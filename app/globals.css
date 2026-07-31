@@ -1,0 +1,353 @@
+:root {
+  --navy: #0b1739;
+  --blue: #1d4ed8;
+  --light: #f4f7fb;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --white: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--light);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button { font: inherit; }
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+  min-height: 100vh;
+  padding: 24px 18px;
+  background: var(--navy);
+  color: var(--white);
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0 8px 24px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+
+.brandMark {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  font-weight: 800;
+}
+
+.brand strong, .brand span { display: block; }
+.brand span { margin-top: 3px; color: #a8b2ce; font-size: 12px; }
+
+nav { display: grid; gap: 5px; margin-top: 22px; }
+
+.navItem {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  color: #cbd5e1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.navItem:hover, .navItem.active {
+  color: white;
+  background: rgba(255,255,255,.10);
+}
+
+.content { padding: 32px; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 26px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+h1 { margin: 0; font-size: 30px; }
+
+.primaryButton {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--blue);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.statCard, .panel {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--white);
+  box-shadow: 0 6px 22px rgba(15,23,42,.05);
+}
+
+.statCard { padding: 20px; }
+.statCard span, .statCard small { display: block; color: var(--muted); }
+.statCard strong { display: block; margin: 12px 0 8px; font-size: 32px; }
+
+.twoColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.panel { padding: 20px; min-height: 220px; }
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panelHeader h2 { margin: 0; font-size: 17px; }
+.panelHeader button {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.emptyState {
+  min-height: 140px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.emptyState span { color: var(--muted); font-size: 14px; }
+
+.quickActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 22px;
+}
+
+.quickActions button {
+  min-height: 54px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 1000px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { min-height: auto; }
+  nav { grid-template-columns: repeat(2, 1fr); }
+  .statsGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .content { padding: 18px; }
+  .topbar { align-items: flex-start; gap: 14px; }
+  .statsGrid, .twoColumns { grid-template-columns: 1fr; }
+}
+
+/* SprintOS v1.1 — giriş ve rol bazlı panel */
+.sidebar{display:flex;flex-direction:column}.sidebar nav{flex:1}.sidebarProfile{border-top:1px solid rgba(255,255,255,.12);padding:18px 10px 0;display:grid;gap:5px}.sidebarProfile strong{font-size:14px}.sidebarProfile span{font-size:12px;color:#9fb0d3}.sidebarProfile a{margin-top:8px;color:#fff;font-size:13px;font-weight:700}
+.welcomeStrip{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding:16px 20px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(90deg,#fff,#f0f5ff)}.welcomeStrip span,.welcomeStrip strong{display:block}.welcomeStrip span{color:var(--muted);font-size:12px}.welcomeStrip strong{margin-top:3px}.roleBadge{padding:8px 12px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px;font-weight:800}
+.loginPage{min-height:100vh;display:grid;grid-template-columns:1.15fr .85fr;background:#f5f7fb}.loginPage.single{grid-template-columns:1fr;place-items:center;padding:24px}.loginVisual{position:relative;overflow:hidden;padding:72px;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(circle at 20% 20%,rgba(59,130,246,.3),transparent 32%),linear-gradient(145deg,#07132f,#10275d);color:#fff}.loginVisual:after{content:"";position:absolute;width:420px;height:420px;border:1px solid rgba(255,255,255,.12);border-radius:50%;right:-120px;bottom:-180px}.loginBrandMark{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:#2563eb;color:#fff;font-size:26px;font-weight:900;box-shadow:0 18px 45px rgba(37,99,235,.35)}.loginBrandMark.small{margin:0 auto 16px}.loginEyebrow{margin:26px 0 10px;font-size:12px;font-weight:800;letter-spacing:.14em;color:#93c5fd}.loginVisual h1{max-width:640px;font-size:48px;line-height:1.08}.loginVisual>p:not(.loginEyebrow){max-width:620px;font-size:17px;line-height:1.65;color:#cbd5e1}.loginFeatures{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}.loginFeatures span{padding:9px 12px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.06);font-size:12px}.loginPanel{display:grid;place-items:center;padding:36px}.loginCard{width:min(440px,100%);padding:34px;border:1px solid var(--border);border-radius:22px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.12)}.loginCard.statusCard{text-align:center}.loginLogoRow{display:flex;align-items:center;gap:12px;margin-bottom:34px}.loginLogoRow strong,.loginLogoRow span{display:block}.loginLogoRow span{margin-top:2px;color:var(--muted);font-size:12px}.loginCard h2{margin:0;font-size:26px}.loginCard>p{color:var(--muted);line-height:1.55}.loginForm{display:grid;gap:16px;margin-top:24px}.loginForm label{display:grid;gap:7px;font-size:13px;font-weight:800}.loginForm input{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:11px}.loginForm input:focus{outline:3px solid #dbeafe;border-color:#2563eb}.loginButton{padding:14px;border:0;border-radius:11px;background:#1d4ed8;color:#fff;font-weight:800;cursor:pointer}.loginButton:disabled{opacity:.65}.loginError{margin:0;padding:11px;border-radius:9px;background:#fee2e2;color:#b91c1c;font-size:13px;font-weight:700}.loginHelp{margin:0!important;text-align:center;font-size:12px}.panelHeader a{color:var(--blue);font-weight:700;font-size:13px}.quickActions a{min-height:54px;display:grid;place-items:center;border:1px solid var(--border);border-radius:12px;background:#f8fafc;color:var(--text);font-weight:700}
+@media(max-width:900px){.loginPage{grid-template-columns:1fr}.loginVisual{display:none}.loginPanel{min-height:100vh}.loginCard{padding:26px}}
+
+/* SprintOS V2 — Premium giriş ekranı */
+.v2LoginPage{min-height:100vh;display:grid;grid-template-columns:minmax(500px,1.08fr) minmax(520px,.92fr);background:#f8fafc;color:#111827}
+.v2BrandPanel{position:relative;isolation:isolate;overflow:hidden;display:grid;place-items:center;min-height:100vh;padding:52px;background:radial-gradient(circle at 50% 16%,rgba(0,116,255,.28),transparent 24%),radial-gradient(circle at 50% 100%,rgba(0,174,255,.20),transparent 34%),linear-gradient(160deg,#03132f 0%,#061f47 50%,#02132f 100%)}
+.v2BrandPanel:before{content:"";position:absolute;inset:0;z-index:-2;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent 80%)}
+.v2WaterGlow{position:absolute;z-index:-1;width:720px;height:720px;left:50%;bottom:-510px;transform:translateX(-50%);border-radius:50%;border:1px solid rgba(79,185,255,.30);box-shadow:0 0 0 70px rgba(13,96,205,.05),0 0 100px rgba(0,153,255,.14)}
+.v2Bubble{position:absolute;border:1px solid rgba(125,211,252,.25);border-radius:50%;box-shadow:inset 0 0 18px rgba(125,211,252,.08)}.v2BubbleOne{width:16px;height:16px;left:12%;top:23%}.v2BubbleTwo{width:9px;height:9px;right:17%;top:31%}
+.v2BrandContent{width:min(620px,100%);display:flex;flex-direction:column;align-items:center;text-align:center;color:#fff;transform:translateY(-10px)}
+.v2BrandLogo{width:min(390px,78%);height:auto;object-fit:contain;filter:drop-shadow(0 24px 38px rgba(0,0,0,.28));mix-blend-mode:screen}
+.v2Slogan{margin-top:-28px;text-transform:uppercase;font-style:italic;font-weight:900;line-height:1.02;letter-spacing:.015em;text-shadow:0 8px 24px rgba(0,0,0,.35)}.v2Slogan span{display:block;font-size:clamp(27px,3.2vw,43px)}.v2Slogan strong{display:block;font-size:clamp(31px,3.8vw,50px);color:#ff851b}
+.v2SloganLine{width:220px;height:4px;margin:16px auto 34px;border-radius:999px;background:linear-gradient(90deg,transparent,#ff7417 25%,#ff9d2c 75%,transparent);transform:skewX(-28deg)}
+.v2FeatureGrid{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:560px}.v2Feature{position:relative;display:grid;place-items:center;gap:9px;min-height:96px;padding:4px 13px;color:#f8fbff}.v2Feature:not(:last-child):after{content:"";position:absolute;right:0;height:72%;width:1px;background:linear-gradient(transparent,rgba(148,198,255,.42),transparent)}.v2Feature svg{color:#fff;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22))}.v2Feature span{font-size:13px;font-weight:750;text-transform:uppercase;line-height:1.3}
+.v2WaveArt{position:absolute;z-index:-1;inset:auto 0 0;height:25%;opacity:.55;background:radial-gradient(ellipse at center bottom,rgba(32,163,255,.38),transparent 62%)}.v2WaveArt span{position:absolute;left:-10%;width:120%;height:100px;border-top:2px solid rgba(80,185,255,.25);border-radius:50%}.v2WaveArt span:nth-child(1){bottom:1%;transform:rotate(1deg)}.v2WaveArt span:nth-child(2){bottom:-3%;transform:rotate(-1deg)}.v2WaveArt span:nth-child(3){bottom:-7%;transform:rotate(2deg)}
+.v2FormPanel{display:grid;place-items:center;min-height:100vh;padding:42px;background:radial-gradient(circle at 70% 40%,#fff 0,#f8fafc 46%,#eef2f7 100%)}
+.v2LoginCard{width:min(570px,100%);overflow:hidden;border:1px solid rgba(203,213,225,.72);border-radius:25px;background:rgba(255,255,255,.95);box-shadow:0 28px 80px rgba(15,23,42,.13),0 2px 10px rgba(15,23,42,.04);backdrop-filter:blur(16px)}
+.v2RoleTabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #e5e7eb;background:#fff}.v2RoleTab{position:relative;min-height:116px;border:0;border-right:1px solid #eef2f7;background:transparent;color:#475569;display:grid;place-content:center;justify-items:center;gap:10px;padding:16px 8px;font-weight:800;cursor:pointer}.v2RoleTab:last-child{border-right:0}.v2RoleTab:after{content:"";position:absolute;left:20%;right:20%;bottom:-1px;height:3px;border-radius:999px;background:#1368ef;transform:scaleX(0);transition:.22s ease}.v2RoleTab.active{color:#0864e9;background:linear-gradient(to bottom,#fff,#f8fbff)}.v2RoleTab.active:after{transform:scaleX(1)}.v2RoleTab:hover{background:#f8fafc}.v2RoleTab span{font-size:13px;text-transform:uppercase}
+.v2LoginForm{padding:32px 32px 28px}.v2MethodTabs{display:grid;grid-template-columns:1fr 1fr;margin-bottom:30px;padding:3px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}.v2MethodTabs button{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;border:0;border-radius:9px;background:transparent;color:#64748b;font-weight:800;text-transform:uppercase;cursor:pointer}.v2MethodTabs button.active{background:#e8f1ff;color:#0864e9;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.v2Field{display:grid;gap:9px;margin-top:20px}.v2Field>span{font-size:14px;font-weight:800}.v2InputWrap{position:relative;display:flex;align-items:center}.v2InputWrap>svg{position:absolute;left:16px;color:#94a3b8;pointer-events:none}.v2InputWrap input{width:100%;height:55px;padding:0 54px 0 49px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;color:#0f172a;font-size:15px;transition:.18s ease}.v2InputWrap input:focus{outline:0;border-color:#1671f5;box-shadow:0 0 0 4px rgba(22,113,245,.11)}.v2PasswordToggle{position:absolute;right:11px;width:40px;height:40px;display:grid;place-items:center;border:0;border-radius:9px;background:transparent;color:#8491a6;cursor:pointer}.v2PasswordToggle:hover{background:#f1f5f9;color:#2563eb}
+.v2LoginOptions{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:21px 0}.v2Remember{display:flex;align-items:center;gap:9px;color:#334155;font-size:14px}.v2Remember input{width:18px;height:18px;accent-color:#1267e9}.v2LoginOptions a,.v2ContactText a{color:#0864e9;font-weight:750}.v2SubmitButton{width:100%;height:56px;display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:10px;background:linear-gradient(135deg,#0967e9,#116fe9 55%,#0560d9);color:#fff;font-size:17px;font-weight:850;box-shadow:0 12px 28px rgba(9,103,233,.24);cursor:pointer;transition:.18s ease}.v2SubmitButton:hover{transform:translateY(-1px);box-shadow:0 15px 32px rgba(9,103,233,.30)}.v2SubmitButton:disabled{opacity:.65;cursor:wait;transform:none}
+.v2LoginError{margin:15px 0 0;padding:12px 14px;border:1px solid #fecaca;border-radius:10px;background:#fff1f2;color:#b91c1c;font-size:13px;font-weight:750}.v2ContactLine{display:flex;align-items:center;gap:15px;margin:28px 0 19px;color:#64748b}.v2ContactLine:before,.v2ContactLine:after{content:"";height:1px;flex:1;background:#e2e8f0}.v2ContactText{text-align:center;color:#334155;font-size:14px}.v2Loading{padding:60px;text-align:center;color:#64748b}
+@media(max-width:1100px){.v2LoginPage{grid-template-columns:1fr 1fr}.v2BrandPanel{padding:32px}.v2BrandLogo{width:min(330px,82%)}.v2LoginForm{padding:26px}.v2RoleTab{min-height:100px}.v2Feature span{font-size:11px}}
+@media(max-width:850px){.v2LoginPage{grid-template-columns:1fr}.v2BrandPanel{min-height:420px;padding:28px 22px}.v2BrandContent{transform:none}.v2BrandLogo{width:250px}.v2Slogan{margin-top:-22px}.v2Slogan span{font-size:25px}.v2Slogan strong{font-size:31px}.v2SloganLine{margin-bottom:18px}.v2FeatureGrid{max-width:480px}.v2Feature{min-height:72px}.v2Feature svg{width:24px}.v2FormPanel{min-height:auto;padding:28px 16px 46px}.v2LoginCard{margin-top:-4px}}
+@media(max-width:560px){.v2BrandPanel{display:none}.v2FormPanel{min-height:100vh;padding:18px}.v2LoginCard{border-radius:19px}.v2RoleTab{min-height:88px;padding:11px 4px}.v2RoleTab svg{width:20px}.v2RoleTab span{font-size:10px}.v2LoginForm{padding:22px 18px}.v2MethodTabs button{font-size:11px}.v2LoginOptions{align-items:flex-start;flex-direction:column}.v2InputWrap input{font-size:16px}}
+
+/* SprintOS V2.1 — mobile/Android optimization and framed logo */
+.v2LogoFrame{
+  position:relative;
+  width:min(350px,76%);
+  aspect-ratio:1;
+  display:grid;
+  place-items:center;
+  margin:0 auto 10px;
+  padding:18px;
+  border-radius:34px;
+  background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(239,246,255,.94));
+  border:1px solid rgba(255,255,255,.84);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.34),
+    0 0 0 1px rgba(73,170,255,.24),
+    inset 0 1px 0 rgba(255,255,255,.9);
+  overflow:hidden;
+  isolation:isolate;
+}
+.v2LogoFrame:before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  z-index:-2;
+  border-radius:36px;
+  background:conic-gradient(from 180deg,#ff8a1d,#ffd34d,#1e9eff,#1748d7,#ff8a1d);
+  animation:v2LogoRing 7s linear infinite;
+}
+.v2LogoFrame:after{
+  content:"";
+  position:absolute;
+  inset:3px;
+  z-index:-1;
+  border-radius:31px;
+  background:linear-gradient(145deg,#fff,#eef6ff);
+}
+.v2LogoHalo{
+  position:absolute;
+  width:72%;
+  height:72%;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,180,45,.28),rgba(37,141,255,.12) 52%,transparent 72%);
+  filter:blur(18px);
+  animation:v2LogoPulse 3.4s ease-in-out infinite;
+}
+.v2BrandLogo{
+  width:100%;
+  max-width:290px;
+  height:auto;
+  object-fit:contain;
+  position:relative;
+  z-index:2;
+  filter:drop-shadow(0 12px 22px rgba(3,37,91,.20));
+  mix-blend-mode:normal;
+}
+@keyframes v2LogoRing{to{transform:rotate(360deg)}}
+@keyframes v2LogoPulse{0%,100%{transform:scale(.96);opacity:.62}50%{transform:scale(1.08);opacity:1}}
+
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{min-height:100dvh;overscroll-behavior-y:none}
+button,input,a{-webkit-tap-highlight-color:transparent}
+.v2LoginPage,.v2BrandPanel,.v2FormPanel{min-height:100dvh}
+.v2RoleTab,.v2MethodTabs button,.v2SubmitButton,.v2PasswordToggle{touch-action:manipulation}
+.v2InputWrap input{appearance:none;-webkit-appearance:none}
+
+@media(max-width:1100px){
+  .v2LogoFrame{width:min(300px,78%);border-radius:28px}
+}
+
+@media(max-width:850px){
+  .v2LoginPage{grid-template-columns:1fr;min-height:100dvh}
+  .v2BrandPanel{min-height:auto;padding:28px 20px 46px}
+  .v2LogoFrame{width:210px;padding:12px;border-radius:24px;margin-bottom:18px}
+  .v2LogoFrame:before{border-radius:26px}
+  .v2LogoFrame:after{border-radius:21px}
+  .v2BrandLogo{max-width:178px}
+  .v2Slogan{margin-top:0}
+  .v2FeatureGrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .v2FormPanel{min-height:auto;padding:0 16px 34px;margin-top:-18px;background:#f4f7fb}
+  .v2LoginCard{width:min(620px,100%);border-radius:22px}
+}
+
+@media(max-width:560px){
+  .v2BrandPanel{display:flex;min-height:auto;padding:20px 16px 52px}
+  .v2BrandContent{width:100%}
+  .v2LogoFrame{width:132px;padding:8px;border-radius:19px;margin:0 auto 12px}
+  .v2LogoFrame:before{border-radius:21px}
+  .v2LogoFrame:after{border-radius:16px}
+  .v2BrandLogo{max-width:112px}
+  .v2Slogan{margin:0}
+  .v2Slogan span{font-size:16px;letter-spacing:.03em}
+  .v2Slogan strong{font-size:21px}
+  .v2SloganLine{width:130px;height:3px;margin:10px auto 0}
+  .v2FeatureGrid{display:none}
+  .v2WaveArt{height:35%}
+  .v2FormPanel{min-height:calc(100dvh - 230px);padding:0 12px max(20px,env(safe-area-inset-bottom));margin-top:-26px;align-items:start}
+  .v2LoginCard{border-radius:20px;box-shadow:0 18px 45px rgba(15,23,42,.14)}
+  .v2RoleTab{min-height:76px;padding:9px 2px;gap:6px}
+  .v2RoleTab svg{width:19px;height:19px}
+  .v2RoleTab span{font-size:9px;letter-spacing:-.01em}
+  .v2LoginForm{padding:18px 14px 20px}
+  .v2MethodTabs{margin-bottom:22px}
+  .v2MethodTabs button{min-height:46px;font-size:10px;gap:6px}
+  .v2Field{margin-top:16px}
+  .v2InputWrap input{height:52px;font-size:16px;border-radius:12px}
+  .v2LoginOptions{flex-direction:row;align-items:center;gap:10px;margin:16px 0;font-size:12px}
+  .v2Remember{font-size:12px}
+  .v2SubmitButton{height:54px;font-size:15px}
+  .v2ContactLine{margin:22px 0 15px}
+  .v2ContactText{font-size:13px}
+}
+
+@media(max-width:380px){
+  .v2RoleTab span{font-size:8px}
+  .v2MethodTabs button{font-size:9px}
+  .v2LoginOptions{align-items:flex-start;flex-direction:column}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .v2LogoFrame:before,.v2LogoHalo{animation:none}
+  .v2SubmitButton{transition:none}
+}
+
+/* SprintOS Bulut2026 — compact premium login */
+.compactLogin{grid-template-columns:minmax(420px,.92fr) minmax(520px,1.08fr)}
+.compactLogin .v2BrandPanel{padding:34px 42px}
+.compactLogoFrame{width:min(230px,58%);padding:12px;border-radius:28px;margin-bottom:14px}
+.compactLogoFrame:before{border-radius:30px}.compactLogoFrame:after{border-radius:25px}
+.compactLogoFrame .v2BrandLogo{max-width:198px}
+.cloudLabel{margin:2px 0 8px;color:#88bfff;font-size:11px;font-weight:900;letter-spacing:.28em}
+.compactSlogan{margin:0;font-style:normal;text-transform:none;line-height:1.05}
+.compactSlogan span{font-size:clamp(31px,3.6vw,48px);color:#fff;font-weight:900}
+.compactSlogan strong{margin-top:6px;font-size:clamp(18px,2.1vw,28px);color:#ff932e;letter-spacing:.02em}
+.brandDescription{max-width:560px;margin:16px auto 0;color:#bfd1ea;font-size:13px;line-height:1.65}
+.poweredBy{margin:22px 0 0;color:#7290b8;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.compactLoginCard{width:min(520px,100%)}
+.compactLoginCard .v2RoleTab{min-height:94px}.compactLoginCard .v2LoginForm{padding:26px 28px 24px}.compactLoginCard .v2MethodTabs{margin-bottom:22px}.compactLoginCard .v2Field{margin-top:16px}.compactLoginCard .v2InputWrap input{height:51px}.compactLoginCard .v2SubmitButton{height:52px}
+@media(max-width:900px){.compactLogin{grid-template-columns:1fr}.compactLogin .v2BrandPanel{padding:24px 18px 42px}.compactLogoFrame{width:170px}.compactLogoFrame .v2BrandLogo{max-width:145px}.brandDescription{font-size:12px}.compactLogin .v2FormPanel{margin-top:-18px;padding:0 16px 34px}}
+@media(max-width:560px){.compactLogoFrame{width:112px;padding:7px}.compactLogoFrame .v2BrandLogo{max-width:96px}.cloudLabel{font-size:9px;margin-bottom:5px}.compactSlogan span{font-size:22px}.compactSlogan strong{font-size:15px}.brandDescription{display:none}.poweredBy{display:none}.compactLoginCard .v2RoleTab{min-height:72px}.compactLoginCard .v2LoginForm{padding:17px 14px 19px}}
