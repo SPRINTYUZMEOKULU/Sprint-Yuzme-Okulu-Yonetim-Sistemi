@@ -1,0 +1,25 @@
+SPRINTOS v3.3 - ÖN KAYIT MODÜLÜ
+
+Eklenenler:
+- /on-kayit premium, mobil uyumlu ön kayıt formu
+- /on-kayitlar yönetici ön kayıt merkezi
+- Ön kayıt linkini kopyalama butonu
+- Formu yeni sekmede açma butonu
+- Bekleyen ön kayıt ve günlük başvuru sayıları
+- Şube, kurs türü, seviye ve paket tercihi alanları
+
+ÖNEMLİ VERCEL AYARI:
+Formun Supabase'e kayıt gönderebilmesi için Vercel projesinde şu sunucu değişkeni bulunmalıdır:
+SUPABASE_SERVICE_ROLE_KEY = Supabase > Settings > API Keys > Legacy anon, service_role API keys bölümündeki service_role anahtarı
+
+Bu anahtarı kesinlikle NEXT_PUBLIC_ ile başlayan bir adla kaydetmeyin ve kullanıcılarla paylaşmayın.
+Mevcut iki değişken de korunmalıdır:
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+Yükleme:
+1. ZIP içindeki dosyaları GitHub reposuna topluca yükleyin.
+2. Commit oluşturun.
+3. Vercel otomatik deploy başlatacaktır.
+4. Vercel Environment Variables bölümünde SUPABASE_SERVICE_ROLE_KEY ekleyin.
+5. Yeni bir Redeploy yapın.
