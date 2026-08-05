@@ -48,7 +48,6 @@ async function safeCount(table: string, filters?: Array<[string,string]>) {
 
 export default async function HomePage() {
   const profile = await requireProfile();
-  if (profile.role === "guardian") redirect("/veli-paneli");
   const visibleMenu = menu.filter((item) => item.roles.includes(profile.role));
   const isCoach = profile.role === "coach";
   const isGuardian = profile.role === "guardian";
