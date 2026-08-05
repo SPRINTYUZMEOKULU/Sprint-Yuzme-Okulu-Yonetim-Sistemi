@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireProfile, type UserRole } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { Icons } from "@/app/components/dashboard-icons";
@@ -47,6 +48,7 @@ async function safeCount(table: string, filters?: Array<[string,string]>) {
 
 export default async function HomePage() {
   const profile = await requireProfile();
+  if (profile.role === "guardian") redirect("/veli-paneli");
   const visibleMenu = menu.filter((item) => item.roles.includes(profile.role));
   const isCoach = profile.role === "coach";
   const isGuardian = profile.role === "guardian";

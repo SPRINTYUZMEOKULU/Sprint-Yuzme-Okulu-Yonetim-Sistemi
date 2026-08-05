@@ -1,0 +1,16 @@
+SPRINTOS v3.6 — KATILIM GÜNLERİ, TELAFİ VE EK DERS
+
+1) Supabase > SQL Editor > New Query açın.
+2) sql/006_student_attendance_makeup_extra_lessons.sql dosyasının tamamını yapıştırın.
+3) Run butonuna basın. Beklenen sonuç: Success. No rows returned.
+4) Bu klasörün içindeki tüm dosyaları GitHub repository ana dizinine yükleyin.
+5) Commit mesajı: SprintOS v3.6 katılım telafi ve ek ders
+6) Vercel Ready olduktan sonra Öğrenciler > Detayı Aç yolunu test edin.
+
+Yeni özellikler:
+- Öğrenci bazında katılım günleri seçimi (2 veya 3 gün dahil)
+- Telafi dersi ekleme
+- Bonus / hediye / yönetim / havuz kaynaklı ek ders ekleme
+- Paket dersinden düşme veya pakete ders ekleme seçeneği
+- Telafi ve ek ders geçmişi
+- Veli ve eğitmen için güvenli görüntüleme politikaları

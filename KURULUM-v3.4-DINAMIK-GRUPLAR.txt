@@ -1,0 +1,24 @@
+SPRINTOS v3.4 — DİNAMİK GRUPLAR VE ÖN KAYIT FORMU
+
+Bu sürümde:
+- /gruplar sayfası eklendi.
+- Yönetici şube, kurs türü, grup adı, seviye, gün, saat ve kontenjan tanımlayabilir.
+- "Ön kayıt formunda göster" seçeneği açıksa grup /on-kayit formuna otomatik düşer.
+- Pasife alınan veya formda gizlenen gruplar velilere gösterilmez.
+- Ön kayıt formu şube, grup, gün/saat ve paketleri Supabase'den canlı çeker.
+- Seçilen grup ve paket ön kayıt kaydında saklanır ve /on-kayitlar ekranında görünür.
+
+KURULUM SIRASI
+1) Supabase > SQL Editor bölümünde sql/004_dynamic_groups_and_preregistration.sql dosyasının tamamını çalıştırın.
+2) Bu paketin içindeki tüm dosyaları GitHub ana dizinine yükleyin ve Commit changes yapın.
+3) Vercel deployment "Ready" olduktan sonra /gruplar adresini açın.
+4) İlk grubu oluşturun ve "Ön kayıt formunda göster" seçeneğini açık bırakın.
+5) /on-kayit adresini açarak grubun otomatik geldiğini kontrol edin.
+
+GEREKLİ VERCEL DEĞİŞKENLERİ
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY (yalnızca Vercel sunucusunda; GitHub'a yazmayın)
+
+NOT
+Bu çalışma ortamında özel npm paket deposunda @supabase/ssr bulunamadığı için yerel npm build testi tamamlanamadı. Kod mevcut projenin Next.js 15/Supabase yapısına göre hazırlanmıştır.

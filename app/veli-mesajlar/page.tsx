@@ -1,0 +1,6 @@
+import { requireProfile } from "@/lib/auth/profile";
+import { formatDate, getGuardianContext } from "@/lib/guardian/data";
+import { GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
+import "@/app/veli-paneli/veli.css";
+export const dynamic="force-dynamic";
+export default async function Page({searchParams}:{searchParams:Promise<{child?:string}>}){const profile=await requireProfile(["guardian"]);const{child}=await searchParams;const data=await getGuardianContext(profile.id,child);return <main className="guardianShell"><GuardianHeader name={profile.full_name||"Değerli Velimiz"} students={data.students} selectedId={data.selected?.id}/><div className="guardianContent"><h1 className="guardianSectionTitle">Mesaj Merkezi</h1><p className="guardianSectionLead">Kayıt onayı, paket yenileme, ders değişikliği ve bilgilendirme mesajlarınız.</p><section className="guardianCard">{data.messages.map((m:any)=><article className="messageCard" key={m.id}><div className="guardianCardHeader"><h3>{m.title}</h3><StatusPill tone={m.read_at?'green':'blue'}>{m.read_at?'Okundu':'Yeni'}</StatusPill></div><p>{m.body}</p><div className="noteMeta"><span>{formatDate(String(m.created_at).slice(0,10))}</span><span>{m.channel||'Panel'}</span></div></article>)}{!data.messages.length?<p className="guardianSectionLead">Henüz mesaj bulunmuyor.</p>:null}</section></div></main>}

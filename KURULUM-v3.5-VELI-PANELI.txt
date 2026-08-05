@@ -1,0 +1,21 @@
+SPRİNTOS v3.5 — GELİŞMİŞ VELİ PANELİ
+
+1) Supabase SQL Editor'da sql/005_guardian_portal_v2.sql dosyasını çalıştırın.
+2) Bu paketin içindeki dosyaları GitHub ana dizinine yükleyin ve commit edin.
+3) Vercel deployment Ready olunca guardian rolündeki kullanıcı /veli-paneli adresine otomatik yönlenir.
+4) Yönetici, veli hesabını öğrenciye guardian_students tablosunda bağlamalıdır.
+
+Örnek bağlantı SQL'i:
+insert into public.guardian_students(guardian_id,student_id,relationship)
+values ('VELI_PROFILE_UUID','OGRENCI_UUID','Anne');
+
+Veli panelinde:
+- Birden fazla çocuk geçişi
+- Grup, şube, eğitmen ve paket bilgisi
+- Kalan ders ve planlanan bitiş tarihi
+- Ders programı ve yoklama
+- Gelişim notları
+- Ödemeler
+- Mesajlar ve duyurular
+- Kurallar, belgeler ve dijital onay durumu
+bulunur.

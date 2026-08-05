@@ -1,0 +1,27 @@
+SPRINTOS v4 - BUGÜN SON KURULUM
+
+SQL DURUMU
+- 005_guardian_portal_v2.sql: çalıştırıldı.
+- students tablosu: oluşturuldu.
+- guardian_students tablosu: oluşturuldu.
+- 007_core_enrollment_attendance_adjustments.sql: çalıştırıldı.
+- 006 dosyasını tekrar çalıştırmayın.
+
+GITHUB YÜKLEME
+1. Bu klasörün içindeki dosya ve klasörlerin tamamını GitHub depo köküne yükleyin.
+2. Dış klasörün kendisini yüklemeyin.
+3. Commit mesajı: SprintOS v4 katılım telafi veli ve gruplar
+4. Vercel otomatik deploy başlatacaktır.
+
+CANLI TEST
+- /login
+- /gruplar
+- /on-kayit
+- /on-kayitlar
+- /ogrenciler
+- /veli-paneli
+
+GEREKLİ VERCEL DEĞİŞKENLERİ
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY (yalnızca sunucu tarafı API işlemleri için; GitHub'a koymayın)

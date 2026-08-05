@@ -17,8 +17,11 @@ export async function POST(request: Request) {
     const guardianName = clean(body.guardianName, 120);
     const phone = clean(body.phone, 20);
     const branchName = clean(body.branchName, 120);
+    const branchId = clean(body.branchId, 60);
+    const groupId = clean(body.groupId, 60);
+    const packageId = clean(body.packageId, 60);
 
-    if (!firstName || !lastName || !guardianName || !phone || !branchName) {
+    if (!firstName || !lastName || !guardianName || !phone || !branchId || !groupId || !packageId) {
       return NextResponse.json({ error: "Zorunlu alanları eksiksiz doldurun." }, { status: 400 });
     }
 
@@ -37,9 +40,15 @@ export async function POST(request: Request) {
     if (!organization) throw new Error("Kurum kaydı bulunamadı.");
 
     const { data: branch } = await supabase
-      .from("branches").select("id")
-      .eq("organization_id", organization.id).eq("name", branchName).single();
+      .from("branches").select("id,name")
+      .eq("organization_id", organization.id).eq("id", branchId).single();
     if (!branch) throw new Error("Şube kaydı bulunamadı.");
+
+    const { data: group } = await supabase.from("training_groups").select("id,name,branch_id,is_active,public_registration").eq("organization_id", organization.id).eq("id", groupId).single();
+    if (!group || group.branch_id !== branch.id || !group.is_active || !group.public_registration) throw new Error("Seçilen grup artık ön kayda açık değil.");
+
+    const { data: coursePackage } = await supabase.from("course_packages").select("id,name,is_active").eq("organization_id", organization.id).eq("id", packageId).single();
+    if (!coursePackage || !coursePackage.is_active) throw new Error("Seçilen paket artık aktif değil.");
 
     const { data: guardian, error: guardianError } = await supabase
       .from("guardians")
@@ -67,7 +76,9 @@ export async function POST(request: Request) {
         preferred_days: clean(body.preferredDays, 100) || null,
         preferred_time: clean(body.preferredTime, 100) || null,
         registration_source: "web_form",
-        registration_note: clean(body.note, 1000) || null
+        registration_note: clean(body.note, 1000) || null,
+        preferred_group_id: group.id,
+        preferred_package_id: coursePackage.id
       })
       .select("id").single();
 
@@ -91,7 +102,7 @@ export async function POST(request: Request) {
       student_id: student.id,
       alert_type: "new_pre_registration",
       title: "Yeni ön kayıt geldi",
-      description: `${firstName} ${lastName} için web sitesinden ön kayıt oluşturuldu.`,
+      description: `${firstName} ${lastName}, ${branch.name} / ${group.name} / ${coursePackage.name} tercihiyle ön kayıt oluşturdu.`,
       priority: "important",
       status: "open",
       action_label: "Öğrenciyi Gör",

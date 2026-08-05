@@ -1,0 +1,6 @@
+import { requireProfile } from "@/lib/auth/profile";
+import { formatDate, getGuardianContext } from "@/lib/guardian/data";
+import { GuardianHeader } from "@/app/veli-paneli/guardian-ui";
+import "@/app/veli-paneli/veli.css";
+export const dynamic="force-dynamic";
+export default async function Page({searchParams}:{searchParams:Promise<{child?:string}>}){const profile=await requireProfile(["guardian"]);const{child}=await searchParams;const data=await getGuardianContext(profile.id,child);return <main className="guardianShell"><GuardianHeader name={profile.full_name||"Değerli Velimiz"} students={data.students} selectedId={data.selected?.id}/><div className="guardianContent"><h1 className="guardianSectionTitle">Duyurular</h1><p className="guardianSectionLead">Ders değişiklikleri, tatiller, bonus dersler ve okul bilgilendirmeleri.</p><section className="guardianCard">{data.announcements.map((a:any)=><article className="noticeCard" key={a.id}><h3>{a.title}</h3><p>{a.body}</p><div className="noteMeta"><span>{formatDate(String(a.published_at||a.created_at).slice(0,10))}</span><span>SPRİNT Yüzme Okulu</span></div></article>)}{!data.announcements.length?<p className="guardianSectionLead">Henüz yayınlanmış duyuru bulunmuyor.</p>:null}</section></div></main>}
