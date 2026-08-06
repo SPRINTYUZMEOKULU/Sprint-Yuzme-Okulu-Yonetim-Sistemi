@@ -1,0 +1,19 @@
+SPRINTOS v4.2 — KAYIT TAMAMLAMA VE MESAJ MERKEZİ
+
+1) Supabase > SQL Editor > New query
+   sql/009_registration_completion_messages.sql dosyasını çalıştırın.
+   Beklenen sonuç: Success. No rows returned
+
+2) Bu paketteki app ve sql klasörlerini GitHub deponuzun ANA DİZİNİNE yükleyin.
+   Commit mesajı: SprintOS v4.2 kayıt tamamlama ve mesaj merkezi
+
+3) Vercel Ready olduktan sonra:
+   /on-kayitlar sayfasını açın.
+   Bir ön kayıtta "Kayda Aktar" butonuna basın.
+
+4) Şube konumu, iletişim telefonu ve malzeme listesi branch tablosundaki alanlardan çekilir:
+   location_url, contact_phone, material_list
+   Bunları şimdilik Supabase Table Editor > branches üzerinden doldurabilirsiniz.
+
+5) Akış:
+   Ön kayıt > Kayda Aktar > Şube/Grup/Paket/Günler > Otomatik bitiş > Mesaj ön izleme > WhatsApp > Kaydı tamamla.
