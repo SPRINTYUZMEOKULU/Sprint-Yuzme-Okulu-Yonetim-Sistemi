@@ -87,13 +87,14 @@ export async function POST(request: Request) {
       throw studentError || new Error("Öğrenci kaydı oluşturulamadı.");
     }
 
-    const { error: relationError } = await supabase.from("student_guardians").insert({
-      organization_id: organization.id,
-      student_id: student.id,
-      guardian_id: guardian.id,
-      is_primary: true,
-      can_receive_messages: true
-    });
+    const { error: relationError } = await supabase
+  .from("guardian_students")
+  .insert({
+    guardian_id: guardian.id,
+    student_id: student.id,
+    relationship: "Veli",
+    is_primary: true,
+  });
     if (relationError) throw relationError;
 
     await supabase.from("alerts").insert({
