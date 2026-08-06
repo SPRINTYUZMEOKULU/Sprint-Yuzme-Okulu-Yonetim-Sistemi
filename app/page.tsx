@@ -17,6 +17,7 @@ const menu: MenuItem[] = [
   { label: "Ön Kayıtlar", href: "/on-kayitlar", roles: ["owner","admin","branch_manager","registration_staff"], icon: "note", group: "GENEL" },
   { label: "Öğrenciler", href: "/ogrenciler", roles: staff, icon: "child", group: "GENEL" },
   { label: "Veliler", href: "/veliler", roles: ["owner","admin","branch_manager","registration_staff"], icon: "users", group: "GENEL" },
+  { label: "Şubeler", href: "/subeler", roles: management, icon: "branch", group: "EĞİTİM" },
   { label: "Gruplar", href: "/gruplar", roles: staff, icon: "branch", group: "EĞİTİM" },
   { label: "Ders Programı", href: "/ders-programi", roles: allRoles, icon: "calendar", group: "EĞİTİM" },
   { label: "Yoklama", href: "/yoklama", roles: ["owner","admin","branch_manager","coach"], icon: "check", group: "EĞİTİM" },
@@ -48,9 +49,10 @@ async function safeCount(table: string, filters?: Array<[string,string]>) {
 
 export default async function HomePage() {
   const profile = await requireProfile();
+  if (profile.role === "guardian") redirect("/veli-paneli");
   const visibleMenu = menu.filter((item) => item.roles.includes(profile.role));
   const isCoach = profile.role === "coach";
-  const isGuardian = String(profile.role) === "guardian";
+  const isGuardian = profile.role === "guardian";
   const isManager = management.includes(profile.role);
 
   const [activeStudents, preRegistrations, openAlerts, pendingApprovals, pendingCash] = await Promise.all([

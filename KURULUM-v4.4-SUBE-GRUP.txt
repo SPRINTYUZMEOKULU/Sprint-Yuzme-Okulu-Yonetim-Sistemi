@@ -1,0 +1,17 @@
+SPRİNTOS v4.4 — ŞUBE VE GRUP YÖNETİMİ
+
+1) Supabase SQL Editor > New query açın.
+2) sql/011_branch_management_and_seed.sql dosyasının tamamını çalıştırın.
+3) Success. No rows returned sonucunu kontrol edin.
+4) Bu paketteki app ve sql klasörlerini GitHub depo ana dizinine yükleyin.
+5) Commit mesajı: SprintOS v4.4 şube ve grup yönetimi
+6) Vercel Ready olduktan sonra /subeler sayfasını açın.
+7) Şube bilgilerini, konumları ve telefonları düzenleyin.
+8) /gruplar sayfasında her şube için grup, gün, saat ve kontenjan oluşturun.
+9) /on-kayit formunu açın; şube ve grupların otomatik geldiğini doğrulayın.
+
+Hazır eklenen şubeler:
+- Konyaaltı Öğretmenevi
+- Meltem Hasan Subaşı
+- Süleyman Erol Olimpik
+- Lara Life City
