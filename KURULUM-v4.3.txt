@@ -1,0 +1,4 @@
+1) Supabase SQL Editor'da sql/010_digital_student_file.sql dosyasını çalıştırın.
+2) app ve sql klasörlerini GitHub depo köküne yükleyin.
+3) Commit mesajı: SprintOS v4.3 dijital kursiyer dosyası
+4) Vercel Ready olduktan sonra /ogrenciler sayfasından bir öğrenci dosyasını açın.
