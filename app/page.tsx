@@ -50,7 +50,7 @@ export default async function HomePage() {
   const profile = await requireProfile();
   const visibleMenu = menu.filter((item) => item.roles.includes(profile.role));
   const isCoach = profile.role === "coach";
-  const isGuardian = profile.role === "guardian";
+  const isGuardian = String(profile.role) === "guardian";
   const isManager = management.includes(profile.role);
 
   const [activeStudents, preRegistrations, openAlerts, pendingApprovals, pendingCash] = await Promise.all([
