@@ -152,4 +152,72 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}  
+export async function GET() {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Oturum bulunamadı.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("student_status_change_requests")
+      .select(
+        `
+        id,
+        request_type,
+        student_id,
+        branch_id,
+        group_id,
+        reason,
+        description,
+        old_status,
+        new_status,
+        status,
+        requested_by
+        `
+      )
+      .eq("status", "pending")
+      .eq("request_type", "deactivate");
+
+    if (error) {
+      console.error("status request list error:", error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Onay bekleyen pasife alma talepleri alınamadı.",
+          details: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      requests: data ?? [],
+    });
+  } catch (error) {
+    console.error("status request GET error:", error);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Sunucuda beklenmeyen bir hata oluştu.",
+      },
+      { status: 500 }
+    );
+  }
 }
