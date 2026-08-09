@@ -445,7 +445,46 @@ function closeLessonAction() {
   }
 
   return (
-    <div className="studentCenter">
+    <div className="studentCenter"> 
+      <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    marginBottom: "16px",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => router.back()}
+    style={{
+      padding: "10px 16px",
+      border: "1px solid #dbe4f0",
+      borderRadius: "10px",
+      background: "#ffffff",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    ← Geri
+  </button>
+
+  <button
+    type="button"
+    onClick={() => router.push("/")}
+    style={{
+      padding: "10px 16px",
+      border: "none",
+      borderRadius: "10px",
+      background: "#1671e8",
+      color: "#ffffff",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    ⌂ Ana Sayfa
+  </button>
+</div>
       <section className="summaryGrid">
         <button
           className={`summaryCard ${status === "all" ? "selected" : ""}`}
