@@ -133,7 +133,13 @@ const [description, setDescription] = useState("");
 
 const [submitting, setSubmitting] = useState(false);
 const [actionMessage, setActionMessage] = useState("");
+const [statusActionStudent, setStatusActionStudent] =
+  useState<StudentListItem | null>(null);
 
+const [statusReason, setStatusReason] = useState("");
+const [statusDescription, setStatusDescription] = useState("");
+const [statusSubmitting, setStatusSubmitting] = useState(false);
+const [statusActionMessage, setStatusActionMessage] = useState("");
 async function submitLessonAdjustment() {
   if (!actionType) return;
 
@@ -208,7 +214,63 @@ async function submitLessonAdjustment() {
     setSubmitting(false);
   }
 }
+async function submitStatusChangeRequest() {
+  if (!statusActionStudent) return;
 
+  if (!statusReason.trim()) {
+    setStatusActionMessage("Pasife alma gerekçesi seçilmelidir.");
+    return;
+  }
+
+  try {
+    setStatusSubmitting(true);
+    setStatusActionMessage("");
+
+    const response = await fetch("/api/student-status-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        request_type: "deactivate",
+        student_id: statusActionStudent.id,
+        branch_id: statusActionStudent.branch_id || null,
+        group_id: statusActionStudent.group_id || null,
+        reason: statusReason,
+        description: statusDescription,
+        old_status: statusActionStudent.status || "active",
+        new_status: "passive",
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setStatusActionMessage(
+        result.error ||
+          result.details ||
+          "Pasife alma talebi oluşturulamadı."
+      );
+      return;
+    }
+
+    setStatusActionMessage(
+      result.message || "Pasife alma talebi yönetici onayına gönderildi."
+    );
+  } catch (error) {
+    console.error(error);
+    setStatusActionMessage("Sunucuya bağlanırken bir hata oluştu.");
+  } finally {
+    setStatusSubmitting(false);
+  }
+}
+
+function closeStatusAction() {
+  setStatusActionStudent(null);
+  setStatusReason("");
+  setStatusDescription("");
+  setStatusActionMessage("");
+}
 function closeLessonAction() {
   setActionStudent(null);
   setActionType(null);
@@ -782,6 +844,22 @@ function closeLessonAction() {
     >
       + Bireysel Telafi
     </button>
+    {student.status === "active" && (
+  <button
+    type="button"
+    className="studentActionButton passive"
+    onClick={(event) => {
+      event.stopPropagation();
+
+      setStatusActionStudent(student);
+      setStatusReason("");
+      setStatusDescription("");
+      setStatusActionMessage("");
+    }}
+  >
+    Pasife Al
+  </button>
+)}
   </div>
 </footer>
             </article>
@@ -961,6 +1039,205 @@ function closeLessonAction() {
           disabled={submitting}
         >
           {submitting
+            ? "Gönderiliyor..."
+            : "Yönetici Onayına Gönder"}
+        </button>
+      </div>
+    </div>
+  </div>
+)} 
+        {statusActionStudent && (
+  <div
+    className="lessonActionOverlay"
+    onClick={closeStatusAction}
+  >
+    <div
+      className="lessonActionModal"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="lessonActionHeader">
+        <div>
+          <span className="eyebrow">PASİFE ALMA TALEBİ</span>
+
+          <h3>
+            {statusActionStudent.first_name}{" "}
+            {statusActionStudent.last_name}
+          </h3>
+
+          <p>
+            {statusActionStudent.branch_name || "Şube yok"}
+            {" · "}
+            {statusActionStudent.group_name || "Grup yok"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="modalCloseButton"
+          onClick={closeStatusAction}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="lessonActionBody">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: "10px",
+            marginBottom: "14px",
+          }}
+        >
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#64748b",
+              }}
+            >
+              Mevcut Durum
+            </span>
+            <strong>Aktif</strong>
+          </div>
+
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#64748b",
+              }}
+            >
+              Kalan Ders
+            </span>
+            <strong>
+              {numberValue(statusActionStudent.remaining_lessons)}
+            </strong>
+          </div>
+
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#64748b",
+              }}
+            >
+              Bitiş Tarihi
+            </span>
+            <strong>
+              {formatDate(statusActionStudent.end_date)}
+            </strong>
+          </div>
+
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#64748b",
+              }}
+            >
+              İşlem
+            </span>
+            <strong>Pasife Alma</strong>
+          </div>
+        </div>
+
+        <label>
+          <span>Pasife Alma Gerekçesi</span>
+
+          <select
+            value={statusReason}
+            onChange={(event) =>
+              setStatusReason(event.target.value)
+            }
+          >
+            <option value="">Gerekçe seçin</option>
+            <option value="Kursiyer / veli talebi">
+              Kursiyer / veli talebi
+            </option>
+            <option value="Kayıt yenilenmedi">
+              Kayıt yenilenmedi
+            </option>
+            <option value="Program / saat uyuşmazlığı">
+              Program / saat uyuşmazlığı
+            </option>
+            <option value="Taşınma">
+              Taşınma
+            </option>
+            <option value="Uzun süreli devamsızlık">
+              Uzun süreli devamsızlık
+            </option>
+            <option value="Sağlık nedeniyle ara verme">
+              Sağlık nedeniyle ara verme
+            </option>
+            <option value="Ödeme süreci">
+              Ödeme süreci
+            </option>
+            <option value="Yönetim kararı">
+              Yönetim kararı
+            </option>
+            <option value="Diğer">
+              Diğer
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>Açıklama / Not</span>
+
+          <textarea
+            value={statusDescription}
+            onChange={(event) =>
+              setStatusDescription(event.target.value)
+            }
+            placeholder="Pasife alma işlemiyle ilgili açıklamayı yazın..."
+            rows={4}
+          />
+        </label>
+
+        {statusActionMessage && (
+          <div className="actionMessage">
+            {statusActionMessage}
+          </div>
+        )}
+
+        <div
+          style={{
+            marginTop: "14px",
+            padding: "12px",
+            borderRadius: "10px",
+            background: "#fff7ed",
+            border: "1px solid #fed7aa",
+            fontSize: "13px",
+            lineHeight: "1.5",
+          }}
+        >
+          Öğrenci, yönetici onayı verilene kadar aktif olarak
+          kalacaktır. Onay sonrası pasif duruma alınacaktır.
+        </div>
+      </div>
+
+      <div className="lessonActionFooter">
+        <button
+          type="button"
+          className="cancelActionButton"
+          onClick={closeStatusAction}
+          disabled={statusSubmitting}
+        >
+          Vazgeç
+        </button>
+
+        <button
+          type="button"
+          className="submitActionButton"
+          onClick={submitStatusChangeRequest}
+          disabled={statusSubmitting}
+        >
+          {statusSubmitting
             ? "Gönderiliyor..."
             : "Yönetici Onayına Gönder"}
         </button>
