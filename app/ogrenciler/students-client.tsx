@@ -116,7 +116,107 @@ export default function StudentsClient({ students }: Props) {
   const [branch, setBranch] = useState("all");
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
-  const [sort, setSort] = useState<SortType>("name_asc");
+  const [sort, setSort] = useState<SortType>("name_asc"); 
+  const [actionStudent, setActionStudent] =
+  useState<StudentListItem | null>(null);
+
+const [actionType, setActionType] = useState<
+  | "individual_compensation"
+  | "lesson_count_change"
+  | "bulk_compensation"
+  | null
+>(null);
+
+const [lessonCount, setLessonCount] = useState("1");
+const [reason, setReason] = useState("");
+const [description, setDescription] = useState("");
+
+const [submitting, setSubmitting] = useState(false);
+const [actionMessage, setActionMessage] = useState("");
+
+async function submitLessonAdjustment() {
+  if (!actionType) return;
+
+  const count = Number(lessonCount);
+
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    setActionMessage("Ders sayısı 1 ile 100 arasında olmalıdır.");
+    return;
+  }
+
+  if (!reason.trim()) {
+    setActionMessage("İşlem gerekçesi yazılmalıdır.");
+    return;
+  }
+
+  setSubmitting(true);
+  setActionMessage("");
+
+  try {
+    const response = await fetch("/api/lesson-adjustments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        request_type: actionType,
+
+        student_id:
+          actionType === "individual_compensation" ||
+          actionType === "lesson_count_change"
+            ? actionStudent?.id
+            : null,
+
+        branch_id:
+          actionType === "bulk_compensation"
+            ? actionStudent?.branch_id
+            : actionStudent?.branch_id ?? null,
+
+        group_id: actionStudent?.group_id ?? null,
+
+        lesson_count: count,
+        reason: reason.trim(),
+        description: description.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setActionMessage(
+        result.error ||
+          result.details ||
+          "İşlem talebi oluşturulamadı."
+      );
+      return;
+    }
+
+    setActionMessage(
+      result.message ||
+        "Talep yönetici onayına gönderildi."
+    );
+
+    setLessonCount("1");
+    setReason("");
+    setDescription("");
+  } catch (error) {
+    console.error(error);
+    setActionMessage(
+      "Sunucuya bağlanırken bir hata oluştu."
+    );
+  } finally {
+    setSubmitting(false);
+  }
+}
+
+function closeLessonAction() {
+  setActionStudent(null);
+  setActionType(null);
+  setLessonCount("1");
+  setReason("");
+  setDescription("");
+  setActionMessage("");
+}
 
   const branches = useMemo(() => {
     return Array.from(
@@ -582,14 +682,69 @@ export default function StudentsClient({ students }: Props) {
               </div>
 
               <footer className="cardFooter">
-                <span>
-                  {student.phone ||
-                    student.guardian_phone ||
-                    "Telefon bilgisi yok"}
-                </span>
+  <span>
+    {student.phone ||
+      student.guardian_phone ||
+      "Telefon bilgisi yok"}
+  </span>
 
-                <strong>Öğrenci Dosyasını Aç →</strong>
-              </footer>
+  <div className="studentActions">
+    <button
+      type="button"
+      className="studentActionButton"
+      onClick={(event) => {
+        event.stopPropagation();
+        router.push(`/ogrenciler/${student.id}`);
+      }}
+    >
+      Öğrenci Dosyası
+    </button>
+
+    <button
+      type="button"
+      className="studentActionButton primary"
+      onClick={(event) => {
+        event.stopPropagation();
+
+        setActionStudent(student);
+        setActionType("lesson_count_change");
+
+        setLessonCount(
+          String(
+            student.package_lesson_count &&
+              student.package_lesson_count > 0
+              ? student.package_lesson_count
+              : 8
+          )
+        );
+
+        setReason("");
+        setDescription("");
+        setActionMessage("");
+      }}
+    >
+      Ders / Paket Yönet
+    </button>
+
+    <button
+      type="button"
+      className="studentActionButton compensation"
+      onClick={(event) => {
+        event.stopPropagation();
+
+        setActionStudent(student);
+        setActionType("individual_compensation");
+
+        setLessonCount("1");
+        setReason("");
+        setDescription("");
+        setActionMessage("");
+      }}
+    >
+      + Bireysel Telafi
+    </button>
+  </div>
+</footer>
             </article>
           );
         })}
@@ -599,9 +754,420 @@ export default function StudentsClient({ students }: Props) {
             Seçtiğiniz filtrelere uygun öğrenci bulunamadı.
           </div>
         )}
+        {actionType && (
+  <div
+    className="lessonActionOverlay"
+    onClick={closeLessonAction}
+  >
+    <div
+      className="lessonActionModal"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="lessonActionHeader">
+        <div>
+          <span className="eyebrow">
+            {actionType === "individual_compensation"
+              ? "BİREYSEL TELAFİ"
+              : actionType === "lesson_count_change"
+              ? "DERS / PAKET YÖNETİMİ"
+              : "TOPLU TELAFİ"}
+          </span>
+
+          <h3>
+            {actionStudent
+              ? `${actionStudent.first_name} ${actionStudent.last_name}`
+              : "Ders Yönetimi"}
+          </h3>
+
+          {actionStudent && (
+            <p>
+              {actionStudent.branch_name || "Şube yok"}
+              {" · "}
+              {actionStudent.group_name || "Grup yok"}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="modalCloseButton"
+          onClick={closeLessonAction}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="lessonActionBody">
+        <label>
+          <span>Ders Sayısı</span>
+
+          <div className="quickLessonButtons">
+            {[1, 2, 8, 10, 12].map((count) => (
+              <button
+                key={count}
+                type="button"
+                className={
+                  lessonCount === String(count)
+                    ? "quickLessonButton active"
+                    : "quickLessonButton"
+                }
+                onClick={() => setLessonCount(String(count))}
+              >
+                {count}
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={lessonCount}
+            onChange={(event) =>
+              setLessonCount(event.target.value)
+            }
+            placeholder="Özel ders sayısı"
+          />
+        </label>
+
+        <label>
+          <span>Gerekçe</span>
+
+          <select
+            value={reason}
+            onChange={(event) =>
+              setReason(event.target.value)
+            }
+          >
+            <option value="">Gerekçe seçin</option>
+
+            {actionType === "individual_compensation" ? (
+              <>
+                <option value="Havuz kaynaklı ders iptali">
+                  Havuz kaynaklı ders iptali
+                </option>
+
+                <option value="Yönetim kararı">
+                  Yönetim kararı
+                </option>
+
+                <option value="Özel telafi onayı">
+                  Özel telafi onayı
+                </option>
+
+                <option value="Diğer">
+                  Diğer
+                </option>
+              </>
+            ) : (
+              <>
+                <option value="Yeni kayıt paketi">
+                  Yeni kayıt paketi
+                </option>
+
+                <option value="Kayıt yenileme">
+                  Kayıt yenileme
+                </option>
+
+                <option value="Paket düzeltme">
+                  Paket düzeltme
+                </option>
+
+                <option value="Yönetim kararı">
+                  Yönetim kararı
+                </option>
+
+                <option value="Diğer">
+                  Diğer
+                </option>
+              </>
+            )}
+          </select>
+        </label>
+
+        <label>
+          <span>Açıklama / Not</span>
+
+          <textarea
+            value={description}
+            onChange={(event) =>
+              setDescription(event.target.value)
+            }
+            placeholder="İşlemin nedenini ve gerekli açıklamayı yazın..."
+            rows={4}
+          />
+        </label>
+
+        {actionMessage && (
+          <div className="actionMessage">
+            {actionMessage}
+          </div>
+        )}
+      </div>
+
+      <div className="lessonActionFooter">
+        <button
+          type="button"
+          className="cancelActionButton"
+          onClick={closeLessonAction}
+          disabled={submitting}
+        >
+          Vazgeç
+        </button>
+
+        <button
+          type="button"
+          className="submitActionButton"
+          onClick={submitLessonAdjustment}
+          disabled={submitting}
+        >
+          {submitting
+            ? "Gönderiliyor..."
+            : "Yönetici Onayına Gönder"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       </section>
 
       <style jsx>{`
+      .studentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.studentActionButton {
+  appearance: none;
+  border: 1px solid #d7e0ec;
+  background: #ffffff;
+  color: #17345c;
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.studentActionButton:hover {
+  transform: translateY(-1px);
+  border-color: #9eb9df;
+}
+
+.studentActionButton.primary {
+  background: #1268d6;
+  border-color: #1268d6;
+  color: #ffffff;
+}
+
+.studentActionButton.compensation {
+  background: #eef8f3;
+  border-color: #b9e3ce;
+  color: #13734c;
+}
+
+.lessonActionOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 21, 43, 0.62);
+  backdrop-filter: blur(5px);
+}
+
+.lessonActionModal {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.lessonActionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 22px 16px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.lessonActionHeader h3 {
+  margin: 5px 0 4px;
+  font-size: 22px;
+  color: #12284a;
+}
+
+.lessonActionHeader p {
+  margin: 0;
+  color: #6b7b90;
+  font-size: 13px;
+}
+
+.modalCloseButton {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f4f8;
+  color: #334a69;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lessonActionBody {
+  display: grid;
+  gap: 17px;
+  padding: 20px 22px;
+}
+
+.lessonActionBody label {
+  display: grid;
+  gap: 8px;
+}
+
+.lessonActionBody label > span {
+  color: #33445c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.lessonActionBody input,
+.lessonActionBody select,
+.lessonActionBody textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8e0eb;
+  border-radius: 11px;
+  background: #ffffff;
+  padding: 12px 13px;
+  color: #182d4a;
+  font: inherit;
+  outline: none;
+}
+
+.lessonActionBody input:focus,
+.lessonActionBody select:focus,
+.lessonActionBody textarea:focus {
+  border-color: #2680eb;
+  box-shadow: 0 0 0 3px rgba(38, 128, 235, 0.1);
+}
+
+.quickLessonButtons {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+}
+
+.quickLessonButton {
+  border: 1px solid #d8e0eb;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 5px;
+  font-weight: 800;
+  color: #36506f;
+  cursor: pointer;
+}
+
+.quickLessonButton.active {
+  border-color: #1268d6;
+  background: #1268d6;
+  color: #ffffff;
+}
+
+.actionMessage {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #f2f7ff;
+  border: 1px solid #d4e5ff;
+  color: #214d85;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lessonActionFooter {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+  padding: 16px 22px 22px;
+  border-top: 1px solid #edf1f6;
+}
+
+.cancelActionButton,
+.submitActionButton {
+  min-height: 46px;
+  border-radius: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cancelActionButton {
+  border: 1px solid #d5dde8;
+  background: #ffffff;
+  color: #40546e;
+}
+
+.submitActionButton {
+  border: 0;
+  background: #1268d6;
+  color: #ffffff;
+}
+
+.cancelActionButton:disabled,
+.submitActionButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .studentActions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .studentActionButton {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .lessonActionOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .lessonActionModal {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .lessonActionHeader {
+    padding: 18px 16px 14px;
+  }
+
+  .lessonActionBody {
+    padding: 16px;
+  }
+
+  .lessonActionFooter {
+    grid-template-columns: 1fr;
+    padding: 14px 16px 18px;
+  }
+
+  .quickLessonButtons {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
         .studentCenter {
           width: 100%;
         }
