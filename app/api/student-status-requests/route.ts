@@ -126,21 +126,22 @@ const organizationId = studentRecord.organization_id;
     const { data, error } = await supabase
       .from("student_status_change_requests")
       .insert({
-        request_type: "deactivate",
-        student_id: studentId,
-        organization_id: organizationId,
-        branch_id: branchId || null,
-        group_id: groupId || null,
+  request_type: "deactivate",
+  student_id: studentId,
+  organization_id: organizationId,
+  branch_id: branchId || null,
+  group_id: groupId || null,
 
-        reason,
-        description: description || null,
+  reason,
+  description: description || null,
 
-        old_status: oldStatus,
-        new_status: newStatus,
+  old_status: oldStatus,
+  new_status: newStatus,
+  requested_status: newStatus,
 
-        status: "pending",
-        requested_by: user.id,
-      })
+  status: "pending",
+  requested_by: user.id,
+})
       .select()
       .single();
 
