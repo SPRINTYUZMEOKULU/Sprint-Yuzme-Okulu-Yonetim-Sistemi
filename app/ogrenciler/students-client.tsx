@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export type StudentListItem = {
@@ -139,7 +139,36 @@ const [statusActionStudent, setStatusActionStudent] =
 const [statusReason, setStatusReason] = useState("");
 const [statusDescription, setStatusDescription] = useState("");
 const [statusSubmitting, setStatusSubmitting] = useState(false);
-const [statusActionMessage, setStatusActionMessage] = useState("");
+const [statusActionMessage, setStatusActionMessage] = useState(""); 
+  const [pendingStatusStudentIds, setPendingStatusStudentIds] = useState<string[]>([]);
+
+useEffect(() => {
+  async function loadPendingStatusRequests() {
+    try {
+      const response = await fetch("/api/student-status-requests", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        console.error("Bekleyen pasife alma talepleri alınamadı:", result);
+        return;
+      }
+
+      const ids = (result.requests ?? [])
+        .map((request: { student_id?: string | null }) => request.student_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id));
+
+      setPendingStatusStudentIds(ids);
+    } catch (error) {
+      console.error("Bekleyen pasife alma talepleri alınamadı:", error);
+    }
+  }
+
+  loadPendingStatusRequests();
+}, []);
 async function submitLessonAdjustment() {
   if (!actionType) return;
 
@@ -253,7 +282,11 @@ async function submitStatusChangeRequest() {
       );
       return;
     }
-
+setPendingStatusStudentIds((prev) =>
+  statusActionStudent
+    ? Array.from(new Set([...prev, statusActionStudent.id]))
+    : prev
+);
     setStatusActionMessage(
       result.message || "Pasife alma talebi yönetici onayına gönderildi."
     );
