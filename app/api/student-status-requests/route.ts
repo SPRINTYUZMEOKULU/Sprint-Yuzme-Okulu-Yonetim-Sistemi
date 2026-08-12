@@ -71,6 +71,26 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+    const { data: studentRecord, error: studentError } = await supabase
+  .from("students")
+  .select("organization_id")
+  .eq("id", studentId)
+  .single();
+
+if (studentError || !studentRecord?.organization_id) {
+  console.error("Öğrenci organizasyon bilgisi alınamadı:", studentError);
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "Öğrencinin organizasyon bilgisi bulunamadı.",
+      details: studentError?.message,
+    },
+    { status: 400 }
+  );
+}
+
+const organizationId = studentRecord.organization_id;
 
     const { data: existingRequest, error: existingError } = await supabase
       .from("student_status_change_requests")
@@ -108,6 +128,7 @@ export async function POST(request: NextRequest) {
       .insert({
         request_type: "deactivate",
         student_id: studentId,
+        organization_id: organizationId,
         branch_id: branchId || null,
         group_id: groupId || null,
 
