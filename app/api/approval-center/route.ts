@@ -3,11 +3,31 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type StudentInfo = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  emergency_contact_phone: string | null;
+  branch_id: string | null;
+  group_id: string | null;
+};
+
 type UnifiedApprovalRequest = {
   id: string;
-  source: "student_status" | "lesson_adjustment";
-  category: "student" | "lesson";
+
+  source:
+    | "student_status"
+    | "lesson_adjustment";
+
+  category:
+    | "student"
+    | "lesson";
+
   request_type: string;
+  request_label: string;
 
   student_id: string | null;
   branch_id: string | null;
@@ -28,16 +48,179 @@ type UnifiedApprovalRequest = {
   requested_at: string | null;
   created_at: string | null;
 
-  student: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    phone: string | null;
-    guardian_phone: string | null;
-    branch_id: string | null;
-    group_id: string | null;
-  } | null;
+  student: StudentInfo | null;
+
+  recipient_phone: string | null;
+  recipient_type:
+    | "student"
+    | "guardian"
+    | "emergency"
+    | null;
+
+  suggested_message: string;
 };
+
+function requestLabel(
+  source: string,
+  requestType: string,
+  requestedStatus?: string | null
+) {
+  if (source === "student_status") {
+    if (
+      requestType === "deactivate" ||
+      requestedStatus === "passive"
+    ) {
+      return "Pasife Alma";
+    }
+
+    if (
+      requestType === "activate" ||
+      requestedStatus === "active"
+    ) {
+      return "Aktife Alma";
+    }
+
+    return "Öğrenci Durum Değişikliği";
+  }
+
+  if (requestType === "individual_compensation") {
+    return "Bireysel Telafi";
+  }
+
+  if (requestType === "bulk_compensation") {
+    return "Toplu Telafi";
+  }
+
+  if (requestType === "lesson_count_change") {
+    return "Ders Sayısı Değişikliği";
+  }
+
+  return "Ders İşlemi";
+}
+
+function getRecipient(student: StudentInfo | null) {
+  if (!student) {
+    return {
+      phone: null,
+      type: null as
+        | "student"
+        | "guardian"
+        | "emergency"
+        | null,
+    };
+  }
+
+  if (
+    student.guardian_phone &&
+    student.guardian_phone.trim()
+  ) {
+    return {
+      phone: student.guardian_phone.trim(),
+      type: "guardian" as const,
+    };
+  }
+
+  if (student.phone && student.phone.trim()) {
+    return {
+      phone: student.phone.trim(),
+      type: "student" as const,
+    };
+  }
+
+  if (
+    student.emergency_contact_phone &&
+    student.emergency_contact_phone.trim()
+  ) {
+    return {
+      phone: student.emergency_contact_phone.trim(),
+      type: "emergency" as const,
+    };
+  }
+
+  return {
+    phone: null,
+    type: null,
+  };
+}
+
+function buildSuggestedMessage(params: {
+  student: StudentInfo | null;
+  requestType: string;
+  source: string;
+  lessonCount: number | null;
+  requestedStatus: string | null;
+}) {
+  const {
+    student,
+    requestType,
+    source,
+    lessonCount,
+    requestedStatus,
+  } = params;
+
+  const fullName = student
+    ? `${student.first_name ?? ""} ${
+        student.last_name ?? ""
+      }`.trim()
+    : "";
+
+  const greeting = fullName
+    ? `Sayın ${fullName},\n\n`
+    : "";
+
+  if (source === "student_status") {
+    if (
+      requestType === "deactivate" ||
+      requestedStatus === "passive"
+    ) {
+      return (
+        greeting +
+        "Kayıt durumunuzla ilgili pasife alma işlemi yönetim tarafından onaylanmıştır. Kayıt durumunuz pasif olarak güncellenmiştir.\n\nSprint Yüzme Okulu"
+      );
+    }
+
+    if (
+      requestType === "activate" ||
+      requestedStatus === "active"
+    ) {
+      return (
+        greeting +
+        "Kayıt durumunuz yönetim tarafından yeniden aktif hale getirilmiştir.\n\nSprint Yüzme Okulu"
+      );
+    }
+
+    return (
+      greeting +
+      "Kayıt durumunuzla ilgili talebiniz yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu"
+    );
+  }
+
+  if (requestType === "individual_compensation") {
+    return (
+      greeting +
+      `${lessonCount ?? 0} adet telafi dersiniz yönetim tarafından onaylanmıştır ve hesabınıza tanımlanacaktır.\n\nSprint Yüzme Okulu`
+    );
+  }
+
+  if (requestType === "lesson_count_change") {
+    return (
+      greeting +
+      `Ders paketinize ilişkin ${lessonCount ?? 0} derslik değişiklik yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu`
+    );
+  }
+
+  if (requestType === "bulk_compensation") {
+    return (
+      "Değerli kursiyerimiz,\n\n" +
+      `${lessonCount ?? 0} adet telafi dersi yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu`
+    );
+  }
+
+  return (
+    greeting +
+    "Talebiniz yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu"
+  );
+}
 
 export async function GET() {
   try {
@@ -66,13 +249,17 @@ export async function GET() {
         .from("student_status_change_requests")
         .select("*")
         .eq("status", "pending")
-        .order("created_at", { ascending: false }),
+        .order("created_at", {
+          ascending: false,
+        }),
 
       supabase
         .from("lesson_adjustment_requests")
         .select("*")
         .eq("status", "pending")
-        .order("requested_at", { ascending: false }),
+        .order("requested_at", {
+          ascending: false,
+        }),
     ]);
 
     if (statusRequestResult.error) {
@@ -84,8 +271,10 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-          error: "Öğrenci durum talepleri alınamadı.",
-          details: statusRequestResult.error.message,
+          error:
+            "Öğrenci durum talepleri alınamadı.",
+          details:
+            statusRequestResult.error.message,
         },
         { status: 500 }
       );
@@ -100,8 +289,10 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-          error: "Ders işlem talepleri alınamadı.",
-          details: lessonRequestResult.error.message,
+          error:
+            "Ders işlem talepleri alınamadı.",
+          details:
+            lessonRequestResult.error.message,
         },
         { status: 500 }
       );
@@ -125,123 +316,244 @@ export async function GET() {
         ].filter(
           (id): id is string =>
             typeof id === "string" &&
-            id.length > 0
+            id.trim().length > 0
         )
       )
     );
 
-    const studentsResult =
-      studentIds.length > 0
-        ? await supabase
-            .from("students")
-            .select(
-              `
-                id,
-                first_name,
-                last_name,
-                phone,
-                guardian_phone,
-                branch_id,
-                group_id
-              `
-            )
-            .in("id", studentIds)
-        : { data: [], error: null };
+    let students: StudentInfo[] = [];
 
-    if (studentsResult.error) {
-      console.error(
-        "approval center students error:",
-        studentsResult.error
-      );
+    if (studentIds.length > 0) {
+      const {
+        data: studentData,
+        error: studentError,
+      } = await supabase
+        .from("students")
+        .select(
+          `
+          id,
+          first_name,
+          last_name,
+          phone,
+          guardian_name,
+          guardian_phone,
+          emergency_contact_phone,
+          branch_id,
+          group_id
+        `
+        )
+        .in("id", studentIds);
+
+      if (studentError) {
+        console.error(
+          "approval center students error:",
+          studentError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Onay taleplerine ait öğrenci bilgileri alınamadı.",
+            details: studentError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      students =
+        (studentData ?? []) as StudentInfo[];
     }
 
-    const studentMap = new Map(
-      (studentsResult.data ?? []).map(
-        (student) => [
-          student.id,
-          student,
-        ]
-      )
+    const studentMap = new Map<
+      string,
+      StudentInfo
+    >(
+      students.map((student) => [
+        student.id,
+        student,
+      ])
     );
 
-    const unifiedStatusRequests: UnifiedApprovalRequest[] =
-      statusRequests.map((item) => ({
-        id: item.id,
-        source: "student_status",
-        category: "student",
-        request_type:
-          item.request_type ?? "status_change",
+    const statusItems: UnifiedApprovalRequest[] =
+      statusRequests.map((item) => {
+        const student =
+          item.student_id
+            ? studentMap.get(item.student_id) ??
+              null
+            : null;
 
-        student_id: item.student_id ?? null,
-        branch_id: item.branch_id ?? null,
-        group_id: item.group_id ?? null,
+        const recipient =
+          getRecipient(student);
 
-        lesson_count: null,
+        const requestedStatus =
+          item.requested_status ??
+          item.new_status ??
+          null;
 
-        reason: item.reason ?? null,
-        description: item.description ?? null,
+        return {
+          id: item.id,
 
-        old_status: item.old_status ?? null,
-        new_status: item.new_status ?? null,
-        requested_status:
-          item.requested_status ?? null,
+          source: "student_status",
+          category: "student",
 
-        status: item.status ?? "pending",
+          request_type:
+            item.request_type ??
+            "status_change",
 
-        requested_by:
-          item.requested_by ?? null,
-        requested_at:
-          item.requested_at ?? null,
-        created_at:
-          item.created_at ?? null,
+          request_label: requestLabel(
+            "student_status",
+            item.request_type ??
+              "status_change",
+            requestedStatus
+          ),
 
-        student: item.student_id
-          ? studentMap.get(item.student_id) ??
-            null
-          : null,
-      }));
+          student_id:
+            item.student_id ?? null,
 
-    const unifiedLessonRequests: UnifiedApprovalRequest[] =
-      lessonRequests.map((item) => ({
-        id: item.id,
-        source: "lesson_adjustment",
-        category: "lesson",
-        request_type:
-          item.request_type ??
-          "lesson_adjustment",
+          branch_id:
+            item.branch_id ?? null,
 
-        student_id: item.student_id ?? null,
-        branch_id: item.branch_id ?? null,
-        group_id: item.group_id ?? null,
+          group_id:
+            item.group_id ?? null,
 
-        lesson_count:
-          item.lesson_count ?? null,
+          lesson_count: null,
 
-        reason: item.reason ?? null,
-        description: item.description ?? null,
+          reason:
+            item.reason ?? null,
 
-        old_status: null,
-        new_status: null,
-        requested_status: null,
+          description:
+            item.description ?? null,
 
-        status: item.status ?? "pending",
+          old_status:
+            item.old_status ?? null,
 
-        requested_by:
-          item.requested_by ?? null,
-        requested_at:
-          item.requested_at ?? null,
-        created_at:
-          item.created_at ?? null,
+          new_status:
+            item.new_status ?? null,
 
-        student: item.student_id
-          ? studentMap.get(item.student_id) ??
-            null
-          : null,
-      }));
+          requested_status:
+            requestedStatus,
+
+          status:
+            item.status ?? "pending",
+
+          requested_by:
+            item.requested_by ?? null,
+
+          requested_at:
+            item.requested_at ?? null,
+
+          created_at:
+            item.created_at ?? null,
+
+          student,
+
+          recipient_phone:
+            recipient.phone,
+
+          recipient_type:
+            recipient.type,
+
+          suggested_message:
+            buildSuggestedMessage({
+              student,
+              requestType:
+                item.request_type ??
+                "status_change",
+              source: "student_status",
+              lessonCount: null,
+              requestedStatus,
+            }),
+        };
+      });
+
+    const lessonItems: UnifiedApprovalRequest[] =
+      lessonRequests.map((item) => {
+        const student =
+          item.student_id
+            ? studentMap.get(item.student_id) ??
+              null
+            : null;
+
+        const recipient =
+          getRecipient(student);
+
+        return {
+          id: item.id,
+
+          source: "lesson_adjustment",
+          category: "lesson",
+
+          request_type:
+            item.request_type ??
+            "lesson_adjustment",
+
+          request_label: requestLabel(
+            "lesson_adjustment",
+            item.request_type ??
+              "lesson_adjustment"
+          ),
+
+          student_id:
+            item.student_id ?? null,
+
+          branch_id:
+            item.branch_id ?? null,
+
+          group_id:
+            item.group_id ?? null,
+
+          lesson_count:
+            item.lesson_count ?? null,
+
+          reason:
+            item.reason ?? null,
+
+          description:
+            item.description ?? null,
+
+          old_status: null,
+          new_status: null,
+          requested_status: null,
+
+          status:
+            item.status ?? "pending",
+
+          requested_by:
+            item.requested_by ?? null,
+
+          requested_at:
+            item.requested_at ?? null,
+
+          created_at:
+            item.created_at ?? null,
+
+          student,
+
+          recipient_phone:
+            recipient.phone,
+
+          recipient_type:
+            recipient.type,
+
+          suggested_message:
+            buildSuggestedMessage({
+              student,
+              requestType:
+                item.request_type ??
+                "lesson_adjustment",
+              source:
+                "lesson_adjustment",
+              lessonCount:
+                item.lesson_count ?? null,
+              requestedStatus: null,
+            }),
+        };
+      });
 
     const requests = [
-      ...unifiedStatusRequests,
-      ...unifiedLessonRequests,
+      ...statusItems,
+      ...lessonItems,
     ].sort((a, b) => {
       const aDate =
         a.requested_at ??
@@ -253,21 +565,28 @@ export async function GET() {
         b.created_at ??
         "";
 
-      return (
-        new Date(bDate).getTime() -
-        new Date(aDate).getTime()
-      );
+      const aTime = aDate
+        ? new Date(aDate).getTime()
+        : 0;
+
+      const bTime = bDate
+        ? new Date(bDate).getTime()
+        : 0;
+
+      return bTime - aTime;
     });
 
     return NextResponse.json({
       ok: true,
+
       counts: {
         total: requests.length,
-        student:
-          unifiedStatusRequests.length,
-        lesson:
-          unifiedLessonRequests.length,
+        student: statusItems.length,
+        lesson: lessonItems.length,
       },
+
+      students_found: students.length,
+
       requests,
     });
   } catch (error) {
