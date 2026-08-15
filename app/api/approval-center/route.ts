@@ -1,4 +1,8 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +15,7 @@ type StudentInfo = {
   guardian_name: string | null;
   guardian_phone: string | null;
   emergency_contact_phone: string | null;
- branch_id: string | null;
+  branch_id: string | null;
 };
 
 type UnifiedApprovalRequest = {
@@ -50,6 +54,7 @@ type UnifiedApprovalRequest = {
   student: StudentInfo | null;
 
   recipient_phone: string | null;
+
   recipient_type:
     | "student"
     | "guardian"
@@ -58,6 +63,21 @@ type UnifiedApprovalRequest = {
 
   suggested_message: string;
 };
+
+type ApprovalActionBody = {
+  id?: string;
+  source?: string;
+  action?: string;
+};
+
+function clean(
+  value: unknown,
+  max = 100
+) {
+  return typeof value === "string"
+    ? value.trim().slice(0, max)
+    : "";
+}
 
 function requestLabel(
   source: string,
@@ -82,22 +102,33 @@ function requestLabel(
     return "Öğrenci Durum Değişikliği";
   }
 
-  if (requestType === "individual_compensation") {
+  if (
+    requestType ===
+    "individual_compensation"
+  ) {
     return "Bireysel Telafi";
   }
 
-  if (requestType === "bulk_compensation") {
+  if (
+    requestType ===
+    "bulk_compensation"
+  ) {
     return "Toplu Telafi";
   }
 
-  if (requestType === "lesson_count_change") {
+  if (
+    requestType ===
+    "lesson_count_change"
+  ) {
     return "Ders Sayısı Değişikliği";
   }
 
   return "Ders İşlemi";
 }
 
-function getRecipient(student: StudentInfo | null) {
+function getRecipient(
+  student: StudentInfo | null
+) {
   if (!student) {
     return {
       phone: null,
@@ -114,12 +145,16 @@ function getRecipient(student: StudentInfo | null) {
     student.guardian_phone.trim()
   ) {
     return {
-      phone: student.guardian_phone.trim(),
+      phone:
+        student.guardian_phone.trim(),
       type: "guardian" as const,
     };
   }
 
-  if (student.phone && student.phone.trim()) {
+  if (
+    student.phone &&
+    student.phone.trim()
+  ) {
     return {
       phone: student.phone.trim(),
       type: "student" as const,
@@ -131,7 +166,8 @@ function getRecipient(student: StudentInfo | null) {
     student.emergency_contact_phone.trim()
   ) {
     return {
-      phone: student.emergency_contact_phone.trim(),
+      phone:
+        student.emergency_contact_phone.trim(),
       type: "emergency" as const,
     };
   }
@@ -194,21 +230,30 @@ function buildSuggestedMessage(params: {
     );
   }
 
-  if (requestType === "individual_compensation") {
+  if (
+    requestType ===
+    "individual_compensation"
+  ) {
     return (
       greeting +
-      `${lessonCount ?? 0} adet telafi dersiniz yönetim tarafından onaylanmıştır ve hesabınıza tanımlanacaktır.\n\nSprint Yüzme Okulu`
+      `${lessonCount ?? 0} adet telafi dersiniz yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu`
     );
   }
 
-  if (requestType === "lesson_count_change") {
+  if (
+    requestType ===
+    "lesson_count_change"
+  ) {
     return (
       greeting +
       `Ders paketinize ilişkin ${lessonCount ?? 0} derslik değişiklik yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu`
     );
   }
 
-  if (requestType === "bulk_compensation") {
+  if (
+    requestType ===
+    "bulk_compensation"
+  ) {
     return (
       "Değerli kursiyerimiz,\n\n" +
       `${lessonCount ?? 0} adet telafi dersi yönetim tarafından onaylanmıştır.\n\nSprint Yüzme Okulu`
@@ -221,22 +266,611 @@ function buildSuggestedMessage(params: {
   );
 }
 
-export async function GET() {
+/* =========================================================
+   POST
+   ONAYLA / REDDET
+   ========================================================= */
+
+export async function POST(
+  request: NextRequest
+) {
   try {
-    const supabase = await createClient();
+    const supabase =
+      await createClient();
 
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } =
+      await supabase.auth.getUser();
 
-    if (userError || !user) {
+    if (
+      userError ||
+      !user
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Oturum bulunamadı.",
+          error:
+            "Oturum bulunamadı.",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
+      );
+    }
+
+    let body: ApprovalActionBody;
+
+    try {
+      body =
+        (await request.json()) as ApprovalActionBody;
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Geçersiz istek verisi.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const id =
+      clean(body.id, 100);
+
+    const source =
+      clean(body.source, 50);
+
+    const action =
+      clean(body.action, 20);
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Talep numarası bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      source !==
+        "student_status" &&
+      source !==
+        "lesson_adjustment"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Geçersiz talep kaynağı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      action !== "approve" &&
+      action !== "reject"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Geçersiz işlem.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /* =========================================
+       ÖĞRENCİ DURUMU
+       ========================================= */
+
+    if (
+      source ===
+      "student_status"
+    ) {
+      const {
+        data:
+          statusRequest,
+        error:
+          statusRequestError,
+      } = await supabase
+        .from(
+          "student_status_change_requests"
+        )
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (
+        statusRequestError ||
+        !statusRequest
+      ) {
+        console.error(
+          "status request lookup error:",
+          statusRequestError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Öğrenci durum talebi bulunamadı.",
+            details:
+              statusRequestError?.message,
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
+      if (
+        statusRequest.status !==
+        "pending"
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Bu talep daha önce işlenmiş.",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+
+      /*
+       * REDDET
+       */
+
+      if (
+        action === "reject"
+      ) {
+        const {
+          error:
+            rejectError,
+        } = await supabase
+          .from(
+            "student_status_change_requests"
+          )
+          .update({
+            status:
+              "rejected",
+          })
+          .eq("id", id)
+          .eq(
+            "status",
+            "pending"
+          );
+
+        if (rejectError) {
+          console.error(
+            "status reject error:",
+            rejectError
+          );
+
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "Talep reddedilemedi.",
+              details:
+                rejectError.message,
+            },
+            {
+              status: 500,
+            }
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          action:
+            "rejected",
+          source,
+          id,
+          message:
+            "Öğrenci durum talebi reddedildi.",
+        });
+      }
+
+      /*
+       * ONAYLA
+       */
+
+      const studentId =
+        clean(
+          statusRequest.student_id,
+          100
+        );
+
+      if (!studentId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Talebe ait öğrenci bulunamadı.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const targetStatus =
+        clean(
+          statusRequest.requested_status ??
+            statusRequest.new_status,
+          30
+        ) ||
+        (statusRequest.request_type ===
+        "deactivate"
+          ? "passive"
+          : statusRequest.request_type ===
+            "activate"
+          ? "active"
+          : "");
+
+      if (
+        targetStatus !==
+          "active" &&
+        targetStatus !==
+          "passive"
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Talep edilen öğrenci durumu geçersiz.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const {
+        error:
+          studentUpdateError,
+      } = await supabase
+        .from("students")
+        .update({
+          status:
+            targetStatus,
+        })
+        .eq(
+          "id",
+          studentId
+        );
+
+      if (
+        studentUpdateError
+      ) {
+        console.error(
+          "student status update error:",
+          studentUpdateError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Öğrencinin durumu güncellenemedi.",
+            details:
+              studentUpdateError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      const {
+        error:
+          requestUpdateError,
+      } = await supabase
+        .from(
+          "student_status_change_requests"
+        )
+        .update({
+          status:
+            "approved",
+        })
+        .eq("id", id)
+        .eq(
+          "status",
+          "pending"
+        );
+
+      if (
+        requestUpdateError
+      ) {
+        console.error(
+          "status request approve error:",
+          requestUpdateError
+        );
+
+        /*
+         * Öğrenci durumu değişti ancak
+         * talep approved yapılamadı.
+         * Bu nedenle açık hata dönüyoruz.
+         */
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Öğrenci durumu değiştirildi ancak talep kaydı tamamlanamadı.",
+            details:
+              requestUpdateError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action:
+          "approved",
+        source,
+        id,
+        student_id:
+          studentId,
+        new_status:
+          targetStatus,
+        message:
+          targetStatus ===
+          "passive"
+            ? "Öğrenci pasife alındı."
+            : "Öğrenci aktif hale getirildi.",
+      });
+    }
+
+    /* =========================================
+       DERS / TELAFİ İŞLEMLERİ
+       ========================================= */
+
+    const {
+      data:
+        lessonRequest,
+      error:
+        lessonRequestError,
+    } = await supabase
+      .from(
+        "lesson_adjustment_requests"
+      )
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (
+      lessonRequestError ||
+      !lessonRequest
+    ) {
+      console.error(
+        "lesson request lookup error:",
+        lessonRequestError
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Ders işlem talebi bulunamadı.",
+          details:
+            lessonRequestError?.message,
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    if (
+      lessonRequest.status !==
+      "pending"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Bu talep daha önce işlenmiş.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    /*
+     * DERS TALEBİNİ REDDET
+     */
+
+    if (
+      action === "reject"
+    ) {
+      const {
+        error:
+          lessonRejectError,
+      } = await supabase
+        .from(
+          "lesson_adjustment_requests"
+        )
+        .update({
+          status:
+            "rejected",
+        })
+        .eq("id", id)
+        .eq(
+          "status",
+          "pending"
+        );
+
+      if (
+        lessonRejectError
+      ) {
+        console.error(
+          "lesson reject error:",
+          lessonRejectError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Ders işlemi reddedilemedi.",
+            details:
+              lessonRejectError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action:
+          "rejected",
+        source,
+        id,
+        message:
+          "Ders işlem talebi reddedildi.",
+      });
+    }
+
+    /*
+     * DERS TALEBİNİ ONAYLA
+     *
+     * Burada yalnızca talebi onaylıyoruz.
+     * Öğrencinin gerçek kalan ders /
+     * telafi bakiyesinin tutulduğu tablo
+     * ve kolon henüz doğrulanmadığı için
+     * bilinmeyen kolona veri yazmıyoruz.
+     */
+
+    const {
+      error:
+        lessonApproveError,
+    } = await supabase
+      .from(
+        "lesson_adjustment_requests"
+      )
+      .update({
+        status:
+          "approved",
+      })
+      .eq("id", id)
+      .eq(
+        "status",
+        "pending"
+      );
+
+    if (
+      lessonApproveError
+    ) {
+      console.error(
+        "lesson approve error:",
+        lessonApproveError
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Ders işlem talebi onaylanamadı.",
+          details:
+            lessonApproveError.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      action:
+        "approved",
+      source,
+      id,
+      request_type:
+        lessonRequest.request_type ??
+        null,
+      lesson_count:
+        lessonRequest.lesson_count ??
+        null,
+      student_id:
+        lessonRequest.student_id ??
+        null,
+      message:
+        "Ders işlem talebi onaylandı.",
+    });
+  } catch (error) {
+    console.error(
+      "approval-center POST error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Onay işlemi sırasında beklenmeyen bir hata oluştu.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+/* =========================================================
+   GET
+   BEKLEYEN ONAYLARI GETİR
+   ========================================================= */
+
+export async function GET() {
+  try {
+    const supabase =
+      await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } =
+      await supabase.auth.getUser();
+
+    if (
+      userError ||
+      !user
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Oturum bulunamadı.",
+        },
+        {
+          status: 401,
+        }
       );
     }
 
@@ -245,23 +879,43 @@ export async function GET() {
       lessonRequestResult,
     ] = await Promise.all([
       supabase
-        .from("student_status_change_requests")
+        .from(
+          "student_status_change_requests"
+        )
         .select("*")
-        .eq("status", "pending")
-        .order("created_at", {
-          ascending: false,
-        }),
+        .eq(
+          "status",
+          "pending"
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        ),
 
       supabase
-        .from("lesson_adjustment_requests")
+        .from(
+          "lesson_adjustment_requests"
+        )
         .select("*")
-        .eq("status", "pending")
-        .order("requested_at", {
-          ascending: false,
-        }),
+        .eq(
+          "status",
+          "pending"
+        )
+        .order(
+          "requested_at",
+          {
+            ascending:
+              false,
+          }
+        ),
     ]);
 
-    if (statusRequestResult.error) {
+    if (
+      statusRequestResult.error
+    ) {
       console.error(
         "student status approval list error:",
         statusRequestResult.error
@@ -273,13 +927,18 @@ export async function GET() {
           error:
             "Öğrenci durum talepleri alınamadı.",
           details:
-            statusRequestResult.error.message,
+            statusRequestResult
+              .error.message,
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
-    if (lessonRequestResult.error) {
+    if (
+      lessonRequestResult.error
+    ) {
       console.error(
         "lesson approval list error:",
         lessonRequestResult.error
@@ -291,56 +950,78 @@ export async function GET() {
           error:
             "Ders işlem talepleri alınamadı.",
           details:
-            lessonRequestResult.error.message,
+            lessonRequestResult
+              .error.message,
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
     const statusRequests =
-      statusRequestResult.data ?? [];
+      statusRequestResult.data ??
+      [];
 
     const lessonRequests =
-      lessonRequestResult.data ?? [];
+      lessonRequestResult.data ??
+      [];
 
-    const studentIds = Array.from(
-      new Set(
-        [
-          ...statusRequests.map(
-            (item) => item.student_id
-          ),
-          ...lessonRequests.map(
-            (item) => item.student_id
-          ),
-        ].filter(
-          (id): id is string =>
-            typeof id === "string" &&
-            id.trim().length > 0
+    const studentIds =
+      Array.from(
+        new Set(
+          [
+            ...statusRequests.map(
+              (item) =>
+                item.student_id
+            ),
+
+            ...lessonRequests.map(
+              (item) =>
+                item.student_id
+            ),
+          ].filter(
+            (
+              id
+            ): id is string =>
+              typeof id ===
+                "string" &&
+              id.trim().length >
+                0
+          )
         )
-      )
-    );
+      );
 
-    let students: StudentInfo[] = [];
+    let students:
+      StudentInfo[] = [];
 
-    if (studentIds.length > 0) {
+    if (
+      studentIds.length >
+      0
+    ) {
       const {
-        data: studentData,
-        error: studentError,
+        data:
+          studentData,
+        error:
+          studentError,
       } = await supabase
         .from("students")
         .select(
-  `
-  id,
-  first_name,
-  last_name,
-  phone,
-  guardian_name,
-  guardian_phone,
-  emergency_contact_phone,
-  branch_id
-`
-)
-        .in("id", studentIds);
+          `
+            id,
+            first_name,
+            last_name,
+            phone,
+            guardian_name,
+            guardian_phone,
+            emergency_contact_phone,
+            branch_id
+          `
+        )
+        .in(
+          "id",
+          studentIds
+        );
 
       if (studentError) {
         console.error(
@@ -353,237 +1034,319 @@ export async function GET() {
             ok: false,
             error:
               "Onay taleplerine ait öğrenci bilgileri alınamadı.",
-            details: studentError.message,
+            details:
+              studentError.message,
           },
-          { status: 500 }
+          {
+            status: 500,
+          }
         );
       }
 
       students =
-        (studentData ?? []) as StudentInfo[];
+        (studentData ??
+          []) as StudentInfo[];
     }
 
-    const studentMap = new Map<
-      string,
-      StudentInfo
-    >(
-      students.map((student) => [
-        student.id,
-        student,
-      ])
-    );
+    const studentMap =
+      new Map<
+        string,
+        StudentInfo
+      >(
+        students.map(
+          (student) => [
+            student.id,
+            student,
+          ]
+        )
+      );
 
-    const statusItems: UnifiedApprovalRequest[] =
-      statusRequests.map((item) => {
-        const student =
-          item.student_id
-            ? studentMap.get(item.student_id) ??
-              null
-            : null;
+    const statusItems:
+      UnifiedApprovalRequest[] =
+      statusRequests.map(
+        (item) => {
+          const student =
+            item.student_id
+              ? studentMap.get(
+                  item.student_id
+                ) ?? null
+              : null;
 
-        const recipient =
-          getRecipient(student);
+          const recipient =
+            getRecipient(
+              student
+            );
 
-        const requestedStatus =
-          item.requested_status ??
-          item.new_status ??
-          null;
+          const requestedStatus =
+            item.requested_status ??
+            item.new_status ??
+            null;
 
-        return {
-          id: item.id,
+          return {
+            id: item.id,
 
-          source: "student_status",
-          category: "student",
+            source:
+              "student_status",
 
-          request_type:
-            item.request_type ??
-            "status_change",
+            category:
+              "student",
 
-          request_label: requestLabel(
-            "student_status",
-            item.request_type ??
+            request_type:
+              item.request_type ??
               "status_change",
-            requestedStatus
-          ),
 
-          student_id:
-            item.student_id ?? null,
-
-          branch_id:
-            item.branch_id ?? null,
-
-          group_id:
-            item.group_id ?? null,
-
-          lesson_count: null,
-
-          reason:
-            item.reason ?? null,
-
-          description:
-            item.description ?? null,
-
-          old_status:
-            item.old_status ?? null,
-
-          new_status:
-            item.new_status ?? null,
-
-          requested_status:
-            requestedStatus,
-
-          status:
-            item.status ?? "pending",
-
-          requested_by:
-            item.requested_by ?? null,
-
-          requested_at:
-            item.requested_at ?? null,
-
-          created_at:
-            item.created_at ?? null,
-
-          student,
-
-          recipient_phone:
-            recipient.phone,
-
-          recipient_type:
-            recipient.type,
-
-          suggested_message:
-            buildSuggestedMessage({
-              student,
-              requestType:
+            request_label:
+              requestLabel(
+                "student_status",
                 item.request_type ??
-                "status_change",
-              source: "student_status",
-              lessonCount: null,
+                  "status_change",
+                requestedStatus
+              ),
+
+            student_id:
+              item.student_id ??
+              null,
+
+            branch_id:
+              item.branch_id ??
+              null,
+
+            group_id:
+              item.group_id ??
+              null,
+
+            lesson_count:
+              null,
+
+            reason:
+              item.reason ??
+              null,
+
+            description:
+              item.description ??
+              null,
+
+            old_status:
+              item.old_status ??
+              null,
+
+            new_status:
+              item.new_status ??
+              null,
+
+            requested_status:
               requestedStatus,
-            }),
-        };
-      });
 
-    const lessonItems: UnifiedApprovalRequest[] =
-      lessonRequests.map((item) => {
-        const student =
-          item.student_id
-            ? studentMap.get(item.student_id) ??
-              null
-            : null;
+            status:
+              item.status ??
+              "pending",
 
-        const recipient =
-          getRecipient(student);
+            requested_by:
+              item.requested_by ??
+              null,
 
-        return {
-          id: item.id,
+            requested_at:
+              item.requested_at ??
+              null,
 
-          source: "lesson_adjustment",
-          category: "lesson",
+            created_at:
+              item.created_at ??
+              null,
 
-          request_type:
-            item.request_type ??
-            "lesson_adjustment",
+            student,
 
-          request_label: requestLabel(
-            "lesson_adjustment",
-            item.request_type ??
-              "lesson_adjustment"
-          ),
+            recipient_phone:
+              recipient.phone,
 
-          student_id:
-            item.student_id ?? null,
+            recipient_type:
+              recipient.type,
 
-          branch_id:
-            item.branch_id ?? null,
+            suggested_message:
+              buildSuggestedMessage({
+                student,
 
-          group_id:
-            item.group_id ?? null,
+                requestType:
+                  item.request_type ??
+                  "status_change",
 
-          lesson_count:
-            item.lesson_count ?? null,
+                source:
+                  "student_status",
 
-          reason:
-            item.reason ?? null,
+                lessonCount:
+                  null,
 
-          description:
-            item.description ?? null,
+                requestedStatus,
+              }),
+          };
+        }
+      );
 
-          old_status: null,
-          new_status: null,
-          requested_status: null,
+    const lessonItems:
+      UnifiedApprovalRequest[] =
+      lessonRequests.map(
+        (item) => {
+          const student =
+            item.student_id
+              ? studentMap.get(
+                  item.student_id
+                ) ?? null
+              : null;
 
-          status:
-            item.status ?? "pending",
+          const recipient =
+            getRecipient(
+              student
+            );
 
-          requested_by:
-            item.requested_by ?? null,
+          return {
+            id: item.id,
 
-          requested_at:
-            item.requested_at ?? null,
+            source:
+              "lesson_adjustment",
 
-          created_at:
-            item.created_at ?? null,
+            category:
+              "lesson",
 
-          student,
+            request_type:
+              item.request_type ??
+              "lesson_adjustment",
 
-          recipient_phone:
-            recipient.phone,
-
-          recipient_type:
-            recipient.type,
-
-          suggested_message:
-            buildSuggestedMessage({
-              student,
-              requestType:
+            request_label:
+              requestLabel(
+                "lesson_adjustment",
                 item.request_type ??
-                "lesson_adjustment",
-              source:
-                "lesson_adjustment",
-              lessonCount:
-                item.lesson_count ?? null,
-              requestedStatus: null,
-            }),
-        };
-      });
+                  "lesson_adjustment"
+              ),
+
+            student_id:
+              item.student_id ??
+              null,
+
+            branch_id:
+              item.branch_id ??
+              null,
+
+            group_id:
+              item.group_id ??
+              null,
+
+            lesson_count:
+              item.lesson_count ??
+              null,
+
+            reason:
+              item.reason ??
+              null,
+
+            description:
+              item.description ??
+              null,
+
+            old_status:
+              null,
+
+            new_status:
+              null,
+
+            requested_status:
+              null,
+
+            status:
+              item.status ??
+              "pending",
+
+            requested_by:
+              item.requested_by ??
+              null,
+
+            requested_at:
+              item.requested_at ??
+              null,
+
+            created_at:
+              item.created_at ??
+              null,
+
+            student,
+
+            recipient_phone:
+              recipient.phone,
+
+            recipient_type:
+              recipient.type,
+
+            suggested_message:
+              buildSuggestedMessage({
+                student,
+
+                requestType:
+                  item.request_type ??
+                  "lesson_adjustment",
+
+                source:
+                  "lesson_adjustment",
+
+                lessonCount:
+                  item.lesson_count ??
+                  null,
+
+                requestedStatus:
+                  null,
+              }),
+          };
+        }
+      );
 
     const requests = [
       ...statusItems,
       ...lessonItems,
-    ].sort((a, b) => {
-      const aDate =
-        a.requested_at ??
-        a.created_at ??
-        "";
+    ].sort(
+      (a, b) => {
+        const aDate =
+          a.requested_at ??
+          a.created_at ??
+          "";
 
-      const bDate =
-        b.requested_at ??
-        b.created_at ??
-        "";
+        const bDate =
+          b.requested_at ??
+          b.created_at ??
+          "";
 
-      const aTime = aDate
-        ? new Date(aDate).getTime()
-        : 0;
+        const aTime =
+          aDate
+            ? new Date(
+                aDate
+              ).getTime()
+            : 0;
 
-      const bTime = bDate
-        ? new Date(bDate).getTime()
-        : 0;
+        const bTime =
+          bDate
+            ? new Date(
+                bDate
+              ).getTime()
+            : 0;
 
-      return bTime - aTime;
-    });
+        return (
+          bTime - aTime
+        );
+      }
+    );
 
     return NextResponse.json({
       ok: true,
 
       counts: {
-        total: requests.length,
-        student: statusItems.length,
-        lesson: lessonItems.length,
+        total:
+          requests.length,
+
+        student:
+          statusItems.length,
+
+        lesson:
+          lessonItems.length,
       },
 
-      students_found: students.length,
+      students_found:
+        students.length,
 
       requests,
     });
@@ -599,7 +1362,9 @@ export async function GET() {
         error:
           "Onay Merkezi talepleri alınırken beklenmeyen bir hata oluştu.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
