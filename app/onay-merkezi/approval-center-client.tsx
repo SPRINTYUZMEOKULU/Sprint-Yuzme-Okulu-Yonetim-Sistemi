@@ -128,12 +128,16 @@ function createWhatsAppUrl(phone: string, message: string) {
 }
 
 export default function ApprovalCenterClient() {
-  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
-  const [counts, setCounts] = useState({
-    total: 0,
-    student: 0,
-    lesson: 0,
-  });
+ const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+
+const [filter, setFilter] =
+  useState<"all" | "student" | "lesson">("all");
+
+const [counts, setCounts] = useState({
+  total: 0,
+  student: 0,
+  lesson: 0,
+});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -178,7 +182,11 @@ export default function ApprovalCenterClient() {
 
   useEffect(() => {
     void loadRequests();
-  }, []);
+  }, []); 
+  const filteredRequests = requests.filter((request) => {
+  if (filter === "all") return true;
+  return request.category === filter;
+});
 
   async function processRequest(
     request: ApprovalRequest,
@@ -311,22 +319,47 @@ export default function ApprovalCenterClient() {
               marginBottom: "18px",
             }}
           >
-            <div style={summaryCardStyle}>
-              <span style={summaryNumberStyle}>{counts.total}</span>
-              <span style={summaryLabelStyle}>Toplam Bekleyen</span>
-            </div>
+          <button
+  type="button"
+  onClick={() => setFilter("all")}
+  style={{
+    ...summaryCardStyle,
+    cursor: "pointer",
+    border: filter === "all" ? "2px solid #2563eb" : "1px solid #e5e7eb",
+    background: filter === "all" ? "#eff6ff" : "#ffffff",
+  }}
+>
+  <span style={summaryNumberStyle}>{counts.total}</span>
+  <span style={summaryLabelStyle}>Toplam Bekleyen</span>
+</button>
 
-            <div style={summaryCardStyle}>
-              <span style={summaryNumberStyle}>{counts.student}</span>
-              <span style={summaryLabelStyle}>Öğrenci İşlemi</span>
-            </div>
+<button
+  type="button"
+  onClick={() => setFilter("student")}
+  style={{
+    ...summaryCardStyle,
+    cursor: "pointer",
+    border: filter === "student" ? "2px solid #2563eb" : "1px solid #e5e7eb",
+    background: filter === "student" ? "#eff6ff" : "#ffffff",
+  }}
+>
+  <span style={summaryNumberStyle}>{counts.student}</span>
+  <span style={summaryLabelStyle}>Öğrenci İşlemi</span>
+</button>
 
-            <div style={summaryCardStyle}>
-              <span style={summaryNumberStyle}>{counts.lesson}</span>
-              <span style={summaryLabelStyle}>Ders İşlemi</span>
-            </div>
-          </div>
-
+<button
+  type="button"
+  onClick={() => setFilter("lesson")}
+  style={{
+    ...summaryCardStyle,
+    cursor: "pointer",
+    border: filter === "lesson" ? "2px solid #2563eb" : "1px solid #e5e7eb",
+    background: filter === "lesson" ? "#eff6ff" : "#ffffff",
+  }}
+>
+  <span style={summaryNumberStyle}>{counts.lesson}</span>
+  <span style={summaryLabelStyle}>Ders İşlemi</span>
+</button>
           <div
             style={{
               display: "flex",
@@ -393,7 +426,7 @@ export default function ApprovalCenterClient() {
               Onay talepleri yükleniyor...
             </div>
           </div>
-        ) : requests.length === 0 ? (
+        filteredRequests.length === 0 ? (
           <div style={emptyStyle}>
             <div
               style={{
@@ -415,8 +448,7 @@ export default function ApprovalCenterClient() {
               display: "grid",
               gap: "16px",
             }}
-          >
-            {requests.map((request) => {
+          >filteredRequests.map((request) => {
               const studentName = getStudentName(request);
               const requestLabel = getRequestLabel(request);
               const isProcessing = processingId === request.id;
