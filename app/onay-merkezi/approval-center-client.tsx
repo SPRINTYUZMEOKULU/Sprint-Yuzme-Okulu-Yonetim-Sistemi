@@ -425,8 +425,8 @@ const [counts, setCounts] = useState({
             >
               Onay talepleri yükleniyor...
             </div>
-          </div>
-        filteredRequests.length === 0 ? (
+         </div>
+) : filteredRequests.length === 0 ? (
           <div style={emptyStyle}>
             <div
               style={{
