@@ -11,8 +11,7 @@ type StudentInfo = {
   guardian_name: string | null;
   guardian_phone: string | null;
   emergency_contact_phone: string | null;
-  branch_id: string | null;
-  group_id: string | null;
+ branch_id: string | null;
 };
 
 type UnifiedApprovalRequest = {
@@ -330,18 +329,17 @@ export async function GET() {
       } = await supabase
         .from("students")
         .select(
-          `
-          id,
-          first_name,
-          last_name,
-          phone,
-          guardian_name,
-          guardian_phone,
-          emergency_contact_phone,
-          branch_id,
-          group_id
-        `
-        )
+  `
+  id,
+  first_name,
+  last_name,
+  phone,
+  guardian_name,
+  guardian_phone,
+  emergency_contact_phone,
+  branch_id
+`
+)
         .in("id", studentIds);
 
       if (studentError) {
