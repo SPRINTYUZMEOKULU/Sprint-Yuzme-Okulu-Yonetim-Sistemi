@@ -10,85 +10,165 @@ function clean(value: unknown, max = 250) {
 }
 
 function getIp(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for");
+  const forwarded =
+    request.headers.get("x-forwarded-for");
 
   if (forwarded) {
-    return forwarded.split(",")[0]?.trim() || null;
+    return (
+      forwarded
+        .split(",")[0]
+        ?.trim() || null
+    );
   }
 
-  return request.headers.get("x-real-ip") || null;
+  return (
+    request.headers.get("x-real-ip") ||
+    null
+  );
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
-    const body = (await request.json()) as Payload;
+    const body =
+      (await request.json()) as Payload;
 
-    // Bot tuzağı
+    /*
+     * BOT TUZAĞI
+     */
     if (clean(body.website)) {
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+      });
     }
 
+    /*
+     * =====================================================
+     * FORM VERİLERİ
+     * =====================================================
+     */
+
     const registrationFor =
-      clean(body.registrationFor, 20) === "adult"
+      clean(
+        body.registrationFor,
+        20
+      ) === "adult"
         ? "adult"
         : "child";
 
-    const firstName = clean(body.firstName, 60);
-    const lastName = clean(body.lastName, 60);
+    const firstName =
+      clean(body.firstName, 60);
+
+    const lastName =
+      clean(body.lastName, 60);
 
     const birthDate =
-      clean(body.birthDate, 10) || null;
+      clean(body.birthDate, 10) ||
+      null;
 
     const guardianName =
       registrationFor === "child"
-        ? clean(body.guardianName, 120)
+        ? clean(
+            body.guardianName,
+            120
+          )
         : "";
 
-    const phone = clean(body.phone, 20);
+    const phone =
+      clean(body.phone, 20);
 
-    const branchId = clean(body.branchId, 60);
-    const groupId = clean(body.groupId, 60);
-    const packageId = clean(body.packageId, 60);
+    const branchId =
+      clean(body.branchId, 60);
 
-    const courseType = clean(body.courseType, 100);
+    const groupId =
+      clean(body.groupId, 60);
+
+    const packageId =
+      clean(body.packageId, 60);
+
+    const courseType =
+      clean(body.courseType, 100);
 
     const swimmingLevel =
-      clean(body.swimmingLevel, 100) || null;
+      clean(
+        body.swimmingLevel,
+        100
+      ) || null;
 
     const preferredDays =
-      clean(body.preferredDays, 150) || null;
+      clean(
+        body.preferredDays,
+        150
+      ) || null;
 
     const preferredTime =
-      clean(body.preferredTime, 100) || null;
+      clean(
+        body.preferredTime,
+        100
+      ) || null;
 
     const note =
-      clean(body.note, 1000) || null;
+      clean(body.note, 1000) ||
+      null;
 
     const contactRequest =
-      clean(body.contactRequest, 100) || null;
-
-    const rulesAccepted =
-      body.rulesAccepted === "true";
-
-    const whatsappPermission =
-      body.whatsappPermission === "true";
+      clean(
+        body.contactRequest,
+        100
+      ) || null;
 
     /*
-     * TEMEL ZORUNLULUKLAR
+     * SAĞLIK
      */
 
-    if (!firstName || !lastName || !phone) {
+    const healthDeclaration =
+      body.healthDeclaration ===
+      "true";
+
+    const healthNote =
+      clean(
+        body.healthNote,
+        1000
+      ) || null;
+
+    /*
+     * ONAYLAR
+     */
+
+    const rulesAccepted =
+      body.rulesAccepted ===
+      "true";
+
+    const whatsappPermission =
+      body.whatsappPermission ===
+      "true";
+
+    /*
+     * =====================================================
+     * ZORUNLU ALAN KONTROLLERİ
+     * =====================================================
+     */
+
+    if (
+      !firstName ||
+      !lastName ||
+      !phone
+    ) {
       return NextResponse.json(
         {
           error:
             "Ad, soyad ve telefon bilgilerini eksiksiz doldurun.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     if (
-      registrationFor === "child" &&
+      registrationFor ===
+        "child" &&
       !guardianName
     ) {
       return NextResponse.json(
@@ -96,17 +176,48 @@ export async function POST(request: Request) {
           error:
             "Çocuk kaydında veli adı soyadı zorunludur.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    if (!branchId || !groupId) {
+    if (
+      !branchId ||
+      !groupId
+    ) {
       return NextResponse.json(
         {
           error:
             "Şube ve grup seçimini tamamlayın.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!packageId) {
+      return NextResponse.json(
+        {
+          error:
+            "Paket tercihini seçin.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!healthDeclaration) {
+      return NextResponse.json(
+        {
+          error:
+            "Ön kayıt oluşturabilmek için sağlık beyanını onaylamanız gerekiyor.",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
@@ -116,39 +227,69 @@ export async function POST(request: Request) {
           error:
             "Ön kayıt oluşturabilmek için Sprint Yüzme Okulu kurallarını okuyup kabul etmeniz gerekiyor.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
+    if (!whatsappPermission) {
+      return NextResponse.json(
+        {
+          error:
+            "Kayıt bilgilendirmelerinin WhatsApp üzerinden gönderilebilmesi için iletişim onayını vermeniz gerekiyor.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+     * =====================================================
+     * SUPABASE
+     * =====================================================
+     */
+
     const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL;
+      process.env
+        .NEXT_PUBLIC_SUPABASE_URL;
 
     const serviceRoleKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
+      process.env
+        .SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (
+      !supabaseUrl ||
+      !serviceRoleKey
+    ) {
       return NextResponse.json(
         {
           error:
             "Sunucu bağlantısı henüz yapılandırılmadı.",
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
-    const supabase = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
+    const supabase =
+      createClient(
+        supabaseUrl,
+        serviceRoleKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
+      );
 
     /*
+     * =====================================================
      * ORGANİZASYON
+     * =====================================================
      */
 
     const {
@@ -157,18 +298,28 @@ export async function POST(request: Request) {
     } = await supabase
       .from("organizations")
       .select("id")
-      .eq("name", "Sprint Yüzme Okulu")
+      .eq(
+        "name",
+        "Sprint Yüzme Okulu"
+      )
       .single();
 
-    if (organizationError || !organization) {
+    if (
+      organizationError ||
+      !organization
+    ) {
       throw (
         organizationError ||
-        new Error("Kurum kaydı bulunamadı.")
+        new Error(
+          "Kurum kaydı bulunamadı."
+        )
       );
     }
 
     /*
+     * =====================================================
      * ŞUBE
+     * =====================================================
      */
 
     const {
@@ -177,19 +328,32 @@ export async function POST(request: Request) {
     } = await supabase
       .from("branches")
       .select("id,name")
-      .eq("organization_id", organization.id)
-      .eq("id", branchId)
+      .eq(
+        "organization_id",
+        organization.id
+      )
+      .eq(
+        "id",
+        branchId
+      )
       .single();
 
-    if (branchError || !branch) {
+    if (
+      branchError ||
+      !branch
+    ) {
       throw (
         branchError ||
-        new Error("Şube kaydı bulunamadı.")
+        new Error(
+          "Şube kaydı bulunamadı."
+        )
       );
     }
 
     /*
+     * =====================================================
      * GRUP
+     * =====================================================
      */
 
     const {
@@ -198,16 +362,30 @@ export async function POST(request: Request) {
     } = await supabase
       .from("training_groups")
       .select(
-        "id,name,branch_id,is_active,public_registration,course_type"
+        `
+        id,
+        name,
+        branch_id,
+        is_active,
+        public_registration,
+        course_type
+        `
       )
-      .eq("organization_id", organization.id)
-      .eq("id", groupId)
+      .eq(
+        "organization_id",
+        organization.id
+      )
+      .eq(
+        "id",
+        groupId
+      )
       .single();
 
     if (
       groupError ||
       !group ||
-      group.branch_id !== branch.id ||
+      group.branch_id !==
+        branch.id ||
       !group.is_active ||
       !group.public_registration
     ) {
@@ -216,56 +394,62 @@ export async function POST(request: Request) {
           error:
             "Seçilen grup artık ön kayda açık değil.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     /*
-     * PAKET OPSİYONEL
+     * =====================================================
+     * PAKET
+     * =====================================================
      */
 
-    let coursePackage:
-      | {
-          id: string;
-          name: string;
-          lesson_count?: number;
+    const {
+      data: coursePackage,
+      error: packageError,
+    } = await supabase
+      .from("course_packages")
+      .select(
+        `
+        id,
+        name,
+        lesson_count,
+        price,
+        is_active
+        `
+      )
+      .eq(
+        "organization_id",
+        organization.id
+      )
+      .eq(
+        "id",
+        packageId
+      )
+      .single();
+
+    if (
+      packageError ||
+      !coursePackage ||
+      !coursePackage.is_active
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Seçilen paket artık aktif değil.",
+        },
+        {
+          status: 400,
         }
-      | null = null;
-
-    if (packageId) {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("course_packages")
-        .select("id,name,lesson_count,is_active")
-        .eq("organization_id", organization.id)
-        .eq("id", packageId)
-        .single();
-
-      if (
-        error ||
-        !data ||
-        !data.is_active
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Seçilen paket artık aktif değil.",
-          },
-          { status: 400 }
-        );
-      }
-
-      coursePackage = data;
+      );
     }
 
     /*
-     * ÖĞRENCİYİ OLUŞTUR
-     *
-     * DİKKAT:
-     * Telefon ve veli bilgilerini students tablosuna da
-     * yazıyoruz. Böylece Öğrenci Dosyası doğrudan çekebilir.
+     * =====================================================
+     * ÖĞRENCİ KAYDI
+     * =====================================================
      */
 
     const {
@@ -274,46 +458,66 @@ export async function POST(request: Request) {
     } = await supabase
       .from("students")
       .insert({
-        organization_id: organization.id,
+        organization_id:
+          organization.id,
 
-        branch_id: branch.id,
+        branch_id:
+          branch.id,
 
-        first_name: firstName,
-        last_name: lastName,
-        birth_date: birthDate,
+        first_name:
+          firstName,
+
+        last_name:
+          lastName,
+
+        birth_date:
+          birthDate,
 
         phone,
 
         guardian_name:
-          registrationFor === "child"
+          registrationFor ===
+          "child"
             ? guardianName
             : null,
 
         guardian_phone:
-          registrationFor === "child"
+          registrationFor ===
+          "child"
             ? phone
             : null,
 
-        status: "pre_registration",
+        status:
+          "pre_registration",
 
-        swimming_level: swimmingLevel,
+        swimming_level:
+          swimmingLevel,
 
-        preferred_days: preferredDays,
-        preferred_time: preferredTime,
+        preferred_days:
+          preferredDays,
 
-        registration_source: "web_form",
+        preferred_time:
+          preferredTime,
 
-        registration_note: note,
+        registration_source:
+          "web_form",
 
-        preferred_group_id: group.id,
+        registration_note:
+          note,
+
+        preferred_group_id:
+          group.id,
 
         preferred_package_id:
-          coursePackage?.id || null,
+          coursePackage.id,
       })
       .select("id")
       .single();
 
-    if (studentError || !student) {
+    if (
+      studentError ||
+      !student
+    ) {
       throw (
         studentError ||
         new Error(
@@ -323,25 +527,35 @@ export async function POST(request: Request) {
     }
 
     /*
-     * ÇOCUK KAYDIYSA AYRICA GUARDIAN KAYDI
+     * =====================================================
+     * ÇOCUK KAYDINDA VELİ
+     * =====================================================
      */
 
-    let guardianId: string | null = null;
+    let guardianId:
+      | string
+      | null = null;
 
-    if (registrationFor === "child") {
+    if (
+      registrationFor ===
+      "child"
+    ) {
       const {
         data: guardian,
         error: guardianError,
       } = await supabase
         .from("guardians")
         .insert({
-          organization_id: organization.id,
+          organization_id:
+            organization.id,
 
-          full_name: guardianName,
+          full_name:
+            guardianName,
 
           phone,
 
-          relationship: "Veli",
+          relationship:
+            "Veli",
 
           whatsapp_permission:
             whatsappPermission,
@@ -353,15 +567,13 @@ export async function POST(request: Request) {
         guardianError ||
         !guardian
       ) {
-        /*
-         * Öğrenci oluşturuldu ama veli oluşturulamadı.
-         * Yarım kayıt bırakmıyoruz.
-         */
-
         await supabase
           .from("students")
           .delete()
-          .eq("id", student.id);
+          .eq(
+            "id",
+            student.id
+          );
 
         throw (
           guardianError ||
@@ -371,39 +583,67 @@ export async function POST(request: Request) {
         );
       }
 
-      guardianId = guardian.id;
+      guardianId =
+        guardian.id;
 
       const {
-        error: relationError,
+        error:
+          relationError,
       } = await supabase
-        .from("guardian_students")
+        .from(
+          "guardian_students"
+        )
         .insert({
-          guardian_id: guardian.id,
+          guardian_id:
+            guardian.id,
 
-          student_id: student.id,
+          student_id:
+            student.id,
 
-          relationship: "Veli",
+          relationship:
+            "Veli",
 
-          is_primary: true,
+          is_primary:
+            true,
         });
 
-      if (relationError) {
+      if (
+        relationError
+      ) {
+        await supabase
+          .from(
+            "guardian_students"
+          )
+          .delete()
+          .eq(
+            "student_id",
+            student.id
+          );
+
         await supabase
           .from("guardians")
           .delete()
-          .eq("id", guardian.id);
+          .eq(
+            "id",
+            guardian.id
+          );
 
         await supabase
           .from("students")
           .delete()
-          .eq("id", student.id);
+          .eq(
+            "id",
+            student.id
+          );
 
         throw relationError;
       }
     }
 
     /*
-     * ELEKTRONİK KABUL SNAPSHOT
+     * =====================================================
+     * ELEKTRONİK KABUL
+     * =====================================================
      */
 
     const acceptedAt =
@@ -413,22 +653,40 @@ export async function POST(request: Request) {
       getIp(request);
 
     const userAgent =
-      request.headers.get("user-agent");
+      request.headers.get(
+        "user-agent"
+      );
+
+    /*
+     * Başvuru anındaki bilgiler.
+     * Öğrenci kaydı daha sonra değiştirilse bile
+     * bu snapshot ilk başvuruyu korur.
+     */
 
     const snapshot = {
-      registration_for: registrationFor,
+      registration_for:
+        registrationFor,
 
       student: {
-        first_name: firstName,
-        last_name: lastName,
-        birth_date: birthDate,
+        first_name:
+          firstName,
+
+        last_name:
+          lastName,
+
+        birth_date:
+          birthDate,
+
         phone,
       },
 
       guardian:
-        registrationFor === "child"
+        registrationFor ===
+        "child"
           ? {
-              full_name: guardianName,
+              full_name:
+                guardianName,
+
               phone,
             }
           : null,
@@ -439,20 +697,35 @@ export async function POST(request: Request) {
           group.course_type ||
           null,
 
-        branch_id: branch.id,
-        branch_name: branch.name,
+        branch_id:
+          branch.id,
 
-        group_id: group.id,
-        group_name: group.name,
+        branch_name:
+          branch.name,
+
+        group_id:
+          group.id,
+
+        group_name:
+          group.name,
 
         package_id:
-          coursePackage?.id || null,
+          coursePackage.id,
 
         package_name:
-          coursePackage?.name || null,
+          coursePackage.name,
 
-        preferred_days: preferredDays,
-        preferred_time: preferredTime,
+        package_lesson_count:
+          coursePackage.lesson_count,
+
+        package_price:
+          coursePackage.price,
+
+        preferred_days:
+          preferredDays,
+
+        preferred_time:
+          preferredTime,
 
         swimming_level:
           swimmingLevel,
@@ -463,19 +736,56 @@ export async function POST(request: Request) {
 
       note,
 
+      health: {
+        declaration:
+          healthDeclaration,
+
+        note:
+          healthNote,
+      },
+
       consents: {
+        health_declaration:
+          healthDeclaration,
+
         rules_accepted:
           rulesAccepted,
 
         whatsapp_permission:
           whatsappPermission,
       },
+
+      technical: {
+        accepted_at:
+          acceptedAt,
+
+        ip_address:
+          ipAddress,
+
+        user_agent:
+          userAgent,
+
+        form_version:
+          "SPRINT-ONKAYIT-v2",
+
+        rules_version:
+          "SPRINT-KURALLAR-v1",
+      },
     };
 
+    /*
+     * =====================================================
+     * REGISTRATION CONSENTS
+     * =====================================================
+     */
+
     const {
-      error: consentError,
+      error:
+        consentError,
     } = await supabase
-      .from("registration_consents")
+      .from(
+        "registration_consents"
+      )
       .insert({
         organization_id:
           organization.id,
@@ -485,6 +795,12 @@ export async function POST(request: Request) {
 
         registration_for:
           registrationFor,
+
+        health_declaration:
+          healthDeclaration,
+
+        health_note:
+          healthNote,
 
         rules_accepted:
           rulesAccepted,
@@ -499,7 +815,7 @@ export async function POST(request: Request) {
           "SPRINT-KURALLAR-v1",
 
         form_version:
-          "SPRINT-ONKAYIT-v1",
+          "SPRINT-ONKAYIT-v2",
 
         accepted_at:
           acceptedAt,
@@ -514,20 +830,24 @@ export async function POST(request: Request) {
           snapshot,
       });
 
-    if (consentError) {
+    if (
+      consentError
+    ) {
       console.error(
         "registration consent error:",
         consentError
       );
 
       /*
-       * Kabul kaydı kritik olduğu için
-       * ön kaydı başarılı saymıyoruz.
+       * Elektronik kabul kaydı bizim için
+       * kritik olduğu için yarım başvuru bırakmıyoruz.
        */
 
       if (guardianId) {
         await supabase
-          .from("guardian_students")
+          .from(
+            "guardian_students"
+          )
           .delete()
           .eq(
             "student_id",
@@ -546,7 +866,10 @@ export async function POST(request: Request) {
       await supabase
         .from("students")
         .delete()
-        .eq("id", student.id);
+        .eq(
+          "id",
+          student.id
+        );
 
       throw new Error(
         `Elektronik kabul kaydı oluşturulamadı: ${consentError.message}`
@@ -554,15 +877,18 @@ export async function POST(request: Request) {
     }
 
     /*
+     * =====================================================
      * YÖNETİM UYARISI
+     * =====================================================
      */
 
     const requestText =
-      contactRequest === "call_me"
+      contactRequest ===
+      "call_me"
         ? " · Aranmak istiyor"
         : contactRequest ===
             "whatsapp_info"
-        ? " · WhatsApp bilgisi istiyor"
+        ? " · WhatsApp üzerinden bilgi istiyor"
         : contactRequest ===
             "ready_to_start"
         ? " · Kayıt sonrası doğrudan başlamak istiyor"
@@ -571,7 +897,14 @@ export async function POST(request: Request) {
         ? " · Detaylı bilgi istiyor"
         : "";
 
-    await supabase
+    const healthText =
+      healthNote
+        ? " · Sağlık notu mevcut"
+        : "";
+
+    const {
+      error: alertError,
+    } = await supabase
       .from("alerts")
       .insert({
         organization_id:
@@ -587,23 +920,22 @@ export async function POST(request: Request) {
           "new_pre_registration",
 
         title:
-          registrationFor === "adult"
+          registrationFor ===
+          "adult"
             ? "Yeni yetişkin ön kaydı geldi"
             : "Yeni çocuk ön kaydı geldi",
 
         description:
           `${firstName} ${lastName}, ` +
-          `${branch.name} / ${group.name}` +
-          `${
-            coursePackage
-              ? ` / ${coursePackage.name}`
-              : ""
-          } tercihiyle ön kayıt oluşturdu.` +
-          requestText,
+          `${branch.name} / ${group.name} / ${coursePackage.name} ` +
+          `tercihiyle ön kayıt oluşturdu.` +
+          requestText +
+          healthText,
 
         priority:
+          healthNote ||
           contactRequest ===
-          "ready_to_start"
+            "ready_to_start"
             ? "important"
             : "normal",
 
@@ -617,12 +949,29 @@ export async function POST(request: Request) {
           `new-pre-registration-${student.id}`,
       });
 
+    if (alertError) {
+      console.error(
+        "pre-registration alert error:",
+        alertError
+      );
+    }
+
     /*
+     * =====================================================
      * ÖĞRENCİ İŞLEM GEÇMİŞİ
+     * =====================================================
+     *
+     * Sağlık notunun metnini buraya tekrar yazmıyoruz.
+     * Hassas bilgi elektronik kabul kaydında tutuluyor.
      */
 
-    await supabase
-      .from("student_activity_logs")
+    const {
+      error:
+        activityError,
+    } = await supabase
+      .from(
+        "student_activity_logs"
+      )
       .insert({
         organization_id:
           organization.id,
@@ -637,10 +986,59 @@ export async function POST(request: Request) {
           "Ön kayıt oluşturuldu",
 
         description:
-          `${branch.name} / ${group.name} için web ön kaydı oluşturuldu.`,
+          `${branch.name} / ${group.name} / ${coursePackage.name} için web ön kaydı oluşturuldu.`,
 
-        new_value:
-          snapshot,
+        new_value: {
+          registration_for:
+            registrationFor,
+
+          branch_id:
+            branch.id,
+
+          branch_name:
+            branch.name,
+
+          group_id:
+            group.id,
+
+          group_name:
+            group.name,
+
+          package_id:
+            coursePackage.id,
+
+          package_name:
+            coursePackage.name,
+
+          swimming_level:
+            swimmingLevel,
+
+          preferred_days:
+            preferredDays,
+
+          preferred_time:
+            preferredTime,
+
+          contact_request:
+            contactRequest,
+
+          health_declaration:
+            healthDeclaration,
+
+          health_note_provided:
+            Boolean(
+              healthNote
+            ),
+
+          rules_accepted:
+            rulesAccepted,
+
+          whatsapp_permission:
+            whatsappPermission,
+
+          accepted_at:
+            acceptedAt,
+        },
 
         source_type:
           "web_pre_registration",
@@ -652,6 +1050,21 @@ export async function POST(request: Request) {
           acceptedAt,
       });
 
+    if (
+      activityError
+    ) {
+      console.error(
+        "pre-registration activity error:",
+        activityError
+      );
+    }
+
+    /*
+     * =====================================================
+     * BAŞARILI
+     * =====================================================
+     */
+
     return NextResponse.json({
       ok: true,
 
@@ -661,6 +1074,11 @@ export async function POST(request: Request) {
       registrationFor,
 
       acceptedAt,
+
+      healthDeclaration,
+
+      message:
+        "Ön kayıt başarıyla oluşturuldu.",
     });
   } catch (error) {
     console.error(
@@ -675,7 +1093,9 @@ export async function POST(request: Request) {
             ? error.message
             : "Ön kayıt alınamadı. Lütfen daha sonra tekrar deneyin.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
