@@ -68,8 +68,8 @@ export default async function AttendancePage() {
     supabase
       .from("training_groups")
       .select(
-        "id, organization_id, branch_id, name, course_type, capacity, primary_coach_id"
-      )
+  "id, first_name, last_name, student_number, phone, email, guardian_name, guardian_phone, guardian_email, swimming_level, medical_note, general_note, preferred_days, preferred_time"
+)
       .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true }),
 
