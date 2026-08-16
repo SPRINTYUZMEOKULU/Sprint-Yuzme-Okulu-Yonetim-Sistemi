@@ -18,8 +18,6 @@ type AttendanceRecordInput = {
 };
 
 type SaveAttendanceInput = {
-  organizationId?: string;
-  currentProfileId?: string;
   branchId: string | null;
   groupId: string;
   scheduleId: string;
@@ -117,7 +115,7 @@ export async function saveAttendance(
       await supabase
         .from("training_groups")
         .select(
-          "id, organization_id, branch_id, primary_coach_id"
+          "id, branch_id, primary_coach_id"
         )
         .eq("id", input.groupId)
         .eq("organization_id", organizationId)
@@ -138,7 +136,7 @@ export async function saveAttendance(
     } = await supabase
       .from("lesson_schedules")
       .select(
-        "id, organization_id, branch_id, group_id, coach_id"
+        "id, branch_id, group_id, coach_id"
       )
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
