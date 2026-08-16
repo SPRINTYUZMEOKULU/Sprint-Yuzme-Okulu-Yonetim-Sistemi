@@ -36,7 +36,7 @@ type DailyAttendanceInput = {
 
 type MonthlyAttendanceInput = {
   groupId: string;
-  month: string; // YYYY-MM
+  month: string;
 };
 
 const ALLOWED_ROLES = [
@@ -59,7 +59,9 @@ async function getAuthorizedProfile() {
   return requireProfile([...ALLOWED_ROLES]);
 }
 
-export async function saveAttendance(input: SaveAttendanceInput) {
+export async function saveAttendance(
+  input: SaveAttendanceInput
+) {
   try {
     const profile = await getAuthorizedProfile();
     const supabase = await createClient();
@@ -74,27 +76,16 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       };
     }
 
-    if (!input.groupId) {
+    if (
+      !input.groupId ||
+      !input.scheduleId ||
+      !input.lessonDate
+    ) {
       return {
         ok: false,
         count: 0,
-        message: "Grup seçilmedi.",
-      };
-    }
-
-    if (!input.scheduleId) {
-      return {
-        ok: false,
-        count: 0,
-        message: "Ders seansı seçilmedi.",
-      };
-    }
-
-    if (!input.lessonDate) {
-      return {
-        ok: false,
-        count: 0,
-        message: "Ders tarihi seçilmedi.",
+        message:
+          "Grup, ders seansı ve tarih bilgisi zorunludur.",
       };
     }
 
@@ -102,7 +93,8 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {
         ok: false,
         count: 0,
-        message: "Kaydedilecek öğrenci bulunamadı.",
+        message:
+          "Kaydedilecek öğrenci bulunamadı.",
       };
     }
 
@@ -116,30 +108,38 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {
         ok: false,
         count: 0,
-        message: "Geçersiz yoklama kaydı tespit edildi.",
+        message:
+          "Geçersiz yoklama kaydı tespit edildi.",
       };
     }
 
-    // Grup gerçekten bu organizasyona mı ait?
-    const { data: group, error: groupError } = await supabase
-      .from("training_groups")
-      .select("id, branch_id, primary_coach_id")
-      .eq("id", input.groupId)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
+    const { data: group, error: groupError } =
+      await supabase
+        .from("training_groups")
+        .select(
+          "id, organization_id, branch_id, primary_coach_id"
+        )
+        .eq("id", input.groupId)
+        .eq("organization_id", organizationId)
+        .maybeSingle();
 
     if (groupError || !group) {
       return {
         ok: false,
         count: 0,
-        message: "Grup bulunamadı veya bu kuruma ait değil.",
+        message:
+          "Grup bulunamadı veya bu kuruma ait değil.",
       };
     }
 
-    // Seans gerçekten seçilen gruba mı ait?
-    const { data: schedule, error: scheduleError } = await supabase
+    const {
+      data: schedule,
+      error: scheduleError,
+    } = await supabase
       .from("lesson_schedules")
-      .select("id, group_id, branch_id, coach_id, is_active")
+      .select(
+        "id, organization_id, branch_id, group_id, coach_id"
+      )
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
       .eq("organization_id", organizationId)
@@ -149,44 +149,54 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {
         ok: false,
         count: 0,
-        message: "Ders seansı bulunamadı.",
+        message:
+          "Seçilen ders programı bulunamadı.",
       };
     }
 
-    const studentIds = input.records.map(
-      (record) => record.studentId
+    const studentIds = Array.from(
+      new Set(
+        input.records.map(
+          (record) => record.studentId
+        )
+      )
     );
 
-    // Gönderilen öğrencilerin gerçekten kuruma ait olduğunu doğrula.
-    const { data: validStudents, error: studentsError } =
-      await supabase
-        .from("students")
-        .select("id")
-        .eq("organization_id", organizationId)
-        .in("id", studentIds);
+    const {
+      data: validStudents,
+      error: studentError,
+    } = await supabase
+      .from("students")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", studentIds);
 
-    if (studentsError) {
+    if (studentError) {
       return {
         ok: false,
         count: 0,
-        message: `Öğrenciler doğrulanamadı: ${studentsError.message}`,
+        message: `Öğrenciler doğrulanamadı: ${studentError.message}`,
       };
     }
 
     const validStudentIds = new Set(
-      (validStudents || []).map((student) => student.id)
+      (validStudents || []).map(
+        (student: { id: string }) => student.id
+      )
     );
 
-    const hasInvalidStudent = input.records.some(
-      (record) => !validStudentIds.has(record.studentId)
-    );
+    const unauthorizedStudent =
+      input.records.some(
+        (record) =>
+          !validStudentIds.has(record.studentId)
+      );
 
-    if (hasInvalidStudent) {
+    if (unauthorizedStudent) {
       return {
         ok: false,
         count: 0,
         message:
-          "Yoklama listesinde bu kuruma ait olmayan öğrenci bulundu.",
+          "Yoklama listesinde kuruma ait olmayan öğrenci bulundu.",
       };
     }
 
@@ -194,26 +204,34 @@ export async function saveAttendance(input: SaveAttendanceInput) {
 
     const rows = input.records.map((record) => ({
       organization_id: organizationId,
+
       branch_id:
-        schedule.branch_id ||
-        group.branch_id ||
-        input.branchId ||
+        schedule.branch_id ??
+        group.branch_id ??
+        input.branchId ??
         null,
 
       student_id: record.studentId,
-      enrollment_id: record.enrollmentId,
+
+      enrollment_id:
+        record.enrollmentId ?? null,
+
       group_id: input.groupId,
+
       schedule_id: input.scheduleId,
 
       coach_id:
-        schedule.coach_id ||
-        input.coachId ||
-        group.primary_coach_id ||
+        schedule.coach_id ??
+        input.coachId ??
+        group.primary_coach_id ??
         null,
 
       lesson_date: input.lessonDate,
+
       status: record.status,
-      coach_note: record.coachNote,
+
+      coach_note:
+        record.coachNote?.trim() || null,
 
       recorded_by: profile.id,
       updated_by: profile.id,
@@ -229,8 +247,6 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       });
 
     if (error) {
-      console.error("attendance_records upsert error:", error);
-
       return {
         ok: false,
         count: 0,
@@ -243,18 +259,17 @@ export async function saveAttendance(input: SaveAttendanceInput) {
     return {
       ok: true,
       count: rows.length,
-      message: "Yoklama başarıyla kaydedildi.",
+      message:
+        "Yoklama başarıyla kaydedildi.",
     };
   } catch (error) {
-    console.error("saveAttendance error:", error);
-
     return {
       ok: false,
       count: 0,
       message:
         error instanceof Error
           ? `Yoklama kaydedilemedi: ${error.message}`
-          : "Yoklama kaydedilirken beklenmeyen bir hata oluştu.",
+          : "Yoklama kaydedilirken beklenmeyen hata oluştu.",
     };
   }
 }
@@ -266,11 +281,14 @@ export async function getAttendanceForDate(
     const profile = await getAuthorizedProfile();
     const supabase = await createClient();
 
-    if (!profile.organization_id) {
+    const organizationId = profile.organization_id;
+
+    if (!organizationId) {
       return {
         ok: false,
         records: [],
-        message: "Organizasyon bilgisi bulunamadı.",
+        message:
+          "Organizasyon bilgisi bulunamadı.",
       };
     }
 
@@ -282,31 +300,17 @@ export async function getAttendanceForDate(
       return {
         ok: false,
         records: [],
-        message: "Grup, seans ve tarih bilgisi gerekli.",
+        message:
+          "Grup, seans ve tarih bilgisi eksik.",
       };
     }
 
     const { data, error } = await supabase
       .from("attendance_records")
       .select(
-        `
-        id,
-        student_id,
-        enrollment_id,
-        group_id,
-        schedule_id,
-        coach_id,
-        lesson_date,
-        status,
-        coach_note,
-        recorded_by,
-        updated_by,
-        edited_at,
-        created_at,
-        updated_at
-        `
+        "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
       )
-      .eq("organization_id", profile.organization_id)
+      .eq("organization_id", organizationId)
       .eq("group_id", input.groupId)
       .eq("schedule_id", input.scheduleId)
       .eq("lesson_date", input.lessonDate);
@@ -322,14 +326,11 @@ export async function getAttendanceForDate(
     return {
       ok: true,
       records: data || [],
-      message:
-        data && data.length
-          ? "Kayıtlı yoklama yüklendi."
-          : "Bu tarih için henüz yoklama alınmamış.",
+      message: data?.length
+        ? "Kayıtlı yoklama yüklendi."
+        : "Bu tarih için henüz yoklama alınmamış.",
     };
   } catch (error) {
-    console.error("getAttendanceForDate error:", error);
-
     return {
       ok: false,
       records: [],
@@ -348,31 +349,32 @@ export async function getMonthlyAttendance(
     const profile = await getAuthorizedProfile();
     const supabase = await createClient();
 
-    if (!profile.organization_id) {
+    const organizationId = profile.organization_id;
+
+    if (!organizationId) {
       return {
         ok: false,
         records: [],
-        message: "Organizasyon bilgisi bulunamadı.",
+        message:
+          "Organizasyon bilgisi bulunamadı.",
       };
     }
 
-    if (!input.groupId) {
+    if (
+      !input.groupId ||
+      !/^\d{4}-\d{2}$/.test(input.month)
+    ) {
       return {
         ok: false,
         records: [],
-        message: "Grup seçilmedi.",
+        message:
+          "Grup veya ay bilgisi geçersiz.",
       };
     }
 
-    if (!/^\d{4}-\d{2}$/.test(input.month)) {
-      return {
-        ok: false,
-        records: [],
-        message: "Ay bilgisi geçersiz.",
-      };
-    }
+    const [yearText, monthText] =
+      input.month.split("-");
 
-    const [yearText, monthText] = input.month.split("-");
     const year = Number(yearText);
     const monthNumber = Number(monthText);
 
@@ -382,36 +384,22 @@ export async function getMonthlyAttendance(
     const nextMonth =
       monthNumber === 12
         ? `${year + 1}-01-01`
-        : `${year}-${String(monthNumber + 1).padStart(
-            2,
-            "0"
-          )}-01`;
+        : `${year}-${String(
+            monthNumber + 1
+          ).padStart(2, "0")}-01`;
 
     const { data, error } = await supabase
       .from("attendance_records")
       .select(
-        `
-        id,
-        student_id,
-        enrollment_id,
-        group_id,
-        schedule_id,
-        coach_id,
-        lesson_date,
-        status,
-        coach_note,
-        recorded_by,
-        updated_by,
-        edited_at,
-        created_at,
-        updated_at
-        `
+        "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
       )
-      .eq("organization_id", profile.organization_id)
+      .eq("organization_id", organizationId)
       .eq("group_id", input.groupId)
       .gte("lesson_date", startDate)
       .lt("lesson_date", nextMonth)
-      .order("lesson_date", { ascending: true });
+      .order("lesson_date", {
+        ascending: true,
+      });
 
     if (error) {
       return {
@@ -424,11 +412,10 @@ export async function getMonthlyAttendance(
     return {
       ok: true,
       records: data || [],
-      message: "Aylık yoklama yüklendi.",
+      message:
+        "Aylık yoklama başarıyla yüklendi.",
     };
   } catch (error) {
-    console.error("getMonthlyAttendance error:", error);
-
     return {
       ok: false,
       records: [],
