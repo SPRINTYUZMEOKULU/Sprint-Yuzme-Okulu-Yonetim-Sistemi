@@ -2,13 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-
-/* ============================================================
-   ROLLER
-   ============================================================ */
 
 const staffRoles = [
   "owner",
@@ -24,20 +19,16 @@ const approvalRoles = [
   "admin",
 ] as const;
 
-/* ============================================================
-   HELPERS
-   ============================================================ */
-
-function text(
+function getText(
   value: FormDataEntryValue | null,
-  max = 1000
+  maxLength = 2000
 ) {
   return typeof value === "string"
-    ? value.trim().slice(0, max)
+    ? value.trim().slice(0, maxLength)
     : "";
 }
 
-function errorRedirect(
+function goError(
   studentId: string,
   message: string
 ): never {
@@ -46,7 +37,7 @@ function errorRedirect(
   );
 }
 
-function savedRedirect(
+function goSaved(
   studentId: string,
   key: string
 ): never {
@@ -55,97 +46,85 @@ function savedRedirect(
   );
 }
 
-function fullName(student: {
+function studentFullName(student: {
   first_name?: string | null;
   last_name?: string | null;
 }) {
-  return [
-    student.first_name,
-    student.last_name,
-  ]
+  return [student.first_name, student.last_name]
     .filter(Boolean)
     .join(" ")
     .trim();
 }
 
-/* ============================================================
-   ÖĞRENCİ NOTU
-   ============================================================ */
+/* =========================================================
+   NOT EKLE
+   ========================================================= */
 
 export async function addStudentNote(
   formData: FormData
 ) {
-  const profile =
-    await requireProfile([
-      ...staffRoles,
-    ]);
+  const profile = await requireProfile([
+    ...staffRoles,
+  ]);
 
-  const studentId =
-    text(
-      formData.get("student_id"),
-      100
-    );
+  const studentId = getText(
+    formData.get("student_id"),
+    100
+  );
 
-  const body =
-    text(
-      formData.get("body"),
-      4000
-    );
+  const body = getText(
+    formData.get("body"),
+    4000
+  );
 
   if (
     !studentId ||
     !body ||
     !profile.organization_id
   ) {
-    errorRedirect(
+    goError(
       studentId,
       "Not alanı zorunludur."
     );
   }
 
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
-  const { error } =
-    await supabase
-      .from("student_notes")
-      .insert({
-        organization_id:
-          profile.organization_id,
+  const { error } = await supabase
+    .from("student_notes")
+    .insert({
+      organization_id:
+        profile.organization_id,
 
-        student_id:
-          studentId,
+      student_id:
+        studentId,
 
-        author_id:
-          profile.id,
+      author_id:
+        profile.id,
 
-        note_type:
-          text(
-            formData.get(
-              "note_type"
-            ),
-            50
-          ) || "general",
+      note_type:
+        getText(
+          formData.get("note_type"),
+          50
+        ) || "general",
 
-        body,
+      body,
 
-        is_guardian_visible:
-          formData.get(
-            "is_guardian_visible"
-          ) === "on",
-      });
+      is_guardian_visible:
+        formData.get(
+          "is_guardian_visible"
+        ) === "on",
+    });
 
   if (error) {
-    errorRedirect(
+    goError(
       studentId,
       error.message
     );
   }
 
   await supabase
-    .from(
-      "student_timeline_events"
-    )
+    .from("student_timeline_events")
     .insert({
       organization_id:
         profile.organization_id,
@@ -170,82 +149,73 @@ export async function addStudentNote(
     `/ogrenciler/${studentId}`
   );
 
-  savedRedirect(
+  goSaved(
     studentId,
     "note"
   );
 }
 
-/* ============================================================
-   ÖĞRENCİ PROFİL BİLGİLERİ
-   ============================================================ */
+/* =========================================================
+   PROFİL GÜNCELLE
+   ========================================================= */
 
 export async function updateStudentProfile(
   formData: FormData
 ) {
-  const profile =
-    await requireProfile([
-      ...staffRoles,
-    ]);
+  const profile = await requireProfile([
+    ...staffRoles,
+  ]);
 
-  const studentId =
-    text(
-      formData.get("student_id"),
-      100
-    );
+  const studentId = getText(
+    formData.get("student_id"),
+    100
+  );
 
   if (
     !studentId ||
     !profile.organization_id
   ) {
-    errorRedirect(
+    goError(
       studentId,
       "Öğrenci bulunamadı."
     );
   }
 
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
   const payload = {
     phone:
-      text(
+      getText(
         formData.get("phone"),
         30
       ) || null,
 
     email:
-      text(
+      getText(
         formData.get("email"),
         200
       ) || null,
 
     guardian_name:
-      text(
-        formData.get(
-          "guardian_name"
-        ),
+      getText(
+        formData.get("guardian_name"),
         200
       ) || null,
 
     guardian_phone:
-      text(
-        formData.get(
-          "guardian_phone"
-        ),
+      getText(
+        formData.get("guardian_phone"),
         30
       ) || null,
 
     guardian_email:
-      text(
-        formData.get(
-          "guardian_email"
-        ),
+      getText(
+        formData.get("guardian_email"),
         200
       ) || null,
 
     emergency_contact_name:
-      text(
+      getText(
         formData.get(
           "emergency_contact_name"
         ),
@@ -253,7 +223,7 @@ export async function updateStudentProfile(
       ) || null,
 
     emergency_contact_phone:
-      text(
+      getText(
         formData.get(
           "emergency_contact_phone"
         ),
@@ -261,15 +231,13 @@ export async function updateStudentProfile(
       ) || null,
 
     allergy_note:
-      text(
-        formData.get(
-          "allergy_note"
-        ),
+      getText(
+        formData.get("allergy_note"),
         2000
       ) || null,
 
     chronic_condition_note:
-      text(
+      getText(
         formData.get(
           "chronic_condition_note"
         ),
@@ -277,15 +245,13 @@ export async function updateStudentProfile(
       ) || null,
 
     medication_note:
-      text(
-        formData.get(
-          "medication_note"
-        ),
+      getText(
+        formData.get("medication_note"),
         2000
       ) || null,
 
     emergency_medical_note:
-      text(
+      getText(
         formData.get(
           "emergency_medical_note"
         ),
@@ -293,38 +259,33 @@ export async function updateStudentProfile(
       ) || null,
 
     general_note:
-      text(
-        formData.get(
-          "general_note"
-        ),
+      getText(
+        formData.get("general_note"),
         4000
       ) || null,
   };
 
-  const { error } =
-    await supabase
-      .from("students")
-      .update(payload)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "id",
-        studentId
-      );
+  const { error } = await supabase
+    .from("students")
+    .update(payload)
+    .eq(
+      "organization_id",
+      profile.organization_id
+    )
+    .eq(
+      "id",
+      studentId
+    );
 
   if (error) {
-    errorRedirect(
+    goError(
       studentId,
       error.message
     );
   }
 
   await supabase
-    .from(
-      "student_timeline_events"
-    )
+    .from("student_timeline_events")
     .insert({
       organization_id:
         profile.organization_id,
@@ -346,141 +307,119 @@ export async function updateStudentProfile(
     `/ogrenciler/${studentId}`
   );
 
-  savedRedirect(
+  goSaved(
     studentId,
     "profile"
   );
 }
 
-/* ============================================================
+/* =========================================================
    ÖĞRENCİ SİLME TALEBİ
-   ============================================================ */
+   ========================================================= */
 
 export async function requestStudentDeletion(
   formData: FormData
 ) {
-  const profile =
-    await requireProfile([
-      ...staffRoles,
-    ]);
+  const profile = await requireProfile([
+    ...staffRoles,
+  ]);
 
-  const studentId =
-    text(
-      formData.get("student_id"),
-      100
-    );
+  const studentId = getText(
+    formData.get("student_id"),
+    100
+  );
 
-  const reason =
-    text(
-      formData.get("reason"),
-      2000
-    );
+  const reason = getText(
+    formData.get("reason"),
+    2000
+  );
 
   if (
     !studentId ||
     !profile.organization_id
   ) {
-    errorRedirect(
+    goError(
       studentId,
       "Öğrenci bulunamadı."
     );
   }
 
-  if (
-    reason.length < 5
-  ) {
-    errorRedirect(
+  if (reason.length < 5) {
+    goError(
       studentId,
-      "Silme nedeni zorunludur. Lütfen açıklama yazın."
+      "Silme nedeni zorunludur."
     );
   }
 
-  const supabase =
-    await createClient();
+  const supabase = await createClient();
 
   const {
     data: student,
     error: studentError,
-  } =
-    await supabase
-      .from("students")
-      .select(
-        `
-        id,
-        student_number,
-        first_name,
-        last_name,
-        branch_id,
-        status,
-        is_deleted
-        `
-      )
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "id",
-        studentId
-      )
-      .single();
+  } = await supabase
+    .from("students")
+    .select(
+      `
+      id,
+      student_number,
+      first_name,
+      last_name,
+      branch_id,
+      status,
+      is_deleted
+      `
+    )
+    .eq(
+      "organization_id",
+      profile.organization_id
+    )
+    .eq(
+      "id",
+      studentId
+    )
+    .single();
 
   if (
     studentError ||
     !student
   ) {
-    errorRedirect(
+    goError(
       studentId,
       "Öğrenci bulunamadı."
     );
   }
 
-  if (
-    student.is_deleted
-  ) {
-    errorRedirect(
+  if (student.is_deleted) {
+    goError(
       studentId,
       "Bu öğrenci zaten arşivlenmiş."
     );
   }
 
-  /*
-   * Aynı öğrenci için bekleyen
-   * silme talebi var mı?
-   */
   const {
     data: existingRequest,
-  } =
-    await supabase
-      .from(
-        "student_change_requests"
-      )
-      .select("id")
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        studentId
-      )
-      .eq(
-        "request_type",
-        "student_delete"
-      )
-      .eq(
-        "status",
-        "pending"
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("student_change_requests")
+    .select("id")
+    .eq(
+      "organization_id",
+      profile.organization_id
+    )
+    .eq(
+      "student_id",
+      studentId
+    )
+    .eq(
+      "request_type",
+      "student_delete"
+    )
+    .eq(
+      "status",
+      "pending"
+    )
+    .maybeSingle();
 
-  if (
-    existingRequest
-  ) {
-    errorRedirect(
+  if (existingRequest) {
+    goError(
       studentId,
-      "Bu öğrenci için zaten yönetici onayı bekleyen bir silme talebi var."
-    );
-  }
-
-  const
+      "Bu öğrenci için
