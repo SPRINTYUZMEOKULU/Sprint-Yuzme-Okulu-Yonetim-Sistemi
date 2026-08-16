@@ -271,244 +271,247 @@ function buildSuggestedMessage(params: {
    ONAYLA / REDDET
    ========================================================= */
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase =
-      await createClient();
+    const supabase = await createClient();
 
     const {
       data: { user },
       error: userError,
-    } =
-      await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
-    if (
-      userError ||
-      !user
-    ) {
+    if (userError || !user) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Oturum bulunamadı.",
+          error: "Oturum bulunamadı.",
         },
-        {
-          status: 401,
-        }
+        { status: 401 }
       );
     }
 
     let body: ApprovalActionBody;
 
     try {
-      body =
-        (await request.json()) as ApprovalActionBody;
+      body = (await request.json()) as ApprovalActionBody;
     } catch {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Geçersiz istek verisi.",
+          error: "Geçersiz istek verisi.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    const id =
-      clean(body.id, 100);
-
-    const source =
-      clean(body.source, 50);
-
-    const action =
-      clean(body.action, 20);
+    const id = clean(body.id, 100);
+    const source = clean(body.source, 50);
+    const action = clean(body.action, 20);
 
     if (!id) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Talep numarası bulunamadı.",
+          error: "Talep numarası bulunamadı.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     if (
-      source !==
-        "student_status" &&
-      source !==
-        "lesson_adjustment"
+      source !== "student_status" &&
+      source !== "lesson_adjustment"
     ) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Geçersiz talep kaynağı.",
+          error: "Geçersiz talep kaynağı.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (
-      action !== "approve" &&
-      action !== "reject"
-    ) {
+    if (action !== "approve" && action !== "reject") {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Geçersiz işlem.",
+          error: "Geçersiz işlem.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    /* =========================================
-       ÖĞRENCİ DURUMU
-       ========================================= */
+    /* =====================================================
+       ONAYLAYAN PERSONEL
+       ===================================================== */
 
-    if (
-      source ===
-      "student_status"
-    ) {
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select("id, organization_id, full_name, role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error(
+        "approval profile lookup error:",
+        profileError
+      );
+    }
+
+    const actorId = profile?.id ?? user.id;
+    const actorName = profile?.full_name ?? user.email ?? "Yönetici";
+
+    /* =====================================================
+       ÖĞRENCİ DURUM TALEBİ
+       ===================================================== */
+
+    if (source === "student_status") {
       const {
-        data:
-          statusRequest,
-        error:
-          statusRequestError,
+        data: statusRequest,
+        error: statusRequestError,
       } = await supabase
-        .from(
-          "student_status_change_requests"
-        )
+        .from("student_status_change_requests")
         .select("*")
         .eq("id", id)
         .single();
 
-      if (
-        statusRequestError ||
-        !statusRequest
-      ) {
-        console.error(
-          "status request lookup error:",
-          statusRequestError
-        );
-
+      if (statusRequestError || !statusRequest) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Öğrenci durum talebi bulunamadı.",
-            details:
-              statusRequestError?.message,
+            error: "Öğrenci durum talebi bulunamadı.",
+            details: statusRequestError?.message,
           },
-          {
-            status: 404,
-          }
+          { status: 404 }
         );
       }
 
-      if (
-        statusRequest.status !==
-        "pending"
-      ) {
+      if (statusRequest.status !== "pending") {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Bu talep daha önce işlenmiş.",
+            error: "Bu talep daha önce işlenmiş.",
           },
-          {
-            status: 409,
-          }
+          { status: 409 }
         );
       }
 
-      /*
-       * REDDET
-       */
+      const organizationId =
+        statusRequest.organization_id ??
+        profile?.organization_id ??
+        null;
 
-      if (
-        action === "reject"
-      ) {
-        const {
-          error:
-            rejectError,
-        } = await supabase
-          .from(
-            "student_status_change_requests"
-          )
+      const studentId =
+        typeof statusRequest.student_id === "string"
+          ? statusRequest.student_id
+          : null;
+
+      if (!organizationId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Kurum bilgisi bulunamadı.",
+          },
+          { status: 400 }
+        );
+      }
+
+      /* ---------------- REDDET ---------------- */
+
+      if (action === "reject") {
+        const { error: rejectError } = await supabase
+          .from("student_status_change_requests")
           .update({
-            status:
-              "rejected",
+            status: "rejected",
           })
           .eq("id", id)
-          .eq(
-            "status",
-            "pending"
-          );
+          .eq("status", "pending");
 
         if (rejectError) {
-          console.error(
-            "status reject error:",
-            rejectError
-          );
-
           return NextResponse.json(
             {
               ok: false,
-              error:
-                "Talep reddedilemedi.",
-              details:
-                rejectError.message,
+              error: "Talep reddedilemedi.",
+              details: rejectError.message,
             },
-            {
-              status: 500,
-            }
+            { status: 500 }
           );
+        }
+
+        const { error: historyError } = await supabase
+          .from("approval_history")
+          .insert({
+            organization_id: organizationId,
+            student_id: studentId,
+            source_type: "student_status",
+            source_id: id,
+            action_type:
+              statusRequest.request_type ?? "status_change",
+            decision: "rejected",
+            reason: statusRequest.reason ?? null,
+            requested_by: statusRequest.requested_by ?? null,
+            requested_at:
+              statusRequest.requested_at ??
+              statusRequest.created_at ??
+              null,
+            decided_by: actorId,
+            decided_at: new Date().toISOString(),
+            snapshot: statusRequest,
+          });
+
+        if (historyError) {
+          console.error(
+            "approval reject history error:",
+            historyError
+          );
+        }
+
+        if (studentId) {
+          const { error: activityError } = await supabase
+            .from("student_activity_logs")
+            .insert({
+              organization_id: organizationId,
+              student_id: studentId,
+              activity_type: "approval_rejected",
+              title: "Öğrenci durum talebi reddedildi",
+              description:
+                statusRequest.reason ??
+                "Öğrenci durum değişikliği reddedildi.",
+              source_type: "student_status",
+              source_id: id,
+              performed_by: actorId,
+              performed_at: new Date().toISOString(),
+            });
+
+          if (activityError) {
+            console.error(
+              "student activity reject error:",
+              activityError
+            );
+          }
         }
 
         return NextResponse.json({
           ok: true,
-          action:
-            "rejected",
+          action: "rejected",
           source,
           id,
-          message:
-            "Öğrenci durum talebi reddedildi.",
+          message: "Öğrenci durum talebi reddedildi.",
         });
       }
 
-      /*
-       * ONAYLA
-       */
-
-      const studentId =
-        clean(
-          statusRequest.student_id,
-          100
-        );
+      /* ---------------- ONAYLA ---------------- */
 
       if (!studentId) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Talebe ait öğrenci bulunamadı.",
+            error: "Talebe ait öğrenci bulunamadı.",
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
@@ -518,311 +521,791 @@ export async function POST(
             statusRequest.new_status,
           30
         ) ||
-        (statusRequest.request_type ===
-        "deactivate"
+        (statusRequest.request_type === "deactivate"
           ? "passive"
-          : statusRequest.request_type ===
-            "activate"
+          : statusRequest.request_type === "activate"
           ? "active"
           : "");
 
       if (
-        targetStatus !==
-          "active" &&
-        targetStatus !==
-          "passive"
+        targetStatus !== "active" &&
+        targetStatus !== "passive"
       ) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Talep edilen öğrenci durumu geçersiz.",
+            error: "Talep edilen öğrenci durumu geçersiz.",
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
       const {
-        error:
-          studentUpdateError,
+        data: studentBefore,
+        error: studentLookupError,
       } = await supabase
         .from("students")
-        .update({
-          status:
-            targetStatus,
-        })
-        .eq(
-          "id",
-          studentId
-        );
+        .select("id, first_name, last_name, status")
+        .eq("id", studentId)
+        .single();
 
-      if (
-        studentUpdateError
-      ) {
-        console.error(
-          "student status update error:",
-          studentUpdateError
-        );
-
+      if (studentLookupError || !studentBefore) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Öğrencinin durumu güncellenemedi.",
-            details:
-              studentUpdateError.message,
+            error: "Öğrenci bulunamadı.",
+            details: studentLookupError?.message,
           },
-          {
-            status: 500,
-          }
+          { status: 404 }
         );
       }
 
-      const {
-        error:
-          requestUpdateError,
-      } = await supabase
-        .from(
-          "student_status_change_requests"
-        )
+      const { error: studentUpdateError } = await supabase
+        .from("students")
         .update({
-          status:
-            "approved",
+          status: targetStatus,
+        })
+        .eq("id", studentId);
+
+      if (studentUpdateError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Öğrencinin durumu güncellenemedi.",
+            details: studentUpdateError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: requestUpdateError } = await supabase
+        .from("student_status_change_requests")
+        .update({
+          status: "approved",
         })
         .eq("id", id)
-        .eq(
-          "status",
-          "pending"
-        );
+        .eq("status", "pending");
 
-      if (
-        requestUpdateError
-      ) {
-        console.error(
-          "status request approve error:",
-          requestUpdateError
-        );
-
-        /*
-         * Öğrenci durumu değişti ancak
-         * talep approved yapılamadı.
-         * Bu nedenle açık hata dönüyoruz.
-         */
-
+      if (requestUpdateError) {
         return NextResponse.json(
           {
             ok: false,
             error:
               "Öğrenci durumu değiştirildi ancak talep kaydı tamamlanamadı.",
-            details:
-              requestUpdateError.message,
+            details: requestUpdateError.message,
           },
-          {
-            status: 500,
-          }
+          { status: 500 }
+        );
+      }
+
+      const { error: approvalHistoryError } = await supabase
+        .from("approval_history")
+        .insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          source_type: "student_status",
+          source_id: id,
+          action_type:
+            statusRequest.request_type ?? "status_change",
+          decision: "approved",
+          reason: statusRequest.reason ?? null,
+          requested_by: statusRequest.requested_by ?? null,
+          requested_at:
+            statusRequest.requested_at ??
+            statusRequest.created_at ??
+            null,
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          snapshot: {
+            ...statusRequest,
+            approved_status: targetStatus,
+            approved_by_name: actorName,
+          },
+        });
+
+      if (approvalHistoryError) {
+        console.error(
+          "status approval history error:",
+          approvalHistoryError
+        );
+      }
+
+      const { error: activityError } = await supabase
+        .from("student_activity_logs")
+        .insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          activity_type: "status_change",
+          title:
+            targetStatus === "passive"
+              ? "Öğrenci pasife alındı"
+              : "Öğrenci aktif hale getirildi",
+          description:
+            statusRequest.reason ??
+            "Yönetici onayı ile öğrenci durumu değiştirildi.",
+          old_value: {
+            status:
+              statusRequest.old_status ??
+              studentBefore.status ??
+              null,
+          },
+          new_value: {
+            status: targetStatus,
+          },
+          source_type: "student_status",
+          source_id: id,
+          performed_by: actorId,
+          approved_by: actorId,
+          performed_at: new Date().toISOString(),
+          approved_at: new Date().toISOString(),
+        });
+
+      if (activityError) {
+        console.error(
+          "status student activity error:",
+          activityError
+        );
+      }
+
+      const { error: notificationError } = await supabase
+        .from("system_notifications")
+        .insert({
+          organization_id: organizationId,
+          recipient_profile_id: null,
+          notification_type: "student_status_approved",
+          title:
+            targetStatus === "passive"
+              ? "Öğrenci pasife alındı"
+              : "Öğrenci aktif hale getirildi",
+          body: `${studentBefore.first_name ?? ""} ${
+            studentBefore.last_name ?? ""
+          } öğrencisinin durum değişikliği ${actorName} tarafından onaylandı.`,
+          priority: "normal",
+          student_id: studentId,
+          source_type: "student_status",
+          source_id: id,
+          target_path: `/ogrenciler/${studentId}`,
+          push_required: true,
+        });
+
+      if (notificationError) {
+        console.error(
+          "status notification error:",
+          notificationError
         );
       }
 
       return NextResponse.json({
         ok: true,
-        action:
-          "approved",
+        action: "approved",
         source,
         id,
-        student_id:
-          studentId,
-        new_status:
-          targetStatus,
+        student_id: studentId,
+        new_status: targetStatus,
+        approved_by: actorName,
         message:
-          targetStatus ===
-          "passive"
+          targetStatus === "passive"
             ? "Öğrenci pasife alındı."
             : "Öğrenci aktif hale getirildi.",
       });
     }
 
-    /* =========================================
-       DERS / TELAFİ İŞLEMLERİ
-       ========================================= */
+    /* =====================================================
+       DERS / TELAFİ TALEBİ
+       ===================================================== */
 
     const {
-      data:
-        lessonRequest,
-      error:
-        lessonRequestError,
+      data: lessonRequest,
+      error: lessonRequestError,
     } = await supabase
-      .from(
-        "lesson_adjustment_requests"
-      )
+      .from("lesson_adjustment_requests")
       .select("*")
       .eq("id", id)
       .single();
 
-    if (
-      lessonRequestError ||
-      !lessonRequest
-    ) {
-      console.error(
-        "lesson request lookup error:",
-        lessonRequestError
-      );
-
+    if (lessonRequestError || !lessonRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Ders işlem talebi bulunamadı.",
-          details:
-            lessonRequestError?.message,
+          error: "Ders işlem talebi bulunamadı.",
+          details: lessonRequestError?.message,
         },
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
+    if (lessonRequest.status !== "pending") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Bu talep daha önce işlenmiş.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const organizationId =
+      lessonRequest.organization_id ??
+      profile?.organization_id ??
+      null;
+
+    if (!organizationId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Kurum bilgisi bulunamadı.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const lessonCount = Number(lessonRequest.lesson_count ?? 0);
+
     if (
-      lessonRequest.status !==
-      "pending"
+      !Number.isInteger(lessonCount) ||
+      lessonCount <= 0
     ) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Bu talep daha önce işlenmiş.",
+          error: "Geçersiz ders sayısı.",
         },
-        {
-          status: 409,
-        }
+        { status: 400 }
       );
     }
 
-    /*
-     * DERS TALEBİNİ REDDET
-     */
+    const requestType =
+      lessonRequest.request_type ?? "lesson_adjustment";
 
-    if (
-      action === "reject"
-    ) {
-      const {
-        error:
-          lessonRejectError,
-      } = await supabase
-        .from(
-          "lesson_adjustment_requests"
-        )
+    /* ---------------- REDDET ---------------- */
+
+    if (action === "reject") {
+      const { error: lessonRejectError } = await supabase
+        .from("lesson_adjustment_requests")
         .update({
-          status:
-            "rejected",
+          status: "rejected",
         })
         .eq("id", id)
-        .eq(
-          "status",
-          "pending"
-        );
+        .eq("status", "pending");
 
-      if (
-        lessonRejectError
-      ) {
-        console.error(
-          "lesson reject error:",
-          lessonRejectError
-        );
-
+      if (lessonRejectError) {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Ders işlemi reddedilemedi.",
-            details:
-              lessonRejectError.message,
+            error: "Ders işlemi reddedilemedi.",
+            details: lessonRejectError.message,
           },
-          {
-            status: 500,
-          }
+          { status: 500 }
+        );
+      }
+
+      const { error: historyError } = await supabase
+        .from("approval_history")
+        .insert({
+          organization_id: organizationId,
+          student_id: lessonRequest.student_id ?? null,
+          source_type: "lesson_adjustment",
+          source_id: id,
+          action_type: requestType,
+          decision: "rejected",
+          reason: lessonRequest.reason ?? null,
+          requested_by: lessonRequest.requested_by ?? null,
+          requested_at:
+            lessonRequest.requested_at ??
+            lessonRequest.created_at ??
+            null,
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          snapshot: lessonRequest,
+        });
+
+      if (historyError) {
+        console.error(
+          "lesson reject history error:",
+          historyError
         );
       }
 
       return NextResponse.json({
         ok: true,
-        action:
-          "rejected",
+        action: "rejected",
         source,
         id,
-        message:
-          "Ders işlem talebi reddedildi.",
+        message: "Ders işlem talebi reddedildi.",
       });
     }
 
-    /*
-     * DERS TALEBİNİ ONAYLA
-     *
-     * Burada yalnızca talebi onaylıyoruz.
-     * Öğrencinin gerçek kalan ders /
-     * telafi bakiyesinin tutulduğu tablo
-     * ve kolon henüz doğrulanmadığı için
-     * bilinmeyen kolona veri yazmıyoruz.
-     */
+    /* =====================================================
+       BİREYSEL TELAFİ
+       ===================================================== */
 
-    const {
-      error:
-        lessonApproveError,
-    } = await supabase
-      .from(
-        "lesson_adjustment_requests"
-      )
-      .update({
-        status:
-          "approved",
-      })
-      .eq("id", id)
-      .eq(
-        "status",
-        "pending"
-      );
+    if (requestType === "individual_compensation") {
+      const studentId = lessonRequest.student_id;
 
-    if (
-      lessonApproveError
-    ) {
-      console.error(
-        "lesson approve error:",
-        lessonApproveError
-      );
+      if (!studentId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Telafi öğrencisi bulunamadı.",
+          },
+          { status: 400 }
+        );
+      }
 
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Ders işlem talebi onaylanamadı.",
-          details:
-            lessonApproveError.message,
-        },
-        {
-          status: 500,
-        }
-      );
+      const { error: ledgerError } = await supabase
+        .from("student_lesson_ledger")
+        .insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          group_id: lessonRequest.group_id ?? null,
+          lesson_type: "compensation",
+          direction: "credit",
+          lesson_count: lessonCount,
+          reason: lessonRequest.reason ?? null,
+          description: lessonRequest.description ?? null,
+          source_type: "individual_compensation",
+          source_id: id,
+          requires_approval: true,
+          approval_status: "approved",
+          requested_by: lessonRequest.requested_by ?? null,
+          requested_at:
+            lessonRequest.requested_at ??
+            lessonRequest.created_at ??
+            new Date().toISOString(),
+          approved_by: actorId,
+          approved_at: new Date().toISOString(),
+        });
+
+      if (ledgerError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Telafi öğrenci hesabına eklenemedi.",
+            details: ledgerError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: requestApproveError } = await supabase
+        .from("lesson_adjustment_requests")
+        .update({
+          status: "approved",
+        })
+        .eq("id", id)
+        .eq("status", "pending");
+
+      if (requestApproveError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Telafi eklendi ancak talep kaydı tamamlanamadı.",
+            details: requestApproveError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      await Promise.all([
+        supabase.from("approval_history").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          source_type: "lesson_adjustment",
+          source_id: id,
+          action_type: requestType,
+          decision: "approved",
+          reason: lessonRequest.reason ?? null,
+          requested_by: lessonRequest.requested_by ?? null,
+          requested_at:
+            lessonRequest.requested_at ??
+            lessonRequest.created_at ??
+            null,
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          snapshot: lessonRequest,
+        }),
+
+        supabase.from("student_activity_logs").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          activity_type: "compensation_added",
+          title: `${lessonCount} telafi dersi eklendi`,
+          description:
+            lessonRequest.reason ??
+            "Yönetici onayı ile telafi dersi eklendi.",
+          new_value: {
+            compensation_lessons_added: lessonCount,
+          },
+          source_type: "lesson_adjustment",
+          source_id: id,
+          performed_by: actorId,
+          approved_by: actorId,
+          performed_at: new Date().toISOString(),
+          approved_at: new Date().toISOString(),
+        }),
+
+        supabase.from("system_notifications").insert({
+          organization_id: organizationId,
+          recipient_profile_id: null,
+          notification_type: "compensation_approved",
+          title: "Telafi dersi onaylandı",
+          body: `${lessonCount} adet telafi dersi ${actorName} tarafından onaylandı.`,
+          priority: "normal",
+          student_id: studentId,
+          source_type: "lesson_adjustment",
+          source_id: id,
+          target_path: `/ogrenciler/${studentId}`,
+          push_required: true,
+        }),
+
+        supabase.from("student_contact_logs").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          contact_type: "compensation",
+          channel: "whatsapp",
+          status: "prepared",
+          message_text:
+            `${lessonCount} adet telafi dersiniz ` +
+            `${lessonRequest.reason ?? "ilgili işlem"} nedeniyle ` +
+            "yönetim tarafından onaylanmış ve hesabınıza tanımlanmıştır.\n\n" +
+            "Keyifli dersler dileriz.\nSprint Yüzme Okulu",
+          prepared_at: new Date().toISOString(),
+        }),
+      ]);
+
+      return NextResponse.json({
+        ok: true,
+        action: "approved",
+        source,
+        id,
+        request_type: requestType,
+        lesson_count: lessonCount,
+        student_id: studentId,
+        approved_by: actorName,
+        message: `${lessonCount} telafi dersi öğrenci hesabına eklendi.`,
+      });
     }
 
-    return NextResponse.json({
-      ok: true,
-      action:
-        "approved",
-      source,
-      id,
-      request_type:
-        lessonRequest.request_type ??
-        null,
-      lesson_count:
-        lessonRequest.lesson_count ??
-        null,
-      student_id:
-        lessonRequest.student_id ??
-        null,
-      message:
-        "Ders işlem talebi onaylandı.",
-    });
+    /* =====================================================
+       TOPLU TELAFİ
+       ===================================================== */
+
+    if (requestType === "bulk_compensation") {
+      const groupId = lessonRequest.group_id;
+
+      if (!groupId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Toplu telafi için grup seçilmemiş.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const {
+        data: memberships,
+        error: membershipsError,
+      } = await supabase
+        .from("student_group_memberships")
+        .select("student_id")
+        .eq("group_id", groupId);
+
+      if (membershipsError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Grup öğrencileri alınamadı.",
+            details: membershipsError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const studentIds = [
+        ...new Set(
+          (memberships ?? [])
+            .map((item) => item.student_id)
+            .filter(
+              (studentId): studentId is string =>
+                typeof studentId === "string"
+            )
+        ),
+      ];
+
+      if (studentIds.length === 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Seçilen grupta öğrenci bulunamadı.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const ledgerRows = studentIds.map((studentId) => ({
+        organization_id: organizationId,
+        student_id: studentId,
+        group_id: groupId,
+        lesson_type: "compensation",
+        direction: "credit",
+        lesson_count: lessonCount,
+        reason: lessonRequest.reason ?? null,
+        description: lessonRequest.description ?? null,
+        source_type: "bulk_compensation",
+        source_id: id,
+        requires_approval: true,
+        approval_status: "approved",
+        requested_by: lessonRequest.requested_by ?? null,
+        requested_at:
+          lessonRequest.requested_at ??
+          lessonRequest.created_at ??
+          new Date().toISOString(),
+        approved_by: actorId,
+        approved_at: new Date().toISOString(),
+      }));
+
+      const { error: bulkLedgerError } = await supabase
+        .from("student_lesson_ledger")
+        .insert(ledgerRows);
+
+      if (bulkLedgerError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Toplu telafi öğrencilere eklenemedi.",
+            details: bulkLedgerError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const activityRows = studentIds.map((studentId) => ({
+        organization_id: organizationId,
+        student_id: studentId,
+        activity_type: "bulk_compensation_added",
+        title: `${lessonCount} toplu telafi dersi eklendi`,
+        description:
+          lessonRequest.reason ??
+          "Grup için yönetici onaylı toplu telafi eklendi.",
+        new_value: {
+          compensation_lessons_added: lessonCount,
+          group_id: groupId,
+        },
+        source_type: "lesson_adjustment",
+        source_id: id,
+        performed_by: actorId,
+        approved_by: actorId,
+        performed_at: new Date().toISOString(),
+        approved_at: new Date().toISOString(),
+      }));
+
+      const contactRows = studentIds.map((studentId) => ({
+        organization_id: organizationId,
+        student_id: studentId,
+        contact_type: "compensation",
+        channel: "whatsapp",
+        status: "prepared",
+        message_text:
+          `Değerli kursiyerimiz,\n\n` +
+          `${lessonRequest.reason ?? "Havuz kaynaklı program değişikliği"} nedeniyle ` +
+          `${lessonCount} adet telafi dersiniz yönetim tarafından onaylanmış ve hesabınıza tanımlanmıştır.\n\n` +
+          `Keyifli dersler dileriz.\nSprint Yüzme Okulu`,
+        prepared_at: new Date().toISOString(),
+      }));
+
+      const notificationRows = studentIds.map((studentId) => ({
+        organization_id: organizationId,
+        recipient_profile_id: null,
+        notification_type: "bulk_compensation_approved",
+        title: "Toplu telafi dersi eklendi",
+        body:
+          `${lessonCount} telafi dersi grup öğrencisine tanımlandı. ` +
+          `Onaylayan: ${actorName}`,
+        priority: "normal",
+        student_id: studentId,
+        source_type: "lesson_adjustment",
+        source_id: id,
+        target_path: `/ogrenciler/${studentId}`,
+        push_required: true,
+      }));
+
+      await Promise.all([
+        supabase
+          .from("student_activity_logs")
+          .insert(activityRows),
+
+        supabase
+          .from("student_contact_logs")
+          .insert(contactRows),
+
+        supabase
+          .from("system_notifications")
+          .insert(notificationRows),
+
+        supabase
+          .from("approval_history")
+          .insert({
+            organization_id: organizationId,
+            student_id: null,
+            source_type: "lesson_adjustment",
+            source_id: id,
+            action_type: "bulk_compensation",
+            decision: "approved",
+            reason: lessonRequest.reason ?? null,
+            requested_by: lessonRequest.requested_by ?? null,
+            requested_at:
+              lessonRequest.requested_at ??
+              lessonRequest.created_at ??
+              null,
+            decided_by: actorId,
+            decided_at: new Date().toISOString(),
+            snapshot: {
+              ...lessonRequest,
+              affected_students: studentIds,
+              affected_student_count: studentIds.length,
+            },
+          }),
+      ]);
+
+      const { error: bulkApproveError } = await supabase
+        .from("lesson_adjustment_requests")
+        .update({
+          status: "approved",
+        })
+        .eq("id", id)
+        .eq("status", "pending");
+
+      if (bulkApproveError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Telafiler eklendi ancak talep kaydı tamamlanamadı.",
+            details: bulkApproveError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action: "approved",
+        source,
+        id,
+        request_type: requestType,
+        lesson_count: lessonCount,
+        group_id: groupId,
+        affected_students: studentIds.length,
+        approved_by: actorName,
+        message:
+          `${studentIds.length} öğrenciye ${lessonCount} adet telafi dersi eklendi.`,
+      });
+    }
+
+    /* =====================================================
+       DERS SAYISI DEĞİŞİKLİĞİ
+
+       ŞİMDİLİK BAKİYEYE YAZMIYORUZ.
+       Çünkü mevcut istekte:
+       - artış mı?
+       - düşüş mü?
+       - yeni paket toplamı mı?
+       bilgisi bulunmuyor.
+
+       Yanlış ders bakiyesi oluşturmamak için yalnız onay geçmişine
+       kaydediyoruz. Bir sonraki aşamada direction / target_count ekleyeceğiz.
+       ===================================================== */
+
+    if (requestType === "lesson_count_change") {
+      const studentId = lessonRequest.student_id;
+
+      if (!studentId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Öğrenci bulunamadı.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { error: requestApproveError } = await supabase
+        .from("lesson_adjustment_requests")
+        .update({
+          status: "approved",
+        })
+        .eq("id", id)
+        .eq("status", "pending");
+
+      if (requestApproveError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Ders sayısı talebi onaylanamadı.",
+            details: requestApproveError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      await Promise.all([
+        supabase.from("approval_history").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          source_type: "lesson_adjustment",
+          source_id: id,
+          action_type: "lesson_count_change",
+          decision: "approved",
+          reason: lessonRequest.reason ?? null,
+          requested_by: lessonRequest.requested_by ?? null,
+          requested_at:
+            lessonRequest.requested_at ??
+            lessonRequest.created_at ??
+            null,
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          snapshot: lessonRequest,
+        }),
+
+        supabase.from("student_activity_logs").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          activity_type: "lesson_count_change_approved",
+          title: "Ders sayısı değişikliği onaylandı",
+          description:
+            `${lessonCount} derslik değişiklik talebi onaylandı. ` +
+            "Bakiyeye uygulanması yeni ders yönü modeli tamamlandıktan sonra yapılacaktır.",
+          source_type: "lesson_adjustment",
+          source_id: id,
+          performed_by: actorId,
+          approved_by: actorId,
+          performed_at: new Date().toISOString(),
+          approved_at: new Date().toISOString(),
+        }),
+      ]);
+
+      return NextResponse.json({
+        ok: true,
+        action: "approved",
+        source,
+        id,
+        request_type: requestType,
+        lesson_count: lessonCount,
+        student_id: studentId,
+        approved_by: actorName,
+        message: "Ders sayısı değişikliği onaylandı.",
+      });
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Desteklenmeyen ders işlem türü: ${requestType}`,
+      },
+      { status: 400 }
+    );
   } catch (error) {
     console.error(
       "approval-center POST error:",
@@ -833,11 +1316,11 @@ export async function POST(
       {
         ok: false,
         error:
-          "Onay işlemi sırasında beklenmeyen bir hata oluştu.",
+          error instanceof Error
+            ? error.message
+            : "Onay işlemi sırasında beklenmeyen bir hata oluştu.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
