@@ -17,7 +17,46 @@ export default async function AttendancePage() {
 
   const supabase = await createClient();
 
-  const organizationId = profile.organization_id;
+  const organizationId = profile.organization_id; 
+  if (!organizationId) {
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        padding: 32,
+        background: "#f4f7fb",
+        color: "#10213a",
+      }}
+    >
+      <h1>Yoklama</h1>
+
+      <div
+        style={{
+          marginTop: 20,
+          padding: 20,
+          background: "#fff",
+          border: "1px solid #fecaca",
+          borderRadius: 16,
+          color: "#991b1b",
+        }}
+      >
+        Kullanıcının organizasyon bilgisi bulunamadı.
+      </div>
+
+      <Link
+        href="/"
+        style={{
+          display: "inline-block",
+          marginTop: 20,
+          color: "#0b6ff4",
+          fontWeight: 800,
+        }}
+      >
+        ← Yönetim Paneline Dön
+      </Link>
+    </main>
+  );
+}
 
   const [
     groupsResult,
