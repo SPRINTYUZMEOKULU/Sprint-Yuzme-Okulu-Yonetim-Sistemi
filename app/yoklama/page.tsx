@@ -1,6 +1,8 @@
 import Link from "next/link";
+
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+
 import AttendanceClient from "./AttendanceClient";
 
 export const dynamic = "force-dynamic";
@@ -17,46 +19,48 @@ export default async function AttendancePage() {
 
   const supabase = await createClient();
 
-  const organizationId = profile.organization_id; 
+  const organizationId = profile.organization_id;
+
   if (!organizationId) {
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: 32,
-        background: "#f4f7fb",
-        color: "#10213a",
-      }}
-    >
-      <h1>Yoklama</h1>
-
-      <div
+    return (
+      <main
         style={{
-          marginTop: 20,
-          padding: 20,
-          background: "#fff",
-          border: "1px solid #fecaca",
-          borderRadius: 16,
-          color: "#991b1b",
+          minHeight: "100vh",
+          padding: 32,
+          background: "#f4f7fb",
+          color: "#10213a",
         }}
       >
-        Kullanıcının organizasyon bilgisi bulunamadı.
-      </div>
+        <h1>Yoklama</h1>
 
-      <Link
-        href="/"
-        style={{
-          display: "inline-block",
-          marginTop: 20,
-          color: "#0b6ff4",
-          fontWeight: 800,
-        }}
-      >
-        ← Yönetim Paneline Dön
-      </Link>
-    </main>
-  );
-}
+        <div
+          style={{
+            marginTop: 20,
+            padding: 20,
+            background: "#fff",
+            border: "1px solid #fecaca",
+            borderRadius: 16,
+            color: "#991b1b",
+          }}
+        >
+          Kullanıcının organizasyon bilgisi bulunamadı.
+        </div>
+
+        <Link
+          href="/"
+          style={{
+            display: "inline-block",
+            marginTop: 20,
+            color: "#0b6ff4",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          ← Yönetim Paneline Dön
+        </Link>
+      </main>
+    );
+  }
 
   const [
     groupsResult,
@@ -68,8 +72,8 @@ export default async function AttendancePage() {
     supabase
       .from("training_groups")
       .select(
-  "id, first_name, last_name, student_number, phone, email, guardian_name, guardian_phone, guardian_email, swimming_level, medical_note, general_note, preferred_days, preferred_time"
-)
+        "id, organization_id, branch_id, name, course_type, capacity, primary_coach_id"
+      )
       .eq("organization_id", organizationId)
       .order("sort_order", { ascending: true }),
 
@@ -93,7 +97,9 @@ export default async function AttendancePage() {
 
     supabase
       .from("students")
-      .select("id, first_name, last_name, student_number")
+      .select(
+        "id, first_name, last_name, student_number, phone, email, guardian_name, guardian_phone, guardian_email, swimming_level, medical_note, general_note, preferred_days, preferred_time"
+      )
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
       .order("first_name", { ascending: true }),
@@ -146,6 +152,7 @@ export default async function AttendancePage() {
             marginTop: 20,
             color: "#0b6ff4",
             fontWeight: 800,
+            textDecoration: "none",
           }}
         >
           ← Yönetim Paneline Dön
@@ -154,17 +161,11 @@ export default async function AttendancePage() {
     );
   }
 
-  const groups = groupsResult.data || [];
-  const schedules = schedulesResult.data || [];
-  const memberships = membershipsResult.data || [];
-  const students = studentsResult.data || [];
-  const enrollments = enrollmentsResult.data || [];
-
   return (
     <main
       style={{
         minHeight: "100vh",
-        padding: "32px",
+        padding: "28px",
         background:
           "linear-gradient(180deg,#f5f8fc 0%,#eef3f9 100%)",
         color: "#10213a",
@@ -172,79 +173,16 @@ export default async function AttendancePage() {
     >
       <div
         style={{
-          maxWidth: 1450,
+          maxWidth: 1500,
           margin: "0 auto",
         }}
       >
-        <header
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 20,
-            marginBottom: 24,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                color: "#0b6ff4",
-                fontSize: 12,
-                fontWeight: 900,
-                letterSpacing: ".12em",
-              }}
-            >
-              SPRINTOS · YOKLAMA
-            </div>
-
-            <h1
-              style={{
-                margin: "6px 0 0",
-                fontSize: 34,
-                color: "#102f55",
-              }}
-            >
-              Günlük Yoklama
-            </h1>
-
-            <p
-              style={{
-                margin: "8px 0 0",
-                color: "#6b7b8f",
-                fontSize: 14,
-              }}
-            >
-              Şube, grup ve seans seçerek öğrencilerin günlük
-              yoklamasını kaydedin.
-            </p>
-          </div>
-
-          <Link
-            href="/"
-            style={{
-              textDecoration: "none",
-              padding: "12px 17px",
-              borderRadius: 12,
-              background: "#fff",
-              color: "#15385f",
-              border: "1px solid #dce5ee",
-              fontWeight: 900,
-              boxShadow: "0 5px 15px rgba(15,42,76,.06)",
-            }}
-          >
-            ← Yönetim Paneli
-          </Link>
-        </header>
-
         <AttendanceClient
-          organizationId={organizationId}
-          currentProfileId={profile.id}
-          groups={groups}
-          schedules={schedules}
-          memberships={memberships}
-          students={students}
-          enrollments={enrollments}
+          groups={groupsResult.data || []}
+          schedules={schedulesResult.data || []}
+          memberships={membershipsResult.data || []}
+          students={studentsResult.data || []}
+          enrollments={enrollmentsResult.data || []}
         />
       </div>
     </main>
