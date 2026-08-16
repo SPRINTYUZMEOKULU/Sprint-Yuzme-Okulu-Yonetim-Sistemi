@@ -1,12 +1,31 @@
-import type { Metadata, Viewport } from "next";
+import type {
+  Metadata,
+  Viewport,
+} from "next";
+
 import "./globals.css";
+
+import GlobalPrintButton from "./components/global-print-button";
 
 export const metadata: Metadata = {
   title: "SprintOS",
-  description: "Sprint Yüzme Okulu Yönetim Sistemi",
-  applicationName: "SprintOS",
-  appleWebApp: { capable: true, title: "SprintOS", statusBarStyle: "default" },
-  formatDetection: { telephone: false }
+
+  description:
+    "Sprint Yüzme Okulu Yönetim Sistemi",
+
+  applicationName:
+    "SprintOS",
+
+  appleWebApp: {
+    capable: true,
+    title: "SprintOS",
+    statusBarStyle:
+      "default",
+  },
+
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
@@ -14,15 +33,22 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#03132f"
+  themeColor: "#03132f",
 };
 
 export default function RootLayout({
-  children
-}: Readonly<{ children: React.ReactNode }>) {
+  children,
+}: Readonly<{
+  children:
+    React.ReactNode;
+}>) {
   return (
     <html lang="tr">
-      <body>{children}</body>
+      <body>
+        {children}
+
+        <GlobalPrintButton />
+      </body>
     </html>
   );
 }
