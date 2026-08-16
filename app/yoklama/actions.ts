@@ -46,7 +46,7 @@ const ALLOWED_ROLES = [
   "registration_staff",
   "accounting",
   "coach",
-];
+] as const;
 
 const ALLOWED_STATUSES: AttendanceStatus[] = [
   "present",
@@ -56,7 +56,7 @@ const ALLOWED_STATUSES: AttendanceStatus[] = [
 ];
 
 async function getAuthorizedProfile() {
-  return requireProfile(ALLOWED_ROLES);
+  return requireProfile([...ALLOWED_ROLES]);
 }
 
 export async function saveAttendance(input: SaveAttendanceInput) {
