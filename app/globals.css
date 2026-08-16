@@ -351,3 +351,196 @@ button,input,a{-webkit-tap-highlight-color:transparent}
 .compactLoginCard .v2RoleTab{min-height:94px}.compactLoginCard .v2LoginForm{padding:26px 28px 24px}.compactLoginCard .v2MethodTabs{margin-bottom:22px}.compactLoginCard .v2Field{margin-top:16px}.compactLoginCard .v2InputWrap input{height:51px}.compactLoginCard .v2SubmitButton{height:52px}
 @media(max-width:900px){.compactLogin{grid-template-columns:1fr}.compactLogin .v2BrandPanel{padding:24px 18px 42px}.compactLogoFrame{width:170px}.compactLogoFrame .v2BrandLogo{max-width:145px}.brandDescription{font-size:12px}.compactLogin .v2FormPanel{margin-top:-18px;padding:0 16px 34px}}
 @media(max-width:560px){.compactLogoFrame{width:112px;padding:7px}.compactLogoFrame .v2BrandLogo{max-width:96px}.cloudLabel{font-size:9px;margin-bottom:5px}.compactSlogan span{font-size:22px}.compactSlogan strong{font-size:15px}.brandDescription{display:none}.poweredBy{display:none}.compactLoginCard .v2RoleTab{min-height:72px}.compactLoginCard .v2LoginForm{padding:17px 14px 19px}}
+/* =========================================================
+   SprintOS — GLOBAL ÇIKTI / PDF SİSTEMİ
+   ========================================================= */
+
+.sprintGlobalPrintButton {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 9999;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  min-height: 46px;
+  padding: 0 18px;
+
+  border: 0;
+  border-radius: 12px;
+
+  background: #1d4ed8;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 12px 30px rgba(29, 78, 216, 0.28),
+    0 2px 6px rgba(15, 23, 42, 0.12);
+
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.sprintGlobalPrintButton:hover {
+  background: #1e40af;
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 36px rgba(29, 78, 216, 0.34),
+    0 3px 8px rgba(15, 23, 42, 0.14);
+}
+
+.sprintGlobalPrintButton:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 700px) {
+  .sprintGlobalPrintButton {
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 11px;
+    font-size: 13px;
+  }
+}
+
+
+/* =========================================================
+   YAZDIRMA / PDF
+   ========================================================= */
+
+@media print {
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    min-height: auto !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: #ffffff !important;
+    color: #000000 !important;
+
+    overflow: visible !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+  /* Çıktıda görünmemesi gereken alanlar */
+  .no-print,
+  .sprintGlobalPrintButton {
+    display: none !important;
+  }
+
+
+  /* Sayfa taşmasını engelle */
+  * {
+    box-sizing: border-box !important;
+  }
+
+
+  /* Ana içerik tam genişlik */
+  main,
+  .content {
+    width: 100% !important;
+    max-width: none !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
+  }
+
+
+  /* Sol yönetim menüsü çıktıda görünmesin */
+  .sidebar {
+    display: none !important;
+  }
+
+
+  /* Sidebar kalkınca içerik tam sayfa olsun */
+  .shell {
+    display: block !important;
+
+    width: 100% !important;
+    min-height: auto !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+
+  /* Kartların ortadan bölünmesini mümkün olduğunca önle */
+  article,
+  section,
+  table,
+  tr,
+  .card,
+  [class*="Card"],
+  [class*="card"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+
+  /* Tablolar */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+
+  /* Link URL'lerini ayrıca yazdırma */
+  a[href]::after {
+    content: none !important;
+  }
+
+
+  /* Form alanları çıktıda okunabilir olsun */
+  input,
+  textarea,
+  select {
+    color: #000000 !important;
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+
+    box-shadow: none !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+  /* Gereksiz animasyonları kapat */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
