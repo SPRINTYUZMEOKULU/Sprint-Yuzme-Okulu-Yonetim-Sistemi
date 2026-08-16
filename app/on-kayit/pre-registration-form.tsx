@@ -127,6 +127,8 @@ export default function PreRegistrationForm() {
         setOptions(data);
       })
       .catch(() => {
+        setStatus("error");
+
         setMessage(
           "Grup ve saat seçenekleri yüklenemedi. Lütfen daha sonra tekrar deneyin."
         );
@@ -233,18 +235,28 @@ export default function PreRegistrationForm() {
         )
       ).join(" – ");
 
-    const time =
-      schedules[0]
-        ? `${schedules[0].start_time.slice(
-            0,
-            5
-          )}–${schedules[0].end_time.slice(
-            0,
-            5
-          )}`
+    const timeText =
+      schedules.length
+        ? Array.from(
+            new Set(
+              schedules.map(
+                (schedule) =>
+                  `${schedule.start_time.slice(
+                    0,
+                    5
+                  )}–${schedule.end_time.slice(
+                    0,
+                    5
+                  )}`
+              )
+            )
+          ).join(" / ")
         : "Saat tanımlanmadı";
 
-    return `${group.name} · ${dayText} · ${time}`;
+    return `${group.name} · ${
+      dayText ||
+      "Gün tanımlanmadı"
+    } · ${timeText}`;
   }
 
   async function handleSubmit(
@@ -259,11 +271,51 @@ export default function PreRegistrationForm() {
     const formElement =
       event.currentTarget;
 
+    const formData =
+      new FormData(
+        formElement
+      );
+
+    /*
+     * Yetişkin kendi kaydını oluşturuyorsa
+     * API tarafındaki guardianName alanını
+     * katılımcının kendi adıyla dolduruyoruz.
+     *
+     * Böylece yetişkin kayıtlarında
+     * veli alanı göstermemize gerek kalmaz.
+     */
+    if (
+      registrationFor ===
+      "adult"
+    ) {
+      const firstName =
+        String(
+          formData.get(
+            "firstName"
+          ) || ""
+        ).trim();
+
+      const lastName =
+        String(
+          formData.get(
+            "lastName"
+          ) || ""
+        ).trim();
+
+      formData.set(
+        "guardianName",
+        `${firstName} ${lastName}`.trim()
+      );
+    }
+
+    formData.set(
+      "registrationFor",
+      registrationFor
+    );
+
     const payload =
       Object.fromEntries(
-        new FormData(
-          formElement
-        ).entries()
+        formData.entries()
       );
 
     try {
@@ -291,7 +343,7 @@ export default function PreRegistrationForm() {
       if (!response.ok) {
         throw new Error(
           result.error ||
-            "Kayıt oluşturulamadı."
+            "Ön kayıt oluşturulamadı."
         );
       }
 
@@ -310,6 +362,11 @@ export default function PreRegistrationForm() {
       setCourseType("");
       setBranchId("");
       setGroupId("");
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
     } catch (error) {
       setStatus("error");
 
@@ -333,6 +390,8 @@ export default function PreRegistrationForm() {
         tabIndex={-1}
         autoComplete="off"
       />
+
+      {/* 1 - KATILIMCI */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -430,6 +489,7 @@ export default function PreRegistrationForm() {
               required
               maxLength={60}
               placeholder="Adı"
+              autoComplete="given-name"
             />
           </label>
 
@@ -441,6 +501,7 @@ export default function PreRegistrationForm() {
               required
               maxLength={60}
               placeholder="Soyadı"
+              autoComplete="family-name"
             />
           </label>
 
@@ -463,6 +524,7 @@ export default function PreRegistrationForm() {
                 required
                 maxLength={120}
                 placeholder="Veli adı soyadı"
+                autoComplete="name"
               />
             </label>
           )}
@@ -476,10 +538,13 @@ export default function PreRegistrationForm() {
               required
               placeholder="05xx xxx xx xx"
               maxLength={20}
+              autoComplete="tel"
             />
           </label>
         </div>
       </section>
+
+      {/* 2 - KURS */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -636,13 +701,16 @@ export default function PreRegistrationForm() {
                       key={
                         level.id
                       }
+                      value={
+                        level.name
+                      }
                     >
                       {level.name}
                     </option>
                   )
                 )}
 
-                <option>
+                <option value="Bilmiyorum">
                   Bilmiyorum
                 </option>
               </select>
@@ -653,9 +721,13 @@ export default function PreRegistrationForm() {
 
               <select
                 name="packageId"
+                required
                 defaultValue=""
               >
-                <option value="">
+                <option
+                  value=""
+                  disabled
+                >
                   Paket seçin
                 </option>
 
@@ -800,14 +872,22 @@ export default function PreRegistrationForm() {
               type="hidden"
               name="preferredTime"
               value={
-                selectedSchedules[0]
-                  ? `${selectedSchedules[0].start_time.slice(
-                      0,
-                      5
-                    )} - ${selectedSchedules[0].end_time.slice(
-                      0,
-                      5
-                    )}`
+                selectedSchedules
+                  .length
+                  ? selectedSchedules
+                      .map(
+                        (
+                          schedule
+                        ) =>
+                          `${schedule.start_time.slice(
+                            0,
+                            5
+                          )}-${schedule.end_time.slice(
+                            0,
+                            5
+                          )}`
+                      )
+                      .join(" / ")
                   : ""
               }
             />
@@ -823,6 +903,8 @@ export default function PreRegistrationForm() {
           </div>
         ) : null}
       </section>
+
+      {/* 3 - İLETİŞİM */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -848,7 +930,11 @@ export default function PreRegistrationForm() {
               name="contactRequest"
               value="call_me"
             />
-            Beni aramanızı istiyorum
+
+            <span>
+              Beni aramanızı
+              istiyorum
+            </span>
           </label>
 
           <label>
@@ -857,8 +943,12 @@ export default function PreRegistrationForm() {
               name="contactRequest"
               value="whatsapp_info"
             />
-            WhatsApp üzerinden detaylı
-            bilgi almak istiyorum
+
+            <span>
+              WhatsApp üzerinden
+              detaylı bilgi almak
+              istiyorum
+            </span>
           </label>
 
           <label>
@@ -867,8 +957,13 @@ export default function PreRegistrationForm() {
               name="contactRequest"
               value="ready_to_start"
             />
-            Kaydım tamamlandığında
-            doğrudan kursa başlayacağım
+
+            <span>
+              Kaydım
+              tamamlandığında
+              doğrudan kursa
+              başlayacağım
+            </span>
           </label>
 
           <label>
@@ -877,11 +972,17 @@ export default function PreRegistrationForm() {
               name="contactRequest"
               value="need_information"
             />
-            Karar vermeden önce detaylı
-            bilgi almak istiyorum
+
+            <span>
+              Karar vermeden önce
+              detaylı bilgi almak
+              istiyorum
+            </span>
           </label>
         </div>
       </section>
+
+      {/* 4 - EK BİLGİLER */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -907,10 +1008,12 @@ export default function PreRegistrationForm() {
             name="note"
             rows={4}
             maxLength={1000}
-            placeholder="Su korkusu veya kayıtla ilgili eklemek istediğiniz not..."
+            placeholder="Su korkusu, öğrenme durumu veya kayıtla ilgili eklemek istediğiniz not..."
           />
         </label>
       </section>
+
+      {/* 5 - SAĞLIK BEYANI */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -918,12 +1021,67 @@ export default function PreRegistrationForm() {
 
           <div>
             <strong>
+              Sağlık beyanı
+            </strong>
+
+            <span>
+              Güvenli bir eğitim
+              süreci için sağlık
+              durumunu beyan edin
+            </span>
+          </div>
+        </div>
+
+        <label className="consent">
+          <input
+            type="checkbox"
+            name="healthDeclaration"
+            value="true"
+            required
+          />
+
+          <span>
+            Öğrencinin /
+            katılımcının yüzme
+            eğitimine katılmasına
+            engel teşkil eden
+            bilinen bir sağlık
+            problemi bulunmadığını
+            beyan ediyorum.
+          </span>
+        </label>
+
+        <label className="fullWidth">
+          Bildirilmesi gereken
+          sağlık bilgisi{" "}
+          <small>
+            (varsa)
+          </small>
+
+          <textarea
+            name="healthNote"
+            rows={3}
+            maxLength={1000}
+            placeholder="Alerji, kronik rahatsızlık, düzenli kullanılan ilaç veya antrenörün bilmesi gereken bir sağlık durumu varsa yazabilirsiniz."
+          />
+        </label>
+      </section>
+
+      {/* 6 - KURALLAR */}
+
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>6</b>
+
+          <div>
+            <strong>
               Kurallar ve onaylar
             </strong>
 
             <span>
-              Başvurunuzu tamamlamadan
-              önce bilgilendirmeleri
+              Başvurunuzu
+              tamamlamadan önce
+              bilgilendirmeleri
               inceleyin
             </span>
           </div>
@@ -937,17 +1095,55 @@ export default function PreRegistrationForm() {
 
           <div className="rulesContent">
             <p>
-              Sprint Yüzme Okulu kayıt
-              ve kurs kuralları burada
-              gösterilecektir.
+              Sprint Yüzme Okulu
+              kurs ve kayıt
+              koşullarını dikkatlice
+              okuyunuz.
             </p>
 
             <p>
-              Bu metin daha sonra
-              yönetim panelindeki form
-              ayarlarından
-              düzenlenebilir hale
-              getirilecektir.
+              Kurs programında
+              bireysel nedenlerle
+              kaçırılan dersler için
+              telafi uygulaması
+              bulunmamaktadır.
+              Telafi yalnızca tesis
+              veya yüzme okulundan
+              kaynaklanan ve dersin
+              yapılamadığı
+              durumlarda
+              uygulanmaktadır.
+            </p>
+
+            <p>
+              Tatil, izin,
+              şehir dışında bulunma
+              veya benzeri bireysel
+              durumlarda kayıt
+              dondurma, ders ekleme
+              veya ücret indirimi
+              uygulanmaz.
+            </p>
+
+            <p>
+              Eğitim planlamasının
+              gerektirdiği
+              durumlarda saat, grup
+              ve antrenör
+              düzenlemeleri Sprint
+              Yüzme Okulu tarafından
+              yapılabilir.
+            </p>
+
+            <p>
+              Başvurunun
+              gönderilmesi kesin
+              kayıt anlamına gelmez.
+              Kesin kayıt, kayıt
+              ekibinin onayı ve
+              gerekli işlemlerin
+              tamamlanmasıyla
+              oluşur.
             </p>
           </div>
         </details>
@@ -963,7 +1159,8 @@ export default function PreRegistrationForm() {
           <span>
             Sprint Yüzme Okulu
             kurallarını okudum,
-            anladım ve kabul ediyorum.
+            anladım ve kabul
+            ediyorum.
           </span>
         </label>
 
@@ -984,6 +1181,8 @@ export default function PreRegistrationForm() {
           </span>
         </label>
       </section>
+
+      {/* GÖNDER */}
 
       <div className="submitRow">
         <button
@@ -1008,6 +1207,7 @@ export default function PreRegistrationForm() {
               ? "formMessage success"
               : "formMessage error"
           }
+          role="status"
         >
           {message}
         </p>
