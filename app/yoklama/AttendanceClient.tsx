@@ -14,96 +14,89 @@ import {
   saveAttendance,
 } from "./actions";
 
-type Group = {
-  id: string;
-  organization_id: string;
-  branch_id: string | null;
-  name: string;
-  course_type: string | null;
-  capacity: number | null;
-  primary_coach_id: string | null;
-};
-
-type Schedule = {
-  id: string;
-  organization_id: string;
-  branch_id: string | null;
-  group_id: string;
-  coach_id: string | null;
-  weekday: number;
-  start_time: string | null;
-  end_time: string | null;
-  is_active: boolean;
-};
-
-type Membership = {
-  id: string;
-  student_id: string;
-  group_id: string;
-  level_id: string | null;
-  started_at: string | null;
-  ended_at: string | null;
-  is_active: boolean;
-};
-
-type Student = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  student_number: string | null;
-
-  phone: string | null;
-  email: string | null;
-
-  guardian_name: string | null;
-  guardian_phone: string | null;
-  guardian_email: string | null;
-
-  swimming_level: string | null;
-  medical_note: string | null;
-  general_note: string | null;
-
-  preferred_days: string | null;
-  preferred_time: string | null;
-};
-
-type Enrollment = {
-  id: string;
-  student_id: string;
-  group_id: string | null;
-  start_date: string | null;
-  planned_end_date: string | null;
-  total_lessons: number | null;
-  used_lessons: number | null;
-  status: string | null;
-};
-
 type AttendanceStatus =
   | "present"
   | "absent"
   | "excused"
   | "compensation";
 
+type Group = {
+  id: string;
+  organization_id?: string | null;
+  branch_id?: string | null;
+  name?: string | null;
+  course_type?: string | null;
+  capacity?: number | null;
+  primary_coach_id?: string | null;
+};
+
+type Schedule = {
+  id: string;
+  organization_id?: string | null;
+  branch_id?: string | null;
+  group_id?: string | null;
+  coach_id?: string | null;
+  weekday?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  is_active?: boolean | null;
+};
+
+type Membership = {
+  id: string;
+  student_id?: string | null;
+  group_id?: string | null;
+  level_id?: string | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+  is_active?: boolean | null;
+};
+
+type Student = {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  student_number?: string | null;
+
+  phone?: string | null;
+  email?: string | null;
+
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  guardian_email?: string | null;
+
+  swimming_level?: string | null;
+  medical_note?: string | null;
+  general_note?: string | null;
+
+  preferred_days?: string | null;
+  preferred_time?: string | null;
+};
+
+type Enrollment = {
+  id: string;
+  student_id?: string | null;
+  group_id?: string | null;
+  start_date?: string | null;
+  planned_end_date?: string | null;
+  total_lessons?: number | null;
+  used_lessons?: number | null;
+  status?: string | null;
+};
+
 type AttendanceRecord = {
   id?: string;
   student_id: string;
   enrollment_id?: string | null;
-  group_id: string;
-  schedule_id: string;
+  group_id?: string | null;
+  schedule_id?: string | null;
   coach_id?: string | null;
   lesson_date: string;
   status: AttendanceStatus;
   coach_note?: string | null;
-  recorded_by?: string | null;
-  updated_by?: string | null;
-  edited_at?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
 };
 
 type Props = {
-  organizationId: string;
-  currentProfileId: string;
   groups: Group[];
   schedules: Schedule[];
   memberships: Membership[];
@@ -111,7 +104,10 @@ type Props = {
   enrollments: Enrollment[];
 };
 
-type ViewMode = "daily" | "monthly" | "history";
+type ViewMode =
+  | "daily"
+  | "monthly"
+  | "history";
 
 const DAY_NAMES: Record<number, string> = {
   1: "Pazartesi",
@@ -128,50 +124,45 @@ const STATUS_META: Record<
   {
     label: string;
     short: string;
-    icon: string;
-    bg: string;
+    background: string;
     color: string;
     border: string;
   }
 > = {
   present: {
-    label: "Geldi",
+    label: "✓ Geldi",
     short: "✓",
-    icon: "✓",
-    bg: "#ecfdf3",
+    background: "#ecfdf3",
     color: "#15803d",
     border: "#86efac",
   },
 
   absent: {
-    label: "Gelmedi",
+    label: "✕ Gelmedi",
     short: "✕",
-    icon: "✕",
-    bg: "#fff1f2",
+    background: "#fff1f2",
     color: "#be123c",
     border: "#fda4af",
   },
 
   excused: {
-    label: "İzinli",
+    label: "○ İzinli",
     short: "İ",
-    icon: "○",
-    bg: "#fffbeb",
+    background: "#fffbeb",
     color: "#a16207",
     border: "#fde68a",
   },
 
   compensation: {
-    label: "Telafi",
+    label: "+ Telafi",
     short: "T",
-    icon: "+",
-    bg: "#eef2ff",
+    background: "#eef2ff",
     color: "#4338ca",
     border: "#c7d2fe",
   },
 };
 
-function todayInTurkey() {
+function todayTR() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
@@ -180,106 +171,101 @@ function todayInTurkey() {
   }).format(new Date());
 }
 
-function currentMonthInTurkey() {
-  return todayInTurkey().slice(0, 7);
-}
+function shiftDate(
+  value: string,
+  amount: number
+) {
+  const date = new Date(
+    `${value}T12:00:00`
+  );
 
-function shortTime(value?: string | null) {
-  if (!value) return "—";
-
-  return value.slice(0, 5);
-}
-
-function formatDateTR(value: string) {
-  if (!value) return "—";
-
-  try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(`${value}T12:00:00`));
-  } catch {
-    return value;
-  }
-}
-
-function formatShortDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(new Date(`${value}T12:00:00`));
-  } catch {
-    return value;
-  }
-}
-
-function weekdayFromDate(value: string) {
-  const date = new Date(`${value}T12:00:00`);
-
-  const jsDay = date.getDay();
-
-  return jsDay === 0 ? 7 : jsDay;
-}
-
-function shiftDate(value: string, amount: number) {
-  const date = new Date(`${value}T12:00:00`);
-
-  date.setDate(date.getDate() + amount);
+  date.setDate(
+    date.getDate() + amount
+  );
 
   const year = date.getFullYear();
 
-  const month = String(date.getMonth() + 1).padStart(
-    2,
-    "0"
-  );
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
 
-  const day = String(date.getDate()).padStart(2, "0");
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
-function remainingLessons(enrollment?: Enrollment | null) {
-  if (!enrollment) return 0;
+function dateWeekday(value: string) {
+  const date = new Date(
+    `${value}T12:00:00`
+  );
 
-  const total = Number(enrollment.total_lessons || 0);
+  const day = date.getDay();
 
-  const used = Number(enrollment.used_lessons || 0);
-
-  return Math.max(0, total - used);
+  return day === 0 ? 7 : day;
 }
 
-function cleanPhone(value?: string | null) {
-  if (!value) return "";
-
-  return value.replace(/\D/g, "");
+function time(value?: string | null) {
+  return value
+    ? value.slice(0, 5)
+    : "—";
 }
 
-function getCallPhone(student: Student) {
-  const guardian = cleanPhone(student.guardian_phone);
+function formatDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat(
+      "tr-TR",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }
+    ).format(
+      new Date(`${value}T12:00:00`)
+    );
+  } catch {
+    return value;
+  }
+}
+
+function cleanPhone(
+  value?: string | null
+) {
+  return (value || "").replace(
+    /\D/g,
+    ""
+  );
+}
+
+function studentPhone(
+  student: Student
+) {
+  const guardian =
+    cleanPhone(
+      student.guardian_phone
+    );
 
   if (guardian.length >= 10) {
     return guardian;
   }
 
-  const studentPhone = cleanPhone(student.phone);
+  const own = cleanPhone(
+    student.phone
+  );
 
-  if (studentPhone.length >= 10) {
-    return studentPhone;
+  if (own.length >= 10) {
+    return own;
   }
 
   return "";
 }
 
-function toInternationalPhone(value: string) {
-  let phone = cleanPhone(value);
-
-  if (!phone) return "";
-
-  if (phone.startsWith("00")) {
-    phone = phone.slice(2);
-  }
+function whatsappPhone(
+  value: string
+) {
+  let phone =
+    cleanPhone(value);
 
   if (phone.startsWith("90")) {
     return phone;
@@ -296,198 +282,299 @@ function toInternationalPhone(value: string) {
   return phone;
 }
 
+function remaining(
+  enrollment?: Enrollment
+) {
+  if (!enrollment) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Number(
+      enrollment.total_lessons || 0
+    ) -
+      Number(
+        enrollment.used_lessons || 0
+      )
+  );
+}
+
 function monthLessonDates(
   month: string,
   schedules: Schedule[]
 ) {
-  if (!month || !schedules.length) return [];
+  if (!month) return [];
 
-  const [yearText, monthText] = month.split("-");
+  const [yearText, monthText] =
+    month.split("-");
 
   const year = Number(yearText);
+  const monthNumber =
+    Number(monthText);
 
-  const monthIndex = Number(monthText) - 1;
+  if (
+    !year ||
+    !monthNumber
+  ) {
+    return [];
+  }
 
-  const daysInMonth = new Date(
+  const weekdays = new Set(
+    schedules
+      .map(
+        (schedule) =>
+          Number(schedule.weekday)
+      )
+      .filter(
+        (weekday) =>
+          weekday >= 1 &&
+          weekday <= 7
+      )
+  );
+
+  const lastDay = new Date(
     year,
-    monthIndex + 1,
+    monthNumber,
     0
   ).getDate();
 
-  const activeWeekdays = new Set(
-    schedules.map((schedule) => schedule.weekday)
-  );
+  const result: string[] = [];
 
-  const dates: string[] = [];
+  for (
+    let day = 1;
+    day <= lastDay;
+    day++
+  ) {
+    const mm = String(
+      monthNumber
+    ).padStart(2, "0");
 
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year, monthIndex, day, 12);
+    const dd = String(
+      day
+    ).padStart(2, "0");
 
-    const jsDay = date.getDay();
+    const value =
+      `${year}-${mm}-${dd}`;
 
-    const weekday = jsDay === 0 ? 7 : jsDay;
-
-    if (!activeWeekdays.has(weekday)) {
-      continue;
+    if (
+      weekdays.has(
+        dateWeekday(value)
+      )
+    ) {
+      result.push(value);
     }
-
-    const monthValue = String(monthIndex + 1).padStart(
-      2,
-      "0"
-    );
-
-    const dayValue = String(day).padStart(2, "0");
-
-    dates.push(`${year}-${monthValue}-${dayValue}`);
   }
 
-  return dates;
+  return result;
 }
 
 export default function AttendanceClient({
-  organizationId,
-  currentProfileId,
   groups,
   schedules,
   memberships,
   students,
   enrollments,
 }: Props) {
-  const [viewMode, setViewMode] =
+  const [view, setView] =
     useState<ViewMode>("daily");
 
-  const [lessonDate, setLessonDate] = useState(
-    todayInTurkey()
+  const [lessonDate, setLessonDate] =
+    useState(todayTR());
+
+  const [month, setMonth] =
+    useState(todayTR().slice(0, 7));
+
+  const [
+    selectedGroupId,
+    setSelectedGroupId,
+  ] = useState(
+    groups[0]?.id || ""
   );
 
-  const [selectedGroupId, setSelectedGroupId] =
-    useState(groups[0]?.id || "");
+  const [
+    selectedScheduleId,
+    setSelectedScheduleId,
+  ] = useState("");
 
-  const [selectedScheduleId, setSelectedScheduleId] =
-    useState("");
+  const [statuses, setStatuses] =
+    useState<
+      Record<
+        string,
+        AttendanceStatus
+      >
+    >({});
 
-  const [month, setMonth] = useState(
-    currentMonthInTurkey()
-  );
+  const [notes, setNotes] =
+    useState<
+      Record<string, string>
+    >({});
 
-  const [statuses, setStatuses] = useState<
-    Record<string, AttendanceStatus>
-  >({});
-
-  const [notes, setNotes] = useState<
-    Record<string, string>
-  >({});
-
-  const [monthlyRecords, setMonthlyRecords] = useState<
+  const [
+    monthlyRecords,
+    setMonthlyRecords,
+  ] = useState<
     AttendanceRecord[]
   >([]);
 
-  const [message, setMessage] = useState("");
+  const [
+    contactStudent,
+    setContactStudent,
+  ] = useState<string | null>(
+    null
+  );
 
-  const [dailyLoaded, setDailyLoaded] =
+  const [message, setMessage] =
+    useState("");
+
+  const [hasSaved, setHasSaved] =
     useState(false);
 
-  const [contactStudentId, setContactStudentId] =
-    useState<string | null>(null);
+  const [
+    isPending,
+    startTransition,
+  ] = useTransition();
 
-  const [isPending, startTransition] =
-    useTransition();
+  const selectedGroup =
+    useMemo(
+      () =>
+        groups.find(
+          (group) =>
+            group.id ===
+            selectedGroupId
+        ) || null,
+      [groups, selectedGroupId]
+    );
 
-  const selectedGroup = useMemo(
-    () =>
-      groups.find(
-        (group) => group.id === selectedGroupId
-      ) || null,
-    [groups, selectedGroupId]
-  );
-
-  const groupSchedules = useMemo(
-    () =>
-      schedules.filter(
-        (schedule) =>
-          schedule.group_id === selectedGroupId &&
-          schedule.is_active
-      ),
-    [schedules, selectedGroupId]
-  );
+  const groupSchedules =
+    useMemo(
+      () =>
+        schedules.filter(
+          (schedule) =>
+            schedule.group_id ===
+              selectedGroupId &&
+            schedule.is_active !==
+              false
+        ),
+      [
+        schedules,
+        selectedGroupId,
+      ]
+    );
 
   const selectedSchedule =
     groupSchedules.find(
       (schedule) =>
-        schedule.id === selectedScheduleId
+        schedule.id ===
+        selectedScheduleId
     ) || null;
 
-  const groupStudentIds = useMemo(() => {
-    return new Set(
-      memberships
-        .filter(
-          (membership) =>
-            membership.group_id ===
-              selectedGroupId &&
-            membership.is_active
-        )
-        .map(
-          (membership) =>
-            membership.student_id
-        )
-    );
-  }, [memberships, selectedGroupId]);
-
-  const groupStudents = useMemo(() => {
-    return students
-      .filter((student) =>
-        groupStudentIds.has(student.id)
-      )
-      .sort((a, b) =>
-        `${a.first_name} ${a.last_name}`.localeCompare(
-          `${b.first_name} ${b.last_name}`,
-          "tr"
-        )
+  const studentIds =
+    useMemo(() => {
+      return new Set(
+        memberships
+          .filter(
+            (membership) =>
+              membership.group_id ===
+                selectedGroupId &&
+              membership.is_active !==
+                false &&
+              !!membership.student_id
+          )
+          .map(
+            (membership) =>
+              membership.student_id as string
+          )
       );
-  }, [students, groupStudentIds]);
+    }, [
+      memberships,
+      selectedGroupId,
+    ]);
 
-  const enrollmentByStudent = useMemo(() => {
-    const map = new Map<string, Enrollment>();
-
-    enrollments.forEach((enrollment) => {
-      if (
-        enrollment.group_id === selectedGroupId
-      ) {
-        map.set(
-          enrollment.student_id,
-          enrollment
+  const groupStudents =
+    useMemo(() => {
+      return students
+        .filter((student) =>
+          studentIds.has(student.id)
+        )
+        .sort((a, b) =>
+          `${a.first_name || ""} ${
+            a.last_name || ""
+          }`.localeCompare(
+            `${b.first_name || ""} ${
+              b.last_name || ""
+            }`,
+            "tr"
+          )
         );
-      }
-    });
+    }, [students, studentIds]);
 
-    return map;
-  }, [enrollments, selectedGroupId]);
+  const enrollmentMap =
+    useMemo(() => {
+      const map =
+        new Map<
+          string,
+          Enrollment
+        >();
 
-  const counts = useMemo(() => {
+      enrollments.forEach(
+        (enrollment) => {
+          if (
+            enrollment.student_id &&
+            enrollment.group_id ===
+              selectedGroupId
+          ) {
+            map.set(
+              enrollment.student_id,
+              enrollment
+            );
+          }
+        }
+      );
+
+      return map;
+    }, [
+      enrollments,
+      selectedGroupId,
+    ]);
+
+  const totals = useMemo(() => {
     let present = 0;
     let absent = 0;
     let excused = 0;
     let compensation = 0;
 
-    groupStudents.forEach((student) => {
-      const status = statuses[student.id];
+    groupStudents.forEach(
+      (student) => {
+        const status =
+          statuses[student.id];
 
-      if (status === "present") present += 1;
+        if (status === "present") {
+          present++;
+        }
 
-      if (status === "absent") absent += 1;
+        if (status === "absent") {
+          absent++;
+        }
 
-      if (status === "excused") excused += 1;
+        if (status === "excused") {
+          excused++;
+        }
 
-      if (status === "compensation")
-        compensation += 1;
-    });
+        if (
+          status ===
+          "compensation"
+        ) {
+          compensation++;
+        }
+      }
+    );
 
     return {
       present,
       absent,
       excused,
       compensation,
-
       missing:
         groupStudents.length -
         present -
@@ -495,62 +582,100 @@ export default function AttendanceClient({
         excused -
         compensation,
     };
-  }, [statuses, groupStudents]);
+  }, [
+    statuses,
+    groupStudents,
+  ]);
 
-  const lessonDates = useMemo(
-    () =>
-      monthLessonDates(month, groupSchedules),
-    [month, groupSchedules]
-  );
-
-  const monthlyRecordMap = useMemo(() => {
-    const map = new Map<
-      string,
-      AttendanceRecord
-    >();
-
-    monthlyRecords.forEach((record) => {
-      map.set(
-        `${record.student_id}_${record.lesson_date}`,
-        record
-      );
-    });
-
-    return map;
-  }, [monthlyRecords]);
-
-  const historyRows = useMemo(() => {
-    return [...monthlyRecords].sort((a, b) =>
-      b.lesson_date.localeCompare(a.lesson_date)
+  const lessonDates =
+    useMemo(
+      () =>
+        monthLessonDates(
+          month,
+          groupSchedules
+        ),
+      [month, groupSchedules]
     );
-  }, [monthlyRecords]);
+
+  const monthlyMap =
+    useMemo(() => {
+      const map =
+        new Map<
+          string,
+          AttendanceRecord
+        >();
+
+      monthlyRecords.forEach(
+        (record) => {
+          map.set(
+            `${record.student_id}_${record.lesson_date}`,
+            record
+          );
+        }
+      );
+
+      return map;
+    }, [monthlyRecords]);
+
+  const monthlyByDate =
+    useMemo(() => {
+      const map = new Map<
+        string,
+        AttendanceRecord[]
+      >();
+
+      monthlyRecords.forEach(
+        (record) => {
+          const current =
+            map.get(
+              record.lesson_date
+            ) || [];
+
+          current.push(record);
+
+          map.set(
+            record.lesson_date,
+            current
+          );
+        }
+      );
+
+      return Array.from(
+        map.entries()
+      ).sort((a, b) =>
+        b[0].localeCompare(a[0])
+      );
+    }, [monthlyRecords]);
 
   useEffect(() => {
-    if (!selectedGroupId) return;
-
-    if (!groupSchedules.length) {
-      setSelectedScheduleId("");
+    if (
+      !groupSchedules.length
+    ) {
+      setSelectedScheduleId(
+        ""
+      );
 
       return;
     }
 
-    const selectedWeekday =
-      weekdayFromDate(lessonDate);
+    const weekday =
+      dateWeekday(lessonDate);
 
-    const sameDaySchedule =
+    const matching =
       groupSchedules.find(
         (schedule) =>
-          schedule.weekday === selectedWeekday
+          Number(
+            schedule.weekday
+          ) === weekday
       );
 
     setSelectedScheduleId(
-      sameDaySchedule?.id ||
+      matching?.id ||
         groupSchedules[0].id
     );
   }, [
-    selectedGroupId,
-    lessonDate,
     groupSchedules,
+    lessonDate,
   ]);
 
   useEffect(() => {
@@ -562,67 +687,82 @@ export default function AttendanceClient({
       return;
     }
 
-    let cancelled = false;
+    let active = true;
 
     startTransition(async () => {
       const result =
         await getAttendanceForDate({
-          groupId: selectedGroupId,
-          scheduleId: selectedScheduleId,
+          groupId:
+            selectedGroupId,
+          scheduleId:
+            selectedScheduleId,
           lessonDate,
         });
 
-      if (cancelled) return;
+      if (!active) return;
 
       if (!result.ok) {
         setStatuses({});
         setNotes({});
-        setDailyLoaded(false);
-        setMessage(result.message);
+        setHasSaved(false);
+        setMessage(
+          result.message
+        );
 
         return;
       }
 
-      const nextStatuses: Record<
+      const statusMap: Record<
         string,
         AttendanceStatus
       > = {};
 
-      const nextNotes: Record<
+      const noteMap: Record<
         string,
         string
       > = {};
 
-      (result.records || []).forEach(
-        (record: any) => {
-          if (
-            record.status === "present" ||
-            record.status === "absent" ||
-            record.status === "excused" ||
-            record.status === "compensation"
-          ) {
-            nextStatuses[record.student_id] =
-              record.status;
-          }
+      for (const raw of
+        result.records || []) {
+        const record =
+          raw as unknown as AttendanceRecord;
 
-          nextNotes[record.student_id] =
-            record.coach_note || "";
+        if (
+          record.status ===
+            "present" ||
+          record.status ===
+            "absent" ||
+          record.status ===
+            "excused" ||
+          record.status ===
+            "compensation"
+        ) {
+          statusMap[
+            record.student_id
+          ] = record.status;
         }
+
+        noteMap[
+          record.student_id
+        ] =
+          record.coach_note || "";
+      }
+
+      setStatuses(statusMap);
+      setNotes(noteMap);
+
+      setHasSaved(
+        (result.records || [])
+          .length > 0
       );
 
-      setStatuses(nextStatuses);
-
-      setNotes(nextNotes);
-
-      setDailyLoaded(
-        (result.records || []).length > 0
+      setMessage(
+        result.message
       );
-
-      setMessage(result.message);
     });
 
     return () => {
-      cancelled = true;
+      active = false;
     };
   }, [
     selectedGroupId,
@@ -632,261 +772,219 @@ export default function AttendanceClient({
 
   useEffect(() => {
     if (
-      viewMode !== "monthly" &&
-      viewMode !== "history"
+      view === "daily" ||
+      !selectedGroupId ||
+      !month
     ) {
       return;
     }
 
-    if (!selectedGroupId || !month) {
-      return;
-    }
-
-    let cancelled = false;
+    let active = true;
 
     startTransition(async () => {
       const result =
         await getMonthlyAttendance({
-          groupId: selectedGroupId,
+          groupId:
+            selectedGroupId,
           month,
         });
 
-      if (cancelled) return;
+      if (!active) return;
 
       if (!result.ok) {
         setMonthlyRecords([]);
-        setMessage(result.message);
+        setMessage(
+          result.message
+        );
 
         return;
       }
 
       setMonthlyRecords(
-        (result.records || []) as AttendanceRecord[]
+        (result.records ||
+          []) as unknown as AttendanceRecord[]
       );
-
-      setMessage(result.message);
     });
 
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [viewMode, selectedGroupId, month]);
+  }, [
+    view,
+    selectedGroupId,
+    month,
+  ]);
 
-  function selectGroup(groupId: string) {
-    setSelectedGroupId(groupId);
-
-    setStatuses({});
-
-    setNotes({});
-
-    setMonthlyRecords([]);
-
-    setDailyLoaded(false);
-
-    setContactStudentId(null);
-
-    setMessage("");
-  }
-
-  function selectStatus(
-    studentId: string,
-    status: AttendanceStatus
+  function selectGroup(
+    value: string
   ) {
-    setStatuses((current) => ({
-      ...current,
-      [studentId]: status,
-    }));
+    setSelectedGroupId(value);
+    setStatuses({});
+    setNotes({});
+    setMonthlyRecords([]);
+    setHasSaved(false);
+    setContactStudent(null);
   }
 
   function markAllPresent() {
-    const next: Record<
+    const value: Record<
       string,
       AttendanceStatus
     > = {};
 
-    groupStudents.forEach((student) => {
-      next[student.id] = "present";
-    });
-
-    setStatuses(next);
-  }
-
-  function clearAll() {
-    setStatuses({});
-    setNotes({});
-    setMessage("Yoklama seçimleri temizlendi.");
-  }
-
-  function handleSave() {
-    setMessage("");
-
-    if (!selectedGroupId) {
-      setMessage("Önce grup seçmelisiniz.");
-      return;
-    }
-
-    if (!selectedScheduleId) {
-      setMessage(
-        "Bu grup için ders seansı bulunamadı."
-      );
-      return;
-    }
-
-    if (!groupStudents.length) {
-      setMessage(
-        "Bu grupta aktif öğrenci bulunmuyor."
-      );
-      return;
-    }
-
-    const missing = groupStudents.filter(
-      (student) => !statuses[student.id]
+    groupStudents.forEach(
+      (student) => {
+        value[student.id] =
+          "present";
+      }
     );
+
+    setStatuses(value);
+  }
+
+  function save() {
+    if (
+      !selectedGroupId ||
+      !selectedScheduleId
+    ) {
+      setMessage(
+        "Grup ve ders seansı seçmelisiniz."
+      );
+
+      return;
+    }
+
+    if (
+      !groupStudents.length
+    ) {
+      setMessage(
+        "Bu grupta öğrenci bulunamadı."
+      );
+
+      return;
+    }
+
+    const missing =
+      groupStudents.filter(
+        (student) =>
+          !statuses[student.id]
+      );
 
     if (missing.length) {
       setMessage(
-        `${missing.length} öğrenci için yoklama durumu seçilmedi.`
+        `${missing.length} öğrencinin yoklaması eksik.`
       );
 
       return;
     }
 
-    const records = groupStudents.map(
-      (student) => {
-        const enrollment =
-          enrollmentByStudent.get(
-            student.id
-          ) ||
-          enrollments.find(
-            (item) =>
-              item.student_id === student.id
-          ) ||
-          null;
+    const records =
+      groupStudents.map(
+        (student) => ({
+          studentId:
+            student.id,
 
-        return {
-          studentId: student.id,
           enrollmentId:
-            enrollment?.id || null,
-          status: statuses[student.id],
+            enrollmentMap.get(
+              student.id
+            )?.id || null,
+
+          status:
+            statuses[
+              student.id
+            ],
+
           coachNote:
-            notes[student.id]?.trim() ||
-            null,
-        };
-      }
-    );
+            notes[
+              student.id
+            ]?.trim() || null,
+        })
+      );
 
-    startTransition(async () => {
-      const result = await saveAttendance({
-        organizationId,
-        currentProfileId,
+    startTransition(
+      async () => {
+        const result =
+          await saveAttendance({
+            branchId:
+              selectedSchedule?.branch_id ??
+              selectedGroup?.branch_id ??
+              null,
 
-        branchId:
-          selectedSchedule?.branch_id ||
-          selectedGroup?.branch_id ||
-          null,
+            groupId:
+              selectedGroupId,
 
-        groupId: selectedGroupId,
+            scheduleId:
+              selectedScheduleId,
 
-        scheduleId:
-          selectedScheduleId,
+            coachId:
+              selectedSchedule?.coach_id ??
+              selectedGroup?.primary_coach_id ??
+              null,
 
-        coachId:
-          selectedSchedule?.coach_id ||
-          selectedGroup?.primary_coach_id ||
-          null,
+            lessonDate,
 
-        lessonDate,
+            records,
+          });
 
-        records,
-      });
+        setMessage(
+          result.message
+        );
 
-      setMessage(result.message);
-
-      if (result.ok) {
-        setDailyLoaded(true);
-
-        if (
-          viewMode === "monthly" ||
-          viewMode === "history"
-        ) {
-          const monthly =
-            await getMonthlyAttendance({
-              groupId:
-                selectedGroupId,
-              month,
-            });
-
-          if (monthly.ok) {
-            setMonthlyRecords(
-              (monthly.records ||
-                []) as AttendanceRecord[]
-            );
-          }
+        if (result.ok) {
+          setHasSaved(true);
         }
       }
-    });
+    );
   }
 
-  function openDayFromMonthly(date: string) {
-    setLessonDate(date);
-
-    setViewMode("daily");
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  }
-
-  function callStudent(student: Student) {
-    const phone = getCallPhone(student);
-
-    if (!phone) {
-      setMessage(
-        `${student.first_name} ${student.last_name} için geçerli telefon bilgisi bulunamadı.`
-      );
-
-      return;
-    }
-
-    window.location.href = `tel:${phone}`;
-  }
-
-  function whatsappStudent(
+  function call(
     student: Student
   ) {
-    const phone = getCallPhone(student);
+    const phone =
+      studentPhone(student);
 
     if (!phone) {
       setMessage(
-        `${student.first_name} ${student.last_name} için WhatsApp telefonu bulunamadı.`
+        "Geçerli telefon numarası bulunamadı."
       );
 
       return;
     }
 
-    const international =
-      toInternationalPhone(phone);
+    window.location.href =
+      `tel:${phone}`;
+  }
+
+  function whatsapp(
+    student: Student
+  ) {
+    const phone =
+      studentPhone(student);
+
+    if (!phone) {
+      setMessage(
+        "WhatsApp numarası bulunamadı."
+      );
+
+      return;
+    }
 
     window.open(
-      `https://wa.me/${international}`,
+      `https://wa.me/${whatsappPhone(
+        phone
+      )}`,
       "_blank",
       "noopener,noreferrer"
     );
   }
 
-  async function copyStudentPhone(
+  async function copyPhone(
     student: Student
   ) {
-    const phone = getCallPhone(student);
+    const phone =
+      studentPhone(student);
 
-    if (!phone) {
-      setMessage(
-        "Kopyalanacak telefon bilgisi yok."
-      );
-
-      return;
-    }
+    if (!phone) return;
 
     try {
       await navigator.clipboard.writeText(
@@ -903,38 +1001,28 @@ export default function AttendanceClient({
     }
   }
 
-  const selectedDateWeekday =
-    weekdayFromDate(lessonDate);
-
-  const scheduleMatchesDate =
-    !!selectedSchedule &&
-    selectedSchedule.weekday ===
-      selectedDateWeekday;
-
   return (
     <div
       style={{
         display: "grid",
-        gap: 20,
+        gap: 18,
       }}
     >
-      <section
+      <nav
         style={{
           display: "flex",
-          gap: 10,
+          gap: 8,
           flexWrap: "wrap",
           padding: 10,
-          background: "#ffffff",
+          background: "#fff",
           border:
             "1px solid #dce7f2",
           borderRadius: 18,
-          boxShadow:
-            "0 12px 35px rgba(16,47,85,.06)",
         }}
       >
         <Link
           href="/"
-          style={navButton(false)}
+          style={navStyle(false)}
         >
           🏠 Ana Panel
         </Link>
@@ -942,10 +1030,10 @@ export default function AttendanceClient({
         <button
           type="button"
           onClick={() =>
-            setViewMode("daily")
+            setView("daily")
           }
-          style={navButton(
-            viewMode === "daily"
+          style={navStyle(
+            view === "daily"
           )}
         >
           ✓ Günlük Yoklama
@@ -954,22 +1042,22 @@ export default function AttendanceClient({
         <button
           type="button"
           onClick={() =>
-            setViewMode("monthly")
+            setView("monthly")
           }
-          style={navButton(
-            viewMode === "monthly"
+          style={navStyle(
+            view === "monthly"
           )}
         >
-          🗓️ Tüm Ayı Gör
+          🗓 Tüm Ayı Gör
         </button>
 
         <button
           type="button"
           onClick={() =>
-            setViewMode("history")
+            setView("history")
           }
-          style={navButton(
-            viewMode === "history"
+          style={navStyle(
+            view === "history"
           )}
         >
           ↺ Geçmiş
@@ -977,20 +1065,18 @@ export default function AttendanceClient({
 
         <Link
           href="/ogrenciler"
-          style={navButton(false)}
+          style={navStyle(false)}
         >
           👥 Öğrenciler
         </Link>
-      </section>
+      </nav>
 
       <section
         style={{
-          background: "#102f55",
+          padding: 20,
           borderRadius: 22,
-          padding: 22,
+          background: "#102f55",
           color: "#fff",
-          boxShadow:
-            "0 20px 50px rgba(16,47,85,.16)",
         }}
       >
         <div
@@ -998,18 +1084,17 @@ export default function AttendanceClient({
             display: "flex",
             justifyContent:
               "space-between",
-            alignItems: "center",
             gap: 16,
+            alignItems: "center",
             flexWrap: "wrap",
           }}
         >
           <div>
             <div
               style={{
-                fontSize: 12,
-                fontWeight: 900,
-                letterSpacing: ".12em",
+                fontSize: 11,
                 color: "#93c5fd",
+                fontWeight: 900,
               }}
             >
               SPRINTOS · YOKLAMA
@@ -1018,31 +1103,16 @@ export default function AttendanceClient({
             <h2
               style={{
                 margin: "5px 0 0",
-                fontSize: 28,
               }}
             >
               Yoklama & Ders Yönetimi
             </h2>
-
-            <p
-              style={{
-                margin: "7px 0 0",
-                color: "#cbd9e8",
-                fontSize: 13,
-              }}
-            >
-              Günlük yoklama,
-              geçmiş düzenleme,
-              aylık takip ve öğrenci
-              iletişimi tek ekranda.
-            </p>
           </div>
 
           <div
             style={{
               display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
+              gap: 7,
             }}
           >
             <button
@@ -1055,19 +1125,23 @@ export default function AttendanceClient({
                   )
                 )
               }
-              style={darkButton()}
+              style={darkStyle}
             >
-              ← Önceki
+              ←
             </button>
 
             <button
               type="button"
               onClick={() =>
                 setLessonDate(
-                  todayInTurkey()
+                  todayTR()
                 )
               }
-              style={darkButton(true)}
+              style={{
+                ...darkStyle,
+                background:
+                  "#0b6ff4",
+              }}
             >
               Bugün
             </button>
@@ -1082,63 +1156,51 @@ export default function AttendanceClient({
                   )
                 )
               }
-              style={darkButton()}
+              style={darkStyle}
             >
-              Sonraki →
+              →
             </button>
           </div>
         </div>
       </section>
 
-      <section
-        style={{
-          background: "#fff",
-          border:
-            "1px solid #dce7f2",
-          borderRadius: 22,
-          padding: 20,
-          boxShadow:
-            "0 14px 36px rgba(15,42,76,.07)",
-        }}
-      >
+      <section style={panelStyle}>
         <div
           style={{
             display: "grid",
             gridTemplateColumns:
-              "minmax(180px,1fr) minmax(260px,2fr) minmax(250px,1.5fr)",
-            gap: 14,
+              "1fr 2fr 1.5fr",
+            gap: 12,
           }}
         >
-          <label
-            style={labelStyle}
-          >
+          <label style={labelStyle}>
             TARİH
 
             <input
               type="date"
               value={lessonDate}
-              onChange={(event) =>
+              onChange={(e) =>
                 setLessonDate(
-                  event.target.value
+                  e.target.value
                 )
               }
-              style={fieldStyle}
+              style={inputStyle}
             />
           </label>
 
-          <label
-            style={labelStyle}
-          >
+          <label style={labelStyle}>
             GRUP
 
             <select
-              value={selectedGroupId}
-              onChange={(event) =>
+              value={
+                selectedGroupId
+              }
+              onChange={(e) =>
                 selectGroup(
-                  event.target.value
+                  e.target.value
                 )
               }
-              style={fieldStyle}
+              style={inputStyle}
             >
               {!groups.length && (
                 <option value="">
@@ -1146,33 +1208,36 @@ export default function AttendanceClient({
                 </option>
               )}
 
-              {groups.map((group) => (
-                <option
-                  key={group.id}
-                  value={group.id}
-                >
-                  {group.name}
-                  {group.course_type
-                    ? ` · ${group.course_type}`
-                    : ""}
-                </option>
-              ))}
+              {groups.map(
+                (group) => (
+                  <option
+                    key={group.id}
+                    value={group.id}
+                  >
+                    {group.name ||
+                      "İsimsiz grup"}
+                    {group.course_type
+                      ? ` · ${group.course_type}`
+                      : ""}
+                  </option>
+                )
+              )}
             </select>
           </label>
 
-          <label
-            style={labelStyle}
-          >
+          <label style={labelStyle}>
             DERS / SEANS
 
             <select
-              value={selectedScheduleId}
-              onChange={(event) =>
+              value={
+                selectedScheduleId
+              }
+              onChange={(e) =>
                 setSelectedScheduleId(
-                  event.target.value
+                  e.target.value
                 )
               }
-              style={fieldStyle}
+              style={inputStyle}
             >
               <option value="">
                 Seans seçin
@@ -1181,19 +1246,25 @@ export default function AttendanceClient({
               {groupSchedules.map(
                 (schedule) => (
                   <option
-                    key={schedule.id}
-                    value={schedule.id}
+                    key={
+                      schedule.id
+                    }
+                    value={
+                      schedule.id
+                    }
                   >
                     {DAY_NAMES[
-                      schedule.weekday
+                      Number(
+                        schedule.weekday
+                      )
                     ] ||
-                      `Gün ${schedule.weekday}`}
+                      "Ders"}
                     {" · "}
-                    {shortTime(
+                    {time(
                       schedule.start_time
                     )}
                     {" - "}
-                    {shortTime(
+                    {time(
                       schedule.end_time
                     )}
                   </option>
@@ -1202,247 +1273,135 @@ export default function AttendanceClient({
             </select>
           </label>
         </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginTop: 16,
-          }}
-        >
-          {groupSchedules.map(
-            (schedule) => (
-              <span
-                key={schedule.id}
-                style={{
-                  padding:
-                    "8px 11px",
-                  borderRadius: 999,
-                  background:
-                    "#f0f6fc",
-                  color: "#315577",
-                  fontSize: 12,
-                  fontWeight: 800,
-                }}
-              >
-                {
-                  DAY_NAMES[
-                    schedule.weekday
-                  ]
-                }
-                {" · "}
-                {shortTime(
-                  schedule.start_time
-                )}
-              </span>
-            )
-          )}
-        </div>
-
-        {!scheduleMatchesDate &&
-          selectedSchedule && (
-            <div
-              style={{
-                marginTop: 14,
-                padding: 12,
-                borderRadius: 12,
-                background:
-                  "#fff7ed",
-                border:
-                  "1px solid #fed7aa",
-                color: "#9a3412",
-                fontWeight: 800,
-                fontSize: 12,
-              }}
-            >
-              ⚠️ Seçili tarih,
-              seçilen seansın normal
-              ders günü ile
-              eşleşmiyor. Geriye
-              dönük düzenleme veya
-              özel ders kaydı için
-              yine de kullanabilirsiniz.
-            </div>
-          )}
       </section>
 
-      {viewMode === "daily" && (
+      {view === "daily" && (
         <>
           <section
             style={{
               display: "grid",
               gridTemplateColumns:
-                "repeat(6,minmax(120px,1fr))",
-              gap: 10,
+                "repeat(6, minmax(110px, 1fr))",
+              gap: 9,
             }}
           >
-            <StatCard
-              title="Toplam"
+            <Stat
+              name="Toplam"
               value={
                 groupStudents.length
               }
-              tone="blue"
             />
 
-            <StatCard
-              title="Geldi"
-              value={counts.present}
-              tone="green"
-            />
-
-            <StatCard
-              title="Gelmedi"
-              value={counts.absent}
-              tone="red"
-            />
-
-            <StatCard
-              title="İzinli"
-              value={counts.excused}
-              tone="yellow"
-            />
-
-            <StatCard
-              title="Telafi"
+            <Stat
+              name="Geldi"
               value={
-                counts.compensation
+                totals.present
               }
-              tone="purple"
             />
 
-            <StatCard
-              title="Eksik"
-              value={counts.missing}
-              tone="gray"
+            <Stat
+              name="Gelmedi"
+              value={
+                totals.absent
+              }
+            />
+
+            <Stat
+              name="İzinli"
+              value={
+                totals.excused
+              }
+            />
+
+            <Stat
+              name="Telafi"
+              value={
+                totals.compensation
+              }
+            />
+
+            <Stat
+              name="Eksik"
+              value={
+                totals.missing
+              }
             />
           </section>
 
-          <section
-            style={{
-              background: "#fff",
-              border:
-                "1px solid #dce7f2",
-              borderRadius: 22,
-              overflow: "hidden",
-              boxShadow:
-                "0 14px 36px rgba(15,42,76,.07)",
-            }}
-          >
+          <section style={panelStyle}>
             <div
               style={{
                 display: "flex",
                 justifyContent:
                   "space-between",
-                alignItems:
-                  "center",
-                gap: 12,
-                padding:
-                  "16px 18px",
-                background:
-                  "#edf4fb",
+                gap: 10,
                 flexWrap: "wrap",
+                marginBottom: 12,
               }}
             >
               <div>
-                <strong
-                  style={{
-                    color:
-                      "#143b65",
-                  }}
-                >
-                  {formatDateTR(
+                <strong>
+                  {formatDate(
                     lessonDate
                   )}
-                  {" · "}
-                  {selectedSchedule
-                    ? DAY_NAMES[
-                        selectedSchedule
-                          .weekday
-                      ]
-                    : ""}
                 </strong>
 
-                <div
-                  style={{
-                    marginTop: 4,
-                    fontSize: 11,
-                    color:
-                      "#738297",
-                  }}
-                >
-                  {dailyLoaded
-                    ? "Kayıtlı yoklama açıldı. Değişiklik yapıp tekrar kaydedebilirsiniz."
-                    : "Yeni yoklama kaydı."}
-                </div>
+                {selectedSchedule && (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      color: "#64748b",
+                      fontSize: 11,
+                    }}
+                  >
+                    {DAY_NAMES[
+                      Number(
+                        selectedSchedule.weekday
+                      )
+                    ] || ""}
+                    {" · "}
+                    {time(
+                      selectedSchedule.start_time
+                    )}
+                    {" - "}
+                    {time(
+                      selectedSchedule.end_time
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                }}
+              <button
+                type="button"
+                onClick={
+                  markAllPresent
+                }
+                style={smallStyle}
               >
-                <button
-                  type="button"
-                  onClick={
-                    markAllPresent
-                  }
-                  style={actionButton(
-                    "#ecfdf3",
-                    "#15803d"
-                  )}
-                >
-                  ✓ Tümünü Geldi
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  style={actionButton(
-                    "#f8fafc",
-                    "#64748b"
-                  )}
-                >
-                  Temizle
-                </button>
-              </div>
+                ✓ Tümünü Geldi
+              </button>
             </div>
 
             {groupStudents.map(
               (student) => {
                 const enrollment =
-                  enrollmentByStudent.get(
+                  enrollmentMap.get(
                     student.id
-                  ) || null;
-
-                const remaining =
-                  remainingLessons(
-                    enrollment
                   );
 
                 const phone =
-                  getCallPhone(student);
-
-                const hasWarning =
-                  !!student.medical_note ||
-                  !!student.general_note ||
-                  remaining <= 2;
-
-                const contactOpen =
-                  contactStudentId ===
-                  student.id;
+                  studentPhone(
+                    student
+                  );
 
                 return (
                   <div
                     key={student.id}
                     style={{
-                      padding: 18,
+                      padding:
+                        "16px 0",
                       borderTop:
                         "1px solid #edf2f7",
-                      display:
-                        "grid",
-                      gap: 14,
                     }}
                   >
                     <div
@@ -1451,110 +1410,54 @@ export default function AttendanceClient({
                           "flex",
                         justifyContent:
                           "space-between",
-                        gap: 16,
+                        gap: 12,
                         flexWrap:
                           "wrap",
                       }}
                     >
-                      <div
-                        style={{
-                          minWidth:
-                            240,
-                          flex: 1,
-                        }}
-                      >
-                        <div
+                      <div>
+                        <strong
                           style={{
-                            display:
-                              "flex",
-                            gap: 8,
-                            alignItems:
-                              "center",
-                            flexWrap:
-                              "wrap",
+                            color:
+                              "#123b68",
+                            fontSize:
+                              15,
                           }}
                         >
-                          <strong
-                            style={{
-                              fontSize:
-                                16,
-                              color:
-                                "#123b68",
-                            }}
-                          >
-                            {
-                              student.first_name
-                            }{" "}
-                            {
-                              student.last_name
-                            }
-                          </strong>
-
-                          {hasWarning && (
-                            <span
-                              style={{
-                                padding:
-                                  "4px 8px",
-                                borderRadius:
-                                  999,
-                                background:
-                                  "#fff7ed",
-                                color:
-                                  "#c2410c",
-                                fontSize:
-                                  10,
-                                fontWeight:
-                                  900,
-                              }}
-                            >
-                              ⚠ İKAZ
-                            </span>
-                          )}
-                        </div>
+                          {student.first_name ||
+                            ""}{" "}
+                          {student.last_name ||
+                            ""}
+                        </strong>
 
                         <div
                           style={{
                             marginTop:
                               5,
-                            display:
-                              "flex",
-                            gap: 7,
-                            flexWrap:
-                              "wrap",
                             fontSize:
                               11,
                             color:
-                              "#7b899b",
+                              "#7c8998",
                           }}
                         >
-                          <span>
-                            {student.student_number ||
-                              "Öğrenci no yok"}
-                          </span>
+                          {student.student_number ||
+                            "Öğrenci no yok"}
 
-                          {student.swimming_level && (
-                            <span>
-                              🏊{" "}
-                              {
-                                student.swimming_level
-                              }
-                            </span>
-                          )}
+                          {" · "}📚{" "}
+                          {remaining(
+                            enrollment
+                          )}{" "}
+                          ders kaldı
 
-                          <span>
-                            📚{" "}
-                            {remaining}{" "}
-                            ders kaldı
-                          </span>
+                          {student.swimming_level
+                            ? ` · 🏊 ${student.swimming_level}`
+                            : ""}
 
-                          {enrollment?.planned_end_date && (
-                            <span>
-                              📅 Bitiş:{" "}
-                              {formatDateTR(
+                          {enrollment?.planned_end_date
+                            ? ` · Bitiş ${formatDate(
                                 enrollment.planned_end_date
-                              )}
-                            </span>
-                          )}
+                              )}`
+                            : ""}
                         </div>
                       </div>
 
@@ -1562,7 +1465,7 @@ export default function AttendanceClient({
                         style={{
                           display:
                             "flex",
-                          gap: 7,
+                          gap: 6,
                           flexWrap:
                             "wrap",
                         }}
@@ -1570,145 +1473,105 @@ export default function AttendanceClient({
                         <button
                           type="button"
                           onClick={() =>
-                            setContactStudentId(
-                              contactOpen
+                            setContactStudent(
+                              contactStudent ===
+                                student.id
                                 ? null
                                 : student.id
                             )
                           }
-                          style={miniButton(
-                            "#eff6ff",
-                            "#1d4ed8"
-                          )}
+                          style={smallStyle}
                         >
                           📞 İletişim
                         </button>
 
                         <button
                           type="button"
+                          disabled={!phone}
                           onClick={() =>
-                            callStudent(
-                              student
-                            )
+                            call(student)
                           }
-                          disabled={
-                            !phone
-                          }
-                          style={miniButton(
-                            phone
-                              ? "#ecfdf3"
-                              : "#f1f5f9",
-                            phone
-                              ? "#15803d"
-                              : "#94a3b8"
-                          )}
+                          style={smallStyle}
                         >
                           ☎ Ara
                         </button>
 
                         <button
                           type="button"
+                          disabled={!phone}
                           onClick={() =>
-                            whatsappStudent(
+                            whatsapp(
                               student
                             )
                           }
-                          disabled={
-                            !phone
-                          }
-                          style={miniButton(
-                            phone
-                              ? "#ecfdf5"
-                              : "#f1f5f9",
-                            phone
-                              ? "#047857"
-                              : "#94a3b8"
-                          )}
+                          style={smallStyle}
                         >
                           💬 WhatsApp
                         </button>
 
                         <Link
                           href={`/ogrenciler/${student.id}`}
-                          style={miniButton(
-                            "#f8fafc",
-                            "#475569"
-                          )}
+                          style={smallStyle}
                         >
                           👤 Detay
                         </Link>
                       </div>
                     </div>
 
-                    {contactOpen && (
+                    {contactStudent ===
+                      student.id && (
                       <div
                         style={{
-                          padding: 14,
+                          marginTop:
+                            10,
+                          padding:
+                            12,
                           borderRadius:
-                            14,
+                            12,
                           background:
-                            "#f8fbff",
-                          border:
-                            "1px solid #dbeafe",
-                          display:
-                            "flex",
-                          justifyContent:
-                            "space-between",
-                          gap: 12,
-                          flexWrap:
-                            "wrap",
+                            "#f6f9fc",
                         }}
                       >
-                        <div>
-                          <strong
-                            style={{
-                              display:
-                                "block",
-                              color:
-                                "#173f69",
-                            }}
-                          >
-                            {student.guardian_name
-                              ? `Veli: ${student.guardian_name}`
-                              : "İletişim Bilgileri"}
-                          </strong>
+                        <strong>
+                          {student.guardian_name
+                            ? `Veli: ${student.guardian_name}`
+                            : "İletişim Bilgileri"}
+                        </strong>
 
-                          <span
-                            style={{
-                              display:
-                                "block",
-                              marginTop:
-                                5,
-                              color:
-                                "#64748b",
-                              fontSize:
-                                12,
-                            }}
-                          >
-                            Veli Tel:{" "}
-                            {student.guardian_phone ||
-                              "—"}
-                            {" · "}
-                            Öğrenci Tel:{" "}
-                            {student.phone ||
-                              "—"}
-                          </span>
+                        <div
+                          style={{
+                            marginTop:
+                              5,
+                            fontSize:
+                              12,
+                          }}
+                        >
+                          Veli telefonu:{" "}
+                          {student.guardian_phone ||
+                            "—"}
+                          {" · "}
+                          Öğrenci telefonu:{" "}
+                          {student.phone ||
+                            "—"}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            copyStudentPhone(
-                              student
-                            )
-                          }
-                          style={miniButton(
-                            "#fff",
-                            "#315577"
-                          )}
-                        >
-                          📋 Numarayı Kopyala
-                        </button>
+                        {phone && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyPhone(
+                                student
+                              )
+                            }
+                            style={{
+                              ...smallStyle,
+                              marginTop:
+                                8,
+                            }}
+                          >
+                            📋 Numarayı Kopyala
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1716,42 +1579,25 @@ export default function AttendanceClient({
                       student.general_note) && (
                       <div
                         style={{
-                          display:
-                            "flex",
-                          gap: 8,
-                          flexWrap:
-                            "wrap",
+                          marginTop:
+                            9,
+                          padding:
+                            10,
+                          borderRadius:
+                            10,
+                          background:
+                            "#fff7ed",
+                          color:
+                            "#9a3412",
+                          fontSize:
+                            11,
+                          fontWeight:
+                            800,
                         }}
                       >
-                        {student.medical_note && (
-                          <span
-                            style={warningBadge}
-                          >
-                            🩺{" "}
-                            {
-                              student.medical_note
-                            }
-                          </span>
-                        )}
-
-                        {student.general_note && (
-                          <span
-                            style={{
-                              ...warningBadge,
-                              background:
-                                "#eff6ff",
-                              color:
-                                "#1d4ed8",
-                              borderColor:
-                                "#bfdbfe",
-                            }}
-                          >
-                            📝{" "}
-                            {
-                              student.general_note
-                            }
-                          </span>
-                        )}
+                        ⚠{" "}
+                        {student.medical_note ||
+                          student.general_note}
                       </div>
                     )}
 
@@ -1760,8 +1606,9 @@ export default function AttendanceClient({
                         display:
                           "grid",
                         gridTemplateColumns:
-                          "minmax(520px,2fr) minmax(220px,1fr)",
-                        gap: 12,
+                          "minmax(520px, 2fr) minmax(220px, 1fr)",
+                        gap: 10,
+                        marginTop: 12,
                       }}
                     >
                       <div
@@ -1769,8 +1616,8 @@ export default function AttendanceClient({
                           display:
                             "grid",
                           gridTemplateColumns:
-                            "repeat(4,1fr)",
-                          gap: 8,
+                            "repeat(4, 1fr)",
+                          gap: 7,
                         }}
                       >
                         {(
@@ -1797,23 +1644,28 @@ export default function AttendanceClient({
                                 }
                                 type="button"
                                 onClick={() =>
-                                  selectStatus(
-                                    student.id,
-                                    status
+                                  setStatuses(
+                                    (
+                                      old
+                                    ) => ({
+                                      ...old,
+                                      [student.id]:
+                                        status,
+                                    })
                                   )
                                 }
                                 style={{
                                   minHeight:
-                                    48,
+                                    46,
                                   borderRadius:
-                                    13,
+                                    11,
                                   border:
                                     active
                                       ? `2px solid ${meta.border}`
                                       : "1px solid #dbe5ef",
                                   background:
                                     active
-                                      ? meta.bg
+                                      ? meta.background
                                       : "#fff",
                                   color:
                                     active
@@ -1823,13 +1675,8 @@ export default function AttendanceClient({
                                     900,
                                   cursor:
                                     "pointer",
-                                  fontSize:
-                                    13,
                                 }}
                               >
-                                {
-                                  meta.icon
-                                }{" "}
                                 {
                                   meta.label
                                 }
@@ -1840,42 +1687,27 @@ export default function AttendanceClient({
                       </div>
 
                       <input
-                        type="text"
-                        placeholder="Antrenör notu..."
                         value={
                           notes[
                             student.id
                           ] || ""
                         }
                         onChange={(
-                          event
+                          e
                         ) =>
                           setNotes(
                             (
-                              current
+                              old
                             ) => ({
-                              ...current,
+                              ...old,
                               [student.id]:
-                                event
-                                  .target
+                                e.target
                                   .value,
                             })
                           )
                         }
-                        style={{
-                          width:
-                            "100%",
-                          minHeight:
-                            48,
-                          padding:
-                            "0 12px",
-                          border:
-                            "1px solid #dbe5ef",
-                          borderRadius:
-                            13,
-                          color:
-                            "#183b61",
-                        }}
+                        placeholder="Antrenör notu..."
+                        style={inputStyle}
                       />
                     </div>
                   </div>
@@ -1886,103 +1718,76 @@ export default function AttendanceClient({
             {!groupStudents.length && (
               <div
                 style={{
-                  padding: 40,
+                  padding: 30,
                   textAlign:
                     "center",
                   color:
-                    "#7b899a",
+                    "#7c8998",
                 }}
               >
-                Bu grupta aktif
-                öğrenci bulunamadı.
+                Bu grupta aktif öğrenci bulunamadı.
               </div>
             )}
           </section>
 
           <section
             style={{
+              ...panelStyle,
               position: "sticky",
-              bottom: 12,
-              zIndex: 20,
+              bottom: 10,
               display: "flex",
               justifyContent:
                 "space-between",
               alignItems: "center",
-              gap: 16,
+              gap: 12,
               flexWrap: "wrap",
-              padding: 18,
-              background:
-                "rgba(255,255,255,.96)",
-              backdropFilter:
-                "blur(12px)",
-              border:
-                "1px solid #dce7f2",
-              borderRadius: 18,
               boxShadow:
-                "0 16px 45px rgba(16,47,85,.14)",
+                "0 15px 40px rgba(16,47,85,.14)",
             }}
           >
             <div>
-              <strong
-                style={{
-                  display: "block",
-                  color:
-                    message.includes(
-                      "başarı"
-                    ) ||
-                    message.includes(
-                      "yüklendi"
-                    )
-                      ? "#15803d"
-                      : "#8a5a00",
-                }}
-              >
+              <strong>
                 {message ||
-                  "Yoklama kaydedilmeye hazır."}
+                  "Yoklama hazır."}
               </strong>
 
-              <span
+              <div
                 style={{
-                  display: "block",
                   marginTop: 4,
                   fontSize: 11,
-                  color: "#7d8998",
+                  color:
+                    "#7c8998",
                 }}
               >
                 Eksik işaretleme:{" "}
-                {counts.missing}
-              </span>
+                {totals.missing}
+              </div>
             </div>
 
             <button
               type="button"
               disabled={isPending}
-              onClick={handleSave}
+              onClick={save}
               style={{
-                minWidth: 255,
-                minHeight: 54,
+                minHeight: 50,
+                minWidth: 240,
                 border: 0,
-                borderRadius: 14,
+                borderRadius: 13,
                 background:
-                  isPending
-                    ? "#94a3b8"
-                    : dailyLoaded
+                  hasSaved
                     ? "#0f766e"
                     : "#0b6ff4",
                 color: "#fff",
+                fontWeight: 900,
                 cursor:
                   isPending
                     ? "wait"
                     : "pointer",
-                fontWeight: 900,
-                fontSize: 14,
-                boxShadow:
-                  "0 9px 25px rgba(11,111,244,.22)",
               }}
             >
               {isPending
                 ? "KAYDEDİLİYOR..."
-                : dailyLoaded
+                : hasSaved
                 ? "YOKLAMAYI GÜNCELLE"
                 : "YOKLAMAYI KAYDET"}
             </button>
@@ -1990,69 +1795,45 @@ export default function AttendanceClient({
         </>
       )}
 
-      {viewMode === "monthly" && (
-        <section
-          style={{
-            background: "#fff",
-            border:
-              "1px solid #dce7f2",
-            borderRadius: 22,
-            overflow: "hidden",
-            boxShadow:
-              "0 14px 36px rgba(15,42,76,.07)",
-          }}
-        >
+      {view === "monthly" && (
+        <section style={panelStyle}>
           <div
             style={{
-              padding: 18,
-              background:
-                "#edf4fb",
               display: "flex",
               justifyContent:
                 "space-between",
-              gap: 14,
-              alignItems:
-                "center",
+              gap: 10,
+              alignItems: "center",
               flexWrap: "wrap",
             }}
           >
             <div>
-              <strong
-                style={{
-                  color:
-                    "#153e69",
-                  fontSize: 17,
-                }}
-              >
-                Aylık Yoklama
+              <strong>
+                Aylık Yoklama Görünümü
               </strong>
 
               <div
                 style={{
                   marginTop: 4,
+                  color: "#64748b",
                   fontSize: 11,
-                  color:
-                    "#738297",
                 }}
               >
-                Hücreye tıklayarak
-                ilgili günün
-                yoklamasını
-                açabilirsiniz.
+                Bir güne tıklayarak geriye dönük düzenleme yapabilirsiniz.
               </div>
             </div>
 
             <input
               type="month"
               value={month}
-              onChange={(event) =>
+              onChange={(e) =>
                 setMonth(
-                  event.target.value
+                  e.target.value
                 )
               }
               style={{
-                ...fieldStyle,
-                width: 190,
+                ...inputStyle,
+                width: 180,
               }}
             />
           </div>
@@ -2060,39 +1841,26 @@ export default function AttendanceClient({
           <div
             style={{
               overflowX: "auto",
+              marginTop: 15,
             }}
           >
             <table
               style={{
-                width: "100%",
                 borderCollapse:
                   "collapse",
+                width: "100%",
                 minWidth:
                   Math.max(
-                    850,
-                    300 +
+                    800,
+                    260 +
                       lessonDates.length *
-                        58
+                        55
                   ),
               }}
             >
               <thead>
                 <tr>
-                  <th
-                    style={{
-                      ...tableHeader,
-                      textAlign:
-                        "left",
-                      position:
-                        "sticky",
-                      left: 0,
-                      zIndex: 2,
-                      background:
-                        "#f7fafe",
-                      minWidth:
-                        250,
-                    }}
-                  >
+                  <th style={thStyle}>
                     Öğrenci
                   </th>
 
@@ -2100,193 +1868,123 @@ export default function AttendanceClient({
                     (date) => (
                       <th
                         key={date}
-                        style={
-                          tableHeader
-                        }
+                        style={thStyle}
                       >
-                        {formatShortDate(
-                          date
+                        {date.slice(
+                          8,
+                          10
                         )}
                       </th>
                     )
                   )}
-
-                  <th
-                    style={
-                      tableHeader
-                    }
-                  >
-                    %
-                  </th>
                 </tr>
               </thead>
 
               <tbody>
                 {groupStudents.map(
-                  (student) => {
-                    let attended = 0;
-
-                    let totalMarked = 0;
-
-                    lessonDates.forEach(
-                      (date) => {
-                        const record =
-                          monthlyRecordMap.get(
-                            `${student.id}_${date}`
-                          );
-
-                        if (record) {
-                          totalMarked += 1;
-
-                          if (
-                            record.status ===
-                            "present"
-                          ) {
-                            attended += 1;
-                          }
-                        }
+                  (student) => (
+                    <tr
+                      key={
+                        student.id
                       }
-                    );
-
-                    const percent =
-                      totalMarked
-                        ? Math.round(
-                            (attended /
-                              totalMarked) *
-                              100
-                          )
-                        : 0;
-
-                    return (
-                      <tr
-                        key={
-                          student.id
-                        }
+                    >
+                      <td
+                        style={{
+                          ...tdStyle,
+                          textAlign:
+                            "left",
+                          fontWeight:
+                            800,
+                          color:
+                            "#153e69",
+                        }}
                       >
-                        <td
-                          style={{
-                            ...tableCell,
-                            position:
-                              "sticky",
-                            left: 0,
-                            zIndex:
-                              1,
-                            background:
-                              "#fff",
-                            minWidth:
-                              250,
-                          }}
-                        >
-                          <strong
-                            style={{
-                              color:
-                                "#143b65",
-                            }}
-                          >
-                            {
-                              student.first_name
-                            }{" "}
-                            {
-                              student.last_name
-                            }
-                          </strong>
-                        </td>
+                        {student.first_name ||
+                          ""}{" "}
+                        {student.last_name ||
+                          ""}
+                      </td>
 
-                        {lessonDates.map(
-                          (date) => {
-                            const record =
-                              monthlyRecordMap.get(
-                                `${student.id}_${date}`
-                              );
-
-                            return (
-                              <td
-                                key={
-                                  date
-                                }
-                                style={
-                                  tableCell
-                                }
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openDayFromMonthly(
-                                      date
-                                    )
-                                  }
-                                  style={{
-                                    width:
-                                      38,
-                                    height:
-                                      38,
-                                    borderRadius:
-                                      10,
-                                    border:
-                                      record
-                                        ? `1px solid ${
-                                            STATUS_META[
-                                              record
-                                                .status
-                                            ]
-                                              .border
-                                          }`
-                                        : "1px solid #e2e8f0",
-                                    background:
-                                      record
-                                        ? STATUS_META[
-                                            record
-                                              .status
-                                          ].bg
-                                        : "#f8fafc",
-                                    color:
-                                      record
-                                        ? STATUS_META[
-                                            record
-                                              .status
-                                          ].color
-                                        : "#cbd5e1",
-                                    fontWeight:
-                                      900,
-                                    cursor:
-                                      "pointer",
-                                  }}
-                                >
-                                  {record
-                                    ? STATUS_META[
-                                        record
-                                          .status
-                                      ].short
-                                    : "·"}
-                                </button>
-                              </td>
+                      {lessonDates.map(
+                        (date) => {
+                          const record =
+                            monthlyMap.get(
+                              `${student.id}_${date}`
                             );
-                          }
-                        )}
 
-                        <td
-                          style={
-                            tableCell
-                          }
-                        >
-                          <strong
-                            style={{
-                              color:
-                                percent >=
-                                80
-                                  ? "#15803d"
-                                  : percent >=
-                                    60
-                                  ? "#a16207"
-                                  : "#be123c",
-                            }}
-                          >
-                            {percent}%
-                          </strong>
-                        </td>
-                      </tr>
-                    );
-                  }
+                          return (
+                            <td
+                              key={
+                                date
+                              }
+                              style={
+                                tdStyle
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLessonDate(
+                                    date
+                                  );
+
+                                  setView(
+                                    "daily"
+                                  );
+                                }}
+                                style={{
+                                  width:
+                                    36,
+                                  height:
+                                    36,
+                                  borderRadius:
+                                    9,
+                                  border:
+                                    record
+                                      ? `1px solid ${
+                                          STATUS_META[
+                                            record
+                                              .status
+                                          ]
+                                            .border
+                                        }`
+                                      : "1px solid #e2e8f0",
+                                  background:
+                                    record
+                                      ? STATUS_META[
+                                          record
+                                            .status
+                                        ]
+                                          .background
+                                      : "#f8fafc",
+                                  color:
+                                    record
+                                      ? STATUS_META[
+                                          record
+                                            .status
+                                        ]
+                                          .color
+                                      : "#cbd5e1",
+                                  fontWeight:
+                                    900,
+                                  cursor:
+                                    "pointer",
+                                }}
+                              >
+                                {record
+                                  ? STATUS_META[
+                                      record
+                                        .status
+                                    ]
+                                      .short
+                                  : "·"}
+                              </button>
+                            </td>
+                          );
+                        }
+                      )}
+                    </tr>
+                  )
                 )}
               </tbody>
             </table>
@@ -2294,275 +1992,178 @@ export default function AttendanceClient({
         </section>
       )}
 
-      {viewMode === "history" && (
-        <section
-          style={{
-            background: "#fff",
-            border:
-              "1px solid #dce7f2",
-            borderRadius: 22,
-            overflow: "hidden",
-            boxShadow:
-              "0 14px 36px rgba(15,42,76,.07)",
-          }}
-        >
+      {view === "history" && (
+        <section style={panelStyle}>
           <div
             style={{
-              padding: 18,
-              background:
-                "#edf4fb",
               display: "flex",
               justifyContent:
                 "space-between",
-              alignItems:
-                "center",
-              gap: 12,
+              gap: 10,
+              alignItems: "center",
               flexWrap: "wrap",
             }}
           >
-            <div>
-              <strong
-                style={{
-                  color:
-                    "#153e69",
-                  fontSize: 17,
-                }}
-              >
-                Geçmiş Yoklamalar
-              </strong>
-
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 11,
-                  color:
-                    "#738297",
-                }}
-              >
-                Herhangi bir kaydı
-                açıp geriye dönük
-                düzenleyebilirsiniz.
-              </div>
-            </div>
+            <strong>
+              Geçmiş Yoklamalar
+            </strong>
 
             <input
               type="month"
               value={month}
-              onChange={(event) =>
+              onChange={(e) =>
                 setMonth(
-                  event.target.value
+                  e.target.value
                 )
               }
               style={{
-                ...fieldStyle,
-                width: 190,
+                ...inputStyle,
+                width: 180,
               }}
             />
           </div>
 
-          {!historyRows.length && (
-            <div
-              style={{
-                padding: 36,
-                textAlign:
-                  "center",
-                color:
-                  "#7b899a",
-              }}
-            >
-              Bu ay için kayıtlı
-              yoklama bulunamadı.
-            </div>
-          )}
+          <div
+            style={{
+              marginTop: 15,
+            }}
+          >
+            {!monthlyByDate.length && (
+              <div
+                style={{
+                  padding: 30,
+                  textAlign:
+                    "center",
+                  color:
+                    "#7c8998",
+                }}
+              >
+                Bu ay için kayıt bulunamadı.
+              </div>
+            )}
 
-          {historyRows.map(
-            (record) => {
-              const student =
-                students.find(
-                  (item) =>
-                    item.id ===
-                    record.student_id
-                );
+            {monthlyByDate.map(
+              ([date, records]) => {
+                const present =
+                  records.filter(
+                    (record) =>
+                      record.status ===
+                      "present"
+                  ).length;
 
-              const meta =
-                STATUS_META[
-                  record.status
-                ];
+                const absent =
+                  records.filter(
+                    (record) =>
+                      record.status ===
+                      "absent"
+                  ).length;
 
-              return (
-                <button
-                  key={
-                    record.id ||
-                    `${record.student_id}_${record.lesson_date}`
-                  }
-                  type="button"
-                  onClick={() =>
-                    openDayFromMonthly(
-                      record.lesson_date
-                    )
-                  }
-                  style={{
-                    width: "100%",
-                    border: 0,
-                    borderTop:
-                      "1px solid #edf2f7",
-                    background:
-                      "#fff",
-                    padding:
-                      "14px 18px",
-                    display:
-                      "grid",
-                    gridTemplateColumns:
-                      "150px minmax(220px,1fr) 130px minmax(200px,1fr)",
-                    gap: 12,
-                    alignItems:
-                      "center",
-                    textAlign:
-                      "left",
-                    cursor:
-                      "pointer",
-                  }}
-                >
-                  <strong
-                    style={{
-                      color:
-                        "#153e69",
+                const excused =
+                  records.filter(
+                    (record) =>
+                      record.status ===
+                      "excused"
+                  ).length;
+
+                const compensation =
+                  records.filter(
+                    (record) =>
+                      record.status ===
+                      "compensation"
+                  ).length;
+
+                return (
+                  <button
+                    type="button"
+                    key={date}
+                    onClick={() => {
+                      setLessonDate(
+                        date
+                      );
+
+                      setView(
+                        "daily"
+                      );
                     }}
-                  >
-                    {formatDateTR(
-                      record.lesson_date
-                    )}
-                  </strong>
-
-                  <span
                     style={{
-                      fontWeight:
-                        800,
-                      color:
-                        "#334155",
-                    }}
-                  >
-                    {student
-                      ? `${student.first_name} ${student.last_name}`
-                      : "Öğrenci"}
-                  </span>
-
-                  <span
-                    style={{
-                      display:
-                        "inline-flex",
-                      justifyContent:
-                        "center",
-                      padding:
-                        "7px 9px",
+                      width: "100%",
+                      padding: 14,
+                      marginBottom:
+                        8,
+                      border:
+                        "1px solid #e2e8f0",
                       borderRadius:
-                        999,
+                        12,
                       background:
-                        meta.bg,
-                      color:
-                        meta.color,
-                      fontWeight:
-                        900,
-                      fontSize:
-                        11,
+                        "#f8fafc",
+                      display:
+                        "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: 12,
+                      cursor:
+                        "pointer",
                     }}
                   >
-                    {meta.icon}{" "}
-                    {meta.label}
-                  </span>
+                    <strong>
+                      {formatDate(
+                        date
+                      )}
+                    </strong>
 
-                  <span
-                    style={{
-                      color:
-                        "#7b899a",
-                      fontSize: 12,
-                    }}
-                  >
-                    {record.coach_note ||
-                      "Not yok"}
-                  </span>
-                </button>
-              );
-            }
-          )}
+                    <span>
+                      ✓ {present}
+                      {" · "}✕{" "}
+                      {absent}
+                      {" · "}İ{" "}
+                      {excused}
+                      {" · "}T{" "}
+                      {compensation}
+                    </span>
+                  </button>
+                );
+              }
+            )}
+          </div>
         </section>
       )}
     </div>
   );
 }
 
-function StatCard({
-  title,
+function Stat({
+  name,
   value,
-  tone,
 }: {
-  title: string;
+  name: string;
   value: number;
-  tone:
-    | "blue"
-    | "green"
-    | "red"
-    | "yellow"
-    | "purple"
-    | "gray";
 }) {
-  const map = {
-    blue: {
-      bg: "#eff6ff",
-      color: "#1d4ed8",
-    },
-    green: {
-      bg: "#ecfdf3",
-      color: "#15803d",
-    },
-    red: {
-      bg: "#fff1f2",
-      color: "#be123c",
-    },
-    yellow: {
-      bg: "#fffbeb",
-      color: "#a16207",
-    },
-    purple: {
-      bg: "#eef2ff",
-      color: "#4338ca",
-    },
-    gray: {
-      bg: "#f8fafc",
-      color: "#475569",
-    },
-  };
-
-  const toneStyle = map[tone];
-
   return (
     <div
       style={{
-        padding: 15,
-        borderRadius: 16,
-        background:
-          toneStyle.bg,
-        color:
-          toneStyle.color,
+        padding: 13,
+        borderRadius: 14,
+        background: "#fff",
         border:
-          "1px solid rgba(148,163,184,.18)",
+          "1px solid #dce7f2",
       }}
     >
       <span
         style={{
-          display: "block",
-          fontSize: 11,
+          fontSize: 10,
+          color: "#64748b",
           fontWeight: 900,
         }}
       >
-        {title}
+        {name}
       </span>
 
       <strong
         style={{
           display: "block",
           marginTop: 4,
-          fontSize: 24,
+          color: "#153e69",
+          fontSize: 22,
         }}
       >
         {value}
@@ -2571,128 +2172,96 @@ function StatCard({
   );
 }
 
-const labelStyle = {
-  display: "grid",
-  gap: 7,
-  fontSize: 11,
-  fontWeight: 900,
-  color: "#52667e",
+const panelStyle = {
+  padding: 18,
+  background: "#fff",
+  border:
+    "1px solid #dce7f2",
+  borderRadius: 20,
 } as const;
 
-const fieldStyle = {
+const labelStyle = {
+  display: "grid",
+  gap: 6,
+  fontSize: 10,
+  color: "#64748b",
+  fontWeight: 900,
+} as const;
+
+const inputStyle = {
   width: "100%",
-  minHeight: 46,
-  padding: "0 12px",
+  minHeight: 44,
   border:
     "1px solid #d8e2ec",
-  borderRadius: 12,
+  borderRadius: 11,
   background: "#fff",
+  padding: "0 11px",
   color: "#183b61",
   fontWeight: 800,
 } as const;
 
-const warningBadge = {
+const smallStyle = {
   display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   padding: "8px 10px",
-  borderRadius: 10,
-  background: "#fff7ed",
-  color: "#c2410c",
   border:
-    "1px solid #fed7aa",
-  fontSize: 11,
-  fontWeight: 800,
+    "1px solid #dce7f2",
+  borderRadius: 10,
+  background: "#f8fafc",
+  color: "#315577",
+  textDecoration: "none",
+  cursor: "pointer",
+  fontSize: 10,
+  fontWeight: 900,
 } as const;
 
-const tableHeader = {
-  padding: "12px 8px",
+const darkStyle = {
+  border:
+    "1px solid rgba(255,255,255,.2)",
+  borderRadius: 10,
+  padding: "8px 11px",
+  background:
+    "rgba(255,255,255,.08)",
+  color: "#fff",
+  cursor: "pointer",
+  fontWeight: 900,
+} as const;
+
+const thStyle = {
+  padding: "10px 7px",
   borderBottom:
     "1px solid #e2e8f0",
+  background: "#f8fafc",
   color: "#64748b",
   fontSize: 10,
   fontWeight: 900,
   textAlign: "center",
-  background: "#f7fafe",
 } as const;
 
-const tableCell = {
-  padding: "9px 8px",
+const tdStyle = {
+  padding: "8px 7px",
   borderBottom:
     "1px solid #edf2f7",
   textAlign: "center",
 } as const;
 
-function navButton(
+function navStyle(
   active: boolean
 ) {
   return {
     border: 0,
-    textDecoration: "none",
-    padding: "11px 14px",
-    borderRadius: 12,
-    cursor: "pointer",
+    borderRadius: 11,
+    padding: "10px 12px",
     background: active
       ? "#0b6ff4"
       : "#f6f9fc",
     color: active
       ? "#fff"
       : "#315577",
-    fontWeight: 900,
-    fontSize: 12,
-  } as const;
-}
-
-function darkButton(
-  active = false
-) {
-  return {
-    border: active
-      ? "1px solid #60a5fa"
-      : "1px solid rgba(255,255,255,.18)",
-    borderRadius: 11,
-    padding: "9px 12px",
     cursor: "pointer",
-    background: active
-      ? "#0b6ff4"
-      : "rgba(255,255,255,.08)",
-    color: "#fff",
-    fontWeight: 900,
-    fontSize: 11,
-  } as const;
-}
-
-function actionButton(
-  background: string,
-  color: string
-) {
-  return {
-    border: 0,
-    borderRadius: 11,
-    padding: "10px 13px",
-    background,
-    color,
-    cursor: "pointer",
-    fontWeight: 900,
-    fontSize: 11,
-  } as const;
-}
-
-function miniButton(
-  background: string,
-  color: string
-) {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border:
-      "1px solid #dce7f2",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background,
-    color,
-    cursor: "pointer",
-    fontWeight: 900,
-    fontSize: 10,
     textDecoration: "none",
+    fontSize: 11,
+    fontWeight: 900,
   } as const;
 }
