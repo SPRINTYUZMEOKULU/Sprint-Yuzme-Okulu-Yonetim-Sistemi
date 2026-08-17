@@ -1840,10 +1840,21 @@ export default function AttendanceClient({
                   <div
                     key={student.id}
                     style={{
-                      padding:
-                        "18px 0",
-                      borderTop:
-                        "1px solid #edf2f7",
+                      padding: "16px",
+                      marginTop: 10,
+                      border: isCompensationLesson
+                        ? "1px solid #c4b5fd"
+                        : "1px solid #e6edf5",
+                      borderLeft: isCompensationLesson
+                        ? "5px solid #7c3aed"
+                        : "5px solid #dbe7f3",
+                      borderRadius: 16,
+                      background: isCompensationLesson
+                        ? "linear-gradient(135deg,#ffffff 0%,#faf5ff 100%)"
+                        : "#ffffff",
+                      boxShadow: "0 6px 18px rgba(15,42,76,.045)",
+                      minWidth: 0,
+                      overflow: "hidden",
                     }}
                   >
                     <div
@@ -2031,8 +2042,8 @@ export default function AttendanceClient({
                           gap: 6,
                           flexWrap:
                             "wrap",
-                          alignItems:
-                            "flex-start",
+                          alignItems: "stretch",
+                          minWidth: 0,
                         }}
                       >
                         <button
@@ -2045,7 +2056,7 @@ export default function AttendanceClient({
                                 : student.id
                             )
                           }
-                          style={smallStyle}
+                          style={contactButtonStyle}
                         >
                           📞 İletişim
                         </button>
@@ -2056,7 +2067,7 @@ export default function AttendanceClient({
                           onClick={() =>
                             call(student)
                           }
-                          style={smallStyle}
+                          style={callButtonStyle}
                         >
                           ☎ Ara
                         </button>
@@ -2069,16 +2080,16 @@ export default function AttendanceClient({
                               student
                             )
                           }
-                          style={smallStyle}
+                          style={whatsappButtonStyle}
                         >
                           💬 WhatsApp
                         </button>
 
                         <Link
                           href={`/ogrenciler/${student.id}`}
-                          style={smallStyle}
+                          style={detailButtonStyle}
                         >
-                          👤 Detay
+                          👤 Öğrenci Kartı
                         </Link>
                       </div>
                     </div>
@@ -2093,8 +2104,10 @@ export default function AttendanceClient({
                             12,
                           borderRadius:
                             12,
-                          background:
-                            "#f6f9fc",
+                          background: "linear-gradient(135deg,#f8fbff 0%,#f1f6fb 100%)",
+                          border: "1px solid #dbe7f3",
+                          boxShadow: "0 6px 18px rgba(15,42,76,.04)",
+                          overflowWrap: "anywhere",
                         }}
                       >
                         <strong>
@@ -3052,6 +3065,8 @@ const labelStyle = {
 
 const inputStyle = {
   width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   minHeight: 44,
   border:
     "1px solid #d8e2ec",
@@ -3066,16 +3081,45 @@ const smallStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "8px 10px",
-  border:
-    "1px solid #dce7f2",
-  borderRadius: 10,
+  padding: "9px 11px",
+  border: "1px solid #dce7f2",
+  borderRadius: 11,
   background: "#f8fafc",
   color: "#315577",
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 10,
   fontWeight: 900,
+  whiteSpace: "nowrap",
+  boxSizing: "border-box",
+} as const;
+
+const contactButtonStyle = {
+  ...smallStyle,
+  background: "#eff6ff",
+  border: "1px solid #bfdbfe",
+  color: "#1d4ed8",
+} as const;
+
+const callButtonStyle = {
+  ...smallStyle,
+  background: "#ecfdf5",
+  border: "1px solid #a7f3d0",
+  color: "#047857",
+} as const;
+
+const whatsappButtonStyle = {
+  ...smallStyle,
+  background: "#f0fdf4",
+  border: "1px solid #bbf7d0",
+  color: "#15803d",
+} as const;
+
+const detailButtonStyle = {
+  ...smallStyle,
+  background: "#f8fafc",
+  border: "1px solid #cbd5e1",
+  color: "#334155",
 } as const;
 
 const darkStyle = {
@@ -3125,5 +3169,7 @@ function navStyle(
     textDecoration: "none",
     fontSize: 11,
     fontWeight: 900,
+    boxSizing: "border-box",
+    whiteSpace: "nowrap",
   } as const;
 }
