@@ -282,27 +282,54 @@ function cleanPhone(
   );
 }
 
-function studentPhone(
-  student: Student
+function isAdultCourse(
+  group?: Group | null
 ) {
-  const guardian =
-    cleanPhone(
-      student.guardian_phone
-    );
+  const value = `${group?.course_type || ""} ${group?.name || ""}`
+    .toLocaleLowerCase("tr-TR")
+    .trim();
 
-  if (guardian.length >= 10) {
-    return guardian;
-  }
+  return (
+    value.includes("yetişkin") ||
+    value.includes("yetiskin") ||
+    value.includes("adult") ||
+    value.includes("master")
+  );
+}
+
+function studentPhone(
+  student: Student,
+  adultCourse = false
+) {
+  const guardian = cleanPhone(
+    student.guardian_phone
+  );
 
   const own = cleanPhone(
     student.phone
   );
 
-  if (own.length >= 10) {
-    return own;
+  // Yetişkin grubunda önce kursiyerin kendi numarası,
+  // çocuk grubunda önce veli numarası kullanılır.
+  if (adultCourse) {
+    if (own.length >= 10) return own;
+    if (guardian.length >= 10) return guardian;
+  } else {
+    if (guardian.length >= 10) return guardian;
+    if (own.length >= 10) return own;
   }
 
   return "";
+}
+
+function whatsappButtonLabel(
+  status?: AttendanceStatus
+) {
+  if (status === "absent") return "💬 Gelmedi Mesajı";
+  if (status === "excused") return "💬 İzin Bilgisi";
+  if (status === "compensation") return "💬 Telafi Bilgisi";
+  if (status === "present") return "💬 Katılım Bilgisi";
+  return "💬 WhatsApp";
 }
 
 function whatsappPhone(
@@ -1230,8 +1257,14 @@ export default function AttendanceClient({
   function call(
     student: Student
   ) {
+    const adultCourse =
+      isAdultCourse(selectedGroup);
+
     const phone =
-      studentPhone(student);
+      studentPhone(
+        student,
+        adultCourse
+      );
 
     if (!phone) {
       setMessage(
@@ -1248,21 +1281,77 @@ export default function AttendanceClient({
   function whatsapp(
     student: Student
   ) {
+    const adultCourse =
+      isAdultCourse(selectedGroup);
+
     const phone =
-      studentPhone(student);
+      studentPhone(
+        student,
+        adultCourse
+      );
 
     if (!phone) {
       setMessage(
-        "WhatsApp numarası bulunamadı."
+        adultCourse
+          ? "Kursiyerin WhatsApp numarası bulunamadı."
+          : "Veli WhatsApp numarası bulunamadı."
       );
 
       return;
     }
 
+    const firstName =
+      (student.first_name || "Öğrencimiz").trim();
+
+    const status =
+      statuses[student.id];
+
+    const weekday =
+      DAY_NAMES[dateWeekday(lessonDate)] || "";
+
+    const lessonTime =
+      selectedSchedule?.start_time
+        ? time(selectedSchedule.start_time)
+        : "";
+
+    const lessonLabel =
+      `${formatDate(lessonDate)} ${weekday}${lessonTime ? ` · ${lessonTime}` : ""}`;
+
+    let body = "";
+
+    if (status === "absent") {
+      body = adultCourse
+        ? `${lessonLabel} tarihli yüzme dersinize katılım sağlamadığınız görülmüştür.`
+        : `Çocuğumuz ${firstName}, ${lessonLabel} tarihli yüzme dersine katılım sağlamamıştır.`;
+    } else if (status === "excused") {
+      body = adultCourse
+        ? `${lessonLabel} tarihli yüzme dersiniz izinli olarak kaydedilmiştir. Yüzme okulumuz kuralları gereği izinli dersler ders hakkından düşmektedir.`
+        : `Çocuğumuz ${firstName}, ${lessonLabel} tarihli yüzme dersi için izinli olarak kaydedilmiştir. Yüzme okulumuz kuralları gereği izinli dersler ders hakkından düşmektedir.`;
+    } else if (status === "compensation") {
+      body = adultCourse
+        ? `${lessonLabel} tarihli dersiniz telafi dersi olarak kaydedilmiştir.`
+        : `Çocuğumuz ${firstName}, ${lessonLabel} tarihli ders için telafi programına kaydedilmiştir.`;
+    } else if (status === "present") {
+      body = adultCourse
+        ? `${lessonLabel} tarihli yüzme dersine katılımınız kaydedilmiştir.`
+        : `Çocuğumuz ${firstName}, ${lessonLabel} tarihli yüzme dersine katılım sağlamıştır.`;
+    } else {
+      body = adultCourse
+        ? `${lessonLabel} tarihli yüzme dersiniz hakkında bilgilendirme için yazıyoruz.`
+        : `Çocuğumuz ${firstName}'in ${lessonLabel} tarihli yüzme dersi hakkında bilgilendirme için yazıyoruz.`;
+    }
+
+    const text =
+      `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n` +
+      `${body}\n\n` +
+      `Bilginize sunar, iyi günler dileriz.\n` +
+      `Sprint Yüzme Okulu`;
+
+    const url =
+      `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(text)}`;
+
     window.open(
-      `https://wa.me/${whatsappPhone(
-        phone
-      )}`,
+      url,
       "_blank",
       "noopener,noreferrer"
     );
@@ -1272,7 +1361,10 @@ export default function AttendanceClient({
     student: Student
   ) {
     const phone =
-      studentPhone(student);
+      studentPhone(
+        student,
+        isAdultCourse(selectedGroup)
+      );
 
     if (!phone) return;
 
@@ -1296,6 +1388,10 @@ export default function AttendanceClient({
       style={{
         display: "grid",
         gap: 18,
+        width: "100%",
+        minWidth: 0,
+        overflowX: "hidden",
+        boxSizing: "border-box",
       }}
     >
       <nav
@@ -1304,10 +1400,13 @@ export default function AttendanceClient({
           gap: 8,
           flexWrap: "wrap",
           padding: 10,
-          background: "#fff",
-          border:
-            "1px solid #dce7f2",
+          background: "rgba(255,255,255,.96)",
+          border: "1px solid #dce7f2",
           borderRadius: 18,
+          boxShadow: "0 8px 24px rgba(15,42,76,.05)",
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
         }}
       >
         <Link
@@ -1815,7 +1914,8 @@ export default function AttendanceClient({
 
                 const phone =
                   studentPhone(
-                    student
+                    student,
+                    isAdultCourse(selectedGroup)
                   );
 
                 const usage =
@@ -1840,21 +1940,18 @@ export default function AttendanceClient({
                   <div
                     key={student.id}
                     style={{
-                      padding: "16px",
+                      padding: 16,
                       marginTop: 10,
                       border: isCompensationLesson
                         ? "1px solid #c4b5fd"
-                        : "1px solid #e6edf5",
-                      borderLeft: isCompensationLesson
-                        ? "5px solid #7c3aed"
-                        : "5px solid #dbe7f3",
+                        : "1px solid #e7edf4",
                       borderRadius: 16,
                       background: isCompensationLesson
-                        ? "linear-gradient(135deg,#ffffff 0%,#faf5ff 100%)"
+                        ? "linear-gradient(135deg,#ffffff 0%,#faf8ff 100%)"
                         : "#ffffff",
-                      boxShadow: "0 6px 18px rgba(15,42,76,.045)",
+                      boxShadow: "0 6px 18px rgba(15,42,76,.035)",
                       minWidth: 0,
-                      overflow: "hidden",
+                      boxSizing: "border-box",
                     }}
                   >
                     <div
@@ -2037,12 +2134,12 @@ export default function AttendanceClient({
 
                       <div
                         style={{
-                          display:
-                            "flex",
-                          gap: 6,
-                          flexWrap:
-                            "wrap",
-                          alignItems: "stretch",
+                          display: "flex",
+                          gap: 7,
+                          flexWrap: "wrap",
+                          alignItems: "flex-start",
+                          justifyContent: "flex-end",
+                          flex: "1 1 330px",
                           minWidth: 0,
                         }}
                       >
@@ -2056,9 +2153,12 @@ export default function AttendanceClient({
                                 : student.id
                             )
                           }
-                          style={contactButtonStyle}
+                          style={{
+                            ...smallStyle,
+                            ...contactActionStyle,
+                          }}
                         >
-                          📞 İletişim
+                          📇 İletişim
                         </button>
 
                         <button
@@ -2067,9 +2167,14 @@ export default function AttendanceClient({
                           onClick={() =>
                             call(student)
                           }
-                          style={callButtonStyle}
+                          style={{
+                            ...smallStyle,
+                            ...callActionStyle,
+                            opacity: phone ? 1 : 0.45,
+                            cursor: phone ? "pointer" : "not-allowed",
+                          }}
                         >
-                          ☎ Ara
+                          ☎️ Ara
                         </button>
 
                         <button
@@ -2080,14 +2185,24 @@ export default function AttendanceClient({
                               student
                             )
                           }
-                          style={whatsappButtonStyle}
+                          style={{
+                            ...smallStyle,
+                            ...whatsappActionStyle,
+                            opacity: phone ? 1 : 0.45,
+                            cursor: phone ? "pointer" : "not-allowed",
+                          }}
                         >
-                          💬 WhatsApp
+                          {whatsappButtonLabel(
+                            statuses[student.id]
+                          )}
                         </button>
 
                         <Link
                           href={`/ogrenciler/${student.id}`}
-                          style={detailButtonStyle}
+                          style={{
+                            ...smallStyle,
+                            ...detailActionStyle,
+                          }}
                         >
                           👤 Öğrenci Kartı
                         </Link>
@@ -2104,10 +2219,8 @@ export default function AttendanceClient({
                             12,
                           borderRadius:
                             12,
-                          background: "linear-gradient(135deg,#f8fbff 0%,#f1f6fb 100%)",
-                          border: "1px solid #dbe7f3",
-                          boxShadow: "0 6px 18px rgba(15,42,76,.04)",
-                          overflowWrap: "anywhere",
+                          background:
+                            "#f6f9fc",
                         }}
                       >
                         <strong>
@@ -2118,37 +2231,77 @@ export default function AttendanceClient({
 
                         <div
                           style={{
-                            marginTop:
-                              5,
-                            fontSize:
-                              12,
+                            marginTop: 8,
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit,minmax(180px,1fr))",
+                            gap: 8,
                           }}
                         >
-                          Veli telefonu:{" "}
-                          {student.guardian_phone ||
-                            "—"}
-                          {" · "}
-                          Öğrenci telefonu:{" "}
-                          {student.phone ||
-                            "—"}
+                          <ContactBox
+                            title="Veli Telefonu"
+                            value={student.guardian_phone}
+                          />
+
+                          <ContactBox
+                            title="Öğrenci Telefonu"
+                            value={student.phone}
+                          />
+
+                          <ContactBox
+                            title="E-posta"
+                            value={
+                              student.guardian_email ||
+                              student.email
+                            }
+                          />
                         </div>
 
                         {phone && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyPhone(
-                                student
-                              )
-                            }
+                          <div
                             style={{
-                              ...smallStyle,
-                              marginTop:
-                                8,
+                              marginTop: 9,
+                              display: "flex",
+                              gap: 7,
+                              flexWrap: "wrap",
                             }}
                           >
-                            📋 Numarayı Kopyala
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => call(student)}
+                              style={{
+                                ...smallStyle,
+                                ...callActionStyle,
+                              }}
+                            >
+                              ☎️ Hemen Ara
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                whatsapp(student)
+                              }
+                              style={{
+                                ...smallStyle,
+                                ...whatsappActionStyle,
+                              }}
+                            >
+                              {whatsappButtonLabel(
+                                statuses[student.id]
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyPhone(student)
+                              }
+                              style={smallStyle}
+                            >
+                              📋 Numarayı Kopyala
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -2202,12 +2355,26 @@ export default function AttendanceClient({
 
                     <div
                       style={{
-                        display:
-                          "grid",
+                        marginTop: 10,
+                        color: "#64748b",
+                        fontSize: 10,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      ℹ️ İzinli yalnızca bilgilendirme statüsüdür; ders hakkından düşer.
+                      {isCompensationLesson
+                        ? " Bu satır telafi programından gelmiştir."
+                        : ""}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
                         gridTemplateColumns:
-                          "repeat(auto-fit,minmax(280px,1fr))",
+                          "repeat(auto-fit,minmax(260px,1fr))",
                         gap: 10,
-                        marginTop: 12,
+                        marginTop: 10,
+                        minWidth: 0,
                       }}
                     >
                       <div
@@ -2260,10 +2427,9 @@ export default function AttendanceClient({
                                   )
                                 }
                                 style={{
-                                  minHeight:
-                                    46,
-                                  borderRadius:
-                                    11,
+                                  minHeight: 48,
+                                  padding: "8px 10px",
+                                  borderRadius: 12,
                                   border:
                                     active
                                       ? `2px solid ${meta.border}`
@@ -2276,10 +2442,11 @@ export default function AttendanceClient({
                                     active
                                       ? meta.color
                                       : "#53677f",
-                                  fontWeight:
-                                    900,
-                                  cursor:
-                                    "pointer",
+                                  fontWeight: 900,
+                                  fontSize: 12,
+                                  lineHeight: 1.2,
+                                  whiteSpace: "normal",
+                                  cursor: "pointer",
                                 }}
                               >
                                 {isCompensationLesson &&
@@ -3047,8 +3214,80 @@ function InfoBox({
   );
 }
 
+
+function ContactBox({
+  title,
+  value,
+}: {
+  title: string;
+  value?: string | null;
+}) {
+  return (
+    <div
+      style={{
+        padding: "9px 10px",
+        borderRadius: 10,
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          display: "block",
+          color: "#94a3b8",
+          fontSize: 8,
+          fontWeight: 900,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </span>
+
+      <strong
+        style={{
+          display: "block",
+          marginTop: 3,
+          color: "#334155",
+          fontSize: 11,
+          overflowWrap: "anywhere",
+        }}
+      >
+        {value || "—"}
+      </strong>
+    </div>
+  );
+}
+
+const contactActionStyle = {
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  border: "1px solid #bfdbfe",
+} as const;
+
+const callActionStyle = {
+  background: "#ecfdf3",
+  color: "#166534",
+  border: "1px solid #bbf7d0",
+} as const;
+
+const whatsappActionStyle = {
+  background: "#f0fdf4",
+  color: "#15803d",
+  border: "1px solid #86efac",
+} as const;
+
+const detailActionStyle = {
+  background: "#f8fafc",
+  color: "#0f3a63",
+  border: "1px solid #cbd5e1",
+} as const;
+
 const panelStyle = {
   padding: 18,
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   background: "#fff",
   border:
     "1px solid #dce7f2",
@@ -3066,8 +3305,8 @@ const labelStyle = {
 const inputStyle = {
   width: "100%",
   minWidth: 0,
-  boxSizing: "border-box",
   minHeight: 44,
+  boxSizing: "border-box",
   border:
     "1px solid #d8e2ec",
   borderRadius: 11,
@@ -3081,45 +3320,18 @@ const smallStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "9px 11px",
-  border: "1px solid #dce7f2",
-  borderRadius: 11,
+  gap: 4,
+  minHeight: 38,
+  padding: "8px 11px",
+  border:
+    "1px solid #dce7f2",
+  borderRadius: 10,
   background: "#f8fafc",
   color: "#315577",
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 10,
   fontWeight: 900,
-  whiteSpace: "nowrap",
-  boxSizing: "border-box",
-} as const;
-
-const contactButtonStyle = {
-  ...smallStyle,
-  background: "#eff6ff",
-  border: "1px solid #bfdbfe",
-  color: "#1d4ed8",
-} as const;
-
-const callButtonStyle = {
-  ...smallStyle,
-  background: "#ecfdf5",
-  border: "1px solid #a7f3d0",
-  color: "#047857",
-} as const;
-
-const whatsappButtonStyle = {
-  ...smallStyle,
-  background: "#f0fdf4",
-  border: "1px solid #bbf7d0",
-  color: "#15803d",
-} as const;
-
-const detailButtonStyle = {
-  ...smallStyle,
-  background: "#f8fafc",
-  border: "1px solid #cbd5e1",
-  color: "#334155",
 } as const;
 
 const darkStyle = {
@@ -3169,7 +3381,9 @@ function navStyle(
     textDecoration: "none",
     fontSize: 11,
     fontWeight: 900,
+    flex: "1 1 135px",
+    minHeight: 40,
+    textAlign: "center",
     boxSizing: "border-box",
-    whiteSpace: "nowrap",
   } as const;
 }
