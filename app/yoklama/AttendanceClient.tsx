@@ -96,12 +96,31 @@ type AttendanceRecord = {
   coach_note?: string | null;
 };
 
+type CompensationLesson = {
+  id: string;
+  organization_id?: string | null;
+  student_id: string;
+  enrollment_id?: string | null;
+  source_request_id?: string | null;
+  target_group_id: string;
+  target_schedule_id?: string | null;
+  lesson_date: string;
+  status: "planned" | "completed" | "cancelled" | string;
+  note?: string | null;
+  created_by?: string | null;
+  completed_by?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  completed_at?: string | null;
+};
+
 type Props = {
   groups: Group[];
   schedules: Schedule[];
   memberships: Membership[];
   students: Student[];
   enrollments: Enrollment[];
+  compensationLessons: CompensationLesson[];
 };
 
 type ViewMode =
@@ -478,6 +497,7 @@ export default function AttendanceClient({
   memberships,
   students,
   enrollments,
+  compensationLessons,
 }: Props) {
   const [view, setView] =
     useState<ViewMode>("daily");
@@ -599,6 +619,32 @@ export default function AttendanceClient({
       selectedGroupId,
     ]);
 
+  const activeCompensationLessons =
+    useMemo(() => {
+      return compensationLessons.filter(
+        (lesson) =>
+          lesson.status === "planned" &&
+          lesson.target_group_id === selectedGroupId &&
+          lesson.lesson_date === lessonDate &&
+          (!lesson.target_schedule_id ||
+            lesson.target_schedule_id === selectedScheduleId)
+      );
+    }, [
+      compensationLessons,
+      selectedGroupId,
+      selectedScheduleId,
+      lessonDate,
+    ]);
+
+  const compensationStudentIds =
+    useMemo(() => {
+      return new Set(
+        activeCompensationLessons.map(
+          (lesson) => lesson.student_id
+        )
+      );
+    }, [activeCompensationLessons]);
+
   const groupStudents =
     useMemo(() => {
       return students
@@ -616,6 +662,23 @@ export default function AttendanceClient({
           )
         );
     }, [students, studentIds]);
+
+  const attendanceStudents =
+    useMemo(() => {
+      const includedIds = new Set<string>([
+        ...Array.from(studentIds),
+        ...Array.from(compensationStudentIds),
+      ]);
+
+      return students
+        .filter((student) => includedIds.has(student.id))
+        .sort((a, b) =>
+          `${a.first_name || ""} ${a.last_name || ""}`.localeCompare(
+            `${b.first_name || ""} ${b.last_name || ""}`,
+            "tr"
+          )
+        );
+    }, [students, studentIds, compensationStudentIds]);
 
   const enrollmentMap =
     useMemo(() => {
@@ -640,10 +703,23 @@ export default function AttendanceClient({
         }
       );
 
+      activeCompensationLessons.forEach((lesson) => {
+        if (!lesson.enrollment_id) return;
+
+        const enrollment = enrollments.find(
+          (item) => item.id === lesson.enrollment_id
+        );
+
+        if (enrollment?.student_id) {
+          map.set(enrollment.student_id, enrollment);
+        }
+      });
+
       return map;
     }, [
       enrollments,
       selectedGroupId,
+      activeCompensationLessons,
     ]);
 
   const renewalCounts =
@@ -653,7 +729,7 @@ export default function AttendanceClient({
       let two = 0;
       let three = 0;
 
-      groupStudents.forEach(
+      attendanceStudents.forEach(
         (student) => {
           const enrollment =
             enrollmentMap.get(
@@ -689,7 +765,7 @@ export default function AttendanceClient({
           three,
       };
     }, [
-      groupStudents,
+      attendanceStudents,
       enrollmentMap,
     ]);
 
@@ -698,10 +774,10 @@ export default function AttendanceClient({
       if (
         renewalFilter === "all"
       ) {
-        return groupStudents;
+        return attendanceStudents;
       }
 
-      return groupStudents.filter(
+      return attendanceStudents.filter(
         (student) => {
           const enrollment =
             enrollmentMap.get(
@@ -744,7 +820,7 @@ export default function AttendanceClient({
         }
       );
     }, [
-      groupStudents,
+      attendanceStudents,
       enrollmentMap,
       renewalFilter,
     ]);
@@ -755,7 +831,7 @@ export default function AttendanceClient({
     let excused = 0;
     let compensation = 0;
 
-    groupStudents.forEach(
+    attendanceStudents.forEach(
       (student) => {
         const status =
           statuses[student.id];
@@ -787,7 +863,7 @@ export default function AttendanceClient({
       excused,
       compensation,
       missing:
-        groupStudents.length -
+        attendanceStudents.length -
         present -
         absent -
         excused -
@@ -795,7 +871,7 @@ export default function AttendanceClient({
     };
   }, [
     statuses,
-    groupStudents,
+    attendanceStudents,
   ]);
 
   const lessonDates =
@@ -1044,10 +1120,12 @@ export default function AttendanceClient({
       AttendanceStatus
     > = {};
 
-    groupStudents.forEach(
+    attendanceStudents.forEach(
       (student) => {
         value[student.id] =
-          "present";
+          compensationStudentIds.has(student.id)
+            ? "compensation"
+            : "present";
       }
     );
 
@@ -1067,7 +1145,7 @@ export default function AttendanceClient({
     }
 
     if (
-      !groupStudents.length
+      !attendanceStudents.length
     ) {
       setMessage(
         "Bu grupta öğrenci bulunamadı."
@@ -1077,7 +1155,7 @@ export default function AttendanceClient({
     }
 
     const missing =
-      groupStudents.filter(
+      attendanceStudents.filter(
         (student) =>
           !statuses[student.id]
       );
@@ -1091,7 +1169,7 @@ export default function AttendanceClient({
     }
 
     const records =
-      groupStudents.map(
+      attendanceStudents.map(
         (student) => ({
           studentId:
             student.id,
@@ -1381,7 +1459,7 @@ export default function AttendanceClient({
           style={{
             display: "grid",
             gridTemplateColumns:
-              "1fr 2fr 1.5fr",
+              "repeat(auto-fit,minmax(220px,1fr))",
             gap: 12,
           }}
         >
@@ -1543,7 +1621,7 @@ export default function AttendanceClient({
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(4,minmax(150px,1fr))",
+              "repeat(auto-fit,minmax(150px,1fr))",
             gap: 10,
           }}
         >
@@ -1627,14 +1705,14 @@ export default function AttendanceClient({
             style={{
               display: "grid",
               gridTemplateColumns:
-                "repeat(6, minmax(110px, 1fr))",
+                "repeat(auto-fit, minmax(105px, 1fr))",
               gap: 9,
             }}
           >
             <Stat
               name="Toplam"
               value={
-                groupStudents.length
+                attendanceStudents.length
               }
             />
 
@@ -1750,6 +1828,14 @@ export default function AttendanceClient({
                     enrollment
                   );
 
+                const isCompensationLesson =
+                  compensationStudentIds.has(student.id);
+
+                const compensationLesson =
+                  activeCompensationLessons.find(
+                    (lesson) => lesson.student_id === student.id
+                  );
+
                 return (
                   <div
                     key={student.id}
@@ -1774,7 +1860,7 @@ export default function AttendanceClient({
                       <div
                         style={{
                           flex: 1,
-                          minWidth: 280,
+                          minWidth: 0,
                         }}
                       >
                         <div
@@ -1788,19 +1874,18 @@ export default function AttendanceClient({
                               "wrap",
                           }}
                         >
-                          <strong
+                          <Link
+                            href={`/ogrenciler/${student.id}`}
                             style={{
-                              color:
-                                "#123b68",
-                              fontSize:
-                                16,
+                              color: "#123b68",
+                              fontSize: 16,
+                              fontWeight: 900,
+                              textDecoration: "none",
                             }}
                           >
-                            {student.first_name ||
-                              ""}{" "}
-                            {student.last_name ||
-                              ""}
-                          </strong>
+                            {student.first_name || ""}{" "}
+                            {student.last_name || ""}
+                          </Link>
 
                           <span
                             style={{
@@ -1823,6 +1908,23 @@ export default function AttendanceClient({
                           >
                             {renewal.label}
                           </span>
+
+                          {isCompensationLesson && (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                padding: "5px 9px",
+                                borderRadius: 999,
+                                background: "#ede9fe",
+                                color: "#6d28d9",
+                                border: "1px solid #c4b5fd",
+                                fontSize: 10,
+                                fontWeight: 900,
+                              }}
+                            >
+                              🟣 TELAFİ DERSİ
+                            </span>
+                          )}
                         </div>
 
                         <div
@@ -1863,7 +1965,7 @@ export default function AttendanceClient({
                             display:
                               "grid",
                             gridTemplateColumns:
-                              "repeat(4,minmax(120px,1fr))",
+                              "repeat(auto-fit,minmax(120px,1fr))",
                             gap: 7,
                             maxWidth:
                               760,
@@ -2038,6 +2140,27 @@ export default function AttendanceClient({
                       </div>
                     )}
 
+                    {isCompensationLesson && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          padding: 12,
+                          borderRadius: 12,
+                          background: "#f5f3ff",
+                          border: "1px solid #c4b5fd",
+                          color: "#5b21b6",
+                          fontSize: 11,
+                          fontWeight: 900,
+                        }}
+                      >
+                        🟣 Bu öğrenci bu seansa TELAFİ dersi olarak eklenmiştir.
+                        Geldiğinde yoklama otomatik olarak Telafi şeklinde işlenecektir.
+                        {compensationLesson?.note
+                          ? ` · Not: ${compensationLesson.note}`
+                          : ""}
+                      </div>
+                    )}
+
                     {(student.medical_note ||
                       student.general_note) && (
                       <div
@@ -2069,7 +2192,7 @@ export default function AttendanceClient({
                         display:
                           "grid",
                         gridTemplateColumns:
-                          "minmax(520px, 2fr) minmax(220px, 1fr)",
+                          "repeat(auto-fit,minmax(280px,1fr))",
                         gap: 10,
                         marginTop: 12,
                       }}
@@ -2079,14 +2202,20 @@ export default function AttendanceClient({
                           display:
                             "grid",
                           gridTemplateColumns:
-                            "repeat(4, 1fr)",
+                            "repeat(auto-fit,minmax(120px,1fr))",
                           gap: 7,
                         }}
                       >
                         {(
-                          Object.keys(
-                            STATUS_META
-                          ) as AttendanceStatus[]
+                          isCompensationLesson
+                            ? ([
+                                "compensation",
+                                "absent",
+                                "excused",
+                              ] as AttendanceStatus[])
+                            : (Object.keys(
+                                STATUS_META
+                              ) as AttendanceStatus[])
                         ).map(
                           (status) => {
                             const meta =
@@ -2140,9 +2269,10 @@ export default function AttendanceClient({
                                     "pointer",
                                 }}
                               >
-                                {
-                                  meta.label
-                                }
+                                {isCompensationLesson &&
+                                status === "compensation"
+                                  ? "✓ Geldi · TELAFİ"
+                                  : meta.label}
                               </button>
                             );
                           }
@@ -2236,7 +2366,8 @@ export default function AttendanceClient({
               onClick={save}
               style={{
                 minHeight: 50,
-                minWidth: 240,
+                minWidth: 0,
+                width: "min(100%, 260px)",
                 border: 0,
                 borderRadius: 13,
                 background:
