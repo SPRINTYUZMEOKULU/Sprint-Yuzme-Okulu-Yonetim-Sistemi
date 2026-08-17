@@ -109,6 +109,13 @@ type ViewMode =
   | "monthly"
   | "history";
 
+type RenewalFilter =
+  | "all"
+  | "expired"
+  | "last"
+  | "two"
+  | "three";
+
 const DAY_NAMES: Record<number, string> = {
   1: "Pazartesi",
   2: "Salı",
@@ -212,7 +219,9 @@ function time(value?: string | null) {
     : "—";
 }
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+
   try {
     return new Intl.DateTimeFormat(
       "tr-TR",
@@ -220,6 +229,22 @@ function formatDate(value: string) {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
+      }
+    ).format(
+      new Date(`${value}T12:00:00`)
+    );
+  } catch {
+    return value;
+  }
+}
+
+function shortDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat(
+      "tr-TR",
+      {
+        day: "2-digit",
+        month: "2-digit",
       }
     ).format(
       new Date(`${value}T12:00:00`)
@@ -298,6 +323,84 @@ function remaining(
         enrollment.used_lessons || 0
       )
   );
+}
+
+function lessonUsage(
+  enrollment?: Enrollment
+) {
+  return {
+    total: Number(
+      enrollment?.total_lessons || 0
+    ),
+    used: Number(
+      enrollment?.used_lessons || 0
+    ),
+    remaining: remaining(enrollment),
+  };
+}
+
+function renewalInfo(
+  enrollment?: Enrollment
+) {
+  if (!enrollment) {
+    return {
+      level: "none" as const,
+      label: "PAKET BİLGİSİ YOK",
+      background: "#f1f5f9",
+      color: "#64748b",
+      border: "#cbd5e1",
+    };
+  }
+
+  const left = remaining(enrollment);
+
+  if (left <= 0) {
+    return {
+      level: "expired" as const,
+      label: "PAKET BİTTİ · KAYIT YENİLE",
+      background: "#7f1d1d",
+      color: "#ffffff",
+      border: "#7f1d1d",
+    };
+  }
+
+  if (left === 1) {
+    return {
+      level: "last" as const,
+      label: "SON DERS",
+      background: "#fee2e2",
+      color: "#991b1b",
+      border: "#fecaca",
+    };
+  }
+
+  if (left === 2) {
+    return {
+      level: "two" as const,
+      label: "2 DERS KALDI",
+      background: "#ffedd5",
+      color: "#9a3412",
+      border: "#fed7aa",
+    };
+  }
+
+  if (left === 3) {
+    return {
+      level: "three" as const,
+      label: "3 DERS KALDI · YENİLEME YAKLAŞIYOR",
+      background: "#fef9c3",
+      color: "#854d0e",
+      border: "#fde68a",
+    };
+  }
+
+  return {
+    level: "active" as const,
+    label: "AKTİF",
+    background: "#ecfdf3",
+    color: "#15803d",
+    border: "#bbf7d0",
+  };
 }
 
 function monthLessonDates(
@@ -396,6 +499,11 @@ export default function AttendanceClient({
     selectedScheduleId,
     setSelectedScheduleId,
   ] = useState("");
+
+  const [
+    renewalFilter,
+    setRenewalFilter,
+  ] = useState<RenewalFilter>("all");
 
   const [statuses, setStatuses] =
     useState<
@@ -536,6 +644,109 @@ export default function AttendanceClient({
     }, [
       enrollments,
       selectedGroupId,
+    ]);
+
+  const renewalCounts =
+    useMemo(() => {
+      let expired = 0;
+      let last = 0;
+      let two = 0;
+      let three = 0;
+
+      groupStudents.forEach(
+        (student) => {
+          const enrollment =
+            enrollmentMap.get(
+              student.id
+            );
+
+          if (!enrollment) return;
+
+          const left =
+            remaining(enrollment);
+
+          if (left <= 0) {
+            expired++;
+          } else if (left === 1) {
+            last++;
+          } else if (left === 2) {
+            two++;
+          } else if (left === 3) {
+            three++;
+          }
+        }
+      );
+
+      return {
+        expired,
+        last,
+        two,
+        three,
+        total:
+          expired +
+          last +
+          two +
+          three,
+      };
+    }, [
+      groupStudents,
+      enrollmentMap,
+    ]);
+
+  const filteredStudents =
+    useMemo(() => {
+      if (
+        renewalFilter === "all"
+      ) {
+        return groupStudents;
+      }
+
+      return groupStudents.filter(
+        (student) => {
+          const enrollment =
+            enrollmentMap.get(
+              student.id
+            );
+
+          if (!enrollment) {
+            return false;
+          }
+
+          const left =
+            remaining(enrollment);
+
+          if (
+            renewalFilter ===
+            "expired"
+          ) {
+            return left <= 0;
+          }
+
+          if (
+            renewalFilter === "last"
+          ) {
+            return left === 1;
+          }
+
+          if (
+            renewalFilter === "two"
+          ) {
+            return left === 2;
+          }
+
+          if (
+            renewalFilter === "three"
+          ) {
+            return left === 3;
+          }
+
+          return true;
+        }
+      );
+    }, [
+      groupStudents,
+      enrollmentMap,
+      renewalFilter,
     ]);
 
   const totals = useMemo(() => {
@@ -824,6 +1035,7 @@ export default function AttendanceClient({
     setMonthlyRecords([]);
     setHasSaved(false);
     setContactStudent(null);
+    setRenewalFilter("all");
   }
 
   function markAllPresent() {
@@ -1275,6 +1487,140 @@ export default function AttendanceClient({
         </div>
       </section>
 
+      <section
+        style={{
+          ...panelStyle,
+          background:
+            "linear-gradient(135deg,#ffffff 0%,#f8fbff 100%)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <strong
+              style={{
+                color: "#153e69",
+                fontSize: 16,
+              }}
+            >
+              🔔 Kayıt Yenileme Uyarıları
+            </strong>
+
+            <div
+              style={{
+                marginTop: 4,
+                color: "#64748b",
+                fontSize: 11,
+              }}
+            >
+              Son dersleri kalan kursiyerleri buradan takip edebilirsiniz.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setRenewalFilter(
+                "all"
+              )
+            }
+            style={smallStyle}
+          >
+            Tüm Öğrenciler
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(4,minmax(150px,1fr))",
+            gap: 10,
+          }}
+        >
+          <RenewalCard
+            title="Paket Bitti"
+            value={
+              renewalCounts.expired
+            }
+            active={
+              renewalFilter ===
+              "expired"
+            }
+            background="#7f1d1d"
+            color="#fff"
+            onClick={() =>
+              setRenewalFilter(
+                "expired"
+              )
+            }
+          />
+
+          <RenewalCard
+            title="Son Ders"
+            value={
+              renewalCounts.last
+            }
+            active={
+              renewalFilter ===
+              "last"
+            }
+            background="#fee2e2"
+            color="#991b1b"
+            onClick={() =>
+              setRenewalFilter(
+                "last"
+              )
+            }
+          />
+
+          <RenewalCard
+            title="2 Ders Kaldı"
+            value={
+              renewalCounts.two
+            }
+            active={
+              renewalFilter ===
+              "two"
+            }
+            background="#ffedd5"
+            color="#9a3412"
+            onClick={() =>
+              setRenewalFilter(
+                "two"
+              )
+            }
+          />
+
+          <RenewalCard
+            title="3 Ders Kaldı"
+            value={
+              renewalCounts.three
+            }
+            active={
+              renewalFilter ===
+              "three"
+            }
+            background="#fef9c3"
+            color="#854d0e"
+            onClick={() =>
+              setRenewalFilter(
+                "three"
+              )
+            }
+          />
+        </div>
+      </section>
+
       {view === "daily" && (
         <>
           <section
@@ -1382,7 +1728,7 @@ export default function AttendanceClient({
               </button>
             </div>
 
-            {groupStudents.map(
+            {filteredStudents.map(
               (student) => {
                 const enrollment =
                   enrollmentMap.get(
@@ -1394,12 +1740,22 @@ export default function AttendanceClient({
                     student
                   );
 
+                const usage =
+                  lessonUsage(
+                    enrollment
+                  );
+
+                const renewal =
+                  renewalInfo(
+                    enrollment
+                  );
+
                 return (
                   <div
                     key={student.id}
                     style={{
                       padding:
-                        "16px 0",
+                        "18px 0",
                       borderTop:
                         "1px solid #edf2f7",
                     }}
@@ -1415,49 +1771,154 @@ export default function AttendanceClient({
                           "wrap",
                       }}
                     >
-                      <div>
-                        <strong
+                      <div
+                        style={{
+                          flex: 1,
+                          minWidth: 280,
+                        }}
+                      >
+                        <div
                           style={{
-                            color:
-                              "#123b68",
-                            fontSize:
-                              15,
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            gap: 8,
+                            flexWrap:
+                              "wrap",
                           }}
                         >
-                          {student.first_name ||
-                            ""}{" "}
-                          {student.last_name ||
-                            ""}
-                        </strong>
+                          <strong
+                            style={{
+                              color:
+                                "#123b68",
+                              fontSize:
+                                16,
+                            }}
+                          >
+                            {student.first_name ||
+                              ""}{" "}
+                            {student.last_name ||
+                              ""}
+                          </strong>
+
+                          <span
+                            style={{
+                              display:
+                                "inline-flex",
+                              padding:
+                                "5px 9px",
+                              borderRadius:
+                                999,
+                              background:
+                                renewal.background,
+                              color:
+                                renewal.color,
+                              border: `1px solid ${renewal.border}`,
+                              fontSize:
+                                10,
+                              fontWeight:
+                                900,
+                            }}
+                          >
+                            {renewal.label}
+                          </span>
+                        </div>
 
                         <div
                           style={{
                             marginTop:
-                              5,
+                              7,
+                            display:
+                              "flex",
+                            gap: 8,
+                            flexWrap:
+                              "wrap",
+                            color:
+                              "#64748b",
                             fontSize:
                               11,
-                            color:
-                              "#7c8998",
                           }}
                         >
-                          {student.student_number ||
-                            "Öğrenci no yok"}
+                          <span>
+                            No:{" "}
+                            {student.student_number ||
+                              "—"}
+                          </span>
 
-                          {" · "}📚{" "}
-                          {remaining(
-                            enrollment
-                          )}{" "}
-                          ders kaldı
+                          {student.swimming_level && (
+                            <span>
+                              🏊{" "}
+                              {
+                                student.swimming_level
+                              }
+                            </span>
+                          )}
+                        </div>
 
-                          {student.swimming_level
-                            ? ` · 🏊 ${student.swimming_level}`
-                            : ""}
+                        <div
+                          style={{
+                            marginTop:
+                              9,
+                            display:
+                              "grid",
+                            gridTemplateColumns:
+                              "repeat(4,minmax(120px,1fr))",
+                            gap: 7,
+                            maxWidth:
+                              760,
+                          }}
+                        >
+                          <InfoBox
+                            title="Paket"
+                            value={`${usage.total} Ders`}
+                          />
 
-                          {enrollment?.planned_end_date
-                            ? ` · Bitiş ${formatDate(
-                                enrollment.planned_end_date
-                              )}`
-                            : ""}
+                          <InfoBox
+                            title="Kullanılan"
+                            value={`${usage.used} / ${usage.total}`}
+                          />
+
+                          <InfoBox
+                            title="Kalan"
+                            value={`${usage.remaining} Ders`}
+                            danger={
+                              usage.remaining <=
+                              2
+                            }
+                          />
+
+                          <InfoBox
+                            title="Bitiş"
+                            value={formatDate(
+                              enrollment?.planned_end_date
+                            )}
+                            danger={
+                              usage.remaining <=
+                              2
+                            }
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop:
+                              7,
+                            color:
+                              "#7c8998",
+                            fontSize:
+                              11,
+                          }}
+                        >
+                          📅 Başlangıç:{" "}
+                          {formatDate(
+                            enrollment?.start_date
+                          )}
+                          {" · "}
+                          📅 Planlanan Bitiş:{" "}
+                          {formatDate(
+                            enrollment?.planned_end_date
+                          )}
                         </div>
                       </div>
 
@@ -1468,6 +1929,8 @@ export default function AttendanceClient({
                           gap: 6,
                           flexWrap:
                             "wrap",
+                          alignItems:
+                            "flex-start",
                         }}
                       >
                         <button
@@ -1715,7 +2178,7 @@ export default function AttendanceClient({
               }
             )}
 
-            {!groupStudents.length && (
+            {!filteredStudents.length && (
               <div
                 style={{
                   padding: 30,
@@ -1725,7 +2188,7 @@ export default function AttendanceClient({
                     "#7c8998",
                 }}
               >
-                Bu grupta aktif öğrenci bulunamadı.
+                Bu filtreye uygun öğrenci bulunamadı.
               </div>
             )}
           </section>
@@ -1761,6 +2224,9 @@ export default function AttendanceClient({
               >
                 Eksik işaretleme:{" "}
                 {totals.missing}
+                {" · "}
+                Yenileme uyarısı:{" "}
+                {renewalCounts.total}
               </div>
             </div>
 
@@ -1808,7 +2274,12 @@ export default function AttendanceClient({
             }}
           >
             <div>
-              <strong>
+              <strong
+                style={{
+                  fontSize: 16,
+                  color: "#153e69",
+                }}
+              >
                 Aylık Yoklama Görünümü
               </strong>
 
@@ -1819,7 +2290,7 @@ export default function AttendanceClient({
                   fontSize: 11,
                 }}
               >
-                Bir güne tıklayarak geriye dönük düzenleme yapabilirsiniz.
+                Ders tarihlerine tıklayarak geçmiş yoklamaları düzenleyebilirsiniz.
               </div>
             </div>
 
@@ -1851,16 +2322,23 @@ export default function AttendanceClient({
                 width: "100%",
                 minWidth:
                   Math.max(
-                    800,
-                    260 +
+                    1100,
+                    540 +
                       lessonDates.length *
-                        55
+                        58
                   ),
               }}
             >
               <thead>
                 <tr>
-                  <th style={thStyle}>
+                  <th
+                    style={{
+                      ...thStyle,
+                      minWidth: 220,
+                      textAlign:
+                        "left",
+                    }}
+                  >
                     Öğrenci
                   </th>
 
@@ -1870,121 +2348,269 @@ export default function AttendanceClient({
                         key={date}
                         style={thStyle}
                       >
-                        {date.slice(
-                          8,
-                          10
-                        )}
+                        <div>
+                          {shortDate(
+                            date
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            marginTop:
+                              3,
+                            fontSize:
+                              8,
+                          }}
+                        >
+                          {DAY_NAMES[
+                            dateWeekday(
+                              date
+                            )
+                          ]}
+                        </div>
                       </th>
                     )
                   )}
+
+                  <th style={thStyle}>
+                    Kullanılan
+                  </th>
+
+                  <th style={thStyle}>
+                    Kalan
+                  </th>
+
+                  <th
+                    style={{
+                      ...thStyle,
+                      minWidth: 100,
+                    }}
+                  >
+                    Bitiş
+                  </th>
+
+                  <th
+                    style={{
+                      ...thStyle,
+                      minWidth: 120,
+                    }}
+                  >
+                    Durum
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
                 {groupStudents.map(
-                  (student) => (
-                    <tr
-                      key={
+                  (student) => {
+                    const enrollment =
+                      enrollmentMap.get(
                         student.id
-                      }
-                    >
-                      <td
-                        style={{
-                          ...tdStyle,
-                          textAlign:
-                            "left",
-                          fontWeight:
-                            800,
-                          color:
-                            "#153e69",
-                        }}
+                      );
+
+                    const usage =
+                      lessonUsage(
+                        enrollment
+                      );
+
+                    const renewal =
+                      renewalInfo(
+                        enrollment
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          student.id
+                        }
                       >
-                        {student.first_name ||
-                          ""}{" "}
-                        {student.last_name ||
-                          ""}
-                      </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            textAlign:
+                              "left",
+                            fontWeight:
+                              800,
+                            color:
+                              "#153e69",
+                          }}
+                        >
+                          <div>
+                            {student.first_name ||
+                              ""}{" "}
+                            {student.last_name ||
+                              ""}
+                          </div>
 
-                      {lessonDates.map(
-                        (date) => {
-                          const record =
-                            monthlyMap.get(
-                              `${student.id}_${date}`
-                            );
+                          <div
+                            style={{
+                              marginTop:
+                                3,
+                              color:
+                                "#94a3b8",
+                              fontSize:
+                                9,
+                            }}
+                          >
+                            {student.student_number ||
+                              ""}
+                          </div>
+                        </td>
 
-                          return (
-                            <td
-                              key={
-                                date
-                              }
-                              style={
-                                tdStyle
-                              }
-                            >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLessonDate(
-                                    date
-                                  );
+                        {lessonDates.map(
+                          (date) => {
+                            const record =
+                              monthlyMap.get(
+                                `${student.id}_${date}`
+                              );
 
-                                  setView(
-                                    "daily"
-                                  );
-                                }}
-                                style={{
-                                  width:
-                                    36,
-                                  height:
-                                    36,
-                                  borderRadius:
-                                    9,
-                                  border:
-                                    record
-                                      ? `1px solid ${
-                                          STATUS_META[
+                            return (
+                              <td
+                                key={
+                                  date
+                                }
+                                style={
+                                  tdStyle
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLessonDate(
+                                      date
+                                    );
+
+                                    setView(
+                                      "daily"
+                                    );
+                                  }}
+                                  style={{
+                                    width:
+                                      36,
+                                    height:
+                                      36,
+                                    borderRadius:
+                                      9,
+                                    border:
+                                      record
+                                        ? `1px solid ${
+                                            STATUS_META[
+                                              record
+                                                .status
+                                            ]
+                                              .border
+                                          }`
+                                        : "1px solid #e2e8f0",
+                                    background:
+                                      record
+                                        ? STATUS_META[
                                             record
                                               .status
                                           ]
-                                            .border
-                                        }`
-                                      : "1px solid #e2e8f0",
-                                  background:
-                                    record
-                                      ? STATUS_META[
-                                          record
-                                            .status
-                                        ]
-                                          .background
-                                      : "#f8fafc",
-                                  color:
-                                    record
-                                      ? STATUS_META[
-                                          record
-                                            .status
-                                        ]
-                                          .color
-                                      : "#cbd5e1",
-                                  fontWeight:
-                                    900,
-                                  cursor:
-                                    "pointer",
-                                }}
-                              >
-                                {record
-                                  ? STATUS_META[
+                                            .background
+                                        : "#f8fafc",
+                                    color:
                                       record
-                                        .status
-                                    ]
-                                      .short
-                                  : "·"}
-                              </button>
-                            </td>
-                          );
-                        }
-                      )}
-                    </tr>
-                  )
+                                        ? STATUS_META[
+                                            record
+                                              .status
+                                          ]
+                                            .color
+                                        : "#cbd5e1",
+                                    fontWeight:
+                                      900,
+                                    cursor:
+                                      "pointer",
+                                  }}
+                                >
+                                  {record
+                                    ? STATUS_META[
+                                        record
+                                          .status
+                                      ]
+                                        .short
+                                    : "·"}
+                                </button>
+                              </td>
+                            );
+                          }
+                        )}
+
+                        <td
+                          style={
+                            tdStyle
+                          }
+                        >
+                          {usage.used} /{" "}
+                          {usage.total}
+                        </td>
+
+                        <td
+                          style={
+                            tdStyle
+                          }
+                        >
+                          <strong
+                            style={{
+                              color:
+                                usage.remaining <=
+                                1
+                                  ? "#b91c1c"
+                                  : usage.remaining <=
+                                    3
+                                  ? "#c2410c"
+                                  : "#15803d",
+                            }}
+                          >
+                            {
+                              usage.remaining
+                            }
+                          </strong>
+                        </td>
+
+                        <td
+                          style={
+                            tdStyle
+                          }
+                        >
+                          {formatDate(
+                            enrollment?.planned_end_date
+                          )}
+                        </td>
+
+                        <td
+                          style={
+                            tdStyle
+                          }
+                        >
+                          <span
+                            style={{
+                              display:
+                                "inline-flex",
+                              padding:
+                                "5px 7px",
+                              borderRadius:
+                                999,
+                              background:
+                                renewal.background,
+                              color:
+                                renewal.color,
+                              border: `1px solid ${renewal.border}`,
+                              fontSize:
+                                8,
+                              fontWeight:
+                                900,
+                              whiteSpace:
+                                "nowrap",
+                            }}
+                          >
+                            {
+                              renewal.label
+                            }
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
                 )}
               </tbody>
             </table>
@@ -2164,6 +2790,111 @@ function Stat({
           marginTop: 4,
           color: "#153e69",
           fontSize: 22,
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function RenewalCard({
+  title,
+  value,
+  active,
+  background,
+  color,
+  onClick,
+}: {
+  title: string;
+  value: number;
+  active: boolean;
+  background: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        padding: 14,
+        borderRadius: 15,
+        border: active
+          ? "2px solid #0b6ff4"
+          : "1px solid rgba(148,163,184,.24)",
+        background,
+        color,
+        cursor: "pointer",
+      }}
+    >
+      <span
+        style={{
+          display: "block",
+          fontSize: 10,
+          fontWeight: 900,
+        }}
+      >
+        {title}
+      </span>
+
+      <strong
+        style={{
+          display: "block",
+          marginTop: 5,
+          fontSize: 24,
+        }}
+      >
+        {value}
+      </strong>
+    </button>
+  );
+}
+
+function InfoBox({
+  title,
+  value,
+  danger = false,
+}: {
+  title: string;
+  value: string;
+  danger?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "8px 9px",
+        borderRadius: 10,
+        background: danger
+          ? "#fff7ed"
+          : "#f8fafc",
+        border: danger
+          ? "1px solid #fed7aa"
+          : "1px solid #e2e8f0",
+      }}
+    >
+      <span
+        style={{
+          display: "block",
+          fontSize: 8,
+          fontWeight: 900,
+          color: "#94a3b8",
+          textTransform:
+            "uppercase",
+        }}
+      >
+        {title}
+      </span>
+
+      <strong
+        style={{
+          display: "block",
+          marginTop: 3,
+          fontSize: 11,
+          color: danger
+            ? "#c2410c"
+            : "#334155",
         }}
       >
         {value}
