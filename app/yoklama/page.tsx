@@ -68,6 +68,7 @@ export default async function AttendancePage() {
     membershipsResult,
     studentsResult,
     enrollmentsResult,
+    compensationResult,
   ] = await Promise.all([
     supabase
       .from("training_groups")
@@ -111,6 +112,15 @@ export default async function AttendancePage() {
       )
       .eq("organization_id", organizationId)
       .eq("status", "active"),
+
+    supabase
+      .from("student_compensation_lessons")
+      .select(
+        "id, organization_id, student_id, enrollment_id, source_request_id, target_group_id, target_schedule_id, lesson_date, status, note, created_by, completed_by, created_at, updated_at, completed_at"
+      )
+      .eq("organization_id", organizationId)
+      .eq("status", "planned")
+      .order("lesson_date", { ascending: true }),
   ]);
 
   const loadError =
@@ -118,7 +128,8 @@ export default async function AttendancePage() {
     schedulesResult.error ||
     membershipsResult.error ||
     studentsResult.error ||
-    enrollmentsResult.error;
+    enrollmentsResult.error ||
+    compensationResult.error;
 
   if (loadError) {
     return (
@@ -183,6 +194,7 @@ export default async function AttendancePage() {
           memberships={membershipsResult.data || []}
           students={studentsResult.data || []}
           enrollments={enrollmentsResult.data || []}
+          compensationLessons={compensationResult.data || []}
         />
       </div>
     </main>
