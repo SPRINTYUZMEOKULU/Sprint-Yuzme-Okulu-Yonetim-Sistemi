@@ -749,18 +749,35 @@ export default function AttendanceClient({
       activeCompensationLessons,
     ]);
 
-  const normalTrackingEndedIds = useMemo(() => {
-    const ended = new Set<string>();
+const normalTrackingEndedIds = useMemo(() => {
+  const ended = new Set<string>();
 
-    attendanceStudents.forEach((student) => {
-      const enrollment = enrollmentMap.get(student.id);
-      const isCompensation = compensationStudentIds.has(student.id);
+  attendanceStudents.forEach((student) => {
+    const enrollment =
+      enrollmentMap.get(student.id);
 
-      if (enrollment && remaining(enrollment) <= 0 && !isCompensation) {
-        ended.add(student.id);
-      }
-    });
+    const isCompensation =
+      compensationStudentIds.has(student.id);
 
+    const remainingLessons =
+      enrollment
+        ? remaining(enrollment)
+        : 0;
+
+    if (
+      remainingLessons <= 0 &&
+      !isCompensation
+    ) {
+      ended.add(student.id);
+    }
+  });
+
+  return ended;
+}, [
+  attendanceStudents,
+  enrollmentMap,
+  compensationStudentIds,
+]);
     return ended;
   }, [attendanceStudents, enrollmentMap, compensationStudentIds]);
 
