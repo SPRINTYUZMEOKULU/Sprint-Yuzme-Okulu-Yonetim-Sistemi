@@ -47,6 +47,12 @@ export type StudentListItem = {
 
   last_attendance_date?: string | null;
   last_attendance_status?: string | null;
+  last_absent_date?: string | null;
+
+  next_compensation_date?: string | null;
+  next_compensation_group?: string | null;
+  next_compensation_start_time?: string | null;
+  next_compensation_end_time?: string | null;
 
   created_at?: string | null;
 };
@@ -70,6 +76,19 @@ type SortType =
   | "end_near"
   | "remaining_desc"
   | "remaining_asc";
+
+type MessageType =
+  | "smart"
+  | "renewal"
+  | "freeze"
+  | "compensation"
+  | "absence"
+  | "payment"
+  | "lesson_ending"
+  | "lesson_finished"
+  | "program"
+  | "registration"
+  | "general";
 
 const statusLabels: Record<string, string> = {
   active: "Aktif",
@@ -200,32 +219,125 @@ function paymentLabel(student: StudentListItem) {
   };
 }
 
-function readyMessage(student: StudentListItem) {
+function buildMessage(
+  student: StudentListItem,
+  type: MessageType
+) {
   const adult = isAdultCourse(student.course_type);
+  const name = `${student.first_name} ${student.last_name}`.trim();
   const remaining = numberValue(student.remaining_lessons);
   const endDate =
     student.compensation_end_date ||
     student.normal_end_date ||
     student.end_date;
-  const days = daysUntil(endDate);
+  const endText = formatDate(endDate);
+  const startText = formatDate(student.start_date);
+  const outstanding = numberValue(student.payment_outstanding);
+  const compensationDate = formatDate(student.next_compensation_date);
+  const compensationTime = [
+    student.next_compensation_start_time?.slice(0, 5),
+    student.next_compensation_end_time?.slice(0, 5),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+  const groupText = student.next_compensation_group || student.group_name || "";
+  const lastAbsent = formatDate(student.last_absent_date);
 
-  const name = `${student.first_name} ${student.last_name}`.trim();
+  const opening = "Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.";
+  const closing = "Bilginize sunar, iyi günler dileriz.\nSprint Yüzme Okulu";
 
-  if (remaining <= 0) {
-    return adult
-      ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nMevcut paketinizdeki ders hakkınız tamamlanmıştır. Derslerinize kesintisiz devam edebilmeniz için kayıt yenileme işleminizi gerçekleştirmenizi rica ederiz.\n\nSprint Yüzme Okulu`
-      : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin mevcut paketindeki ders hakkı tamamlanmıştır. Derslerine kesintisiz devam edebilmesi için kayıt yenileme işleminizi gerçekleştirmenizi rica ederiz.\n\nSprint Yüzme Okulu`;
+  if (type === "smart") {
+    if (remaining <= 0) return buildMessage(student, "lesson_finished");
+    if (outstanding > 0) return buildMessage(student, "payment");
+    if (student.next_compensation_date) return buildMessage(student, "compensation");
+    if (student.last_absent_date) return buildMessage(student, "absence");
+    if (remaining <= 3 || isEndingSoon(endDate)) return buildMessage(student, "renewal");
+    return buildMessage(student, "registration");
   }
 
-  if (remaining <= 3 || (days !== null && days >= 0 && days <= 7)) {
+  if (type === "renewal") {
     return adult
-      ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nKayıt yenileme döneminiz yaklaşmaktadır. Kalan ders hakkınız: ${remaining}. Planlamanızın aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.\n\nSprint Yüzme Okulu`
-      : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin kayıt yenileme dönemi yaklaşmaktadır. Kalan ders hakkı: ${remaining}. Ders planlamasının aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.\n\nSprint Yüzme Okulu`;
+      ? `${opening}\n\nKayıt yenileme döneminiz yaklaşmaktadır. Mevcut kaydınızın planlanan bitiş tarihi ${endText} olup kalan ders hakkınız ${remaining} derstir. Ders planlamanızın aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin kayıt yenileme dönemi yaklaşmaktadır. Mevcut kaydının planlanan bitiş tarihi ${endText} olup kalan ders hakkı ${remaining} derstir. Ders planlamasının aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.\n\n${closing}`;
+  }
+
+  if (type === "freeze") {
+    return adult
+      ? `${opening}\n\nKayıt dondurma işleminiz sistemimize işlenmiştir. Güncel ders ve kayıt planınızı Öğrenci Merkezi üzerinden takip edebilirsiniz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin kayıt dondurma işlemi sistemimize işlenmiştir. Güncel ders ve kayıt planını Öğrenci Merkezi üzerinden takip edebilirsiniz.\n\n${closing}`;
+  }
+
+  if (type === "compensation") {
+    if (!student.next_compensation_date) {
+      return `${opening}\n\nBu öğrenci için planlanmış aktif bir telafi dersi bulunmamaktadır.\n\n${closing}`;
+    }
+
+    const detail = [
+      compensationDate,
+      compensationTime,
+      groupText,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    return adult
+      ? `${opening}\n\nTelafi dersiniz planlanmıştır. Telafi ders bilginiz: ${detail}. Belirtilen tarih ve saatte dersinize katılım sağlamanızı rica ederiz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin telafi dersi planlanmıştır. Telafi ders bilgisi: ${detail}. Belirtilen tarih ve saatte derse katılım sağlamasını rica ederiz.\n\n${closing}`;
+  }
+
+  if (type === "absence") {
+    if (!student.last_absent_date) {
+      return `${opening}\n\nBu öğrenci için kayıtlı bir gelmedi yoklaması bulunmamaktadır.\n\n${closing}`;
+    }
+
+    return adult
+      ? `${opening}\n\n${lastAbsent} tarihli yüzme dersinize katılım sağlamadığınız görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin ${lastAbsent} tarihli yüzme dersine katılım sağlamadığı görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.\n\n${closing}`;
+  }
+
+  if (type === "payment") {
+    if (outstanding <= 0) {
+      return `${opening}\n\nAktif kayıt dönemine ait bekleyen ödeme görünmemektedir.\n\n${closing}`;
+    }
+
+    const amount = new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency: "TRY",
+      maximumFractionDigits: 0,
+    }).format(outstanding);
+
+    return adult
+      ? `${opening}\n\nAktif kayıt paketinize ait ${amount} tutarında bekleyen ödemeniz bulunmaktadır. Ödeme planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin aktif kayıt paketine ait ${amount} tutarında bekleyen ödeme bulunmaktadır. Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.\n\n${closing}`;
+  }
+
+  if (type === "lesson_ending") {
+    return adult
+      ? `${opening}\n\nMevcut paketinizde ${remaining} ders hakkınız kalmıştır. Kayıt yenileme döneminiz yaklaşmaktadır. Ders planlamanızın kesintiye uğramaması için yenileme işleminizi planlamanızı rica ederiz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin mevcut paketinde ${remaining} ders hakkı kalmıştır. Kayıt yenileme dönemi yaklaşmaktadır. Ders planlamasının kesintiye uğramaması için yenileme işleminizi planlamanızı rica ederiz.\n\n${closing}`;
+  }
+
+  if (type === "lesson_finished") {
+    return adult
+      ? `${opening}\n\nMevcut paketinizdeki ders hakkınız tamamlanmıştır. Ders takibiniz sona ermiştir. Derslerinize devam edebilmeniz için kayıt yenileme işleminizin yapılması gerekmektedir.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin mevcut paketindeki ders hakkı tamamlanmıştır. Ders takibi sona ermiştir. Derslerine devam edebilmesi için kayıt yenileme işleminin yapılması gerekmektedir.\n\n${closing}`;
+  }
+
+  if (type === "program") {
+    return adult
+      ? `${opening}\n\nGüncel yüzme grubunuz: ${student.group_name || "—"}. Şubeniz: ${student.branch_name || "—"}. Ders programınızla ilgili değişiklik olması halinde ayrıca bilgilendirileceksiniz.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin güncel yüzme grubu: ${student.group_name || "—"}. Şubesi: ${student.branch_name || "—"}. Ders programında değişiklik olması halinde ayrıca bilgilendirileceksiniz.\n\n${closing}`;
+  }
+
+  if (type === "registration") {
+    return adult
+      ? `${opening}\n\nKaydınız oluşturulmuştur. Paketiniz: ${student.package_name || "—"}. Başlangıç tarihiniz ${startText}, planlanan bitiş tarihiniz ${endText}. Grubunuz: ${student.group_name || "—"}.\n\n${closing}`
+      : `${opening}\n\n${name} isimli öğrencimizin kaydı oluşturulmuştur. Paketi: ${student.package_name || "—"}. Başlangıç tarihi ${startText}, planlanan bitiş tarihi ${endText}. Grubu: ${student.group_name || "—"}.\n\n${closing}`;
   }
 
   return adult
-    ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nKurs kaydınız ve ders programınızla ilgili bilgi vermek için iletişime geçiyoruz.\n\nSprint Yüzme Okulu`
-    : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin kurs kaydı ve ders programıyla ilgili bilgi vermek için iletişime geçiyoruz.\n\nSprint Yüzme Okulu`;
+    ? `${opening}\n\nKurs kaydınızla ilgili bilgilendirme için iletişime geçiyoruz.\n\n${closing}`
+    : `${opening}\n\n${name} isimli öğrencimizin kurs kaydıyla ilgili bilgilendirme için iletişime geçiyoruz.\n\n${closing}`;
 }
 
 export default function StudentsClient({ students }: Props) {
@@ -269,6 +381,10 @@ const [deleteDescription, setDeleteDescription] = useState("");
 const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 const [deleteActionMessage, setDeleteActionMessage] = useState("");
 const [pendingDeleteStudentIds, setPendingDeleteStudentIds] = useState<string[]>([]);
+
+const [messageStudent, setMessageStudent] = useState<StudentListItem | null>(null);
+const [messageType, setMessageType] = useState<MessageType>("smart");
+const [messageText, setMessageText] = useState("");
 
 useEffect(() => {
   async function loadPendingStatusRequests() {
@@ -738,18 +854,56 @@ function closeLessonAction() {
     );
   }
 
-  function sendReadyMessage(student: StudentListItem) {
-    const phone = contactPhone(student);
+  function openMessageCenter(student: StudentListItem) {
+    const suggestedType: MessageType =
+      numberValue(student.remaining_lessons) <= 0
+        ? "lesson_finished"
+        : numberValue(student.payment_outstanding) > 0
+        ? "payment"
+        : student.next_compensation_date
+        ? "compensation"
+        : numberValue(student.remaining_lessons) <= 3 ||
+          isEndingSoon(
+            student.compensation_end_date ||
+              student.normal_end_date ||
+              student.end_date
+          )
+        ? "renewal"
+        : student.last_absent_date
+        ? "absence"
+        : "smart";
+
+    setMessageStudent(student);
+    setMessageType(suggestedType);
+    setMessageText(buildMessage(student, suggestedType));
+  }
+
+  function changeMessageType(type: MessageType) {
+    setMessageType(type);
+
+    if (messageStudent) {
+      setMessageText(buildMessage(messageStudent, type));
+    }
+  }
+
+  function closeMessageCenter() {
+    setMessageStudent(null);
+    setMessageType("smart");
+    setMessageText("");
+  }
+
+  function sendMessageToWhatsApp() {
+    if (!messageStudent) return;
+
+    const phone = contactPhone(messageStudent);
 
     if (!phone) {
       alert("Hazır mesaj için telefon numarası bulunamadı.");
       return;
     }
 
-    const text = readyMessage(student);
-
     window.open(
-      `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(text)}`,
+      `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(messageText)}`,
       "_blank",
       "noopener,noreferrer"
     );
@@ -1205,7 +1359,7 @@ function closeLessonAction() {
       disabled={!phone}
       onClick={(event) => {
         event.stopPropagation();
-        sendReadyMessage(student);
+        openMessageCenter(student);
       }}
     >
       ✉ Hazır Mesaj
@@ -1686,6 +1840,137 @@ function closeLessonAction() {
     </div>
   </div>
 )}
+      {messageStudent && (
+        <div
+          className="lessonActionOverlay"
+          onClick={closeMessageCenter}
+        >
+          <div
+            className="lessonActionModal messageCenterModal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="lessonActionHeader">
+              <div>
+                <span className="eyebrow">HAZIR MESAJ MERKEZİ</span>
+                <h3>
+                  {messageStudent.first_name} {messageStudent.last_name}
+                </h3>
+                <p>
+                  {messageStudent.student_number || "Öğrenci No Yok"}
+                  {" · "}
+                  {messageStudent.group_name || "Grup yok"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="modalCloseButton"
+                onClick={closeMessageCenter}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="lessonActionBody">
+              <label>
+                <span>Mesaj Türü</span>
+                <select
+                  value={messageType}
+                  onChange={(event) =>
+                    changeMessageType(event.target.value as MessageType)
+                  }
+                >
+                  <option value="smart">✨ Akıllı Öneri</option>
+                  <option value="renewal">🔄 Kayıt Yenileme</option>
+                  <option value="freeze">⏸ Kayıt Dondurma</option>
+                  <option value="compensation">➕ Telafi Bilgisi</option>
+                  <option value="absence">❌ Devamsızlık / Gelmedi</option>
+                  <option value="payment">💳 Ödeme Hatırlatma</option>
+                  <option value="lesson_ending">⚠ Ders Hakkı Bitiyor</option>
+                  <option value="lesson_finished">🔴 Ders Hakkı Bitti</option>
+                  <option value="program">📅 Ders Programı</option>
+                  <option value="registration">✅ Kayıt Onayı</option>
+                  <option value="general">💬 Genel Bilgilendirme</option>
+                </select>
+              </label>
+
+              <div className="messageDataGrid">
+                <div>
+                  <span>Kalan Ders</span>
+                  <strong>{numberValue(messageStudent.remaining_lessons)}</strong>
+                </div>
+                <div>
+                  <span>Bitiş</span>
+                  <strong>
+                    {formatDate(
+                      messageStudent.compensation_end_date ||
+                        messageStudent.normal_end_date ||
+                        messageStudent.end_date
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>Son Gelmedi</span>
+                  <strong>{formatDate(messageStudent.last_absent_date)}</strong>
+                </div>
+                <div>
+                  <span>Planlı Telafi</span>
+                  <strong>{formatDate(messageStudent.next_compensation_date)}</strong>
+                </div>
+                <div>
+                  <span>Bekleyen Ödeme</span>
+                  <strong>
+                    {new Intl.NumberFormat("tr-TR", {
+                      style: "currency",
+                      currency: "TRY",
+                      maximumFractionDigits: 0,
+                    }).format(numberValue(messageStudent.payment_outstanding))}
+                  </strong>
+                </div>
+                <div>
+                  <span>İletişim</span>
+                  <strong>{contactPhone(messageStudent) || "—"}</strong>
+                </div>
+              </div>
+
+              <label>
+                <span>Mesaj Önizleme / Düzenleme</span>
+                <textarea
+                  value={messageText}
+                  onChange={(event) => setMessageText(event.target.value)}
+                  rows={10}
+                  placeholder="Mesaj metni..."
+                />
+              </label>
+
+              <div className="messageInfoBox">
+                Mesaj, öğrencinin mevcut kayıt verilerine göre otomatik
+                hazırlanır. Göndermeden önce metni değiştirebilirsiniz.
+              </div>
+            </div>
+
+            <div className="lessonActionFooter">
+              <button
+                type="button"
+                className="cancelActionButton"
+                onClick={closeMessageCenter}
+              >
+                Vazgeç
+              </button>
+
+              <button
+                type="button"
+                className="whatsappSendButton"
+                onClick={sendMessageToWhatsApp}
+                disabled={!messageText.trim()}
+              >
+                💬 WhatsApp&apos;ta Aç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteActionStudent && (
         <div
           className="lessonActionOverlay"
@@ -1910,6 +2195,68 @@ function closeLessonAction() {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+.messageCenterModal {
+  width: min(700px, 100%);
+}
+
+.messageDataGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.messageDataGrid > div {
+  padding: 10px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.messageDataGrid span {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+  margin-bottom: 3px;
+}
+
+.messageDataGrid strong {
+  font-size: 12px;
+  color: #17233c;
+}
+
+.messageInfoBox {
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.whatsappSendButton {
+  min-height: 46px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 16px;
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.whatsappSendButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .messageDataGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .lessonActionOverlay {
   position: fixed;
   inset: 0;
