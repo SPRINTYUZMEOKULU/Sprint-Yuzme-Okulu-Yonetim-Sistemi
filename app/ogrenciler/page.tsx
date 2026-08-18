@@ -25,6 +25,14 @@ type PackageRow = {
   lesson_count: number | null;
 };
 
+type ScheduleRow = {
+  id: string;
+  group_id: string | null;
+  weekday: number | null;
+  start_time: string | null;
+  end_time: string | null;
+};
+
 function toNumber(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -73,6 +81,7 @@ export default async function StudentsPage() {
     branchesResult,
     groupsResult,
     packagesResult,
+    schedulesResult,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -121,6 +130,12 @@ export default async function StudentsPage() {
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("lesson_count"),
+
+    supabase
+      .from("lesson_schedules")
+      .select("id,group_id,weekday,start_time,end_time")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true),
   ]);
 
   if (studentsResult.error) {
@@ -180,7 +195,8 @@ export default async function StudentsPage() {
             "id,student_id,status,lesson_date,target_group_id,target_schedule_id"
           )
           .in("student_id", studentIds)
-          .eq("status", "planned"),
+          .eq("status", "planned")
+          .order("lesson_date", { ascending: true }),
 
         supabase
           .from("attendance_records")
@@ -219,6 +235,7 @@ export default async function StudentsPage() {
   const branches = (branchesResult.data || []) as BranchRow[];
   const groups = (groupsResult.data || []) as GroupRow[];
   const packages = (packagesResult.data || []) as PackageRow[];
+  const schedules = (schedulesResult.data || []) as ScheduleRow[];
 
   const branchMap = new Map(
     branches.map((branch) => [branch.id, branch.name])
@@ -233,6 +250,10 @@ export default async function StudentsPage() {
       coursePackage.id,
       coursePackage,
     ])
+  );
+
+  const scheduleMap = new Map(
+    schedules.map((schedule) => [schedule.id, schedule])
   );
 
   const enrollmentMap = latestByStudent(
@@ -256,6 +277,7 @@ export default async function StudentsPage() {
   );
 
   const plannedCompensationCount = new Map<string, number>();
+  const nextCompensationMap = new Map<string, any>();
 
   for (const row of (compensationPlansResult.data || []) as any[]) {
     if (!row.student_id) continue;
@@ -264,16 +286,25 @@ export default async function StudentsPage() {
       row.student_id,
       (plannedCompensationCount.get(row.student_id) || 0) + 1
     );
+
+    if (!nextCompensationMap.has(row.student_id)) {
+      nextCompensationMap.set(row.student_id, row);
+    }
   }
 
   const lastAttendanceMap = new Map<string, any>();
+  const lastAbsentMap = new Map<string, any>();
 
   for (const row of (lastAttendanceResult.data || []) as any[]) {
-    if (!row.student_id || lastAttendanceMap.has(row.student_id)) {
-      continue;
+    if (!row.student_id) continue;
+
+    if (!lastAttendanceMap.has(row.student_id)) {
+      lastAttendanceMap.set(row.student_id, row);
     }
 
-    lastAttendanceMap.set(row.student_id, row);
+    if (row.status === "absent" && !lastAbsentMap.has(row.student_id)) {
+      lastAbsentMap.set(row.student_id, row);
+    }
   }
 
   const preparedStudents: StudentListItem[] = students.map(
@@ -284,6 +315,14 @@ export default async function StudentsPage() {
       const lessonBalance = lessonBalanceMap.get(student.id) as any;
       const paymentSummary = paymentSummaryMap.get(student.id) as any;
       const lastAttendance = lastAttendanceMap.get(student.id) as any;
+      const lastAbsent = lastAbsentMap.get(student.id) as any;
+      const nextCompensation = nextCompensationMap.get(student.id) as any;
+      const nextCompensationSchedule = nextCompensation?.target_schedule_id
+        ? scheduleMap.get(nextCompensation.target_schedule_id)
+        : undefined;
+      const nextCompensationGroup = nextCompensation?.target_group_id
+        ? groupMap.get(nextCompensation.target_group_id)
+        : undefined;
 
       const groupId =
         membership?.group_id ??
@@ -413,6 +452,17 @@ export default async function StudentsPage() {
           lastAttendance?.lesson_date ?? null,
         last_attendance_status:
           lastAttendance?.status ?? null,
+        last_absent_date:
+          lastAbsent?.lesson_date ?? null,
+
+        next_compensation_date:
+          nextCompensation?.lesson_date ?? null,
+        next_compensation_group:
+          nextCompensationGroup?.name ?? null,
+        next_compensation_start_time:
+          nextCompensationSchedule?.start_time ?? null,
+        next_compensation_end_time:
+          nextCompensationSchedule?.end_time ?? null,
 
         created_at: student.created_at || null,
       };
