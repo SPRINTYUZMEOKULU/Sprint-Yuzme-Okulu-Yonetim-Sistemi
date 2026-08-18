@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 export type StudentListItem = {
   id: string;
+  student_number?: string | null;
   first_name: string;
   last_name: string;
 
@@ -27,10 +28,25 @@ export type StudentListItem = {
   remaining_lessons?: number | null;
 
   start_date?: string | null;
+  normal_end_date?: string | null;
+  compensation_end_date?: string | null;
   end_date?: string | null;
 
   phone?: string | null;
   guardian_phone?: string | null;
+  guardian_name?: string | null;
+  email?: string | null;
+  guardian_email?: string | null;
+
+  planned_compensation_lessons?: number | null;
+
+  payment_status?: string | null;
+  payment_total_received?: number | null;
+  payment_outstanding?: number | null;
+  last_payment_at?: string | null;
+
+  last_attendance_date?: string | null;
+  last_attendance_status?: string | null;
 
   created_at?: string | null;
 };
@@ -108,6 +124,110 @@ function numberValue(value?: number | null) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function cleanPhone(value?: string | null) {
+  return (value || "").replace(/\D/g, "");
+}
+
+function isAdultCourse(courseType?: string | null) {
+  const value = normalizeText(courseType);
+  return (
+    value.includes("yetişkin") ||
+    value.includes("yetiskin") ||
+    value.includes("adult")
+  );
+}
+
+function contactPhone(student: StudentListItem) {
+  const adult = isAdultCourse(student.course_type);
+  const first = adult ? student.phone : student.guardian_phone;
+  const second = adult ? student.guardian_phone : student.phone;
+
+  return cleanPhone(first) || cleanPhone(second);
+}
+
+function whatsappPhone(value: string) {
+  const phone = cleanPhone(value);
+
+  if (phone.startsWith("90")) return phone;
+  if (phone.startsWith("0")) return `90${phone.slice(1)}`;
+  if (phone.length === 10) return `90${phone}`;
+
+  return phone;
+}
+
+function daysUntil(value?: string | null) {
+  if (!value) return null;
+
+  const end = new Date(value);
+  if (Number.isNaN(end.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  return Math.ceil(
+    (end.getTime() - today.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+}
+
+function paymentLabel(student: StudentListItem) {
+  const outstanding = numberValue(student.payment_outstanding);
+  const raw = normalizeText(student.payment_status);
+
+  if (outstanding > 0) {
+    return {
+      text: "Ödeme Bekliyor",
+      className: "paymentWarn",
+    };
+  }
+
+  if (
+    raw.includes("paid") ||
+    raw.includes("ödendi") ||
+    raw.includes("odendi") ||
+    numberValue(student.payment_total_received) > 0
+  ) {
+    return {
+      text: "Ödeme Kaydı Var",
+      className: "paymentOk",
+    };
+  }
+
+  return {
+    text: "Ödeme Kaydı Yok",
+    className: "paymentNeutral",
+  };
+}
+
+function readyMessage(student: StudentListItem) {
+  const adult = isAdultCourse(student.course_type);
+  const remaining = numberValue(student.remaining_lessons);
+  const endDate =
+    student.compensation_end_date ||
+    student.normal_end_date ||
+    student.end_date;
+  const days = daysUntil(endDate);
+
+  const name = `${student.first_name} ${student.last_name}`.trim();
+
+  if (remaining <= 0) {
+    return adult
+      ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nMevcut paketinizdeki ders hakkınız tamamlanmıştır. Derslerinize kesintisiz devam edebilmeniz için kayıt yenileme işleminizi gerçekleştirmenizi rica ederiz.\n\nSprint Yüzme Okulu`
+      : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin mevcut paketindeki ders hakkı tamamlanmıştır. Derslerine kesintisiz devam edebilmesi için kayıt yenileme işleminizi gerçekleştirmenizi rica ederiz.\n\nSprint Yüzme Okulu`;
+  }
+
+  if (remaining <= 3 || (days !== null && days >= 0 && days <= 7)) {
+    return adult
+      ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nKayıt yenileme döneminiz yaklaşmaktadır. Kalan ders hakkınız: ${remaining}. Planlamanızın aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.\n\nSprint Yüzme Okulu`
+      : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin kayıt yenileme dönemi yaklaşmaktadır. Kalan ders hakkı: ${remaining}. Ders planlamasının aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.\n\nSprint Yüzme Okulu`;
+  }
+
+  return adult
+    ? `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\nKurs kaydınız ve ders programınızla ilgili bilgi vermek için iletişime geçiyoruz.\n\nSprint Yüzme Okulu`
+    : `Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.\n\n${name} isimli öğrencimizin kurs kaydı ve ders programıyla ilgili bilgi vermek için iletişime geçiyoruz.\n\nSprint Yüzme Okulu`;
+}
+
 export default function StudentsClient({ students }: Props) {
   const router = useRouter();
 
@@ -140,7 +260,15 @@ const [statusReason, setStatusReason] = useState("");
 const [statusDescription, setStatusDescription] = useState("");
 const [statusSubmitting, setStatusSubmitting] = useState(false);
 const [statusActionMessage, setStatusActionMessage] = useState(""); 
-  const [pendingStatusStudentIds, setPendingStatusStudentIds] = useState<string[]>([]);
+const [pendingStatusStudentIds, setPendingStatusStudentIds] = useState<string[]>([]);
+
+const [deleteActionStudent, setDeleteActionStudent] =
+  useState<StudentListItem | null>(null);
+const [deleteReason, setDeleteReason] = useState("");
+const [deleteDescription, setDeleteDescription] = useState("");
+const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+const [deleteActionMessage, setDeleteActionMessage] = useState("");
+const [pendingDeleteStudentIds, setPendingDeleteStudentIds] = useState<string[]>([]);
 
 useEffect(() => {
   async function loadPendingStatusRequests() {
@@ -157,11 +285,36 @@ useEffect(() => {
         return;
       }
 
-      const ids = (result.requests ?? [])
-        .map((request: { student_id?: string | null }) => request.student_id)
-        .filter((id: string | null | undefined): id is string => Boolean(id));
+      const requests = (result.requests ?? []) as Array<{
+        student_id?: string | null;
+        request_type?: string | null;
+      }>;
 
-      setPendingStatusStudentIds(ids);
+      const deactivateIds = requests
+        .filter(
+          (request) =>
+            !request.request_type ||
+            request.request_type === "deactivate"
+        )
+        .map((request) => request.student_id)
+        .filter(
+          (id: string | null | undefined): id is string =>
+            Boolean(id)
+        );
+
+      const deleteIds = requests
+        .filter(
+          (request) =>
+            request.request_type === "delete"
+        )
+        .map((request) => request.student_id)
+        .filter(
+          (id: string | null | undefined): id is string =>
+            Boolean(id)
+        );
+
+      setPendingStatusStudentIds(deactivateIds);
+      setPendingDeleteStudentIds(deleteIds);
     } catch (error) {
       console.error("Bekleyen pasife alma talepleri alınamadı:", error);
     }
@@ -298,6 +451,73 @@ setPendingStatusStudentIds((prev) =>
   }
 }
 
+async function submitDeleteRequest() {
+  if (!deleteActionStudent) return;
+
+  if (!deleteReason.trim()) {
+    setDeleteActionMessage("Üye silme gerekçesi seçilmelidir.");
+    return;
+  }
+
+  try {
+    setDeleteSubmitting(true);
+    setDeleteActionMessage("");
+
+    const response = await fetch("/api/student-status-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        request_type: "delete",
+        student_id: deleteActionStudent.id,
+        branch_id: deleteActionStudent.branch_id || null,
+        group_id: deleteActionStudent.group_id || null,
+        reason: deleteReason,
+        description: deleteDescription,
+        old_status: deleteActionStudent.status || "active",
+        new_status: "deleted",
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setDeleteActionMessage(
+        result.error ||
+          result.details ||
+          "Üye silme talebi oluşturulamadı."
+      );
+      return;
+    }
+
+    setPendingDeleteStudentIds((prev) =>
+      deleteActionStudent
+        ? Array.from(new Set([...prev, deleteActionStudent.id]))
+        : prev
+    );
+
+    setDeleteActionMessage(
+      result.message ||
+        "Üye silme talebi yönetici onayına gönderildi."
+    );
+  } catch (error) {
+    console.error(error);
+    setDeleteActionMessage(
+      "Sunucuya bağlanırken bir hata oluştu."
+    );
+  } finally {
+    setDeleteSubmitting(false);
+  }
+}
+
+function closeDeleteAction() {
+  setDeleteActionStudent(null);
+  setDeleteReason("");
+  setDeleteDescription("");
+  setDeleteActionMessage("");
+}
+
 function closeStatusAction() {
   setStatusActionStudent(null);
   setStatusReason("");
@@ -357,7 +577,28 @@ function closeLessonAction() {
       ).length,
       endingSoon: students.filter(
         (student) =>
-          student.status === "active" && isEndingSoon(student.end_date)
+          student.status === "active" &&
+          (
+            isEndingSoon(
+              student.compensation_end_date ||
+                student.normal_end_date ||
+                student.end_date
+            ) ||
+            numberValue(student.remaining_lessons) <= 3
+          )
+      ).length,
+      lessonEnded: students.filter(
+        (student) =>
+          student.status === "active" &&
+          numberValue(student.remaining_lessons) <= 0
+      ).length,
+      paymentWaiting: students.filter(
+        (student) =>
+          numberValue(student.payment_outstanding) > 0
+      ).length,
+      compensationWaiting: students.filter(
+        (student) =>
+          numberValue(student.planned_compensation_lessons) > 0
       ).length,
     };
   }, [students]);
@@ -470,6 +711,49 @@ function closeLessonAction() {
       return 0;
     });
   }, [students, search, status, branch, group, level, sort]);
+
+  function callStudent(student: StudentListItem) {
+    const phone = contactPhone(student);
+
+    if (!phone) {
+      alert("İletişim telefonu bulunamadı.");
+      return;
+    }
+
+    window.location.href = `tel:${phone}`;
+  }
+
+  function whatsappStudent(student: StudentListItem) {
+    const phone = contactPhone(student);
+
+    if (!phone) {
+      alert("WhatsApp için telefon numarası bulunamadı.");
+      return;
+    }
+
+    window.open(
+      `https://wa.me/${whatsappPhone(phone)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function sendReadyMessage(student: StudentListItem) {
+    const phone = contactPhone(student);
+
+    if (!phone) {
+      alert("Hazır mesaj için telefon numarası bulunamadı.");
+      return;
+    }
+
+    const text = readyMessage(student);
+
+    window.open(
+      `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(text)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
 
   function exportCSV() {
     const headers = [
@@ -624,6 +908,21 @@ function closeLessonAction() {
           <span>Bitişi Yaklaşan</span>
           <strong>{counts.endingSoon}</strong>
         </button>
+
+        <div className="summaryCard alertCard">
+          <span>Ders Hakkı Biten</span>
+          <strong>{counts.lessonEnded}</strong>
+        </div>
+
+        <div className="summaryCard warningCard">
+          <span>Ödeme Bekleyen</span>
+          <strong>{counts.paymentWaiting}</strong>
+        </div>
+
+        <div className="summaryCard infoCard">
+          <span>Telafi Bekleyen</span>
+          <strong>{counts.compensationWaiting}</strong>
+        </div>
       </section>
 
       <section className="toolbar">
@@ -700,7 +999,7 @@ function closeLessonAction() {
       </div>
 
       <section className="studentGrid">
-        {filteredStudents.map((student) => {
+        {filteredStudents.map((student, index) => {
           const normalLessons = numberValue(student.package_lesson_count);
           const compensation = numberValue(student.compensation_lessons);
           const used = numberValue(student.used_lessons);
@@ -711,6 +1010,23 @@ function closeLessonAction() {
             student.remaining_lessons != null
               ? numberValue(student.remaining_lessons)
               : Math.max(totalRights - used, 0);
+
+          const effectiveEndDate =
+            student.compensation_end_date ||
+            student.normal_end_date ||
+            student.end_date;
+
+          const endDays = daysUntil(effectiveEndDate);
+          const lessonEnded = remaining <= 0;
+          const renewalWarning =
+            !lessonEnded &&
+            (
+              remaining <= 3 ||
+              (endDays !== null && endDays >= 0 && endDays <= 7)
+            );
+
+          const payment = paymentLabel(student);
+          const phone = contactPhone(student);
 
           return (
             <article
@@ -727,7 +1043,9 @@ function closeLessonAction() {
             >
               <header className="cardHeader">
                 <div>
-                  <span className="eyebrow">ÖĞRENCİ</span>
+                  <span className="eyebrow">
+                    #{index + 1} · {student.student_number || "ÖĞRENCİ NO YOK"}
+                  </span>
 
                   <h3>
                     {student.first_name} {student.last_name}
@@ -748,6 +1066,29 @@ function closeLessonAction() {
                     "Durum Yok"}
                 </span>
               </header>
+
+              {lessonEnded && (
+                <div className="studentWarning dangerWarning">
+                  <strong>🔴 DERS HAKKI KALMAMIŞTIR</strong>
+                  <span>
+                    Ders takibi tamamlanmıştır. Kayıt yenileme gereklidir.
+                  </span>
+                </div>
+              )}
+
+              {renewalWarning && (
+                <div className="studentWarning renewalWarning">
+                  <strong>⚠ KAYIT YENİLEME YAKLAŞIYOR</strong>
+                  <span>
+                    {remaining <= 3
+                      ? `${remaining} ders kaldı.`
+                      : ""}
+                    {endDays !== null && endDays >= 0 && endDays <= 7
+                      ? ` Bitiş tarihine ${endDays} gün kaldı.`
+                      : ""}
+                  </span>
+                </div>
+              )}
 
               <div className="mainDetails">
                 <div>
@@ -810,19 +1151,65 @@ function closeLessonAction() {
                 </div>
 
                 <div>
-                  <span>Bitiş</span>
-                  <strong>{formatDate(student.end_date)}</strong>
+                  <span>Normal Bitiş</span>
+                  <strong>{formatDate(student.normal_end_date)}</strong>
+                </div>
+
+                <div>
+                  <span>Telafili Bitiş</span>
+                  <strong>{formatDate(student.compensation_end_date)}</strong>
+                </div>
+
+                <div>
+                  <span>Ödeme</span>
+                  <strong className={payment.className}>
+                    {payment.text}
+                  </strong>
                 </div>
               </div>
 
               <footer className="cardFooter">
-  <span>
-    {student.phone ||
-      student.guardian_phone ||
-      "Telefon bilgisi yok"}
-  </span>
+  <div className="contactSummary">
+    <span>İletişim</span>
+    <strong>{phone || "Telefon bilgisi yok"}</strong>
+  </div>
 
   <div className="studentActions">
+    <button
+      type="button"
+      className="studentActionButton call"
+      disabled={!phone}
+      onClick={(event) => {
+        event.stopPropagation();
+        callStudent(student);
+      }}
+    >
+      📞 Ara
+    </button>
+
+    <button
+      type="button"
+      className="studentActionButton whatsapp"
+      disabled={!phone}
+      onClick={(event) => {
+        event.stopPropagation();
+        whatsappStudent(student);
+      }}
+    >
+      💬 WhatsApp
+    </button>
+
+    <button
+      type="button"
+      className="studentActionButton message"
+      disabled={!phone}
+      onClick={(event) => {
+        event.stopPropagation();
+        sendReadyMessage(student);
+      }}
+    >
+      ✉ Hazır Mesaj
+    </button>
     <button
       type="button"
       className="studentActionButton"
@@ -881,6 +1268,7 @@ function closeLessonAction() {
   <button
     type="button"
     className="studentActionButton passive"
+    disabled={pendingStatusStudentIds.includes(student.id)}
     onClick={(event) => {
       event.stopPropagation();
 
@@ -890,9 +1278,29 @@ function closeLessonAction() {
       setStatusActionMessage("");
     }}
   >
-    Pasife Al
+    {pendingStatusStudentIds.includes(student.id)
+      ? "Pasif Talebi Bekliyor"
+      : "Pasife Al"}
   </button>
 )}
+
+<button
+  type="button"
+  className="studentActionButton delete"
+  disabled={pendingDeleteStudentIds.includes(student.id)}
+  onClick={(event) => {
+    event.stopPropagation();
+
+    setDeleteActionStudent(student);
+    setDeleteReason("");
+    setDeleteDescription("");
+    setDeleteActionMessage("");
+  }}
+>
+  {pendingDeleteStudentIds.includes(student.id)
+    ? "Silme Onayı Bekliyor"
+    : "Üye Sil"}
+</button>
   </div>
 </footer>
             </article>
@@ -1278,6 +1686,130 @@ function closeLessonAction() {
     </div>
   </div>
 )}
+      {deleteActionStudent && (
+        <div
+          className="lessonActionOverlay"
+          onClick={closeDeleteAction}
+        >
+          <div
+            className="lessonActionModal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="lessonActionHeader">
+              <div>
+                <span className="eyebrow dangerEyebrow">
+                  YÖNETİCİ ONAYLI ÜYE SİLME
+                </span>
+
+                <h3>
+                  {deleteActionStudent.first_name}{" "}
+                  {deleteActionStudent.last_name}
+                </h3>
+
+                <p>
+                  {deleteActionStudent.branch_name || "Şube yok"}
+                  {" · "}
+                  {deleteActionStudent.group_name || "Grup yok"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="modalCloseButton"
+                onClick={closeDeleteAction}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="lessonActionBody">
+              <div className="deleteWarningBox">
+                <strong>⚠ Üye doğrudan silinmeyecektir.</strong>
+                <span>
+                  Talep yönetici onayına gönderilir. Onay verilene
+                  kadar öğrenci ve geçmiş kayıtları sistemde kalır.
+                </span>
+              </div>
+
+              <label>
+                <span>Silme Gerekçesi</span>
+                <select
+                  value={deleteReason}
+                  onChange={(event) =>
+                    setDeleteReason(event.target.value)
+                  }
+                >
+                  <option value="">Gerekçe seçin</option>
+                  <option value="Mükerrer öğrenci kaydı">
+                    Mükerrer öğrenci kaydı
+                  </option>
+                  <option value="Hatalı oluşturulan kayıt">
+                    Hatalı oluşturulan kayıt
+                  </option>
+                  <option value="Kursiyer / veli talebi">
+                    Kursiyer / veli talebi
+                  </option>
+                  <option value="Yönetim kararı">
+                    Yönetim kararı
+                  </option>
+                  <option value="Diğer">
+                    Diğer
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>Açıklama / Yönetici Notu</span>
+                <textarea
+                  value={deleteDescription}
+                  onChange={(event) =>
+                    setDeleteDescription(event.target.value)
+                  }
+                  placeholder="Üye silme talebinin nedenini ayrıntılı olarak yazın..."
+                  rows={4}
+                />
+              </label>
+
+              {deleteActionMessage && (
+                <div className="actionMessage">
+                  {deleteActionMessage}
+                </div>
+              )}
+
+              <div className="deleteConfirmBox">
+                <strong>Bu işlem onay gerektirir.</strong>
+                <span>
+                  Yönetici onayı verilmeden öğrenci kartı,
+                  ders hakları, ödemeler veya yoklamalar kaldırılmaz.
+                </span>
+              </div>
+            </div>
+
+            <div className="lessonActionFooter">
+              <button
+                type="button"
+                className="cancelActionButton"
+                onClick={closeDeleteAction}
+                disabled={deleteSubmitting}
+              >
+                Vazgeç
+              </button>
+
+              <button
+                type="button"
+                className="submitDeleteButton"
+                onClick={submitDeleteRequest}
+                disabled={deleteSubmitting}
+              >
+                {deleteSubmitting
+                  ? "Gönderiliyor..."
+                  : "Silme Talebini Yönetici Onayına Gönder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </section>
 
       <style jsx>{`
@@ -1318,6 +1850,66 @@ function closeLessonAction() {
   color: #13734c;
 }
 
+
+.studentActionButton.passive {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.studentActionButton.delete {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.studentActionButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dangerEyebrow {
+  color: #be123c !important;
+}
+
+.deleteWarningBox,
+.deleteConfirmBox {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.deleteWarningBox {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.deleteConfirmBox {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.submitDeleteButton {
+  min-height: 46px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 14px;
+  background: #be123c;
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.submitDeleteButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .lessonActionOverlay {
   position: fixed;
   inset: 0;
@@ -1489,7 +2081,97 @@ function closeLessonAction() {
     min-height: 42px;
   }
 
-  .lessonActionOverlay {
+ 
+.studentWarning {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.studentWarning strong {
+  font-size: 12px;
+}
+
+.dangerWarning {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.renewalWarning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.contactSummary {
+  display: grid;
+  gap: 2px;
+  min-width: 130px;
+}
+
+.contactSummary span {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.contactSummary strong {
+  color: #17345c !important;
+  font-size: 12px;
+}
+
+.studentActionButton.call {
+  background: #eef6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.studentActionButton.whatsapp {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.studentActionButton.message {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  color: #6d28d9;
+}
+
+.paymentOk {
+  color: #15803d !important;
+}
+
+.paymentWarn {
+  color: #be123c !important;
+}
+
+.paymentNeutral {
+  color: #64748b !important;
+}
+
+.summaryCard.alertCard {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.summaryCard.warningCard {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.summaryCard.infoCard {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+}
+
+ .lessonActionOverlay {
     align-items: flex-end;
     padding: 0;
   }
@@ -1514,7 +2196,7 @@ function closeLessonAction() {
   }
 
   .quickLessonButtons {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   }
 }
         .studentCenter {
