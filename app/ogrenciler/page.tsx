@@ -33,6 +33,20 @@ type ScheduleRow = {
   end_time: string | null;
 };
 
+const DAY_NAMES: Record<number, string> = {
+  1: "Pazartesi",
+  2: "Salı",
+  3: "Çarşamba",
+  4: "Perşembe",
+  5: "Cuma",
+  6: "Cumartesi",
+  7: "Pazar",
+};
+
+function timeText(value?: string | null) {
+  return value ? value.slice(0, 5) : "";
+}
+
 function toNumber(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -256,6 +270,16 @@ export default async function StudentsPage() {
     schedules.map((schedule) => [schedule.id, schedule])
   );
 
+  const schedulesByGroup = new Map<string, ScheduleRow[]>();
+
+  for (const schedule of schedules) {
+    if (!schedule.group_id) continue;
+
+    const current = schedulesByGroup.get(schedule.group_id) || [];
+    current.push(schedule);
+    schedulesByGroup.set(schedule.group_id, current);
+  }
+
   const enrollmentMap = latestByStudent(
     (enrollmentsResult.data || []) as any[]
   );
@@ -374,6 +398,58 @@ export default async function StudentsPage() {
         0
       );
 
+      const totalRemaining =
+        normalRemaining + compensationBalance;
+
+      const regularSchedules = groupId
+        ? schedulesByGroup.get(groupId) || []
+        : [];
+
+      const selectedWeekdays = Array.isArray(
+        attendancePlan?.selected_weekdays
+      )
+        ? attendancePlan.selected_weekdays
+            .map((day: unknown) => Number(day))
+            .filter(
+              (day: number) =>
+                Number.isInteger(day) &&
+                day >= 1 &&
+                day <= 7
+            )
+        : [];
+
+      const studentSchedules = regularSchedules.filter(
+        (schedule) =>
+          selectedWeekdays.length === 0 ||
+          selectedWeekdays.includes(
+            Number(schedule.weekday)
+          )
+      );
+
+      const scheduleText = studentSchedules
+        .slice()
+        .sort((a, b) => {
+          const dayA = Number(a.weekday || 0);
+          const dayB = Number(b.weekday || 0);
+
+          if (dayA !== dayB) return dayA - dayB;
+
+          return String(a.start_time || "").localeCompare(
+            String(b.start_time || "")
+          );
+        })
+        .map((schedule) => {
+          const day =
+            DAY_NAMES[Number(schedule.weekday)] || "Ders";
+          const start = timeText(schedule.start_time);
+          const end = timeText(schedule.end_time);
+
+          return `• ${day} — ${start}${
+            end ? `–${end}` : ""
+          }`.trim();
+        })
+        .join("\n");
+
       const startDate =
         attendancePlan?.start_date ??
         enrollment?.start_date ??
@@ -427,7 +503,11 @@ export default async function StudentsPage() {
           plannedCompensationCount.get(student.id) || 0,
 
         used_lessons: usedLessons,
-        remaining_lessons: normalRemaining,
+        normal_remaining_lessons: normalRemaining,
+        total_remaining_lessons: totalRemaining,
+        remaining_lessons: totalRemaining,
+
+        schedule_text: scheduleText || null,
 
         start_date: startDate,
         normal_end_date: normalEndDate,
