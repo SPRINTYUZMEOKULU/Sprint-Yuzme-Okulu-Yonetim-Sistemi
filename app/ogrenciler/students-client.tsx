@@ -265,7 +265,7 @@ function buildMessage(
     student.next_compensation_end_time?.slice(0, 5),
   ]
     .filter(Boolean)
-    .join(" - ");
+    .join("–");
 
   const compensationGroup =
     student.next_compensation_group ||
@@ -273,23 +273,52 @@ function buildMessage(
     "—";
 
   const lastAbsent = formatDate(student.last_absent_date);
-  const scheduleText = student.schedule_text || "• Program bilgisi bulunamadı";
+  const scheduleText =
+    student.schedule_text || "• Program bilgisi bulunamadı";
+
   const branchText = student.branch_name || "—";
   const groupText = student.group_name || "—";
+
   const packageText =
     student.package_name ||
     (numberValue(student.package_lesson_count) > 0
       ? `${numberValue(student.package_lesson_count)} Ders`
       : "—");
 
-  const contactUrl = "https://sprintyuzmekursu.com/iletisim/";
+  const contactUrl =
+    "https://sprintyuzmekursu.com/iletisim/";
+
+  const infoPhone = "+90 (551) 896 83 19";
 
   const header = `*SPRİNT YÜZME OKULU*`;
-  const footer =
-    `\n\n_Bilginize sunar, iyi günler dileriz._\n` +
-    `*Sprint Yüzme Okulu*`;
 
-  const childSubject = `*${name}* isimli öğrencimizin`;
+  const greeting = adult
+    ? `Değerli Kursiyerimiz, *${name}*`
+    : `Değerli Velimiz,\n*${name}* isimli öğrencimiz`;
+
+  const footer =
+    `\n\n☎️ *SPRİNT BİLGİLENDİRME HATTI*\n` +
+    `${infoPhone}\n\n` +
+    `_Bilginize sunar, iyi günler dileriz._\n` +
+    `*SPRİNT YÜZME OKULU*`;
+
+  const locationBlock =
+    `📍 *KONUM VE ADRES BİLGİLERİ*\n` +
+    `Şubenizin adres ve konum bilgilerine aşağıdaki bağlantıdan ulaşabilirsiniz:\n` +
+    `${contactUrl}`;
+
+  const equipmentBlock =
+    `🎒 *KURSA GELİRKEN GETİRİLMESİ GEREKENLER*\n` +
+    `• Mayo / yüzme şortu\n` +
+    `• Havlu\n` +
+    `• Terlik\n` +
+    `• Havuz gözlüğü\n\n` +
+    `🎁 *SPRİNT BONESİ HEDİYEMİZDİR*\n` +
+    `Sprint bonesi yüzme okulumuzun hediyesidir. Kursumuza ilk katılım sırasında kursiyerimize teslim edilecektir.\n\n` +
+    `🥽 *HAVUZ GÖZLÜĞÜ*\n` +
+    `Havuz gözlüğünüz yoksa dilerseniz yüzme okulumuzdan satın alabilirsiniz.\n\n` +
+    `⏰ *TESİSE GELİŞ*\n` +
+    `Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır bulunmanızı rica ederiz.`;
 
   if (type === "smart") {
     if (totalRemaining <= 0) {
@@ -308,101 +337,137 @@ function buildMessage(
       return buildMessage(student, "absence");
     }
 
-    if (
-      normalRemaining <= 3 ||
-      isEndingSoon(endDate)
-    ) {
+    if (normalRemaining <= 3 || isEndingSoon(endDate)) {
       return buildMessage(student, "renewal");
     }
 
     return buildMessage(student, "registration");
   }
 
+  if (type === "registration") {
+    return (
+      `${header}\n\n` +
+      `_*KAYDINIZ YAPILMIŞTIR*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "Yüzme kursu kaydınız başarıyla oluşturulmuştur."
+          : "yüzme kursu kaydı başarıyla oluşturulmuştur."
+      }\n\n` +
+      `🏊 *KURS BİLGİLERİ*\n` +
+      `💳 *Paket:* ${packageText}\n` +
+      `🏢 *Şube:* ${branchText}\n` +
+      `👥 *Grup:* ${groupText}\n\n` +
+      `📅 *DERS GÜN VE SAATLERİ*\n` +
+      `${scheduleText}\n\n` +
+      `📆 *Başlangıç Tarihi:* ${startText}\n` +
+      `📆 *Planlanan Bitiş Tarihi:* ${endText}\n\n` +
+      `${equipmentBlock}\n\n` +
+      `${locationBlock}` +
+      footer
+    );
+  }
+
   if (type === "renewal") {
-    return adult
-      ? `${header}\n\n_*KAYIT YENİLEME HATIRLATMASI*_\n\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n` +
-          `🏊 *Normal kalan ders:* ${normalRemaining}\n` +
-          `➕ *Telafi hakkı:* ${compensationRemaining}\n` +
-          `✅ *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
-          `Kayıt yenileme döneminiz yaklaşmaktadır. Ders planlamanızın aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.` +
-          footer
-      : `${header}\n\n_*KAYIT YENİLEME HATIRLATMASI*_\n\n` +
-          `${childSubject} kayıt yenileme dönemi yaklaşmaktadır.\n\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n` +
-          `🏊 *Normal kalan ders:* ${normalRemaining}\n` +
-          `➕ *Telafi hakkı:* ${compensationRemaining}\n` +
-          `✅ *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
-          `Ders planlamasının aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*KAYIT YENİLEME HATIRLATMASI*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "kayıt yenileme döneminiz yaklaşmaktadır."
+          : "için kayıt yenileme dönemi yaklaşmaktadır."
+      }\n\n` +
+      `📅 *Planlanan Bitiş:* ${endText}\n` +
+      `🏊 *Normal Kalan Ders:* ${normalRemaining}\n` +
+      `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
+      `✅ *Toplam Kalan:* ${totalRemaining}\n\n` +
+      `Ders planlamasının aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.` +
+      footer
+    );
   }
 
   if (type === "freeze") {
-    return adult
-      ? `${header}\n\n_*KAYIT DONDURMA BİLGİLENDİRMESİ*_\n\n` +
-          `Kayıt dondurma işleminiz sistemimize işlenmiştir.\n\n` +
-          `📅 *Mevcut planlanan bitiş:* ${endText}\n` +
-          `🏊 *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
-          `Güncel kayıt planınız için bizimle iletişime geçebilirsiniz.` +
-          footer
-      : `${header}\n\n_*KAYIT DONDURMA BİLGİLENDİRMESİ*_\n\n` +
-          `${childSubject} kayıt dondurma işlemi sistemimize işlenmiştir.\n\n` +
-          `📅 *Mevcut planlanan bitiş:* ${endText}\n` +
-          `🏊 *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
-          `Güncel kayıt planı için bizimle iletişime geçebilirsiniz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*KAYIT DONDURMA BİLGİLENDİRMESİ*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "kayıt dondurma işleminiz sistemimize işlenmiştir."
+          : "için kayıt dondurma işlemi sistemimize işlenmiştir."
+      }\n\n` +
+      `📅 *Mevcut Planlanan Bitiş:* ${endText}\n` +
+      `🏊 *Toplam Kullanılabilir Ders:* ${totalRemaining}\n\n` +
+      `Güncel kayıt planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
+      footer
+    );
   }
 
   if (type === "compensation") {
     if (!student.next_compensation_date) {
-      return `${header}\n\n_*TELAFİ BİLGİLENDİRMESİ*_\n\n` +
-        `Bu öğrenci için planlanmış aktif bir telafi dersi bulunmamaktadır.` +
-        footer;
+      return (
+        `${header}\n\n` +
+        `_*TELAFİ BİLGİLENDİRMESİ*_\n\n` +
+        `${greeting}\n\n` +
+        `Planlanmış aktif bir telafi dersi bulunmamaktadır.` +
+        footer
+      );
     }
 
-    return adult
-      ? `${header}\n\n_*TELAFİ DERSİ BİLGİLENDİRMESİ*_\n\n` +
-          `Telafi dersiniz planlanmıştır.\n\n` +
-          `📅 *Tarih:* ${compensationDate}\n` +
-          `⏰ *Saat:* ${compensationTime || "—"}\n` +
-          `👥 *Grup:* ${compensationGroup}\n` +
-          `➕ *Mevcut telafi hakkı:* ${compensationRemaining}\n\n` +
-          `Belirtilen tarih ve saatte dersinize katılım sağlamanızı rica ederiz.` +
-          footer
-      : `${header}\n\n_*TELAFİ DERSİ BİLGİLENDİRMESİ*_\n\n` +
-          `${childSubject} telafi dersi planlanmıştır.\n\n` +
-          `📅 *Tarih:* ${compensationDate}\n` +
-          `⏰ *Saat:* ${compensationTime || "—"}\n` +
-          `👥 *Grup:* ${compensationGroup}\n` +
-          `➕ *Mevcut telafi hakkı:* ${compensationRemaining}\n\n` +
-          `Belirtilen tarih ve saatte derse katılım sağlamasını rica ederiz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*TELAFİ DERSİ BİLGİLENDİRMESİ*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "telafi dersiniz planlanmıştır."
+          : "için telafi dersi planlanmıştır."
+      }\n\n` +
+      `📅 *Tarih:* ${compensationDate}\n` +
+      `⏰ *Saat:* ${compensationTime || "—"}\n` +
+      `👥 *Grup:* ${compensationGroup}\n` +
+      `➕ *Mevcut Telafi Hakkı:* ${compensationRemaining}\n\n` +
+      `Belirtilen tarih ve saatte derse katılım sağlamanızı rica ederiz.` +
+      footer
+    );
   }
 
   if (type === "absence") {
     if (!student.last_absent_date) {
-      return `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
-        `Bu öğrenci için kayıtlı bir “Gelmedi” yoklaması bulunmamaktadır.` +
-        footer;
+      return (
+        `${header}\n\n` +
+        `_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
+        `${greeting}\n\n` +
+        `Kayıtlı bir “Gelmedi” yoklaması bulunmamaktadır.` +
+        footer
+      );
     }
 
-    return adult
-      ? `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
-          `📅 *Ders tarihi:* ${lastAbsent}\n\n` +
-          `Belirtilen tarihli yüzme dersinize katılım sağlamadığınız görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.` +
-          footer
-      : `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
-          `${childSubject} aşağıdaki derse katılım sağlamadığı görülmüştür.\n\n` +
-          `📅 *Ders tarihi:* ${lastAbsent}\n\n` +
-          `Bu mesaj bilgilendirme amacıyla gönderilmiştir.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "aşağıdaki tarihli dersinize katılım sağlamadığınız görülmüştür."
+          : "aşağıdaki tarihli derse katılım sağlamamıştır."
+      }\n\n` +
+      `📅 *Ders Tarihi:* ${lastAbsent}\n\n` +
+      `Bu mesaj bilgilendirme amacıyla gönderilmiştir.` +
+      footer
+    );
   }
 
   if (type === "payment") {
     if (outstanding <= 0) {
-      return `${header}\n\n_*ÖDEME BİLGİLENDİRMESİ*_\n\n` +
+      return (
+        `${header}\n\n` +
+        `_*ÖDEME BİLGİLENDİRMESİ*_\n\n` +
+        `${greeting}\n\n` +
         `Aktif kayıt dönemine ait bekleyen ödeme görünmemektedir.` +
-        footer;
+        footer
+      );
     }
 
     const amount = new Intl.NumberFormat("tr-TR", {
@@ -411,103 +476,68 @@ function buildMessage(
       maximumFractionDigits: 0,
     }).format(outstanding);
 
-    return adult
-      ? `${header}\n\n_*ÖDEME HATIRLATMASI*_\n\n` +
-          `💳 *Aktif paket:* ${packageText}\n` +
-          `💰 *Bekleyen ödeme:* ${amount}\n\n` +
-          `Aktif kayıt paketinize ait yukarıdaki tutarda bekleyen ödemeniz bulunmaktadır. Ödeme planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
-          footer
-      : `${header}\n\n_*ÖDEME HATIRLATMASI*_\n\n` +
-          `${childSubject} aktif kayıt paketine ait ödeme bilgisi aşağıdadır.\n\n` +
-          `💳 *Aktif paket:* ${packageText}\n` +
-          `💰 *Bekleyen ödeme:* ${amount}\n\n` +
-          `Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*ÖDEME HATIRLATMASI*_\n\n` +
+      `${greeting}\n\n` +
+      `💳 *Aktif Paket:* ${packageText}\n` +
+      `💰 *Bekleyen Ödeme:* ${amount}\n\n` +
+      `Aktif kayıt paketine ait yukarıdaki tutarda bekleyen ödeme bulunmaktadır. Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
+      footer
+    );
   }
 
   if (type === "lesson_ending") {
-    return adult
-      ? `${header}\n\n_*DERS HAKKI BİTİYOR*_\n\n` +
-          `🏊 *Normal kalan:* ${normalRemaining}\n` +
-          `➕ *Telafi kalan:* ${compensationRemaining}\n` +
-          `✅ *Toplam kalan:* ${totalRemaining}\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n\n` +
-          `Ders planlamanızın kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
-          footer
-      : `${header}\n\n_*DERS HAKKI BİTİYOR*_\n\n` +
-          `${childSubject} ders hakları aşağıdaki gibidir.\n\n` +
-          `🏊 *Normal kalan:* ${normalRemaining}\n` +
-          `➕ *Telafi kalan:* ${compensationRemaining}\n` +
-          `✅ *Toplam kalan:* ${totalRemaining}\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n\n` +
-          `Ders planlamasının kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*DERS HAKKI BİTİYOR*_\n\n` +
+      `${greeting}\n\n` +
+      `🏊 *Normal Kalan:* ${normalRemaining}\n` +
+      `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
+      `✅ *Toplam Kalan:* ${totalRemaining}\n` +
+      `📅 *Planlanan Bitiş:* ${endText}\n\n` +
+      `Ders planlamasının kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
+      footer
+    );
   }
 
   if (type === "lesson_finished") {
-    return adult
-      ? `${header}\n\n_*DERS HAKKI TAMAMLANDI*_\n\n` +
-          `Mevcut kullanılabilir ders hakkınız tamamlanmıştır. Ders takibiniz sona ermiştir.\n\n` +
-          `Kursunuza devam edebilmeniz için kayıt yenileme işleminizin yapılması gerekmektedir.` +
-          footer
-      : `${header}\n\n_*DERS HAKKI TAMAMLANDI*_\n\n` +
-          `${childSubject} mevcut kullanılabilir ders hakkı tamamlanmıştır. Ders takibi sona ermiştir.\n\n` +
-          `Derslerine devam edebilmesi için kayıt yenileme işleminin yapılması gerekmektedir.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*DERS HAKKI TAMAMLANDI*_\n\n` +
+      `${greeting}\n\n` +
+      `${
+        adult
+          ? "mevcut kullanılabilir ders hakkınız tamamlanmıştır."
+          : "için mevcut kullanılabilir ders hakkı tamamlanmıştır."
+      }\n\n` +
+      `Ders takibi sona ermiştir. Kursa devam edilebilmesi için kayıt yenileme işleminin yapılması gerekmektedir.` +
+      footer
+    );
   }
 
   if (type === "program") {
-    return adult
-      ? `${header}\n\n_*DERS PROGRAMI BİLGİLENDİRMESİ*_\n\n` +
-          `🏢 *Şube:* ${branchText}\n` +
-          `👥 *Grup:* ${groupText}\n` +
-          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n\n` +
-          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
-          `Ders programınızda değişiklik olması halinde ayrıca bilgilendirileceksiniz.` +
-          footer
-      : `${header}\n\n_*DERS PROGRAMI BİLGİLENDİRMESİ*_\n\n` +
-          `${childSubject} güncel ders bilgileri aşağıdadır.\n\n` +
-          `🏢 *Şube:* ${branchText}\n` +
-          `👥 *Grup:* ${groupText}\n` +
-          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n\n` +
-          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
-          `Ders programında değişiklik olması halinde ayrıca bilgilendirileceksiniz.` +
-          footer;
+    return (
+      `${header}\n\n` +
+      `_*DERS PROGRAMI BİLGİLENDİRMESİ*_\n\n` +
+      `${greeting}\n\n` +
+      `🏢 *Şube:* ${branchText}\n` +
+      `👥 *Grup:* ${groupText}\n\n` +
+      `📅 *DERS GÜN VE SAATLERİ*\n` +
+      `${scheduleText}\n\n` +
+      `⏰ Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır bulunmanızı rica ederiz.\n\n` +
+      `${locationBlock}` +
+      footer
+    );
   }
 
-  if (type === "registration") {
-    return adult
-      ? `${header}\n\n_*KAYDINIZ YAPILMIŞTIR*_\n\n` +
-          `Yüzme kursu kaydınız başarıyla oluşturulmuştur.\n\n` +
-          `💳 *Paket:* ${packageText}\n` +
-          `🏢 *Şube:* ${branchText}\n` +
-          `👥 *Grup:* ${groupText}\n` +
-          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n` +
-          `📅 *Başlangıç:* ${startText}\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n\n` +
-          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
-          `_Yukarıdaki bağlantıya dokunarak şube adres ve konum bilgilerine ulaşabilirsiniz._` +
-          footer
-      : `${header}\n\n_*KAYDINIZ YAPILMIŞTIR*_\n\n` +
-          `*${name}* isimli öğrencimizin yüzme kursu kaydı başarıyla oluşturulmuştur.\n\n` +
-          `💳 *Paket:* ${packageText}\n` +
-          `🏢 *Şube:* ${branchText}\n` +
-          `👥 *Grup:* ${groupText}\n` +
-          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n` +
-          `📅 *Başlangıç:* ${startText}\n` +
-          `📅 *Planlanan bitiş:* ${endText}\n\n` +
-          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
-          `_Yukarıdaki bağlantıya dokunarak şube adres ve konum bilgilerine ulaşabilirsiniz._` +
-          footer;
-  }
-
-  return adult
-    ? `${header}\n\n_*GENEL BİLGİLENDİRME*_\n\n` +
-        `Kurs kaydınızla ilgili bilgilendirme için iletişime geçiyoruz.` +
-        footer
-    : `${header}\n\n_*GENEL BİLGİLENDİRME*_\n\n` +
-        `*${name}* isimli öğrencimizin kurs kaydıyla ilgili bilgilendirme için iletişime geçiyoruz.` +
-        footer;
+  return (
+    `${header}\n\n` +
+    `_*GENEL BİLGİLENDİRME*_\n\n` +
+    `${greeting}\n\n` +
+    `Kurs kaydınızla ilgili bilgilendirme için iletişime geçiyoruz.` +
+    footer
+  );
 }
 
 export default function StudentsClient({ students }: Props) {
