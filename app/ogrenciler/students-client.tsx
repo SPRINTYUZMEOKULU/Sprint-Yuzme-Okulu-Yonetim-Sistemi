@@ -25,6 +25,8 @@ export type StudentListItem = {
 
   compensation_lessons?: number | null;
   used_lessons?: number | null;
+  normal_remaining_lessons?: number | null;
+  total_remaining_lessons?: number | null;
   remaining_lessons?: number | null;
 
   start_date?: string | null;
@@ -53,6 +55,8 @@ export type StudentListItem = {
   next_compensation_group?: string | null;
   next_compensation_start_time?: string | null;
   next_compensation_end_time?: string | null;
+
+  schedule_text?: string | null;
 
   created_at?: string | null;
 };
@@ -225,79 +229,180 @@ function buildMessage(
 ) {
   const adult = isAdultCourse(student.course_type);
   const name = `${student.first_name} ${student.last_name}`.trim();
-  const remaining = numberValue(student.remaining_lessons);
+
+  const normalRemaining =
+    student.normal_remaining_lessons != null
+      ? numberValue(student.normal_remaining_lessons)
+      : Math.max(
+          numberValue(student.package_lesson_count) -
+            numberValue(student.used_lessons),
+          0
+        );
+
+  const compensationRemaining =
+    numberValue(student.compensation_lessons);
+
+  const totalRemaining =
+    student.total_remaining_lessons != null
+      ? numberValue(student.total_remaining_lessons)
+      : normalRemaining + compensationRemaining;
+
   const endDate =
     student.compensation_end_date ||
     student.normal_end_date ||
     student.end_date;
+
   const endText = formatDate(endDate);
   const startText = formatDate(student.start_date);
   const outstanding = numberValue(student.payment_outstanding);
-  const compensationDate = formatDate(student.next_compensation_date);
+
+  const compensationDate = formatDate(
+    student.next_compensation_date
+  );
+
   const compensationTime = [
     student.next_compensation_start_time?.slice(0, 5),
     student.next_compensation_end_time?.slice(0, 5),
   ]
     .filter(Boolean)
     .join(" - ");
-  const groupText = student.next_compensation_group || student.group_name || "";
-  const lastAbsent = formatDate(student.last_absent_date);
 
-  const opening = "Merhaba, Sprint Yüzme Okulu'ndan bilgilendirme için yazıyoruz.";
-  const closing = "Bilginize sunar, iyi günler dileriz.\nSprint Yüzme Okulu";
+  const compensationGroup =
+    student.next_compensation_group ||
+    student.group_name ||
+    "—";
+
+  const lastAbsent = formatDate(student.last_absent_date);
+  const scheduleText = student.schedule_text || "• Program bilgisi bulunamadı";
+  const branchText = student.branch_name || "—";
+  const groupText = student.group_name || "—";
+  const packageText =
+    student.package_name ||
+    (numberValue(student.package_lesson_count) > 0
+      ? `${numberValue(student.package_lesson_count)} Ders`
+      : "—");
+
+  const contactUrl = "https://sprintyuzmekursu.com/iletisim/";
+
+  const header = `*SPRİNT YÜZME OKULU*`;
+  const footer =
+    `\n\n_Bilginize sunar, iyi günler dileriz._\n` +
+    `*Sprint Yüzme Okulu*`;
+
+  const childSubject = `*${name}* isimli öğrencimizin`;
 
   if (type === "smart") {
-    if (remaining <= 0) return buildMessage(student, "lesson_finished");
-    if (outstanding > 0) return buildMessage(student, "payment");
-    if (student.next_compensation_date) return buildMessage(student, "compensation");
-    if (student.last_absent_date) return buildMessage(student, "absence");
-    if (remaining <= 3 || isEndingSoon(endDate)) return buildMessage(student, "renewal");
+    if (totalRemaining <= 0) {
+      return buildMessage(student, "lesson_finished");
+    }
+
+    if (outstanding > 0) {
+      return buildMessage(student, "payment");
+    }
+
+    if (student.next_compensation_date) {
+      return buildMessage(student, "compensation");
+    }
+
+    if (student.last_absent_date) {
+      return buildMessage(student, "absence");
+    }
+
+    if (
+      normalRemaining <= 3 ||
+      isEndingSoon(endDate)
+    ) {
+      return buildMessage(student, "renewal");
+    }
+
     return buildMessage(student, "registration");
   }
 
   if (type === "renewal") {
     return adult
-      ? `${opening}\n\nKayıt yenileme döneminiz yaklaşmaktadır. Mevcut kaydınızın planlanan bitiş tarihi ${endText} olup kalan ders hakkınız ${remaining} derstir. Ders planlamanızın aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin kayıt yenileme dönemi yaklaşmaktadır. Mevcut kaydının planlanan bitiş tarihi ${endText} olup kalan ders hakkı ${remaining} derstir. Ders planlamasının aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.\n\n${closing}`;
+      ? `${header}\n\n_*KAYIT YENİLEME HATIRLATMASI*_\n\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n` +
+          `🏊 *Normal kalan ders:* ${normalRemaining}\n` +
+          `➕ *Telafi hakkı:* ${compensationRemaining}\n` +
+          `✅ *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
+          `Kayıt yenileme döneminiz yaklaşmaktadır. Ders planlamanızın aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.` +
+          footer
+      : `${header}\n\n_*KAYIT YENİLEME HATIRLATMASI*_\n\n` +
+          `${childSubject} kayıt yenileme dönemi yaklaşmaktadır.\n\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n` +
+          `🏊 *Normal kalan ders:* ${normalRemaining}\n` +
+          `➕ *Telafi hakkı:* ${compensationRemaining}\n` +
+          `✅ *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
+          `Ders planlamasının aksamaması için kayıt yenileme işleminizi tamamlamanızı rica ederiz.` +
+          footer;
   }
 
   if (type === "freeze") {
     return adult
-      ? `${opening}\n\nKayıt dondurma işleminiz sistemimize işlenmiştir. Güncel ders ve kayıt planınızı Öğrenci Merkezi üzerinden takip edebilirsiniz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin kayıt dondurma işlemi sistemimize işlenmiştir. Güncel ders ve kayıt planını Öğrenci Merkezi üzerinden takip edebilirsiniz.\n\n${closing}`;
+      ? `${header}\n\n_*KAYIT DONDURMA BİLGİLENDİRMESİ*_\n\n` +
+          `Kayıt dondurma işleminiz sistemimize işlenmiştir.\n\n` +
+          `📅 *Mevcut planlanan bitiş:* ${endText}\n` +
+          `🏊 *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
+          `Güncel kayıt planınız için bizimle iletişime geçebilirsiniz.` +
+          footer
+      : `${header}\n\n_*KAYIT DONDURMA BİLGİLENDİRMESİ*_\n\n` +
+          `${childSubject} kayıt dondurma işlemi sistemimize işlenmiştir.\n\n` +
+          `📅 *Mevcut planlanan bitiş:* ${endText}\n` +
+          `🏊 *Toplam kullanılabilir ders:* ${totalRemaining}\n\n` +
+          `Güncel kayıt planı için bizimle iletişime geçebilirsiniz.` +
+          footer;
   }
 
   if (type === "compensation") {
     if (!student.next_compensation_date) {
-      return `${opening}\n\nBu öğrenci için planlanmış aktif bir telafi dersi bulunmamaktadır.\n\n${closing}`;
+      return `${header}\n\n_*TELAFİ BİLGİLENDİRMESİ*_\n\n` +
+        `Bu öğrenci için planlanmış aktif bir telafi dersi bulunmamaktadır.` +
+        footer;
     }
 
-    const detail = [
-      compensationDate,
-      compensationTime,
-      groupText,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
     return adult
-      ? `${opening}\n\nTelafi dersiniz planlanmıştır. Telafi ders bilginiz: ${detail}. Belirtilen tarih ve saatte dersinize katılım sağlamanızı rica ederiz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin telafi dersi planlanmıştır. Telafi ders bilgisi: ${detail}. Belirtilen tarih ve saatte derse katılım sağlamasını rica ederiz.\n\n${closing}`;
+      ? `${header}\n\n_*TELAFİ DERSİ BİLGİLENDİRMESİ*_\n\n` +
+          `Telafi dersiniz planlanmıştır.\n\n` +
+          `📅 *Tarih:* ${compensationDate}\n` +
+          `⏰ *Saat:* ${compensationTime || "—"}\n` +
+          `👥 *Grup:* ${compensationGroup}\n` +
+          `➕ *Mevcut telafi hakkı:* ${compensationRemaining}\n\n` +
+          `Belirtilen tarih ve saatte dersinize katılım sağlamanızı rica ederiz.` +
+          footer
+      : `${header}\n\n_*TELAFİ DERSİ BİLGİLENDİRMESİ*_\n\n` +
+          `${childSubject} telafi dersi planlanmıştır.\n\n` +
+          `📅 *Tarih:* ${compensationDate}\n` +
+          `⏰ *Saat:* ${compensationTime || "—"}\n` +
+          `👥 *Grup:* ${compensationGroup}\n` +
+          `➕ *Mevcut telafi hakkı:* ${compensationRemaining}\n\n` +
+          `Belirtilen tarih ve saatte derse katılım sağlamasını rica ederiz.` +
+          footer;
   }
 
   if (type === "absence") {
     if (!student.last_absent_date) {
-      return `${opening}\n\nBu öğrenci için kayıtlı bir gelmedi yoklaması bulunmamaktadır.\n\n${closing}`;
+      return `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
+        `Bu öğrenci için kayıtlı bir “Gelmedi” yoklaması bulunmamaktadır.` +
+        footer;
     }
 
     return adult
-      ? `${opening}\n\n${lastAbsent} tarihli yüzme dersinize katılım sağlamadığınız görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin ${lastAbsent} tarihli yüzme dersine katılım sağlamadığı görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.\n\n${closing}`;
+      ? `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
+          `📅 *Ders tarihi:* ${lastAbsent}\n\n` +
+          `Belirtilen tarihli yüzme dersinize katılım sağlamadığınız görülmüştür. Bu mesaj bilgilendirme amacıyla gönderilmiştir.` +
+          footer
+      : `${header}\n\n_*DEVAMSIZLIK BİLGİLENDİRMESİ*_\n\n` +
+          `${childSubject} aşağıdaki derse katılım sağlamadığı görülmüştür.\n\n` +
+          `📅 *Ders tarihi:* ${lastAbsent}\n\n` +
+          `Bu mesaj bilgilendirme amacıyla gönderilmiştir.` +
+          footer;
   }
 
   if (type === "payment") {
     if (outstanding <= 0) {
-      return `${opening}\n\nAktif kayıt dönemine ait bekleyen ödeme görünmemektedir.\n\n${closing}`;
+      return `${header}\n\n_*ÖDEME BİLGİLENDİRMESİ*_\n\n` +
+        `Aktif kayıt dönemine ait bekleyen ödeme görünmemektedir.` +
+        footer;
     }
 
     const amount = new Intl.NumberFormat("tr-TR", {
@@ -307,37 +412,102 @@ function buildMessage(
     }).format(outstanding);
 
     return adult
-      ? `${opening}\n\nAktif kayıt paketinize ait ${amount} tutarında bekleyen ödemeniz bulunmaktadır. Ödeme planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin aktif kayıt paketine ait ${amount} tutarında bekleyen ödeme bulunmaktadır. Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.\n\n${closing}`;
+      ? `${header}\n\n_*ÖDEME HATIRLATMASI*_\n\n` +
+          `💳 *Aktif paket:* ${packageText}\n` +
+          `💰 *Bekleyen ödeme:* ${amount}\n\n` +
+          `Aktif kayıt paketinize ait yukarıdaki tutarda bekleyen ödemeniz bulunmaktadır. Ödeme planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
+          footer
+      : `${header}\n\n_*ÖDEME HATIRLATMASI*_\n\n` +
+          `${childSubject} aktif kayıt paketine ait ödeme bilgisi aşağıdadır.\n\n` +
+          `💳 *Aktif paket:* ${packageText}\n` +
+          `💰 *Bekleyen ödeme:* ${amount}\n\n` +
+          `Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
+          footer;
   }
 
   if (type === "lesson_ending") {
     return adult
-      ? `${opening}\n\nMevcut paketinizde ${remaining} ders hakkınız kalmıştır. Kayıt yenileme döneminiz yaklaşmaktadır. Ders planlamanızın kesintiye uğramaması için yenileme işleminizi planlamanızı rica ederiz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin mevcut paketinde ${remaining} ders hakkı kalmıştır. Kayıt yenileme dönemi yaklaşmaktadır. Ders planlamasının kesintiye uğramaması için yenileme işleminizi planlamanızı rica ederiz.\n\n${closing}`;
+      ? `${header}\n\n_*DERS HAKKI BİTİYOR*_\n\n` +
+          `🏊 *Normal kalan:* ${normalRemaining}\n` +
+          `➕ *Telafi kalan:* ${compensationRemaining}\n` +
+          `✅ *Toplam kalan:* ${totalRemaining}\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n\n` +
+          `Ders planlamanızın kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
+          footer
+      : `${header}\n\n_*DERS HAKKI BİTİYOR*_\n\n` +
+          `${childSubject} ders hakları aşağıdaki gibidir.\n\n` +
+          `🏊 *Normal kalan:* ${normalRemaining}\n` +
+          `➕ *Telafi kalan:* ${compensationRemaining}\n` +
+          `✅ *Toplam kalan:* ${totalRemaining}\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n\n` +
+          `Ders planlamasının kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
+          footer;
   }
 
   if (type === "lesson_finished") {
     return adult
-      ? `${opening}\n\nMevcut paketinizdeki ders hakkınız tamamlanmıştır. Ders takibiniz sona ermiştir. Derslerinize devam edebilmeniz için kayıt yenileme işleminizin yapılması gerekmektedir.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin mevcut paketindeki ders hakkı tamamlanmıştır. Ders takibi sona ermiştir. Derslerine devam edebilmesi için kayıt yenileme işleminin yapılması gerekmektedir.\n\n${closing}`;
+      ? `${header}\n\n_*DERS HAKKI TAMAMLANDI*_\n\n` +
+          `Mevcut kullanılabilir ders hakkınız tamamlanmıştır. Ders takibiniz sona ermiştir.\n\n` +
+          `Kursunuza devam edebilmeniz için kayıt yenileme işleminizin yapılması gerekmektedir.` +
+          footer
+      : `${header}\n\n_*DERS HAKKI TAMAMLANDI*_\n\n` +
+          `${childSubject} mevcut kullanılabilir ders hakkı tamamlanmıştır. Ders takibi sona ermiştir.\n\n` +
+          `Derslerine devam edebilmesi için kayıt yenileme işleminin yapılması gerekmektedir.` +
+          footer;
   }
 
   if (type === "program") {
     return adult
-      ? `${opening}\n\nGüncel yüzme grubunuz: ${student.group_name || "—"}. Şubeniz: ${student.branch_name || "—"}. Ders programınızla ilgili değişiklik olması halinde ayrıca bilgilendirileceksiniz.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin güncel yüzme grubu: ${student.group_name || "—"}. Şubesi: ${student.branch_name || "—"}. Ders programında değişiklik olması halinde ayrıca bilgilendirileceksiniz.\n\n${closing}`;
+      ? `${header}\n\n_*DERS PROGRAMI BİLGİLENDİRMESİ*_\n\n` +
+          `🏢 *Şube:* ${branchText}\n` +
+          `👥 *Grup:* ${groupText}\n` +
+          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n\n` +
+          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
+          `Ders programınızda değişiklik olması halinde ayrıca bilgilendirileceksiniz.` +
+          footer
+      : `${header}\n\n_*DERS PROGRAMI BİLGİLENDİRMESİ*_\n\n` +
+          `${childSubject} güncel ders bilgileri aşağıdadır.\n\n` +
+          `🏢 *Şube:* ${branchText}\n` +
+          `👥 *Grup:* ${groupText}\n` +
+          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n\n` +
+          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
+          `Ders programında değişiklik olması halinde ayrıca bilgilendirileceksiniz.` +
+          footer;
   }
 
   if (type === "registration") {
     return adult
-      ? `${opening}\n\nKaydınız oluşturulmuştur. Paketiniz: ${student.package_name || "—"}. Başlangıç tarihiniz ${startText}, planlanan bitiş tarihiniz ${endText}. Grubunuz: ${student.group_name || "—"}.\n\n${closing}`
-      : `${opening}\n\n${name} isimli öğrencimizin kaydı oluşturulmuştur. Paketi: ${student.package_name || "—"}. Başlangıç tarihi ${startText}, planlanan bitiş tarihi ${endText}. Grubu: ${student.group_name || "—"}.\n\n${closing}`;
+      ? `${header}\n\n_*KAYDINIZ YAPILMIŞTIR*_\n\n` +
+          `Yüzme kursu kaydınız başarıyla oluşturulmuştur.\n\n` +
+          `💳 *Paket:* ${packageText}\n` +
+          `🏢 *Şube:* ${branchText}\n` +
+          `👥 *Grup:* ${groupText}\n` +
+          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n` +
+          `📅 *Başlangıç:* ${startText}\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n\n` +
+          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
+          `_Yukarıdaki bağlantıya dokunarak şube adres ve konum bilgilerine ulaşabilirsiniz._` +
+          footer
+      : `${header}\n\n_*KAYDINIZ YAPILMIŞTIR*_\n\n` +
+          `*${name}* isimli öğrencimizin yüzme kursu kaydı başarıyla oluşturulmuştur.\n\n` +
+          `💳 *Paket:* ${packageText}\n` +
+          `🏢 *Şube:* ${branchText}\n` +
+          `👥 *Grup:* ${groupText}\n` +
+          `⏰ *Ders Gün ve Saatleri:*\n${scheduleText}\n` +
+          `📅 *Başlangıç:* ${startText}\n` +
+          `📅 *Planlanan bitiş:* ${endText}\n\n` +
+          `📍 *Konum ve adres bilgileri:*\n${contactUrl}\n\n` +
+          `_Yukarıdaki bağlantıya dokunarak şube adres ve konum bilgilerine ulaşabilirsiniz._` +
+          footer;
   }
 
   return adult
-    ? `${opening}\n\nKurs kaydınızla ilgili bilgilendirme için iletişime geçiyoruz.\n\n${closing}`
-    : `${opening}\n\n${name} isimli öğrencimizin kurs kaydıyla ilgili bilgilendirme için iletişime geçiyoruz.\n\n${closing}`;
+    ? `${header}\n\n_*GENEL BİLGİLENDİRME*_\n\n` +
+        `Kurs kaydınızla ilgili bilgilendirme için iletişime geçiyoruz.` +
+        footer
+    : `${header}\n\n_*GENEL BİLGİLENDİRME*_\n\n` +
+        `*${name}* isimli öğrencimizin kurs kaydıyla ilgili bilgilendirme için iletişime geçiyoruz.` +
+        footer;
 }
 
 export default function StudentsClient({ students }: Props) {
@@ -1160,10 +1330,17 @@ function closeLessonAction() {
 
           const totalRights = normalLessons + compensation;
 
-          const remaining =
-            student.remaining_lessons != null
-              ? numberValue(student.remaining_lessons)
-              : Math.max(totalRights - used, 0);
+          const normalRemaining =
+            student.normal_remaining_lessons != null
+              ? numberValue(student.normal_remaining_lessons)
+              : Math.max(normalLessons - used, 0);
+
+          const totalRemaining =
+            student.total_remaining_lessons != null
+              ? numberValue(student.total_remaining_lessons)
+              : normalRemaining + compensation;
+
+          const remaining = totalRemaining;
 
           const effectiveEndDate =
             student.compensation_end_date ||
@@ -1273,12 +1450,22 @@ function closeLessonAction() {
 
               <div className="lessonStrip">
                 <div>
-                  <span>Normal</span>
+                  <span>Normal Paket</span>
                   <strong>{normalLessons}</strong>
                 </div>
 
+                <div>
+                  <span>Kullanılan</span>
+                  <strong>{used}</strong>
+                </div>
+
+                <div>
+                  <span>Normal Kalan</span>
+                  <strong>{normalRemaining}</strong>
+                </div>
+
                 <div className="compensation">
-                  <span>Telafi</span>
+                  <span>Telafi Kalan</span>
                   <strong>+{compensation}</strong>
                 </div>
 
@@ -1287,14 +1474,9 @@ function closeLessonAction() {
                   <strong>{totalRights}</strong>
                 </div>
 
-                <div>
-                  <span>Kullanılan</span>
-                  <strong>{used}</strong>
-                </div>
-
                 <div className="remaining">
-                  <span>Kalan</span>
-                  <strong>{remaining}</strong>
+                  <span>Toplam Kalan</span>
+                  <strong>{totalRemaining}</strong>
                 </div>
               </div>
 
@@ -1896,8 +2078,32 @@ function closeLessonAction() {
 
               <div className="messageDataGrid">
                 <div>
-                  <span>Kalan Ders</span>
-                  <strong>{numberValue(messageStudent.remaining_lessons)}</strong>
+                  <span>Normal Kalan</span>
+                  <strong>
+                    {numberValue(
+                      messageStudent.normal_remaining_lessons ??
+                        Math.max(
+                          numberValue(messageStudent.package_lesson_count) -
+                            numberValue(messageStudent.used_lessons),
+                          0
+                        )
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>Telafi Kalan</span>
+                  <strong>
+                    {numberValue(messageStudent.compensation_lessons)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Toplam Kalan</span>
+                  <strong>
+                    {numberValue(
+                      messageStudent.total_remaining_lessons ??
+                        messageStudent.remaining_lessons
+                    )}
+                  </strong>
                 </div>
                 <div>
                   <span>Bitiş</span>
@@ -2552,7 +2758,7 @@ function closeLessonAction() {
 
         .summaryGrid {
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           gap: 12px;
           margin-bottom: 18px;
         }
@@ -2835,7 +3041,7 @@ function closeLessonAction() {
           }
 
           .lessonStrip {
-            grid-template-columns: repeat(5, minmax(58px, 1fr));
+            grid-template-columns: repeat(6, minmax(72px, 1fr));
             overflow-x: auto;
           }
 
