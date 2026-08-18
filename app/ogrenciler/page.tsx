@@ -25,16 +25,54 @@ type PackageRow = {
   lesson_count: number | null;
 };
 
+function toNumber(value: unknown) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function latestByStudent<T extends { student_id?: string | null }>(
+  rows: T[]
+) {
+  const map = new Map<string, T>();
+
+  for (const row of rows) {
+    if (!row.student_id || map.has(row.student_id)) continue;
+    map.set(row.student_id, row);
+  }
+
+  return map;
+}
+
 export default async function StudentsPage() {
-  await requireProfile();
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+    "registration_staff",
+    "accounting",
+    "coach",
+  ]);
 
   const supabase = await createClient();
+  const organizationId = profile.organization_id;
+
+  if (!organizationId) {
+    return (
+      <main className="operationPage">
+        <section className="operationCard">
+          <div className="tableEmpty">
+            Kullanıcının organizasyon bilgisi bulunamadı.
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   const [
-    { data: students, error: studentsError },
-    { data: branches },
-    { data: groups },
-    { data: packages },
+    studentsResult,
+    branchesResult,
+    groupsResult,
+    packagesResult,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -43,108 +81,338 @@ export default async function StudentsPage() {
         id,
         first_name,
         last_name,
+        student_number,
         status,
         swimming_level,
         branch_id,
         phone,
+        guardian_phone,
+        guardian_name,
+        email,
+        guardian_email,
         preferred_group_id,
         preferred_package_id,
-        created_at
+        created_at,
+        is_deleted
         `
       )
+      .eq("organization_id", organizationId)
+      .eq("is_deleted", false)
       .order("created_at", { ascending: false })
-      .limit(1000),
+      .limit(2000),
 
     supabase
       .from("branches")
       .select("id,name")
+      .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("name"),
 
     supabase
       .from("training_groups")
       .select("id,branch_id,name,course_type")
+      .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("name"),
 
     supabase
       .from("course_packages")
       .select("id,name,lesson_count")
+      .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("lesson_count"),
   ]);
 
-  if (studentsError) {
-    console.error("Öğrenci listesi yüklenemedi:", studentsError);
+  if (studentsResult.error) {
+    console.error(
+      "Öğrenci listesi yüklenemedi:",
+      studentsResult.error
+    );
   }
 
+  const students = studentsResult.data || [];
+  const studentIds = students.map((student) => student.id);
+
+  const [
+    enrollmentsResult,
+    membershipsResult,
+    attendancePlansResult,
+    lessonBalancesResult,
+    paymentSummariesResult,
+    compensationPlansResult,
+    lastAttendanceResult,
+  ] = studentIds.length
+    ? await Promise.all([
+        supabase
+          .from("student_enrollments")
+          .select("*")
+          .in("student_id", studentIds)
+          .eq("status", "active")
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("student_group_memberships")
+          .select("*")
+          .in("student_id", studentIds)
+          .eq("is_active", true)
+          .order("started_at", { ascending: false }),
+
+        supabase
+          .from("student_attendance_plans")
+          .select("*")
+          .in("student_id", studentIds)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("student_lesson_balance")
+          .select("*")
+          .in("student_id", studentIds),
+
+        supabase
+          .from("student_payment_summary")
+          .select("*")
+          .in("student_id", studentIds),
+
+        supabase
+          .from("student_compensation_lessons")
+          .select(
+            "id,student_id,status,lesson_date,target_group_id,target_schedule_id"
+          )
+          .in("student_id", studentIds)
+          .eq("status", "planned"),
+
+        supabase
+          .from("attendance_records")
+          .select("student_id,lesson_date,status,updated_at")
+          .in("student_id", studentIds)
+          .order("lesson_date", { ascending: false })
+          .order("updated_at", { ascending: false }),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+
+  const secondaryErrors = [
+    enrollmentsResult.error,
+    membershipsResult.error,
+    attendancePlansResult.error,
+    lessonBalancesResult.error,
+    paymentSummariesResult.error,
+    compensationPlansResult.error,
+    lastAttendanceResult.error,
+  ].filter(Boolean);
+
+  if (secondaryErrors.length) {
+    console.error(
+      "Öğrenci Merkezi ek verileri kısmen yüklenemedi:",
+      secondaryErrors
+    );
+  }
+
+  const branches = (branchesResult.data || []) as BranchRow[];
+  const groups = (groupsResult.data || []) as GroupRow[];
+  const packages = (packagesResult.data || []) as PackageRow[];
+
   const branchMap = new Map(
-    ((branches || []) as BranchRow[]).map((branch) => [
-      branch.id,
-      branch.name,
-    ])
+    branches.map((branch) => [branch.id, branch.name])
   );
 
   const groupMap = new Map(
-    ((groups || []) as GroupRow[]).map((group) => [
-      group.id,
-      group,
-    ])
+    groups.map((group) => [group.id, group])
   );
 
   const packageMap = new Map(
-    ((packages || []) as PackageRow[]).map((coursePackage) => [
+    packages.map((coursePackage) => [
       coursePackage.id,
       coursePackage,
     ])
   );
 
-  const preparedStudents: StudentListItem[] = (students || []).map(
+  const enrollmentMap = latestByStudent(
+    (enrollmentsResult.data || []) as any[]
+  );
+
+  const membershipMap = latestByStudent(
+    (membershipsResult.data || []) as any[]
+  );
+
+  const attendancePlanMap = latestByStudent(
+    (attendancePlansResult.data || []) as any[]
+  );
+
+  const lessonBalanceMap = latestByStudent(
+    (lessonBalancesResult.data || []) as any[]
+  );
+
+  const paymentSummaryMap = latestByStudent(
+    (paymentSummariesResult.data || []) as any[]
+  );
+
+  const plannedCompensationCount = new Map<string, number>();
+
+  for (const row of (compensationPlansResult.data || []) as any[]) {
+    if (!row.student_id) continue;
+
+    plannedCompensationCount.set(
+      row.student_id,
+      (plannedCompensationCount.get(row.student_id) || 0) + 1
+    );
+  }
+
+  const lastAttendanceMap = new Map<string, any>();
+
+  for (const row of (lastAttendanceResult.data || []) as any[]) {
+    if (!row.student_id || lastAttendanceMap.has(row.student_id)) {
+      continue;
+    }
+
+    lastAttendanceMap.set(row.student_id, row);
+  }
+
+  const preparedStudents: StudentListItem[] = students.map(
     (student) => {
-      const selectedGroup = student.preferred_group_id
-        ? groupMap.get(student.preferred_group_id)
+      const enrollment = enrollmentMap.get(student.id) as any;
+      const membership = membershipMap.get(student.id) as any;
+      const attendancePlan = attendancePlanMap.get(student.id) as any;
+      const lessonBalance = lessonBalanceMap.get(student.id) as any;
+      const paymentSummary = paymentSummaryMap.get(student.id) as any;
+      const lastAttendance = lastAttendanceMap.get(student.id) as any;
+
+      const groupId =
+        membership?.group_id ??
+        enrollment?.group_id ??
+        attendancePlan?.group_id ??
+        student.preferred_group_id ??
+        null;
+
+      const selectedGroup = groupId
+        ? groupMap.get(groupId)
         : undefined;
 
-      const selectedPackage = student.preferred_package_id
-        ? packageMap.get(student.preferred_package_id)
+      const branchId =
+        selectedGroup?.branch_id ??
+        student.branch_id ??
+        enrollment?.branch_id ??
+        null;
+
+      const packageId =
+        enrollment?.package_id ??
+        student.preferred_package_id ??
+        null;
+
+      const selectedPackage = packageId
+        ? packageMap.get(packageId)
         : undefined;
+
+      const normalTotal = toNumber(
+        enrollment?.total_lessons ??
+          selectedPackage?.lesson_count ??
+          0
+      );
+
+      const usedLessons = toNumber(
+        enrollment?.used_lessons ?? 0
+      );
+
+      const normalRemaining = Math.max(
+        normalTotal - usedLessons,
+        0
+      );
+
+      const compensationBalance = Math.max(
+        toNumber(
+          lessonBalance?.compensation_lesson_balance ??
+            plannedCompensationCount.get(student.id) ??
+            0
+        ),
+        0
+      );
+
+      const startDate =
+        attendancePlan?.start_date ??
+        enrollment?.start_date ??
+        null;
+
+      const normalEndDate =
+        attendancePlan?.normal_planned_end_date ??
+        enrollment?.planned_end_date ??
+        null;
+
+      const compensationEndDate =
+        attendancePlan?.compensation_planned_end_date ??
+        normalEndDate;
+
+      const paymentStatus =
+        paymentSummary?.payment_status ??
+        paymentSummary?.status ??
+        null;
+
+      const outstandingBalance = toNumber(
+        paymentSummary?.outstanding_balance ??
+          paymentSummary?.remaining_amount ??
+          paymentSummary?.balance_due ??
+          0
+      );
 
       return {
         id: student.id,
+        student_number: student.student_number || null,
+
         first_name: student.first_name || "",
         last_name: student.last_name || "",
 
         status: student.status || null,
         swimming_level: student.swimming_level || null,
 
-        branch_id: student.branch_id || null,
-        branch_name: student.branch_id
-          ? branchMap.get(student.branch_id) || null
+        branch_id: branchId,
+        branch_name: branchId
+          ? branchMap.get(branchId) || null
           : null,
 
-        group_id: student.preferred_group_id || null,
+        group_id: groupId,
         group_name: selectedGroup?.name || null,
-
         course_type: selectedGroup?.course_type || null,
 
         package_name: selectedPackage?.name || null,
-        package_lesson_count:
-          selectedPackage?.lesson_count ?? null,
+        package_lesson_count: normalTotal,
 
-        /*
-         * Ders hakkı ve tarih altyapısını
-         * sonraki aşamada gerçek tablolara bağlayacağız.
-         */
-        compensation_lessons: 0,
-        used_lessons: 0,
-        remaining_lessons:
-          selectedPackage?.lesson_count ?? 0,
+        compensation_lessons: compensationBalance,
+        planned_compensation_lessons:
+          plannedCompensationCount.get(student.id) || 0,
 
-        start_date: null,
-        end_date: null,
+        used_lessons: usedLessons,
+        remaining_lessons: normalRemaining,
+
+        start_date: startDate,
+        normal_end_date: normalEndDate,
+        compensation_end_date: compensationEndDate,
+        end_date: compensationEndDate,
 
         phone: student.phone || null,
-        guardian_phone: null,
+        guardian_phone: student.guardian_phone || null,
+        guardian_name: student.guardian_name || null,
+        email: student.email || null,
+        guardian_email: student.guardian_email || null,
+
+        payment_status: paymentStatus,
+        payment_total_received: toNumber(
+          paymentSummary?.total_received ?? 0
+        ),
+        payment_outstanding: outstandingBalance,
+        last_payment_at:
+          paymentSummary?.last_payment_at ?? null,
+
+        last_attendance_date:
+          lastAttendance?.lesson_date ?? null,
+        last_attendance_status:
+          lastAttendance?.status ?? null,
 
         created_at: student.created_at || null,
       };
@@ -160,13 +428,13 @@ export default async function StudentsPage() {
           <h1>Öğrenci Merkezi</h1>
 
           <span>
-            Öğrencileri, şubeleri, grupları, seviyeleri ve ders
-            haklarını tek ekrandan yönetin.
+            Öğrenci, iletişim, ders hakkı, telafi, kayıt yenileme
+            ve ödeme takibini tek merkezden yönetin.
           </span>
         </div>
       </header>
 
-      {studentsError ? (
+      {studentsResult.error ? (
         <section className="operationCard">
           <div className="tableEmpty">
             Öğrenci listesi şu anda yüklenemedi.
