@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { createStudentPayment } from "./actions";
+import {
+  createStudentPayment,
+  updatePaymentDueDate,
+} from "./actions";
 
 export type PaymentRecord = {
   id: string;
@@ -452,6 +455,15 @@ export default function PaymentsClient({
   const [paymentMessage, setPaymentMessage] =
     useState("");
 
+  const [dueDateStudent, setDueDateStudent] =
+    useState<PaymentStudent | null>(null);
+  const [dueDateValue, setDueDateValue] =
+    useState("");
+  const [dueDateMessage, setDueDateMessage] =
+    useState("");
+  const [isDueDatePending, startDueDateTransition] =
+    useTransition();
+
   const todayStart = startOfToday();
   const todayEnd = endOfToday();
 
@@ -806,6 +818,42 @@ export default function PaymentsClient({
     setPaymentMethod("cash");
     setPaymentDescription("");
     setPaymentMessage("");
+  }
+
+  function openDueDateModal(
+    student: PaymentStudent
+  ) {
+    setDueDateStudent(student);
+    setDueDateValue(student.due_date || "");
+    setDueDateMessage("");
+  }
+
+  function savePaymentDueDate() {
+    if (!dueDateStudent?.enrollment_id) {
+      setDueDateMessage(
+        "Bu öğrenci için aktif kayıt/paket bulunamadı."
+      );
+      return;
+    }
+
+    startDueDateTransition(async () => {
+      const result = await updatePaymentDueDate(
+        dueDateStudent.enrollment_id!,
+        dueDateValue || null
+      );
+
+      setDueDateMessage(result.message);
+
+      if (!result.ok) return;
+
+      router.refresh();
+
+      window.setTimeout(() => {
+        setDueDateStudent(null);
+        setDueDateValue("");
+        setDueDateMessage("");
+      }, 800);
+    });
   }
 
   function submitPayment() {
@@ -1320,6 +1368,17 @@ export default function PaymentsClient({
                   <button
                     type="button"
                     onClick={() =>
+                      openDueDateModal(
+                        student
+                      )
+                    }
+                  >
+                    📅 Vade Belirle
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
                       openMessage(
                         student,
                         "smart"
@@ -1572,6 +1631,113 @@ export default function PaymentsClient({
                 {isPaymentPending
                   ? "Kaydediliyor..."
                   : "✓ Ödemeyi Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {dueDateStudent ? (
+        <div className="paymentModalBackdrop">
+          <div className="paymentModal">
+            <div className="paymentModalHeader">
+              <div>
+                <p>ÖDEME VADESİ</p>
+                <h2>{studentName(dueDateStudent)}</h2>
+              </div>
+
+              <button
+                type="button"
+                disabled={isDueDatePending}
+                onClick={() =>
+                  setDueDateStudent(null)
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="paymentModalNotice">
+              <strong>
+                Aktif Paket: {dueDateStudent.package_name || "—"}
+              </strong>
+              <span>
+                Mevcut vade: {formatDate(dueDateStudent.due_date)}
+              </span>
+              <span>
+                Kalan ödeme: {money(dueDateStudent.remaining_payment)}
+              </span>
+            </div>
+
+            {!dueDateStudent.enrollment_id ? (
+              <div className="paymentWarningBox">
+                Bu öğrenci için aktif kayıt/paket bulunamadığı için vade tarihi belirlenemez.
+              </div>
+            ) : null}
+
+            <label className="paymentField">
+              <span>Ödeme Vade Tarihi</span>
+              <input
+                type="date"
+                value={dueDateValue}
+                disabled={isDueDatePending}
+                onChange={(event) =>
+                  setDueDateValue(event.target.value)
+                }
+                className="paymentInput"
+              />
+            </label>
+
+            <div className="dueDateHelpBox">
+              Bu tarih kaydedildiğinde öğrenci; vade yaklaşınca <strong>Bu Hafta Ödeme Yapacak</strong>, tarih geçerse <strong>Gecikmiş Ödeme</strong> listelerine otomatik girer. Kayıt yenilemesi de yaklaşıyorsa sistem <strong>Ödeme + Yenileme</strong> mesajını önerir.
+            </div>
+
+            {dueDateMessage ? (
+              <div
+                className={
+                  dueDateMessage.includes("başarıyla") ||
+                  dueDateMessage.includes("kaldırıldı")
+                    ? "paymentResult success"
+                    : "paymentResult error"
+                }
+              >
+                {dueDateMessage}
+              </div>
+            ) : null}
+
+            <div className="paymentModalActions">
+              <button
+                type="button"
+                disabled={isDueDatePending}
+                onClick={() => {
+                  setDueDateValue("");
+                }}
+              >
+                Vade Tarihini Kaldır
+              </button>
+
+              <button
+                type="button"
+                disabled={isDueDatePending}
+                onClick={() =>
+                  setDueDateStudent(null)
+                }
+              >
+                Vazgeç
+              </button>
+
+              <button
+                type="button"
+                className="savePaymentButton"
+                disabled={
+                  isDueDatePending ||
+                  !dueDateStudent.enrollment_id
+                }
+                onClick={savePaymentDueDate}
+              >
+                {isDueDatePending
+                  ? "Kaydediliyor..."
+                  : "✓ Vade Tarihini Kaydet"}
               </button>
             </div>
           </div>
@@ -2240,6 +2406,16 @@ export default function PaymentsClient({
         .paymentResult.success {
           background: #ecfdf3;
           color: #067647;
+        }
+
+        .dueDateHelpBox {
+          border-radius: 12px;
+          padding: 12px;
+          margin-bottom: 14px;
+          background: #eff6ff;
+          color: #1e40af;
+          font-size: 12px;
+          line-height: 1.55;
         }
 
         .paymentResult.error {
