@@ -37,13 +37,6 @@ type MonthlyAttendanceInput = {
   month: string;
 };
 
-type CompensationLessonRow = {
-  id: string;
-  student_id: string;
-  target_schedule_id: string | null;
-  status: "planned" | "completed" | "cancelled";
-};
-
 const ALLOWED_ROLES = [
   "owner",
   "admin",
@@ -60,200 +53,214 @@ const ALLOWED_STATUSES: AttendanceStatus[] = [
   "compensation",
 ];
 
+/*
+ * NORMAL PAKETTEN DÜŞEN STATÜLER
+ *
+ * Sprint Yüzme Okulu kuralı:
+ * - Geldi      -> ders hakkından düşer
+ * - Gelmedi    -> ders hakkından düşer
+ * - İzinli     -> yalnız bilgilendirme statüsüdür,
+ *                 ders hakkından düşer
+ * - Telafi     -> normal paketten düşmez
+ */
+const PACKAGE_CONSUMING_STATUSES: AttendanceStatus[] = [
+  "present",
+  "absent",
+  "excused",
+];
+
 async function getAuthorizedProfile() {
   return requireProfile([...ALLOWED_ROLES]);
 }
 
-/**
- * Yoklama kaydedildikten sonra aynı tarih / grup / seanstaki
- * telafi planlarını senkronize eder.
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values.filter(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0
+      )
+    )
+  );
+}
+
+/*
+ * ---------------------------------------------------------
+ * AKTİF KAYITLARIN used_lessons DEĞERİNİ GERÇEK YOKLAMADAN
+ * YENİDEN HESAPLA
+ * ---------------------------------------------------------
  *
- * compensation -> completed
- * diğer statüler -> tekrar planned
+ * Neden +1 / -1 yapmıyoruz?
  *
- * Böylece geçmiş yoklama düzenlemelerinde telafi hakkı da
- * doğru şekilde geri açılabilir.
+ * Aynı yoklama tekrar kaydedilebilir veya geçmiş bir yoklama
+ * düzeltilebilir. Körlemesine +1 yapmak mükerrer ders düşümüne
+ * neden olur.
+ *
+ * Bunun yerine ilgili enrollment_id için attendance_records
+ * tablosundaki gerçek normal ders kayıtlarını yeniden sayıyoruz.
+ *
+ * Telafi kayıtları (status = compensation) bu sayıya girmez.
  */
-async function syncCompensationLessons({
-  supabase,
-  organizationId,
-  profileId,
-  groupId,
-  scheduleId,
-  lessonDate,
-  records,
-}: {
+async function syncEnrollmentUsedLessons(params: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   organizationId: string;
-  profileId: string;
-  groupId: string;
-  scheduleId: string;
-  lessonDate: string;
-  records: AttendanceRecordInput[];
+  enrollmentIds: string[];
 }) {
-  const studentIds = Array.from(
-    new Set(records.map((record) => record.studentId))
-  );
+  const { supabase, organizationId, enrollmentIds } = params;
 
-  if (!studentIds.length) {
+  if (!enrollmentIds.length) {
     return {
-      ok: true,
-      completedCount: 0,
-      reopenedCount: 0,
+      ok: true as const,
+      updatedEnrollmentIds: [] as string[],
+      studentIds: [] as string[],
     };
   }
 
-  /*
-   * Hedef seansı tam eşleşen kayıtları ve eski/veri girişi sırasında
-   * target_schedule_id boş bırakılmış kayıtları birlikte dikkate alıyoruz.
-   */
-  const { data, error } = await supabase
-    .from("student_compensation_lessons")
+  const {
+    data: enrollments,
+    error: enrollmentError,
+  } = await supabase
+    .from("student_enrollments")
     .select(
-      "id, student_id, target_schedule_id, status"
+      "id, student_id, total_lessons, used_lessons, status"
     )
     .eq("organization_id", organizationId)
-    .eq("target_group_id", groupId)
-    .eq("lesson_date", lessonDate)
-    .in("student_id", studentIds)
-    .neq("status", "cancelled");
+    .in("id", enrollmentIds);
 
-  if (error) {
+  if (enrollmentError) {
     return {
-      ok: false,
-      completedCount: 0,
-      reopenedCount: 0,
-      message: `Telafi kayıtları kontrol edilemedi: ${error.message}`,
+      ok: false as const,
+      message: `Aktif kayıtlar doğrulanamadı: ${enrollmentError.message}`,
+      updatedEnrollmentIds: [] as string[],
+      studentIds: [] as string[],
     };
   }
 
-  const compensationLessons =
-    (data || []) as CompensationLessonRow[];
+  const validEnrollments = enrollments || [];
 
-  const matchingLessons = compensationLessons.filter(
-    (lesson) =>
-      !lesson.target_schedule_id ||
-      lesson.target_schedule_id === scheduleId
+  if (!validEnrollments.length) {
+    return {
+      ok: true as const,
+      updatedEnrollmentIds: [] as string[],
+      studentIds: [] as string[],
+    };
+  }
+
+  const validEnrollmentIds = validEnrollments.map(
+    (enrollment) => enrollment.id
   );
 
-  if (!matchingLessons.length) {
+  const {
+    data: attendanceRows,
+    error: attendanceError,
+  } = await supabase
+    .from("attendance_records")
+    .select("id, enrollment_id, status")
+    .eq("organization_id", organizationId)
+    .in("enrollment_id", validEnrollmentIds)
+    .in("status", PACKAGE_CONSUMING_STATUSES);
+
+  if (attendanceError) {
     return {
-      ok: true,
-      completedCount: 0,
-      reopenedCount: 0,
+      ok: false as const,
+      message: `Ders hakkı hesaplanamadı: ${attendanceError.message}`,
+      updatedEnrollmentIds: [] as string[],
+      studentIds: [] as string[],
     };
   }
 
-  const statusByStudent = new Map<
-    string,
-    AttendanceStatus
-  >();
+  const countMap = new Map<string, number>();
 
-  records.forEach((record) => {
-    statusByStudent.set(
-      record.studentId,
-      record.status
+  for (const row of attendanceRows || []) {
+    if (!row.enrollment_id) continue;
+
+    countMap.set(
+      row.enrollment_id,
+      (countMap.get(row.enrollment_id) || 0) + 1
     );
-  });
-
-  const toComplete = matchingLessons.filter(
-    (lesson) =>
-      statusByStudent.get(lesson.student_id) ===
-        "compensation" &&
-      lesson.status !== "completed"
-  );
-
-  const toReopen = matchingLessons.filter(
-    (lesson) =>
-      statusByStudent.has(lesson.student_id) &&
-      statusByStudent.get(lesson.student_id) !==
-        "compensation" &&
-      lesson.status === "completed"
-  );
-
-  const now = new Date().toISOString();
-
-  if (toComplete.length) {
-    const { error: completeError } = await supabase
-      .from("student_compensation_lessons")
-      .update({
-        status: "completed",
-        completed_by: profileId,
-        completed_at: now,
-        updated_at: now,
-      })
-      .in(
-        "id",
-        toComplete.map((lesson) => lesson.id)
-      )
-      .eq("organization_id", organizationId);
-
-    if (completeError) {
-      return {
-        ok: false,
-        completedCount: 0,
-        reopenedCount: 0,
-        message: `Telafi tamamlanamadı: ${completeError.message}`,
-      };
-    }
   }
 
-  if (toReopen.length) {
-    const { error: reopenError } = await supabase
-      .from("student_compensation_lessons")
-      .update({
-        status: "planned",
-        completed_by: null,
-        completed_at: null,
-        updated_at: now,
-      })
-      .in(
-        "id",
-        toReopen.map((lesson) => lesson.id)
-      )
-      .eq("organization_id", organizationId);
+  const updatedEnrollmentIds: string[] = [];
+  const studentIds: string[] = [];
 
-    if (reopenError) {
-      return {
-        ok: false,
-        completedCount: toComplete.length,
-        reopenedCount: 0,
-        message: `Telafi kaydı tekrar açılamadı: ${reopenError.message}`,
-      };
+  for (const enrollment of validEnrollments) {
+    const rawCount = countMap.get(enrollment.id) || 0;
+
+    const totalLessons = Math.max(
+      Number(enrollment.total_lessons || 0),
+      0
+    );
+
+    /*
+     * Paket hakkı tanımlıysa kullanılan ders toplam paketi aşmasın.
+     * total_lessons = 0 gibi eski/eksik kayıt varsa gerçek sayıyı
+     * kaybetmemek için rawCount kullanıyoruz.
+     */
+    const nextUsedLessons =
+      totalLessons > 0
+        ? Math.min(rawCount, totalLessons)
+        : rawCount;
+
+    const currentUsedLessons = Math.max(
+      Number(enrollment.used_lessons || 0),
+      0
+    );
+
+    if (currentUsedLessons !== nextUsedLessons) {
+      const { error: updateError } = await supabase
+        .from("student_enrollments")
+        .update({
+          used_lessons: nextUsedLessons,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", enrollment.id)
+        .eq("organization_id", organizationId);
+
+      if (updateError) {
+        return {
+          ok: false as const,
+          message: `Ders hakkı güncellenemedi: ${updateError.message}`,
+          updatedEnrollmentIds,
+          studentIds,
+        };
+      }
+    }
+
+    updatedEnrollmentIds.push(enrollment.id);
+
+    if (enrollment.student_id) {
+      studentIds.push(enrollment.student_id);
     }
   }
 
   return {
-    ok: true,
-    completedCount: toComplete.length,
-    reopenedCount: toReopen.length,
+    ok: true as const,
+    updatedEnrollmentIds,
+    studentIds: uniqueStrings(studentIds),
   };
 }
 
-export async function saveAttendance(
-  input: SaveAttendanceInput
-) {
+/*
+ * ---------------------------------------------------------
+ * YOKLAMA KAYDET
+ * ---------------------------------------------------------
+ */
+export async function saveAttendance(input: SaveAttendanceInput) {
   try {
     const profile = await getAuthorizedProfile();
     const supabase = await createClient();
 
-    const organizationId =
-      profile.organization_id;
+    const organizationId = profile.organization_id;
 
     if (!organizationId) {
       return {
         ok: false,
         count: 0,
-        message:
-          "Organizasyon bilgisi bulunamadı.",
+        message: "Organizasyon bilgisi bulunamadı.",
       };
     }
 
-    if (
-      !input.groupId ||
-      !input.scheduleId ||
-      !input.lessonDate
-    ) {
+    if (!input.groupId || !input.scheduleId || !input.lessonDate) {
       return {
         ok: false,
         count: 0,
@@ -266,45 +273,29 @@ export async function saveAttendance(
       return {
         ok: false,
         count: 0,
-        message:
-          "Kaydedilecek öğrenci bulunamadı.",
+        message: "Kaydedilecek öğrenci bulunamadı.",
       };
     }
 
-    const invalidRecord =
-      input.records.find(
-        (record) =>
-          !record.studentId ||
-          !ALLOWED_STATUSES.includes(
-            record.status
-          )
-      );
+    const invalidRecord = input.records.find(
+      (record) =>
+        !record.studentId ||
+        !ALLOWED_STATUSES.includes(record.status)
+    );
 
     if (invalidRecord) {
       return {
         ok: false,
         count: 0,
-        message:
-          "Geçersiz yoklama kaydı tespit edildi.",
+        message: "Geçersiz yoklama kaydı tespit edildi.",
       };
     }
 
-    /*
-     * GRUP DOĞRULAMA
-     */
-    const {
-      data: group,
-      error: groupError,
-    } = await supabase
+    const { data: group, error: groupError } = await supabase
       .from("training_groups")
-      .select(
-        "id, branch_id, primary_coach_id"
-      )
+      .select("id, branch_id, primary_coach_id")
       .eq("id", input.groupId)
-      .eq(
-        "organization_id",
-        organizationId
-      )
+      .eq("organization_id", organizationId)
       .maybeSingle();
 
     if (groupError || !group) {
@@ -316,44 +307,27 @@ export async function saveAttendance(
       };
     }
 
-    /*
-     * SEANS DOĞRULAMA
-     */
     const {
       data: schedule,
       error: scheduleError,
     } = await supabase
       .from("lesson_schedules")
-      .select(
-        "id, branch_id, group_id, coach_id"
-      )
+      .select("id, branch_id, group_id, coach_id")
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
-      .eq(
-        "organization_id",
-        organizationId
-      )
+      .eq("organization_id", organizationId)
       .maybeSingle();
 
     if (scheduleError || !schedule) {
       return {
         ok: false,
         count: 0,
-        message:
-          "Seçilen ders programı bulunamadı.",
+        message: "Seçilen ders programı bulunamadı.",
       };
     }
 
-    /*
-     * ÖĞRENCİLERİN KURUMA AİT OLDUĞUNU
-     * DOĞRULA
-     */
-    const studentIds = Array.from(
-      new Set(
-        input.records.map(
-          (record) => record.studentId
-        )
-      )
+    const studentIds = uniqueStrings(
+      input.records.map((record) => record.studentId)
     );
 
     const {
@@ -362,10 +336,7 @@ export async function saveAttendance(
     } = await supabase
       .from("students")
       .select("id")
-      .eq(
-        "organization_id",
-        organizationId
-      )
+      .eq("organization_id", organizationId)
       .in("id", studentIds);
 
     if (studentError) {
@@ -378,18 +349,13 @@ export async function saveAttendance(
 
     const validStudentIds = new Set(
       (validStudents || []).map(
-        (student: { id: string }) =>
-          student.id
+        (student: { id: string }) => student.id
       )
     );
 
-    const unauthorizedStudent =
-      input.records.some(
-        (record) =>
-          !validStudentIds.has(
-            record.studentId
-          )
-      );
+    const unauthorizedStudent = input.records.some(
+      (record) => !validStudentIds.has(record.studentId)
+    );
 
     if (unauthorizedStudent) {
       return {
@@ -400,68 +366,98 @@ export async function saveAttendance(
       };
     }
 
-    const now =
-      new Date().toISOString();
-
     /*
-     * YOKLAMA SATIRLARI
+     * Enrollment ID gönderilen kayıtları ayrıca doğruluyoruz.
+     * Böylece başka öğrenciye veya başka kuruma ait kayıt yanlışlıkla
+     * yoklamaya bağlanamaz.
      */
-    const rows = input.records.map(
-      (record) => ({
-        organization_id:
-          organizationId,
-
-        branch_id:
-          schedule.branch_id ??
-          group.branch_id ??
-          input.branchId ??
-          null,
-
-        student_id:
-          record.studentId,
-
-        enrollment_id:
-          record.enrollmentId ?? null,
-
-        group_id:
-          input.groupId,
-
-        schedule_id:
-          input.scheduleId,
-
-        coach_id:
-          schedule.coach_id ??
-          input.coachId ??
-          group.primary_coach_id ??
-          null,
-
-        lesson_date:
-          input.lessonDate,
-
-        status:
-          record.status,
-
-        coach_note:
-          record.coachNote?.trim() ||
-          null,
-
-        recorded_by:
-          profile.id,
-
-        updated_by:
-          profile.id,
-
-        edited_at:
-          now,
-
-        updated_at:
-          now,
-      })
+    const enrollmentIds = uniqueStrings(
+      input.records.map((record) => record.enrollmentId)
     );
 
-    /*
-     * YOKLAMA UPSERT
-     */
+    if (enrollmentIds.length) {
+      const {
+        data: validEnrollments,
+        error: enrollmentValidationError,
+      } = await supabase
+        .from("student_enrollments")
+        .select("id, student_id")
+        .eq("organization_id", organizationId)
+        .in("id", enrollmentIds);
+
+      if (enrollmentValidationError) {
+        return {
+          ok: false,
+          count: 0,
+          message: `Öğrenci kayıtları doğrulanamadı: ${enrollmentValidationError.message}`,
+        };
+      }
+
+      const enrollmentStudentMap = new Map<string, string>();
+
+      for (const enrollment of validEnrollments || []) {
+        enrollmentStudentMap.set(
+          enrollment.id,
+          enrollment.student_id
+        );
+      }
+
+      const invalidEnrollment = input.records.find((record) => {
+        if (!record.enrollmentId) return false;
+
+        return (
+          enrollmentStudentMap.get(record.enrollmentId) !==
+          record.studentId
+        );
+      });
+
+      if (invalidEnrollment) {
+        return {
+          ok: false,
+          count: 0,
+          message:
+            "Yoklama listesinde öğrenciyle eşleşmeyen kayıt/paket bilgisi bulundu.",
+        };
+      }
+    }
+
+    const now = new Date().toISOString();
+
+    const rows = input.records.map((record) => ({
+      organization_id: organizationId,
+
+      branch_id:
+        schedule.branch_id ??
+        group.branch_id ??
+        input.branchId ??
+        null,
+
+      student_id: record.studentId,
+
+      enrollment_id: record.enrollmentId ?? null,
+
+      group_id: input.groupId,
+
+      schedule_id: input.scheduleId,
+
+      coach_id:
+        schedule.coach_id ??
+        input.coachId ??
+        group.primary_coach_id ??
+        null,
+
+      lesson_date: input.lessonDate,
+
+      status: record.status,
+
+      coach_note: record.coachNote?.trim() || null,
+
+      recorded_by: profile.id,
+      updated_by: profile.id,
+      edited_at: now,
+      updated_at: now,
+    }));
+
     const { error } = await supabase
       .from("attendance_records")
       .upsert(rows, {
@@ -478,74 +474,57 @@ export async function saveAttendance(
     }
 
     /*
-     * TELAFİ PLANLARINI SENKRONİZE ET
+     * -------------------------------------------------------
+     * DERS HAKKI SENKRONİZASYONU
+     * -------------------------------------------------------
+     *
+     * Yoklama kaydı başarılı olduktan sonra ilgili paketlerin
+     * used_lessons değerini gerçek yoklamadan yeniden hesaplıyoruz.
+     *
+     * Geldi / Gelmedi / İzinli -> paket hakkından düşer
+     * Telafi                    -> normal paketten düşmez
      */
-    const compensationResult =
-      await syncCompensationLessons({
-        supabase,
-        organizationId,
-        profileId: profile.id,
-        groupId: input.groupId,
-        scheduleId: input.scheduleId,
-        lessonDate: input.lessonDate,
-        records: input.records,
-      });
+    const syncResult = await syncEnrollmentUsedLessons({
+      supabase,
+      organizationId,
+      enrollmentIds,
+    });
 
-    /*
-     * Yoklama başarıyla kaydedildi ancak telafi
-     * senkronizasyonunda sorun oluştuysa bunu
-     * kullanıcıya açıkça bildiriyoruz.
-     */
-    if (!compensationResult.ok) {
+    if (!syncResult.ok) {
+      /*
+       * Yoklama kaydedildi ancak ders sayacı güncellenemediyse
+       * kullanıcıya bunu açıkça bildiriyoruz.
+       */
       revalidatePath("/yoklama");
 
       return {
-        ok: true,
+        ok: false,
         count: rows.length,
         message:
-          `Yoklama kaydedildi. Ancak ${compensationResult.message}`,
+          `Yoklama kaydedildi ancak ders hakkı güncellenemedi. ${syncResult.message}`,
       };
     }
-
-    revalidatePath("/yoklama");
 
     /*
-     * SONUÇ MESAJI
+     * -------------------------------------------------------
+     * BAĞLI MODÜLLERİ YENİLE
+     * -------------------------------------------------------
      */
-    if (
-      compensationResult.completedCount >
-      0
-    ) {
-      return {
-        ok: true,
-        count: rows.length,
-        message:
-          compensationResult.completedCount ===
-          1
-            ? "Yoklama kaydedildi. 1 telafi dersi tamamlandı."
-            : `Yoklama kaydedildi. ${compensationResult.completedCount} telafi dersi tamamlandı.`,
-      };
-    }
+    revalidatePath("/yoklama");
+    revalidatePath("/ogrenciler");
+    revalidatePath("/odemeler");
+    revalidatePath("/");
+    revalidatePath("/veli-paneli");
 
-    if (
-      compensationResult.reopenedCount > 0
-    ) {
-      return {
-        ok: true,
-        count: rows.length,
-        message:
-          compensationResult.reopenedCount ===
-          1
-            ? "Yoklama güncellendi. 1 telafi hakkı tekrar açıldı."
-            : `Yoklama güncellendi. ${compensationResult.reopenedCount} telafi hakkı tekrar açıldı.`,
-      };
+    for (const studentId of syncResult.studentIds) {
+      revalidatePath(`/ogrenciler/${studentId}`);
     }
 
     return {
       ok: true,
       count: rows.length,
       message:
-        "Yoklama başarıyla kaydedildi.",
+        "Yoklama başarıyla kaydedildi ve ders hakları güncellendi.",
     };
   } catch (error) {
     return {
@@ -559,63 +538,45 @@ export async function saveAttendance(
   }
 }
 
+/*
+ * ---------------------------------------------------------
+ * GÜNLÜK YOKLAMA YÜKLE
+ * ---------------------------------------------------------
+ */
 export async function getAttendanceForDate(
   input: DailyAttendanceInput
 ) {
   try {
-    const profile =
-      await getAuthorizedProfile();
+    const profile = await getAuthorizedProfile();
+    const supabase = await createClient();
 
-    const supabase =
-      await createClient();
-
-    const organizationId =
-      profile.organization_id;
+    const organizationId = profile.organization_id;
 
     if (!organizationId) {
       return {
         ok: false,
         records: [],
-        message:
-          "Organizasyon bilgisi bulunamadı.",
+        message: "Organizasyon bilgisi bulunamadı.",
       };
     }
 
-    if (
-      !input.groupId ||
-      !input.scheduleId ||
-      !input.lessonDate
-    ) {
+    if (!input.groupId || !input.scheduleId || !input.lessonDate) {
       return {
         ok: false,
         records: [],
-        message:
-          "Grup, seans ve tarih bilgisi eksik.",
+        message: "Grup, seans ve tarih bilgisi eksik.",
       };
     }
 
-    const { data, error } =
-      await supabase
-        .from("attendance_records")
-        .select(
-          "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
-        )
-        .eq(
-          "organization_id",
-          organizationId
-        )
-        .eq(
-          "group_id",
-          input.groupId
-        )
-        .eq(
-          "schedule_id",
-          input.scheduleId
-        )
-        .eq(
-          "lesson_date",
-          input.lessonDate
-        );
+    const { data, error } = await supabase
+      .from("attendance_records")
+      .select(
+        "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
+      )
+      .eq("organization_id", organizationId)
+      .eq("group_id", input.groupId)
+      .eq("schedule_id", input.scheduleId)
+      .eq("lesson_date", input.lessonDate);
 
     if (error) {
       return {
@@ -644,94 +605,63 @@ export async function getAttendanceForDate(
   }
 }
 
+/*
+ * ---------------------------------------------------------
+ * AYLIK YOKLAMA
+ * ---------------------------------------------------------
+ */
 export async function getMonthlyAttendance(
   input: MonthlyAttendanceInput
 ) {
   try {
-    const profile =
-      await getAuthorizedProfile();
+    const profile = await getAuthorizedProfile();
+    const supabase = await createClient();
 
-    const supabase =
-      await createClient();
-
-    const organizationId =
-      profile.organization_id;
+    const organizationId = profile.organization_id;
 
     if (!organizationId) {
       return {
         ok: false,
         records: [],
-        message:
-          "Organizasyon bilgisi bulunamadı.",
+        message: "Organizasyon bilgisi bulunamadı.",
       };
     }
 
-    if (
-      !input.groupId ||
-      !/^\d{4}-\d{2}$/.test(
-        input.month
-      )
-    ) {
+    if (!input.groupId || !/^\d{4}-\d{2}$/.test(input.month)) {
       return {
         ok: false,
         records: [],
-        message:
-          "Grup veya ay bilgisi geçersiz.",
+        message: "Grup veya ay bilgisi geçersiz.",
       };
     }
 
-    const [
-      yearText,
-      monthText,
-    ] = input.month.split("-");
+    const [yearText, monthText] = input.month.split("-");
 
-    const year =
-      Number(yearText);
+    const year = Number(yearText);
+    const monthNumber = Number(monthText);
 
-    const monthNumber =
-      Number(monthText);
-
-    const startDate =
-      `${yearText}-${monthText}-01`;
+    const startDate = `${yearText}-${monthText}-01`;
 
     const nextMonth =
       monthNumber === 12
         ? `${year + 1}-01-01`
-        : `${year}-${String(
-            monthNumber + 1
-          ).padStart(
+        : `${year}-${String(monthNumber + 1).padStart(
             2,
             "0"
           )}-01`;
 
-    const { data, error } =
-      await supabase
-        .from("attendance_records")
-        .select(
-          "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
-        )
-        .eq(
-          "organization_id",
-          organizationId
-        )
-        .eq(
-          "group_id",
-          input.groupId
-        )
-        .gte(
-          "lesson_date",
-          startDate
-        )
-        .lt(
-          "lesson_date",
-          nextMonth
-        )
-        .order(
-          "lesson_date",
-          {
-            ascending: true,
-          }
-        );
+    const { data, error } = await supabase
+      .from("attendance_records")
+      .select(
+        "id, student_id, enrollment_id, group_id, schedule_id, coach_id, lesson_date, status, coach_note, recorded_by, updated_by, edited_at, created_at, updated_at"
+      )
+      .eq("organization_id", organizationId)
+      .eq("group_id", input.groupId)
+      .gte("lesson_date", startDate)
+      .lt("lesson_date", nextMonth)
+      .order("lesson_date", {
+        ascending: true,
+      });
 
     if (error) {
       return {
@@ -743,10 +673,8 @@ export async function getMonthlyAttendance(
 
     return {
       ok: true,
-      records:
-        data || [],
-      message:
-        "Aylık yoklama başarıyla yüklendi.",
+      records: data || [],
+      message: "Aylık yoklama başarıyla yüklendi.",
     };
   } catch (error) {
     return {
