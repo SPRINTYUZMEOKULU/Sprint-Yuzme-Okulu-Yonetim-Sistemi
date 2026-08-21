@@ -1,48 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useMemo,
-  useState,
-} from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+
+import { createStudentPayment } from "./actions";
 
 export type PaymentRecord = {
   id: string;
   student_id: string;
   enrollment_id: string | null;
-
   amount: number;
   currency: string;
-
   payment_method: string | null;
   payment_status: string | null;
   description: string | null;
-
   received_by: string | null;
   received_at: string | null;
-
   cash_handover_status: string | null;
   cash_handover_requested_at: string | null;
   cash_handover_approved_by: string | null;
   cash_handover_approved_at: string | null;
-
   cancellation_reason: string | null;
   cancelled_by: string | null;
   cancelled_at: string | null;
-
   created_at: string | null;
-
   due_date?: string | null;
 };
 
 export type PaymentStudent = {
   id: string;
-
   student_number: string | null;
-
   first_name: string;
   last_name: string;
-
   status: string | null;
 
   phone: string | null;
@@ -116,12 +106,16 @@ type MessageType =
   | "renewal_payment"
   | "payment_received";
 
+type PaymentMethod =
+  | "cash"
+  | "card"
+  | "bank_transfer"
+  | "eft"
+  | "other";
+
 function numberValue(value: unknown) {
   const parsed = Number(value ?? 0);
-
-  return Number.isFinite(parsed)
-    ? parsed
-    : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function money(value: unknown) {
@@ -134,76 +128,49 @@ function money(value: unknown) {
 
 function dateValue(value?: string | null) {
   if (!value) return null;
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function formatDate(value?: string | null) {
   const date = dateValue(value);
-
   if (!date) return "—";
 
-  return new Intl.DateTimeFormat(
-    "tr-TR",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatDateTime(value?: string | null) {
   const date = dateValue(value);
-
   if (!date) return "—";
 
-  return new Intl.DateTimeFormat(
-    "tr-TR",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function startOfToday() {
   const today = new Date();
-
   today.setHours(0, 0, 0, 0);
-
   return today;
 }
 
 function endOfToday() {
   const today = new Date();
-
-  today.setHours(
-    23,
-    59,
-    59,
-    999
-  );
-
+  today.setHours(23, 59, 59, 999);
   return today;
 }
 
 function endOfNextSevenDays() {
   const date = endOfToday();
-
-  date.setDate(
-    date.getDate() + 7
-  );
-
+  date.setDate(date.getDate() + 7);
   return date;
 }
 
@@ -213,70 +180,43 @@ function isBetween(
   end: Date
 ) {
   const date = dateValue(value);
-
   if (!date) return false;
 
   return (
-    date.getTime() >=
-      start.getTime() &&
-    date.getTime() <=
-      end.getTime()
+    date.getTime() >= start.getTime() &&
+    date.getTime() <= end.getTime()
   );
 }
 
-function isPast(
-  value?: string | null
-) {
+function isPast(value?: string | null) {
   const date = dateValue(value);
-
   if (!date) return false;
 
-  return (
-    date.getTime() <
-    startOfToday().getTime()
-  );
+  return date.getTime() < startOfToday().getTime();
 }
 
-function normalizePhone(
-  value?: string | null
-) {
+function normalizePhone(value?: string | null) {
   if (!value) return "";
 
-  let phone =
-    value.replace(/\D/g, "");
+  let phone = value.replace(/\D/g, "");
 
-  if (
-    phone.startsWith("0") &&
-    phone.length === 11
-  ) {
-    phone =
-      "90" + phone.slice(1);
+  if (phone.startsWith("0") && phone.length === 11) {
+    phone = "90" + phone.slice(1);
   }
 
-  if (
-    phone.length === 10 &&
-    phone.startsWith("5")
-  ) {
+  if (phone.length === 10 && phone.startsWith("5")) {
     phone = "90" + phone;
   }
 
   return phone;
 }
 
-function studentName(
-  student: PaymentStudent
-) {
+function studentName(student: PaymentStudent) {
   return `${student.first_name} ${student.last_name}`.trim();
 }
 
-function renewalSoon(
-  student: PaymentStudent
-) {
-  if (
-    student.remaining_lessons <= 3
-  ) {
-    return true;
-  }
+function renewalSoon(student: PaymentStudent) {
+  if (student.remaining_lessons <= 3) return true;
 
   return isBetween(
     student.end_date,
@@ -285,14 +225,8 @@ function renewalSoon(
   );
 }
 
-function paymentDueThisWeek(
-  student: PaymentStudent
-) {
-  if (
-    student.remaining_payment <= 0
-  ) {
-    return false;
-  }
+function paymentDueThisWeek(student: PaymentStudent) {
+  if (student.remaining_payment <= 0) return false;
 
   return isBetween(
     student.due_date,
@@ -304,18 +238,10 @@ function paymentDueThisWeek(
 function suggestedMessage(
   student: PaymentStudent
 ): MessageType {
-  const renewal =
-    renewalSoon(student);
+  const renewal = renewalSoon(student);
+  const hasDebt = student.remaining_payment > 0;
 
-  const hasDebt =
-    student.remaining_payment > 0;
-
-  if (
-    renewal &&
-    hasDebt
-  ) {
-    return "renewal_payment";
-  }
+  if (renewal && hasDebt) return "renewal_payment";
 
   if (
     hasDebt &&
@@ -325,49 +251,32 @@ function suggestedMessage(
     return "payment_overdue";
   }
 
-  if (
-    hasDebt &&
-    paymentDueThisWeek(student)
-  ) {
+  if (hasDebt && paymentDueThisWeek(student)) {
     return "payment_due";
   }
 
-  if (renewal) {
-    return "renewal";
-  }
-
-  if (hasDebt) {
-    return "payment_reminder";
-  }
+  if (renewal) return "renewal";
+  if (hasDebt) return "payment_reminder";
 
   return "payment_received";
 }
 
-function messageLabel(
-  type: MessageType
-) {
+function messageLabel(type: MessageType) {
   switch (type) {
     case "smart":
       return "Akıllı Öneri";
-
     case "payment_reminder":
       return "Ödeme Hatırlatma";
-
     case "payment_due":
       return "Ödeme Tarihi Geldi";
-
     case "payment_overdue":
       return "Gecikmiş Ödeme";
-
     case "renewal":
       return "Kayıt Yenileme";
-
     case "renewal_payment":
       return "Kayıt Yenileme + Ödeme";
-
     case "payment_received":
       return "Ödeme Alındı";
-
     default:
       return "Mesaj";
   }
@@ -382,17 +291,14 @@ function buildMessage(
       ? suggestedMessage(student)
       : requestedType;
 
-  const name =
-    studentName(student);
+  const name = studentName(student);
 
-  const greeting =
-    student.is_adult
-      ? `Değerli Kursiyerimiz, *${name}*`
-      : `Değerli Velimiz,\n*${name}* isimli öğrencimiz`;
+  const greeting = student.is_adult
+    ? `Değerli Kursiyerimiz, *${name}*`
+    : `Değerli Velimiz,\n*${name}* isimli öğrencimiz`;
 
   const packageName =
-    student.package_name ||
-    "Aktif Paket";
+    student.package_name || "Aktif Paket";
 
   const footer =
     `\n\n☎️ *SPRİNT BİLGİLENDİRME HATTI*\n` +
@@ -400,10 +306,7 @@ function buildMessage(
     `_Bilginize sunar, iyi günler dileriz._\n` +
     `*SPRİNT YÜZME OKULU*`;
 
-  if (
-    type ===
-    "renewal_payment"
-  ) {
+  if (type === "renewal_payment") {
     return (
       `*SPRİNT YÜZME OKULU*\n\n` +
       `_*KAYIT YENİLEME VE ÖDEME BİLGİLENDİRMESİ*_\n\n` +
@@ -412,9 +315,13 @@ function buildMessage(
       `🏊 *Mevcut Paket:* ${packageName}\n` +
       `⏳ *Kalan Ders:* ${student.remaining_lessons}\n` +
       `📅 *Planlanan Kayıt Bitişi:* ${formatDate(student.end_date)}\n\n` +
-      `💰 *Mevcut Dönem Kalan Ödeme:* ${money(student.remaining_payment)}\n` +
+      `💰 *Mevcut Dönem Kalan Ödeme:* ${money(
+        student.remaining_payment
+      )}\n` +
       `🔄 *Yeni Dönem:* ${packageName}\n` +
-      `💳 *Yeni Dönem Kayıt Ücreti:* ${money(student.package_price)}\n\n` +
+      `💳 *Yeni Dönem Kayıt Ücreti:* ${money(
+        student.package_price
+      )}\n\n` +
       `Ders planlamasının kesintiye uğramaması için kayıt yenileme ve mevcut dönem ödeme işlemlerinin tamamlanmasını rica ederiz.` +
       footer
     );
@@ -430,16 +337,15 @@ function buildMessage(
       `⏳ *Kalan Ders:* ${student.remaining_lessons}\n` +
       `📅 *Planlanan Kayıt Bitişi:* ${formatDate(student.end_date)}\n\n` +
       `🔄 *Yeni Dönem:* ${packageName}\n` +
-      `💳 *Yeni Dönem Kayıt Ücreti:* ${money(student.package_price)}\n\n` +
+      `💳 *Yeni Dönem Kayıt Ücreti:* ${money(
+        student.package_price
+      )}\n\n` +
       `Ders programının kesintiye uğramaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.` +
       footer
     );
   }
 
-  if (
-    type ===
-    "payment_due"
-  ) {
+  if (type === "payment_due") {
     return (
       `*SPRİNT YÜZME OKULU*\n\n` +
       `_*ÖDEME TARİHİ HATIRLATMASI*_\n\n` +
@@ -448,34 +354,32 @@ function buildMessage(
       `💳 *Aktif Paket:* ${packageName}\n` +
       `💰 *Paket Tutarı:* ${money(student.package_price)}\n` +
       `✅ *Mevcut Dönemde Alınan:* ${money(student.total_paid)}\n` +
-      `🔴 *Mevcut Dönem Kalan Ödeme:* ${money(student.remaining_payment)}\n` +
+      `🔴 *Mevcut Dönem Kalan Ödeme:* ${money(
+        student.remaining_payment
+      )}\n` +
       `📅 *Ödeme Tarihi:* ${formatDate(student.due_date)}\n\n` +
       `Kalan ödemenin tamamlanmasını rica ederiz.` +
       footer
     );
   }
 
-  if (
-    type ===
-    "payment_overdue"
-  ) {
+  if (type === "payment_overdue") {
     return (
       `*SPRİNT YÜZME OKULU*\n\n` +
       `_*GECİKMİŞ ÖDEME BİLGİLENDİRMESİ*_\n\n` +
       `${greeting}\n\n` +
       `Aktif kurs kaydınıza ait ödeme tarihinin geçtiğini hatırlatmak isteriz.\n\n` +
       `💳 *Aktif Paket:* ${packageName}\n` +
-      `💰 *Mevcut Dönem Kalan Ödeme:* ${money(student.remaining_payment)}\n` +
+      `💰 *Mevcut Dönem Kalan Ödeme:* ${money(
+        student.remaining_payment
+      )}\n` +
       `📅 *Ödeme Tarihi:* ${formatDate(student.due_date)}\n\n` +
       `Ödeme işleminizin en kısa sürede tamamlanmasını rica ederiz.` +
       footer
     );
   }
 
-  if (
-    type ===
-    "payment_received"
-  ) {
+  if (type === "payment_received") {
     return (
       `*SPRİNT YÜZME OKULU*\n\n` +
       `_*ÖDEME BİLGİLENDİRMESİ*_\n\n` +
@@ -497,7 +401,9 @@ function buildMessage(
     `💳 *Aktif Paket:* ${packageName}\n` +
     `💰 *Paket Tutarı:* ${money(student.package_price)}\n` +
     `✅ *Mevcut Dönemde Alınan:* ${money(student.total_paid)}\n` +
-    `🔴 *Mevcut Dönem Kalan Ödeme:* ${money(student.remaining_payment)}\n\n` +
+    `🔴 *Mevcut Dönem Kalan Ödeme:* ${money(
+      student.remaining_payment
+    )}\n\n` +
     `Ödeme planınızla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
     footer
   );
@@ -506,412 +412,330 @@ function buildMessage(
 export default function PaymentsClient({
   students,
   payments,
-  currentProfileId,
 }: Props) {
-  const [search, setSearch] =
-    useState("");
+  const router = useRouter();
 
-  const [
-    branchFilter,
-    setBranchFilter,
-  ] = useState("all");
-
-  const [
-    quickFilter,
-    setQuickFilter,
-  ] =
+  const [search, setSearch] = useState("");
+  const [branchFilter, setBranchFilter] =
+    useState("all");
+  const [quickFilter, setQuickFilter] =
     useState<QuickFilter>("all");
 
-  const [
-    selectedStudent,
-    setSelectedStudent,
-  ] =
-    useState<PaymentStudent | null>(
-      null
-    );
+  const [selectedStudent, setSelectedStudent] =
+    useState<PaymentStudent | null>(null);
 
-  const [
-    messageStudent,
-    setMessageStudent,
-  ] =
-    useState<PaymentStudent | null>(
-      null
-    );
+  const [messageStudent, setMessageStudent] =
+    useState<PaymentStudent | null>(null);
 
-  const [
-    messageType,
-    setMessageType,
-  ] =
+  const [messageType, setMessageType] =
     useState<MessageType>("smart");
 
-  const [
-    messageText,
-    setMessageText,
-  ] =
+  const [messageText, setMessageText] =
     useState("");
 
+  const [historyStudent, setHistoryStudent] =
+    useState<PaymentStudent | null>(null);
+
   const [
-    historyStudent,
-    setHistoryStudent,
-  ] =
-    useState<PaymentStudent | null>(
-      null
-    );
+    isPaymentPending,
+    startPaymentTransition,
+  ] = useTransition();
 
-  /*
-   * ------------------------------------------------
-   * ÖZETLER
-   * ------------------------------------------------
-   */
+  const [paymentAmount, setPaymentAmount] =
+    useState("");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("cash");
+  const [
+    paymentDescription,
+    setPaymentDescription,
+  ] = useState("");
+  const [paymentMessage, setPaymentMessage] =
+    useState("");
 
-  const todayStart =
-    startOfToday();
+  const todayStart = startOfToday();
+  const todayEnd = endOfToday();
 
-  const todayEnd =
-    endOfToday();
+  const monthStart = new Date(
+    todayStart.getFullYear(),
+    todayStart.getMonth(),
+    1
+  );
 
-  const monthStart =
-    new Date(
-      todayStart.getFullYear(),
-      todayStart.getMonth(),
-      1
-    );
+  const validPayments = useMemo(
+    () =>
+      payments.filter(
+        (payment) =>
+          !payment.cancelled_at &&
+          payment.payment_status !== "cancelled"
+      ),
+    [payments]
+  );
 
-  const validPayments =
-    useMemo(
-      () =>
-        payments.filter(
-          (payment) =>
-            !payment.cancelled_at &&
-            payment.payment_status !==
-              "cancelled"
-        ),
-      [payments]
-    );
-
-  const todayCollection =
-    useMemo(
-      () =>
-        validPayments
-          .filter((payment) =>
-            isBetween(
-              payment.received_at,
-              todayStart,
-              todayEnd
-            )
+  const todayCollection = useMemo(
+    () =>
+      validPayments
+        .filter((payment) =>
+          isBetween(
+            payment.received_at,
+            todayStart,
+            todayEnd
           )
-          .reduce(
-            (sum, payment) =>
-              sum +
-              numberValue(
-                payment.amount
-              ),
-            0
-          ),
-      [validPayments]
-    );
-
-  const monthCollection =
-    useMemo(
-      () =>
-        validPayments
-          .filter((payment) =>
-            isBetween(
-              payment.received_at,
-              monthStart,
-              todayEnd
-            )
-          )
-          .reduce(
-            (sum, payment) =>
-              sum +
-              numberValue(
-                payment.amount
-              ),
-            0
-          ),
-      [validPayments]
-    );
-
-  const outstandingTotal =
-    useMemo(
-      () =>
-        students.reduce(
-          (sum, student) =>
-            sum +
-            numberValue(
-              student.remaining_payment
-            ),
+        )
+        .reduce(
+          (sum, payment) =>
+            sum + numberValue(payment.amount),
           0
         ),
-      [students]
+    [validPayments, todayStart, todayEnd]
+  );
+
+  const monthCollection = useMemo(
+    () =>
+      validPayments
+        .filter((payment) =>
+          isBetween(
+            payment.received_at,
+            monthStart,
+            todayEnd
+          )
+        )
+        .reduce(
+          (sum, payment) =>
+            sum + numberValue(payment.amount),
+          0
+        ),
+    [validPayments, monthStart, todayEnd]
+  );
+
+  const outstandingTotal = useMemo(
+    () =>
+      students.reduce(
+        (sum, student) =>
+          sum +
+          numberValue(
+            student.remaining_payment
+          ),
+        0
+      ),
+    [students]
+  );
+
+  const unpaidCount = students.filter(
+    (student) =>
+      student.package_price > 0 &&
+      student.total_paid <= 0
+  ).length;
+
+  const partialCount = students.filter(
+    (student) =>
+      student.total_paid > 0 &&
+      student.remaining_payment > 0
+  ).length;
+
+  const paidCount = students.filter(
+    (student) =>
+      student.package_price > 0 &&
+      student.remaining_payment <= 0
+  ).length;
+
+  const cashPendingAmount = validPayments
+    .filter((payment) =>
+      [
+        "with_staff",
+        "handoff_pending",
+      ].includes(
+        payment.cash_handover_status || ""
+      )
+    )
+    .reduce(
+      (sum, payment) =>
+        sum + numberValue(payment.amount),
+      0
     );
 
-  const unpaidCount =
-    students.filter(
-      (student) =>
-        student.package_price > 0 &&
-        student.total_paid <= 0
-    ).length;
+  const branches = useMemo(() => {
+    const map = new Map<string, string>();
 
-  const partialCount =
-    students.filter(
-      (student) =>
-        student.total_paid > 0 &&
-        student.remaining_payment > 0
-    ).length;
-
-  const paidCount =
-    students.filter(
-      (student) =>
-        student.package_price > 0 &&
-        student.remaining_payment <= 0
-    ).length;
-
-  const cashPendingAmount =
-    validPayments
-      .filter((payment) =>
-        [
-          "with_staff",
-          "handoff_pending",
-        ].includes(
-          payment.cash_handover_status ||
-            ""
-        )
-      )
-      .reduce(
-        (sum, payment) =>
-          sum +
-          numberValue(payment.amount),
-        0
-      );
-
-  /*
-   * ------------------------------------------------
-   * ŞUBELER
-   * ------------------------------------------------
-   */
-
-  const branches =
-    useMemo(() => {
-      const map = new Map<
-        string,
-        string
-      >();
-
-      for (const student of students) {
-        if (
-          student.branch_id &&
+    for (const student of students) {
+      if (
+        student.branch_id &&
+        student.branch_name
+      ) {
+        map.set(
+          student.branch_id,
           student.branch_name
-        ) {
-          map.set(
-            student.branch_id,
-            student.branch_name
-          );
-        }
+        );
       }
+    }
 
-      return Array.from(
-        map.entries()
-      )
-        .map(([id, name]) => ({
-          id,
-          name,
-        }))
-        .sort((a, b) =>
-          a.name.localeCompare(
-            b.name,
-            "tr"
-          )
-        );
-    }, [students]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({
+        id,
+        name,
+      }))
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "tr")
+      );
+  }, [students]);
 
-  /*
-   * ------------------------------------------------
-   * FİLTRE
-   * ------------------------------------------------
-   */
+  const filteredStudents = useMemo(() => {
+    const query = search
+      .trim()
+      .toLocaleLowerCase("tr-TR");
 
-  const filteredStudents =
-    useMemo(() => {
-      const query =
-        search
-          .trim()
-          .toLocaleLowerCase(
-            "tr-TR"
-          );
+    let result = students.filter((student) => {
+      const searchable = [
+        studentName(student),
+        student.student_number,
+        student.phone,
+        student.guardian_phone,
+        student.branch_name,
+        student.group_name,
+        student.package_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("tr-TR");
 
-      let result =
-        students.filter(
-          (student) => {
-            const searchable = [
-              studentName(student),
-              student.student_number,
-              student.phone,
-              student.guardian_phone,
-              student.branch_name,
-              student.group_name,
-              student.package_name,
-            ]
-              .filter(Boolean)
-              .join(" ")
-              .toLocaleLowerCase(
-                "tr-TR"
-              );
-
-            if (
-              query &&
-              !searchable.includes(query)
-            ) {
-              return false;
-            }
-
-            if (
-              branchFilter !== "all" &&
-              student.branch_id !==
-                branchFilter
-            ) {
-              return false;
-            }
-
-            return true;
-          }
-        );
-
-      switch (quickFilter) {
-        case "three_lessons":
-          result = result.filter(
-            (student) =>
-              student.remaining_lessons ===
-              3
-          );
-          break;
-
-        case "two_lessons":
-          result = result.filter(
-            (student) =>
-              student.remaining_lessons ===
-              2
-          );
-          break;
-
-        case "one_lesson":
-          result = result.filter(
-            (student) =>
-              student.remaining_lessons ===
-              1
-          );
-          break;
-
-        case "finished":
-          result = result.filter(
-            (student) =>
-              student.remaining_lessons <=
-              0
-          );
-          break;
-
-        case "ending_week":
-        case "renew_week":
-          result = result.filter(
-            renewalSoon
-          );
-          break;
-
-        case "payment_week":
-          result = result.filter(
-            paymentDueThisWeek
-          );
-          break;
-
-        case "renew_and_payment":
-          result = result.filter(
-            (student) =>
-              renewalSoon(student) &&
-              student.remaining_payment >
-                0
-          );
-          break;
-
-        case "no_payment":
-          result = result.filter(
-            (student) =>
-              student.package_price > 0 &&
-              student.total_paid <= 0
-          );
-          break;
-
-        case "partial":
-          result = result.filter(
-            (student) =>
-              student.total_paid > 0 &&
-              student.remaining_payment >
-                0
-          );
-          break;
-
-        case "paid":
-          result = result.filter(
-            (student) =>
-              student.package_price > 0 &&
-              student.remaining_payment <=
-                0
-          );
-          break;
-
-        case "cash_pending":
-          result = result.filter(
-            (student) =>
-              student.payments.some(
-                (payment) =>
-                  [
-                    "with_staff",
-                    "handoff_pending",
-                  ].includes(
-                    payment.cash_handover_status ||
-                      ""
-                  )
-              )
-          );
-          break;
-
-        case "latest_payment":
-          result = result
-            .filter(
-              (student) =>
-                !!student.last_payment_at
-            )
-            .sort(
-              (a, b) =>
-                (dateValue(
-                  b.last_payment_at
-                )?.getTime() || 0) -
-                (dateValue(
-                  a.last_payment_at
-                )?.getTime() || 0)
-            );
-          break;
+      if (
+        query &&
+        !searchable.includes(query)
+      ) {
+        return false;
       }
 
       if (
-        quickFilter !==
-        "latest_payment"
+        branchFilter !== "all" &&
+        student.branch_id !== branchFilter
       ) {
-        result.sort((a, b) =>
-          studentName(a).localeCompare(
-            studentName(b),
-            "tr"
-          )
-        );
+        return false;
       }
 
-      return result;
-    }, [
-      students,
-      search,
-      branchFilter,
-      quickFilter,
-    ]);
+      return true;
+    });
+
+    switch (quickFilter) {
+      case "three_lessons":
+        result = result.filter(
+          (student) =>
+            student.remaining_lessons === 3
+        );
+        break;
+
+      case "two_lessons":
+        result = result.filter(
+          (student) =>
+            student.remaining_lessons === 2
+        );
+        break;
+
+      case "one_lesson":
+        result = result.filter(
+          (student) =>
+            student.remaining_lessons === 1
+        );
+        break;
+
+      case "finished":
+        result = result.filter(
+          (student) =>
+            student.remaining_lessons <= 0
+        );
+        break;
+
+      case "ending_week":
+      case "renew_week":
+        result = result.filter(renewalSoon);
+        break;
+
+      case "payment_week":
+        result = result.filter(
+          paymentDueThisWeek
+        );
+        break;
+
+      case "renew_and_payment":
+        result = result.filter(
+          (student) =>
+            renewalSoon(student) &&
+            student.remaining_payment > 0
+        );
+        break;
+
+      case "no_payment":
+        result = result.filter(
+          (student) =>
+            student.package_price > 0 &&
+            student.total_paid <= 0
+        );
+        break;
+
+      case "partial":
+        result = result.filter(
+          (student) =>
+            student.total_paid > 0 &&
+            student.remaining_payment > 0
+        );
+        break;
+
+      case "paid":
+        result = result.filter(
+          (student) =>
+            student.package_price > 0 &&
+            student.remaining_payment <= 0
+        );
+        break;
+
+      case "cash_pending":
+        result = result.filter((student) =>
+          student.payments.some((payment) =>
+            [
+              "with_staff",
+              "handoff_pending",
+            ].includes(
+              payment.cash_handover_status ||
+                ""
+            )
+          )
+        );
+        break;
+
+      case "latest_payment":
+        result = result
+          .filter(
+            (student) =>
+              !!student.last_payment_at
+          )
+          .sort(
+            (a, b) =>
+              (dateValue(
+                b.last_payment_at
+              )?.getTime() || 0) -
+              (dateValue(
+                a.last_payment_at
+              )?.getTime() || 0)
+          );
+        break;
+    }
+
+    if (
+      quickFilter !== "latest_payment"
+    ) {
+      result.sort((a, b) =>
+        studentName(a).localeCompare(
+          studentName(b),
+          "tr"
+        )
+      );
+    }
+
+    return result;
+  }, [
+    students,
+    search,
+    branchFilter,
+    quickFilter,
+  ]);
 
   function openMessage(
     student: PaymentStudent,
@@ -919,12 +743,8 @@ export default function PaymentsClient({
   ) {
     setMessageStudent(student);
     setMessageType(type);
-
     setMessageText(
-      buildMessage(
-        student,
-        type
-      )
+      buildMessage(student, type)
     );
   }
 
@@ -946,16 +766,14 @@ export default function PaymentsClient({
   function openWhatsApp() {
     if (!messageStudent) return;
 
-    const phone =
-      normalizePhone(
-        messageStudent.contact_phone
-      );
+    const phone = normalizePhone(
+      messageStudent.contact_phone
+    );
 
     if (!phone) {
       alert(
         "Bu öğrenci için iletişim numarası bulunamadı."
       );
-
       return;
     }
 
@@ -972,14 +790,102 @@ export default function PaymentsClient({
     );
   }
 
+  function openPaymentModal(
+    student: PaymentStudent
+  ) {
+    setSelectedStudent(student);
+
+    setPaymentAmount(
+      student.remaining_payment > 0
+        ? String(
+            student.remaining_payment
+          )
+        : ""
+    );
+
+    setPaymentMethod("cash");
+    setPaymentDescription("");
+    setPaymentMessage("");
+  }
+
+  function submitPayment() {
+    if (!selectedStudent) return;
+
+    if (!selectedStudent.enrollment_id) {
+      setPaymentMessage(
+        "Bu öğrenci için aktif kayıt/paket bulunamadı."
+      );
+      return;
+    }
+
+    const amount = Number(
+      String(paymentAmount)
+        .replace(/\./g, "")
+        .replace(",", ".")
+    );
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      setPaymentMessage(
+        "Geçerli bir ödeme tutarı giriniz."
+      );
+      return;
+    }
+
+    if (
+      selectedStudent.remaining_payment >
+        0 &&
+      amount >
+        selectedStudent.remaining_payment
+    ) {
+      setPaymentMessage(
+        `Girilen tutar kalan ödemeden fazla olamaz. Kalan ödeme: ${money(
+          selectedStudent.remaining_payment
+        )}`
+      );
+      return;
+    }
+
+    setPaymentMessage("");
+
+    startPaymentTransition(async () => {
+      const result =
+        await createStudentPayment({
+          studentId:
+            selectedStudent.id,
+          enrollmentId:
+            selectedStudent.enrollment_id!,
+          amount,
+          paymentMethod,
+          description:
+            paymentDescription || null,
+        });
+
+      if (!result.ok) {
+        setPaymentMessage(result.message);
+        return;
+      }
+
+      setPaymentMessage(result.message);
+
+      router.refresh();
+
+      window.setTimeout(() => {
+        setSelectedStudent(null);
+        setPaymentAmount("");
+        setPaymentDescription("");
+        setPaymentMessage("");
+      }, 900);
+    });
+  }
+
   const quickButtons: {
     key: QuickFilter;
     label: string;
   }[] = [
-    {
-      key: "all",
-      label: "Tümü",
-    },
+    { key: "all", label: "Tümü" },
     {
       key: "three_lessons",
       label: "3 Ders Kalan",
@@ -1012,8 +918,7 @@ export default function PaymentsClient({
     },
     {
       key: "renew_and_payment",
-      label:
-        "Ödeme + Yenileme",
+      label: "Ödeme + Yenileme",
     },
     {
       key: "no_payment",
@@ -1047,9 +952,7 @@ export default function PaymentsClient({
             setQuickFilter("all")
           }
         >
-          <span>
-            Bu Ay Tahsilat
-          </span>
+          <span>Bu Ay Tahsilat</span>
           <strong>
             {money(monthCollection)}
           </strong>
@@ -1062,9 +965,7 @@ export default function PaymentsClient({
             setQuickFilter("all")
           }
         >
-          <span>
-            Bugün Tahsilat
-          </span>
+          <span>Bugün Tahsilat</span>
           <strong>
             {money(todayCollection)}
           </strong>
@@ -1077,9 +978,7 @@ export default function PaymentsClient({
             setQuickFilter("no_payment")
           }
         >
-          <span>
-            Bekleyen Alacak
-          </span>
+          <span>Bekleyen Alacak</span>
           <strong>
             {money(outstandingTotal)}
           </strong>
@@ -1092,12 +991,8 @@ export default function PaymentsClient({
             setQuickFilter("no_payment")
           }
         >
-          <span>
-            Ödeme Yapmayan
-          </span>
-          <strong>
-            {unpaidCount}
-          </strong>
+          <span>Ödeme Yapmayan</span>
+          <strong>{unpaidCount}</strong>
         </button>
 
         <button
@@ -1107,12 +1002,8 @@ export default function PaymentsClient({
             setQuickFilter("partial")
           }
         >
-          <span>
-            Kısmi Ödeme
-          </span>
-          <strong>
-            {partialCount}
-          </strong>
+          <span>Kısmi Ödeme</span>
+          <strong>{partialCount}</strong>
         </button>
 
         <button
@@ -1122,12 +1013,8 @@ export default function PaymentsClient({
             setQuickFilter("paid")
           }
         >
-          <span>
-            Tamamlanan
-          </span>
-          <strong>
-            {paidCount}
-          </strong>
+          <span>Tamamlanan</span>
+          <strong>{paidCount}</strong>
         </button>
 
         <button
@@ -1143,9 +1030,7 @@ export default function PaymentsClient({
             Kasa Teslim Bekleyen
           </span>
           <strong>
-            {money(
-              cashPendingAmount
-            )}
+            {money(cashPendingAmount)}
           </strong>
         </button>
       </section>
@@ -1153,13 +1038,8 @@ export default function PaymentsClient({
       <section className="paymentQuickSection">
         <div className="paymentQuickTitle">
           <div>
-            <p>
-              HIZLI TAKİP
-            </p>
-
-            <h2>
-              Akıllı Filtreler
-            </h2>
+            <p>HIZLI TAKİP</p>
+            <h2>Akıllı Filtreler</h2>
           </div>
 
           <span>
@@ -1251,8 +1131,7 @@ export default function PaymentsClient({
             const paymentStatus =
               student.package_price <= 0
                 ? "Paket Ücreti Tanımsız"
-                : student.total_paid <=
-                    0
+                : student.total_paid <= 0
                 ? "Ödeme Yapılmadı"
                 : student.remaining_payment >
                     0
@@ -1310,9 +1189,7 @@ export default function PaymentsClient({
                   </div>
 
                   <div>
-                    <span>
-                      Kalan Ders
-                    </span>
+                    <span>Kalan Ders</span>
                     <strong>
                       {
                         student.remaining_lessons
@@ -1356,9 +1233,7 @@ export default function PaymentsClient({
                   </div>
 
                   <div className="received">
-                    <span>
-                      Alınan
-                    </span>
+                    <span>Alınan</span>
                     <strong>
                       {money(
                         student.total_paid
@@ -1374,9 +1249,7 @@ export default function PaymentsClient({
                         : "remaining"
                     }
                   >
-                    <span>
-                      Kalan
-                    </span>
+                    <span>Kalan</span>
                     <strong>
                       {money(
                         student.remaining_payment
@@ -1412,9 +1285,7 @@ export default function PaymentsClient({
                 </div>
 
                 <div className="paymentContact">
-                  <span>
-                    İletişim
-                  </span>
+                  <span>İletişim</span>
 
                   <strong>
                     {student.contact_phone ||
@@ -1427,7 +1298,7 @@ export default function PaymentsClient({
                     type="button"
                     className="primaryPaymentButton"
                     onClick={() =>
-                      setSelectedStudent(
+                      openPaymentModal(
                         student
                       )
                     }
@@ -1496,9 +1367,7 @@ export default function PaymentsClient({
           <div className="paymentModal">
             <div className="paymentModalHeader">
               <div>
-                <p>
-                  YENİ TAHSİLAT
-                </p>
+                <p>YENİ TAHSİLAT</p>
 
                 <h2>
                   {studentName(
@@ -1509,6 +1378,9 @@ export default function PaymentsClient({
 
               <button
                 type="button"
+                disabled={
+                  isPaymentPending
+                }
                 onClick={() =>
                   setSelectedStudent(
                     null
@@ -1527,16 +1399,20 @@ export default function PaymentsClient({
               </strong>
 
               <span>
-                Paket:{" "}
+                Paket Ücreti:{" "}
                 {money(
                   selectedStudent.package_price
                 )}
-                {" · "}
+              </span>
+
+              <span>
                 Alınan:{" "}
                 {money(
                   selectedStudent.total_paid
                 )}
-                {" · "}
+              </span>
+
+              <span>
                 Kalan:{" "}
                 {money(
                   selectedStudent.remaining_payment
@@ -1544,27 +1420,160 @@ export default function PaymentsClient({
               </span>
             </div>
 
-            <div className="paymentComingSoon">
-              Ödeme giriş formu bir sonraki
-              <strong>
-                {" "}
-                actions.ts
-              </strong>
-              {" "}
-              bağlantısında aktif olacaktır.
-              Bu pencere şimdilik öğrenci ve aktif paket bilgisinin doğru
-              bağlandığını kontrol etmek için hazırlandı.
-            </div>
+            {!selectedStudent.enrollment_id ? (
+              <div className="paymentWarningBox">
+                Bu öğrenci için aktif kayıt/paket bulunamadığı için ödeme alınamaz.
+              </div>
+            ) : null}
 
-            <button
-              type="button"
-              className="paymentCloseButton"
-              onClick={() =>
-                setSelectedStudent(null)
-              }
-            >
-              Kapat
-            </button>
+            {selectedStudent.package_price <=
+            0 ? (
+              <div className="paymentWarningBox">
+                Bu paketin ücret bilgisi tanımlı görünmüyor. Ödeme almadan önce paket ücretini kontrol edin.
+              </div>
+            ) : null}
+
+            <label className="paymentField">
+              <span>
+                Ödeme Tutarı
+              </span>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={paymentAmount}
+                disabled={
+                  isPaymentPending
+                }
+                onChange={(event) =>
+                  setPaymentAmount(
+                    event.target.value
+                  )
+                }
+                placeholder="Örn. 4000"
+                className="paymentInput"
+              />
+            </label>
+
+            <label className="paymentField">
+              <span>
+                Ödeme Yöntemi
+              </span>
+
+              <select
+                value={paymentMethod}
+                disabled={
+                  isPaymentPending
+                }
+                onChange={(event) =>
+                  setPaymentMethod(
+                    event.target
+                      .value as PaymentMethod
+                  )
+                }
+              >
+                <option value="cash">
+                  💵 Nakit
+                </option>
+
+                <option value="card">
+                  💳 Kart
+                </option>
+
+                <option value="bank_transfer">
+                  🏦 Havale
+                </option>
+
+                <option value="eft">
+                  🏦 EFT
+                </option>
+
+                <option value="other">
+                  Diğer
+                </option>
+              </select>
+            </label>
+
+            <label className="paymentField">
+              <span>Açıklama</span>
+
+              <textarea
+                rows={4}
+                value={
+                  paymentDescription
+                }
+                disabled={
+                  isPaymentPending
+                }
+                onChange={(event) =>
+                  setPaymentDescription(
+                    event.target.value
+                  )
+                }
+                placeholder="Örn. Ağustos dönemi paket ödemesi"
+              />
+            </label>
+
+            {paymentMethod ===
+            "cash" ? (
+              <div className="cashInfoBox">
+                💵 Nakit ödeme,
+                <strong>
+                  {" "}
+                  personelde / kasaya teslim bekliyor
+                </strong>{" "}
+                statüsünde kaydedilecektir. Daha sonra Günlük Kasa ekranından teslim süreci tamamlanabilir.
+              </div>
+            ) : (
+              <div className="nonCashInfoBox">
+                ✓ Bu ödeme fiziki nakit teslimi gerektirmeyen ödeme yöntemiyle kaydedilecektir.
+              </div>
+            )}
+
+            {paymentMessage ? (
+              <div
+                className={
+                  paymentMessage.includes(
+                    "başarıyla"
+                  )
+                    ? "paymentResult success"
+                    : "paymentResult error"
+                }
+              >
+                {paymentMessage}
+              </div>
+            ) : null}
+
+            <div className="paymentModalActions">
+              <button
+                type="button"
+                disabled={
+                  isPaymentPending
+                }
+                onClick={() =>
+                  setSelectedStudent(
+                    null
+                  )
+                }
+              >
+                Vazgeç
+              </button>
+
+              <button
+                type="button"
+                className="savePaymentButton"
+                disabled={
+                  isPaymentPending ||
+                  !selectedStudent.enrollment_id
+                }
+                onClick={submitPayment}
+              >
+                {isPaymentPending
+                  ? "Kaydediliyor..."
+                  : "✓ Ödemeyi Kaydet"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -1673,7 +1682,9 @@ export default function PaymentsClient({
               <button
                 type="button"
                 onClick={() =>
-                  setMessageStudent(null)
+                  setMessageStudent(
+                    null
+                  )
                 }
               >
                 ×
@@ -1681,9 +1692,7 @@ export default function PaymentsClient({
             </div>
 
             <label className="paymentField">
-              <span>
-                Mesaj Türü
-              </span>
+              <span>Mesaj Türü</span>
 
               <select
                 value={messageType}
@@ -1737,9 +1746,7 @@ export default function PaymentsClient({
               </div>
 
               <div>
-                <span>
-                  Kalan Ders
-                </span>
+                <span>Kalan Ders</span>
 
                 <strong>
                   {
@@ -1809,7 +1816,7 @@ export default function PaymentsClient({
                 className="whatsappButton"
                 onClick={openWhatsApp}
               >
-                WhatsApp'ta Aç
+                WhatsApp&apos;ta Aç
               </button>
             </div>
           </div>
@@ -1930,7 +1937,8 @@ export default function PaymentsClient({
         .paymentToolbar select,
         .paymentToolbar button,
         .paymentField select,
-        .paymentField textarea {
+        .paymentField textarea,
+        .paymentInput {
           width: 100%;
           box-sizing: border-box;
           border: 1px solid #dbe5f1;
@@ -1949,11 +1957,10 @@ export default function PaymentsClient({
 
         .paymentStudentGrid {
           display: grid;
-          grid-template-columns:
-            repeat(
-              2,
-              minmax(0, 1fr)
-            );
+          grid-template-columns: repeat(
+            2,
+            minmax(0, 1fr)
+          );
           gap: 14px;
         }
 
@@ -2010,8 +2017,10 @@ export default function PaymentsClient({
 
         .paymentPackageBox {
           display: grid;
-          grid-template-columns:
-            repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(
+            4,
+            minmax(0, 1fr)
+          );
           border: 1px solid #e2e8f0;
           border-radius: 14px;
           overflow: hidden;
@@ -2046,8 +2055,10 @@ export default function PaymentsClient({
 
         .paymentMoneyStrip {
           display: grid;
-          grid-template-columns:
-            repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(
+            3,
+            minmax(0, 1fr)
+          );
           border-radius: 14px;
           background: #f8fafc;
           margin-bottom: 12px;
@@ -2122,7 +2133,8 @@ export default function PaymentsClient({
           cursor: pointer;
         }
 
-        .paymentActions .primaryPaymentButton {
+        .paymentActions
+          .primaryPaymentButton {
           background: #156ff5;
           border-color: #156ff5;
           color: #fff;
@@ -2161,31 +2173,19 @@ export default function PaymentsClient({
         }
 
         .paymentModal {
-          width: min(
-            680px,
-            100%
-          );
+          width: min(680px, 100%);
           max-height: 92vh;
           overflow: auto;
           background: #fff;
           border-radius: 22px;
           padding: 20px;
-          box-shadow:
-            0 30px 80px
-            rgba(
-              15,
-              23,
-              42,
-              0.25
-            );
+          box-shadow: 0 30px 80px
+            rgba(15, 23, 42, 0.25);
         }
 
         .historyModal,
         .messageModal {
-          width: min(
-            780px,
-            100%
-          );
+          width: min(780px, 100%);
         }
 
         .paymentModalHeader {
@@ -2206,14 +2206,10 @@ export default function PaymentsClient({
           cursor: pointer;
         }
 
-        .paymentModalNotice,
-        .paymentComingSoon {
+        .paymentModalNotice {
           border-radius: 14px;
           padding: 14px;
           margin-bottom: 14px;
-        }
-
-        .paymentModalNotice {
           background: #eff6ff;
         }
 
@@ -2223,36 +2219,32 @@ export default function PaymentsClient({
           color: #475569;
         }
 
-        .paymentComingSoon {
+        .paymentWarningBox,
+        .cashInfoBox,
+        .nonCashInfoBox,
+        .paymentResult {
+          border-radius: 12px;
+          padding: 12px;
+          margin-bottom: 14px;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .paymentWarningBox,
+        .cashInfoBox {
           background: #fff7ed;
           color: #9a3412;
         }
 
-        .paymentCloseButton {
-          width: 100%;
-          border: 0;
-          border-radius: 12px;
-          background: #10213a;
-          color: #fff;
-          padding: 12px;
-          font-weight: 800;
-          cursor: pointer;
+        .nonCashInfoBox,
+        .paymentResult.success {
+          background: #ecfdf3;
+          color: #067647;
         }
 
-        .paymentHistoryList {
-          display: grid;
-          gap: 9px;
-        }
-
-        .paymentHistoryItem {
-          display: grid;
-          grid-template-columns:
-            1fr 1fr 1fr;
-          gap: 10px;
-          align-items: center;
-          border: 1px solid #e2e8f0;
-          border-radius: 13px;
-          padding: 12px;
+        .paymentResult.error {
+          background: #fef2f2;
+          color: #b42318;
         }
 
         .paymentField {
@@ -2271,13 +2263,29 @@ export default function PaymentsClient({
         .paymentField textarea {
           resize: vertical;
           line-height: 1.55;
-          min-height: 330px;
+        }
+
+        .paymentHistoryList {
+          display: grid;
+          gap: 9px;
+        }
+
+        .paymentHistoryItem {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid #e2e8f0;
+          border-radius: 13px;
+          padding: 12px;
         }
 
         .paymentMessageInfo {
           display: grid;
-          grid-template-columns:
-            repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(
+            4,
+            minmax(0, 1fr)
+          );
           gap: 8px;
           margin-bottom: 14px;
         }
@@ -2303,9 +2311,17 @@ export default function PaymentsClient({
           cursor: pointer;
         }
 
-        .paymentModalActions .whatsappButton {
+        .paymentModalActions
+          .whatsappButton {
           border-color: #16a34a;
           background: #16a34a;
+          color: #fff;
+        }
+
+        .paymentModalActions
+          .savePaymentButton {
+          border-color: #156ff5;
+          background: #156ff5;
           color: #fff;
         }
 
@@ -2313,11 +2329,10 @@ export default function PaymentsClient({
           max-width: 1100px
         ) {
           .paymentSummaryGrid {
-            grid-template-columns:
-              repeat(
-                2,
-                minmax(0, 1fr)
-              );
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            );
           }
 
           .paymentStudentGrid {
@@ -2329,11 +2344,10 @@ export default function PaymentsClient({
           max-width: 720px
         ) {
           .paymentSummaryGrid {
-            grid-template-columns:
-              repeat(
-                2,
-                minmax(0, 1fr)
-              );
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            );
           }
 
           .paymentToolbar {
@@ -2341,32 +2355,24 @@ export default function PaymentsClient({
           }
 
           .paymentPackageBox {
-            grid-template-columns:
-              repeat(
-                2,
-                minmax(0, 1fr)
-              );
-          }
-
-          .paymentPackageBox > div {
-            border-bottom:
-              1px solid #e2e8f0;
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            );
           }
 
           .paymentMoneyStrip {
-            grid-template-columns:
-              repeat(
-                3,
-                minmax(0, 1fr)
-              );
+            grid-template-columns: repeat(
+              3,
+              minmax(0, 1fr)
+            );
           }
 
           .paymentMessageInfo {
-            grid-template-columns:
-              repeat(
-                2,
-                minmax(0, 1fr)
-              );
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            );
           }
 
           .paymentHistoryItem {
@@ -2392,6 +2398,22 @@ export default function PaymentsClient({
 
           .paymentMessageInfo {
             grid-template-columns: 1fr;
+          }
+
+          .paymentPackageBox {
+            grid-template-columns: 1fr;
+          }
+
+          .paymentActions {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .paymentActions button,
+          .paymentActions a {
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
           }
         }
       `}</style>
