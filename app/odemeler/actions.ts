@@ -710,3 +710,153 @@ export async function approveCashHandover(
     };
   }
 }
+export async function updatePaymentDueDate(
+  enrollmentId: string,
+  paymentDueDate: string | null
+): Promise<PaymentActionResult> {
+  try {
+    const profile = await requireProfile([
+      "owner",
+      "admin",
+      "branch_manager",
+      "registration_staff",
+      "accounting",
+    ]);
+
+    const organizationId =
+      profile.organization_id;
+
+    if (!organizationId) {
+      return {
+        ok: false,
+        message:
+          "Organizasyon bilgisi bulunamadı.",
+      };
+    }
+
+    if (!enrollmentId) {
+      return {
+        ok: false,
+        message:
+          "Aktif kayıt bilgisi bulunamadı.",
+      };
+    }
+
+    if (
+      paymentDueDate &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        paymentDueDate
+      )
+    ) {
+      return {
+        ok: false,
+        message:
+          "Geçerli bir ödeme vade tarihi seçiniz.",
+      };
+    }
+
+    const supabase =
+      await createClient();
+
+    /*
+     * Önce enrollment gerçekten
+     * bu organizasyona mı ait kontrol ediyoruz.
+     */
+    const {
+      data: enrollment,
+      error: enrollmentError,
+    } = await supabase
+      .from("student_enrollments")
+      .select(
+        "id, student_id, status, payment_due_date"
+      )
+      .eq("id", enrollmentId)
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .maybeSingle();
+
+    if (
+      enrollmentError ||
+      !enrollment
+    ) {
+      return {
+        ok: false,
+        message:
+          "Öğrencinin kayıt bilgisi bulunamadı.",
+      };
+    }
+
+    if (
+      enrollment.status !== "active"
+    ) {
+      return {
+        ok: false,
+        message:
+          "Ödeme vadesi yalnızca aktif kayıt için değiştirilebilir.",
+      };
+    }
+
+    const { error } =
+      await supabase
+        .from("student_enrollments")
+        .update({
+          payment_due_date:
+            paymentDueDate || null,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          enrollmentId
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        );
+
+    if (error) {
+      return {
+        ok: false,
+        message:
+          `Ödeme vadesi kaydedilemedi: ${error.message}`,
+      };
+    }
+
+    /*
+     * Bağlı ekranları yenile.
+     */
+    revalidatePath("/odemeler");
+    revalidatePath("/ogrenciler");
+
+    if (enrollment.student_id) {
+      revalidatePath(
+        `/ogrenciler/${enrollment.student_id}`
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/kasa");
+
+    return {
+      ok: true,
+      message: paymentDueDate
+        ? "Ödeme vade tarihi başarıyla kaydedildi."
+        : "Ödeme vade tarihi kaldırıldı.",
+    };
+  } catch (error) {
+    console.error(
+      "updatePaymentDueDate error:",
+      error
+    );
+
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? `Ödeme vadesi kaydedilemedi: ${error.message}`
+          : "Ödeme vadesi kaydedilirken beklenmeyen bir hata oluştu.",
+    };
+  }
+}
