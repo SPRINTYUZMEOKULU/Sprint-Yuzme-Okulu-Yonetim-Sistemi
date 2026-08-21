@@ -1,24 +1,316 @@
 import Link from "next/link";
+
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+
+import KasaClient, {
+  type CashPaymentRow,
+} from "./kasa-client";
+
 import "../dashboard.css";
 
 export const dynamic = "force-dynamic";
 
-function money(value: number) { return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(value); }
+type AnyRow = Record<string, any>;
+
+function toNumber(value: unknown) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+}
 
 export default async function CashPage() {
-  await requireProfile();
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+    "registration_staff",
+    "accounting",
+  ]);
+
+  const organizationId = profile.organization_id;
+
+  if (!organizationId) {
+    return (
+      <main className="operationPage">
+        <header className="operationHeader">
+          <div>
+            <p>SPRİNTOS · FİNANS VE KASA</p>
+            <h1>Günlük Kasa</h1>
+            <span>Organizasyon bilgisi bulunamadı.</span>
+          </div>
+        </header>
+      </main>
+    );
+  }
+
   const supabase = await createClient();
-  const start = new Date(); start.setHours(0,0,0,0);
-  const { data: payments } = await supabase.from("payments").select("id,amount,payment_method,cash_status,received_at,student_id,received_by").gte("received_at", start.toISOString()).order("received_at", { ascending: false });
-  const rows = payments || [];
-  const total = rows.reduce((sum,p)=>sum+Number(p.amount || 0),0);
-  const cash = rows.filter(p=>p.payment_method==="cash").reduce((sum,p)=>sum+Number(p.amount || 0),0);
-  const pending = rows.filter(p=>["with_staff","handoff_pending"].includes(p.cash_status)).reduce((sum,p)=>sum+Number(p.amount || 0),0);
-  const confirmed = rows.filter(p=>p.cash_status==="main_cash_confirmed").reduce((sum,p)=>sum+Number(p.amount || 0),0);
-  return <main className="operationPage"><header className="operationHeader"><div><p>FİNANS VE KASA</p><h1>Bugünkü Kasa</h1><span>Personelin aldığı parayı, teslim durumunu ve ana kasaya giren tutarı tek ekranda görün.</span></div><div className="operationActions"><Link href="/">Dashboard</Link><button className="primaryOperation">Teslim Onaylarını Aç</button></div></header>
-    <section className="operationStats cashStats"><article><span>Bugünkü Tahsilat</span><strong>{money(total)}</strong></article><article><span>Nakit Alındı</span><strong>{money(cash)}</strong></article><article><span>Personelde / Onay Bekliyor</span><strong>{money(pending)}</strong></article><article><span>Ana Kasaya Giren</span><strong>{money(confirmed)}</strong></article></section>
-    <section className="operationCard"><div className="operationCardHeader"><div><p>GÜNLÜK HAREKET</p><h2>Bugün Alınan Ödemeler</h2></div><span>{rows.length} işlem</span></div><div className="responsiveTable"><table><thead><tr><th>Saat</th><th>Öğrenci</th><th>Tutar</th><th>Yöntem</th><th>Alan Personel</th><th>Kasa Durumu</th><th>Onay</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td>{new Date(row.received_at).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</td><td>{row.student_id || "—"}</td><td><strong>{money(Number(row.amount))}</strong></td><td>{row.payment_method}</td><td>{row.received_by || "—"}</td><td><span className={`statusPill ${row.cash_status}`}>{row.cash_status}</span></td><td><button>{row.cash_status==="handoff_pending"?"Teslim Aldım":"Detay"}</button></td></tr>)}{!rows.length?<tr><td colSpan={7}><div className="tableEmpty">Bugün için ödeme kaydı bulunmuyor.</div></td></tr>:null}</tbody></table></div></section>
-  </main>;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const [
+    paymentsResult,
+    studentsResult,
+    profilesResult,
+  ] = await Promise.all([
+    supabase
+      .from("student_payments")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .gte("received_at", today.toISOString())
+      .lt("received_at", tomorrow.toISOString())
+      .order("received_at", {
+        ascending: false,
+      }),
+
+    supabase
+      .from("students")
+      .select("id,first_name,last_name,student_number,phone,guardian_phone")
+      .eq("organization_id", organizationId),
+
+    supabase
+      .from("profiles")
+      .select("id,full_name,email")
+      .eq("organization_id", organizationId),
+  ]);
+
+  const loadError =
+    paymentsResult.error ||
+    studentsResult.error ||
+    profilesResult.error;
+
+  if (loadError) {
+    console.error(
+      "Günlük Kasa yükleme hatası:",
+      loadError
+    );
+
+    return (
+      <main className="operationPage">
+        <header className="operationHeader">
+          <div>
+            <p>SPRİNTOS · FİNANS VE KASA</p>
+            <h1>Günlük Kasa</h1>
+            <span>
+              Günlük tahsilat ve kasa teslim hareketleri.
+            </span>
+          </div>
+        </header>
+
+        <section className="operationCard">
+          <div className="tableEmpty">
+            Günlük Kasa yüklenemedi:{" "}
+            {loadError.message}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const students =
+    (studentsResult.data || []) as AnyRow[];
+
+  const profiles =
+    (profilesResult.data || []) as AnyRow[];
+
+  const studentMap = new Map(
+    students.map((student) => [
+      student.id,
+      student,
+    ])
+  );
+
+  const profileMap = new Map(
+    profiles.map((userProfile) => [
+      userProfile.id,
+      userProfile,
+    ])
+  );
+
+  const rows: CashPaymentRow[] = (
+    (paymentsResult.data || []) as AnyRow[]
+  ).map((payment) => {
+    const student =
+      studentMap.get(payment.student_id);
+
+    const receiver =
+      profileMap.get(payment.received_by);
+
+    return {
+      id: String(payment.id),
+
+      student_id:
+        payment.student_id || null,
+
+      student_number:
+        student?.student_number || null,
+
+      student_name:
+        `${student?.first_name || ""} ${
+          student?.last_name || ""
+        }`.trim() || "Öğrenci bilgisi yok",
+
+      contact_phone:
+        student?.guardian_phone ||
+        student?.phone ||
+        null,
+
+      amount:
+        toNumber(payment.amount),
+
+      currency:
+        payment.currency || "TRY",
+
+      payment_method:
+        payment.payment_method || null,
+
+      payment_status:
+        payment.payment_status || null,
+
+      description:
+        payment.description || null,
+
+      received_at:
+        payment.received_at || null,
+
+      received_by:
+        payment.received_by || null,
+
+      received_by_name:
+        receiver?.full_name ||
+        receiver?.email ||
+        null,
+
+      cash_handover_status:
+        payment.cash_handover_status ||
+        null,
+
+      cash_handover_requested_at:
+        payment.cash_handover_requested_at ||
+        null,
+
+      cash_handover_approved_by:
+        payment.cash_handover_approved_by ||
+        null,
+
+      cash_handover_approved_at:
+        payment.cash_handover_approved_at ||
+        null,
+
+      cancelled_at:
+        payment.cancelled_at || null,
+
+      cancellation_reason:
+        payment.cancellation_reason || null,
+    };
+  });
+
+  return (
+    <main className="operationPage">
+      <header className="operationHeader">
+        <div>
+          <p>SPRİNTOS · FİNANS VE KASA</p>
+
+          <h1>Günlük Kasa</h1>
+
+          <span>
+            Bugün alınan ödemeleri, ödeme yöntemlerini,
+            personeldeki nakdi ve ana kasa teslim durumunu
+            tek ekrandan yönetin.
+          </span>
+        </div>
+      </header>
+
+      <nav
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          marginBottom: 18,
+        }}
+      >
+        <Link
+          href="/"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#156ff5",
+            color: "#fff",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          🏠 Ana Sayfa
+        </Link>
+
+        <Link
+          href="/odemeler"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          💳 Ödeme Merkezi
+        </Link>
+
+        <Link
+          href="/ogrenciler"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          👤 Öğrenciler
+        </Link>
+
+        <Link
+          href="/yoklama"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          ✅ Yoklama
+        </Link>
+
+        <Link
+          href="/onay-merkezi"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          🛡️ Onay Merkezi
+        </Link>
+      </nav>
+
+      <KasaClient
+        rows={rows}
+        currentProfileId={profile.id}
+      />
+    </main>
+  );
 }
