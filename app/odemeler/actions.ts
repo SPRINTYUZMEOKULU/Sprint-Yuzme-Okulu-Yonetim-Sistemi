@@ -312,8 +312,7 @@ export async function createStudentPayment(
         payment_method:
           input.paymentMethod,
 
-        payment_status:
-          "completed",
+      payment_status: "received",
 
         description:
           cleanDescription(
