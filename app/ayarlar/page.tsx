@@ -94,7 +94,7 @@ const settingsCards: SettingsCard[] = [
     status: "Planlandı",
     statusTone: "warning",
   },
-  {
+    {
     title: "Sistem Ayarları",
     description:
       "Öğrenci numarası, varsayılan kayıt tercihleri ve SprintOS genel çalışma ayarlarını yönetin.",
@@ -103,6 +103,16 @@ const settingsCards: SettingsCard[] = [
     accent: "#334155",
     status: "Planlandı",
     statusTone: "warning",
+  },
+  {
+    title: "Onay Merkezi",
+    description:
+      "Ödeme, vade tarihi, kayıt düzenleme, silme, kasa teslimi ve diğer kritik işlemlerde yönetici onay kurallarını yönetin.",
+    href: "/ayarlar/onay-merkezi",
+    icon: "🔐",
+    accent: "#7c3aed",
+    status: "Aktif",
+    statusTone: "active",
   },
 ];
 
