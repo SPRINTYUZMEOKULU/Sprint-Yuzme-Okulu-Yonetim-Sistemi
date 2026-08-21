@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -644,6 +646,90 @@ export default async function PaymentsPage() {
           </span>
         </div>
       </header>
+
+
+      <nav
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          marginBottom: 18,
+        }}
+      >
+        <Link
+          href="/"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#156ff5",
+            color: "#fff",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          🏠 Ana Sayfa
+        </Link>
+
+        <Link
+          href="/ogrenciler"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          👤 Öğrenciler
+        </Link>
+
+        <Link
+          href="/kasa"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          💰 Günlük Kasa
+        </Link>
+
+        <Link
+          href="/yoklama"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          ✅ Yoklama
+        </Link>
+
+        <Link
+          href="/onay-merkezi"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "#fff",
+            color: "#10213a",
+            border: "1px solid #dbe5f1",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          🛡️ Onay Merkezi
+        </Link>
+      </nav>
 
       <PaymentsClient
         students={preparedStudents}
