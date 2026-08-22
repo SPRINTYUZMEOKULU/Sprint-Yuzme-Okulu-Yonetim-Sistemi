@@ -8,19 +8,45 @@ import "./globals.css";
 import GlobalPrintButton from "./components/global-print-button";
 
 export const metadata: Metadata = {
-  title: "SprintOS",
+  title: {
+    default: "SprintOS",
+    template: "%s | SprintOS",
+  },
 
   description:
     "Sprint Yüzme Okulu Yönetim Sistemi",
 
-  applicationName:
-    "SprintOS",
+  applicationName: "SprintOS",
+
+  manifest: "/manifest.webmanifest",
+
+  icons: {
+    icon: [
+      {
+        url: "/icons/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        url: "/icons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
+
+    apple: [
+      {
+        url: "/icons/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+  },
 
   appleWebApp: {
     capable: true,
     title: "SprintOS",
-    statusBarStyle:
-      "default",
+    statusBarStyle: "default",
   },
 
   formatDetection: {
@@ -39,8 +65,7 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children:
-    React.ReactNode;
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="tr">
