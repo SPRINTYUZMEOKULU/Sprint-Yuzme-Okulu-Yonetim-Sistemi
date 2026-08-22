@@ -1,1008 +1,1104 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { requireProfile, type UserRole } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icons } from "@/app/components/dashboard-icons";
-import GlobalSearch from "@/app/components/global-search";
-import "./dashboard.css";
 
-export const dynamic = "force-dynamic";
+type SearchResult = {
+  id: string;
+  name: string;
+  type: "student" | "guardian" | "group";
+  subtitle?: string;
 
-type MenuItem = {
-  label: string;
+  studentNumber?: string | null;
+
+  phone?: string | null;
+  guardianPhone?: string | null;
+  guardianName?: string | null;
+
+  email?: string | null;
+  guardianEmail?: string | null;
+
+  swimmingLevel?: string | null;
+  status?: string | null;
+
+  groupName?: string | null;
+  branchName?: string | null;
+
   href: string;
-  roles: UserRole[];
-  icon: keyof typeof Icons;
-  group: string;
 };
 
-type StatItem = {
-  label: string;
-  value: number | string;
-  note: string;
-  icon: keyof typeof Icons;
-  tone: string;
-  href: string;
-};
+function durumMetni(status?: string | null) {
+  if (!status) return "Durum belirtilmemiş";
 
-type QuickItem = {
-  label: string;
-  href: string;
-  icon: keyof typeof Icons;
-  roles: UserRole[];
-  badge?: number;
-};
+  const map: Record<string, string> = {
+    active: "Aktif Öğrenci",
+    passive: "Pasif Öğrenci",
+    pre_registration: "Ön Kayıt",
+    pending: "Bekliyor",
+    cancelled: "İptal",
+    completed: "Tamamlandı",
+  };
 
-const allRoles: UserRole[] = [
-  "owner",
-  "admin",
-  "branch_manager",
-  "registration_staff",
-  "accounting",
-  "coach",
-  "guardian",
-];
+  return map[status] || status;
+}
 
-const management: UserRole[] = [
-  "owner",
-  "admin",
-  "branch_manager",
-];
+export default function GlobalSearch() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
-const staff: UserRole[] = [
-  "owner",
-  "admin",
-  "branch_manager",
-  "registration_staff",
-  "accounting",
-  "coach",
-];
+  const [selected, setSelected] =
+    useState<SearchResult | null>(null);
 
-const menu: MenuItem[] = [
-  {
-    label: "Ana Sayfa",
-    href: "/",
-    roles: allRoles,
-    icon: "dashboard",
-    group: "GENEL",
-  },
-  {
-    label: "Ön Kayıtlar",
-    href: "/on-kayitlar",
-    roles: ["owner", "admin", "branch_manager", "registration_staff"],
-    icon: "note",
-    group: "GENEL",
-  },
-  {
-    label: "Öğrenciler",
-    href: "/ogrenciler",
-    roles: staff,
-    icon: "child",
-    group: "GENEL",
-  },
-  {
-    label: "Veliler",
-    href: "/veliler",
-    roles: ["owner", "admin", "branch_manager", "registration_staff"],
-    icon: "users",
-    group: "GENEL",
-  },
+  const router = useRouter();
 
-  {
-    label: "Şubeler",
-    href: "/subeler",
-    roles: management,
-    icon: "branch",
-    group: "EĞİTİM",
-  },
-  {
-    label: "Gruplar",
-    href: "/gruplar",
-    roles: staff,
-    icon: "branch",
-    group: "EĞİTİM",
-  },
-  {
-    label: "Ders Programı",
-    href: "/ders-programi",
-    roles: allRoles,
-    icon: "calendar",
-    group: "EĞİTİM",
-  },
-  {
-    label: "Yoklama",
-    href: "/yoklama",
-    roles: ["owner", "admin", "branch_manager", "coach"],
-    icon: "check",
-    group: "EĞİTİM",
-  },
+  const wrapperRef =
+    useRef<HTMLDivElement>(null);
 
-  {
-    label: "Paketler",
-    href: "/paketler",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "registration_staff",
-      "accounting",
-      "guardian",
-    ],
-    icon: "approval",
-    group: "FİNANS",
-  },
-  {
-    label: "Günlük Kasa",
-    href: "/kasa",
-    roles: ["owner", "admin", "branch_manager", "accounting"],
-    icon: "wallet",
-    group: "FİNANS",
-  },
-  {
-    label: "Ödemeler",
-    href: "/odemeler",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "accounting",
-      "guardian",
-    ],
-    icon: "wallet",
-    group: "FİNANS",
-  },
-
-  {
-    label: "Hazır Mesajlar",
-    href: "/hazir-mesajlar",
-    roles: staff,
-    icon: "message",
-    group: "İLETİŞİM",
-  },
-
-  {
-    label: "Uyarılar",
-    href: "/uyarilar",
-    roles: staff,
-    icon: "bell",
-    group: "YÖNETİM",
-  },
-  {
-    label: "Onay Merkezi",
-    href: "/onay-merkezi",
-    roles: management,
-    icon: "approval",
-    group: "YÖNETİM",
-  },
-  {
-    label: "Kullanıcılar ve Yetkiler",
-    href: "/kullanicilar-ve-yetkiler",
-    roles: ["owner", "admin"],
-    icon: "users",
-    group: "YÖNETİM",
-  },
-  {
-    label: "Raporlar",
-    href: "/raporlar",
-    roles: management,
-    icon: "chart",
-    group: "YÖNETİM",
-  },
-  {
-    label: "Ayarlar",
-    href: "/ayarlar",
-    roles: ["owner", "admin"],
-    icon: "settings",
-    group: "YÖNETİM",
-  },
-];
-
-const roleLabels: Record<UserRole, string> = {
-  pending: "Onay Bekliyor",
-  owner: "Kurucu Yönetici",
-  admin: "Yönetici",
-  branch_manager: "Şube Yöneticisi",
-  registration_staff: "Kayıt Personeli",
-  accounting: "Muhasebe",
-  coach: "Eğitmen",
-  guardian: "Veli",
-};
-
-async function safeCount(
-  table: string,
-  filters?: Array<[string, string]>
-) {
-  try {
-    const supabase = await createClient();
-
-    let query = supabase
-      .from(table)
-      .select("id", {
-        count: "exact",
-        head: true,
-      });
-
-    for (const [key, value] of filters || []) {
-      query = query.eq(key, value);
+  /*
+   * =========================================================
+   * DIŞARI TIKLAYINCA KAPAT
+   * =========================================================
+   */
+  useEffect(() => {
+    function handleOutside(event: MouseEvent) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(
+          event.target as Node
+        )
+      ) {
+        setOpen(false);
+        setSelected(null);
+      }
     }
 
-    const { count, error } = await query;
+    document.addEventListener(
+      "mousedown",
+      handleOutside
+    );
 
-    return error ? 0 : count || 0;
-  } catch {
-    return 0;
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutside
+      );
+    };
+  }, []);
+
+  /*
+   * =========================================================
+   * ARAMA
+   * =========================================================
+   */
+  useEffect(() => {
+    const trimmed = query.trim();
+
+    if (trimmed.length < 2) {
+      setResults([]);
+      setOpen(false);
+      setSelected(null);
+
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setLoading(true);
+
+        const response = await fetch(
+          `/api/global-search?q=${encodeURIComponent(
+            trimmed
+          )}`,
+          {
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok) {
+          setResults([]);
+          setOpen(true);
+          return;
+        }
+
+        const data =
+          await response.json();
+
+        setResults(
+          Array.isArray(data.results)
+            ? data.results
+            : []
+        );
+
+        setOpen(true);
+      } catch (error) {
+        console.error(
+          "Arama yapılamadı:",
+          error
+        );
+
+        setResults([]);
+        setOpen(true);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () =>
+      clearTimeout(timer);
+  }, [query]);
+
+  /*
+   * =========================================================
+   * SONUCA TIKLANDIĞINDA
+   * SAYFA DEĞİŞTİRME.
+   * HIZLI ÖN İZLEME AÇ.
+   * =========================================================
+   */
+  function selectResult(
+    result: SearchResult
+  ) {
+    setSelected(result);
+    setOpen(true);
   }
-}
 
-export default async function HomePage() {
-  const profile = await requireProfile();
-
-  if (profile.role === "guardian") {
-    redirect("/veli-paneli");
+  function closePreview() {
+    setSelected(null);
   }
 
-  const visibleMenu = menu.filter((item) =>
-    item.roles.includes(profile.role)
-  );
+  /*
+   * =========================================================
+   * KLAVYE KISAYOLU
+   * CMD + K / CTRL + K
+   * =========================================================
+   */
+  const inputRef =
+    useRef<HTMLInputElement>(null);
 
-  const isCoach = profile.role === "coach";
-  const isGuardian = String(profile.role) === "guardian";
-  const isManager = management.includes(profile.role);
+  useEffect(() => {
+    function keyboardShortcut(
+      event: KeyboardEvent
+    ) {
+      if (
+        (event.metaKey ||
+          event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
 
-  const [
-    activeStudents,
-    preRegistrations,
-    openAlerts,
-    pendingApprovals,
-    pendingCash,
-  ] = await Promise.all([
-    safeCount("students", [["status", "active"]]),
-    safeCount("students", [["status", "pre_registration"]]),
-    safeCount("alerts", [["status", "open"]]),
-    safeCount("approval_requests", [["status", "pending"]]),
-    safeCount("payments", [["cash_status", "handoff_pending"]]),
-  ]);
+        inputRef.current?.focus();
 
-  const today = new Intl.DateTimeFormat("tr-TR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+        if (
+          query.trim().length >= 2
+        ) {
+          setOpen(true);
+        }
+      }
 
-  const firstName = (
-    profile.full_name ||
-    "SprintOS Kullanıcısı"
-  ).split(" ")[0];
+      if (
+        event.key === "Escape"
+      ) {
+        setOpen(false);
+        setSelected(null);
+      }
+    }
 
-  const managerStats: StatItem[] = [
-    {
-      label: "Aktif Öğrenci",
-      value: activeStudents,
-      note: "Tüm şubeler",
-      icon: "child",
-      tone: "blue",
-      href: "/ogrenciler?durum=active",
-    },
-    {
-      label: "Bekleyen Ön Kayıt",
-      value: preRegistrations,
-      note: "Geri dönüş bekliyor",
-      icon: "note",
-      tone: "orange",
-      href: "/on-kayitlar?durum=bekleyen",
-    },
-    {
-      label: "Açık Uyarı",
-      value: openAlerts,
-      note: "İşlem gerektiriyor",
-      icon: "bell",
-      tone: "red",
-      href: "/uyarilar?durum=open",
-    },
-    {
-      label: "Kasa Onayı",
-      value: pendingCash,
-      note: "Teslim onayı bekliyor",
-      icon: "wallet",
-      tone: "purple",
-      href: "/kasa?durum=handoff_pending",
-    },
-  ];
+    window.addEventListener(
+      "keydown",
+      keyboardShortcut
+    );
 
-  const coachStats: StatItem[] = [
-    {
-      label: "Bugünkü Dersim",
-      value: 0,
-      note: "Planlanan ders",
-      icon: "calendar",
-      tone: "blue",
-      href: "/ders-programi",
-    },
-    {
-      label: "Bu Ay Girdiğim",
-      value: 0,
-      note: "Onaylı ders",
-      icon: "check",
-      tone: "green",
-      href: "/yoklama",
-    },
-    {
-      label: "Yoklama Bekleyen",
-      value: 0,
-      note: "Tamamlanacak",
-      icon: "clock",
-      tone: "orange",
-      href: "/yoklama",
-    },
-    {
-      label: "Açık Görev",
-      value: openAlerts,
-      note: "Size atanan",
-      icon: "bell",
-      tone: "purple",
-      href: "/uyarilar",
-    },
-  ];
-
-  const guardianStats: StatItem[] = [
-    {
-      label: "Kalan Ders",
-      value: 0,
-      note: "Aktif paket",
-      icon: "calendar",
-      tone: "blue",
-      href: "/paketler",
-    },
-    {
-      label: "Sıradaki Ders",
-      value: "—",
-      note: "Program bilgisi",
-      icon: "clock",
-      tone: "green",
-      href: "/ders-programi",
-    },
-    {
-      label: "Devam Oranı",
-      value: "%0",
-      note: "Katılım geçmişi",
-      icon: "chart",
-      tone: "orange",
-      href: "/yoklama",
-    },
-    {
-      label: "Ödeme Durumu",
-      value: "—",
-      note: "Aktif paket",
-      icon: "wallet",
-      tone: "purple",
-      href: "/odemeler",
-    },
-  ];
-
-  const stats = isCoach
-    ? coachStats
-    : isGuardian
-    ? guardianStats
-    : managerStats;
-
-  const quickItems: QuickItem[] = [
-    {
-      label: "Yeni Ön Kayıt",
-      href: "/on-kayit",
-      icon: "note",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
-    },
-    {
-      label: "Ön Kayıtlar",
-      href: "/on-kayitlar",
-      icon: "note",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
-      badge: preRegistrations,
-    },
-    {
-      label: "Öğrenciler",
-      href: "/ogrenciler",
-      icon: "child",
-      roles: staff,
-    },
-    {
-      label: "Veliler",
-      href: "/veliler",
-      icon: "users",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
-    },
-    {
-      label: "Gruplar",
-      href: "/gruplar",
-      icon: "branch",
-      roles: staff,
-    },
-    {
-      label: "Ders Programı",
-      href: "/ders-programi",
-      icon: "calendar",
-      roles: allRoles,
-    },
-    {
-      label: "Yoklama",
-      href: "/yoklama",
-      icon: "check",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "coach",
-      ],
-    },
-    {
-      label: "Ödemeler",
-      href: "/odemeler",
-      icon: "wallet",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "accounting",
-      ],
-    },
-    {
-      label: "Günlük Kasa",
-      href: "/kasa",
-      icon: "wallet",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "accounting",
-      ],
-      badge: pendingCash,
-    },
-    {
-      label: "Onay Merkezi",
-      href: "/onay-merkezi",
-      icon: "approval",
-      roles: management,
-      badge: pendingApprovals,
-    },
-    {
-      label: "Hazır Mesajlar",
-      href: "/hazir-mesajlar",
-      icon: "message",
-      roles: staff,
-    },
-    {
-      label: "Uyarılar",
-      href: "/uyarilar",
-      icon: "bell",
-      roles: staff,
-      badge: openAlerts,
-    },
-    {
-      label: "Kullanıcılar ve Yetkiler",
-      href: "/kullanicilar-ve-yetkiler",
-      icon: "users",
-      roles: ["owner", "admin"],
-    },
-    {
-      label: "Raporlar",
-      href: "/raporlar",
-      icon: "chart",
-      roles: management,
-    },
-    {
-      label: "Ayarlar",
-      href: "/ayarlar",
-      icon: "settings",
-      roles: ["owner", "admin"],
-    },
-  ];
-
-  const visibleQuickItems = quickItems.filter(
-    (item) => item.roles.includes(profile.role)
-  );
-
-  const groups = [
-    ...new Set(
-      visibleMenu.map((item) => item.group)
-    ),
-  ];
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        keyboardShortcut
+      );
+  }, [query]);
 
   return (
-    <main className="proShell">
-      <aside className="proSidebar">
-        <Link
-          href="/"
-          className="proBrand"
-          title="Ana Sayfaya Dön"
-        >
-          <div className="proLogo">
-            <img
-              src="/sprint-logo.png"
-              alt="Sprint Yüzme Okulu"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                borderRadius: "12px",
-              }}
-            />
-          </div>
+    <div
+      ref={wrapperRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        maxWidth: "560px",
+      }}
+    >
+      {/* =====================================================
+          ARAMA KUTUSU
+      ===================================================== */}
 
-          <div>
-            <strong>SprintOS</strong>
-            <span>Yüzme Okulu Yönetimi</span>
-          </div>
-        </Link>
+      <div
+        className="searchBox"
+        style={{
+          width: "100%",
+          cursor: "text",
+          position: "relative",
+        }}
+        onClick={() =>
+          inputRef.current?.focus()
+        }
+      >
+        <Icons.search />
 
-        <nav className="proNav">
-          {groups.map((group) => (
-            <div
-              className="navGroup"
-              key={group}
-            >
-              <p>{group}</p>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(event) => {
+            setQuery(
+              event.target.value
+            );
 
-              {visibleMenu
-                .filter(
-                  (item) =>
-                    item.group === group
-                )
-                .map((item) => {
-                  const Icon =
-                    Icons[item.icon];
+            setSelected(null);
+          }}
+          onFocus={() => {
+            if (
+              query.trim().length >= 2
+            ) {
+              setOpen(true);
+            }
+          }}
+          placeholder="Öğrenci, veli, telefon veya öğrenci numarası ara..."
+          autoComplete="off"
+          style={{
+            flex: 1,
+            width: "100%",
+            border: 0,
+            outline: "none",
+            background:
+              "transparent",
+            color: "#17233b",
+            fontSize: "14px",
+            minWidth: 0,
+          }}
+        />
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={
-                        item.href === "/"
-                          ? "proNavItem active"
-                          : "proNavItem"
-                      }
-                    >
-                      <Icon />
-
-                      <span>
-                        {item.label}
-                      </span>
-
-                      {item.href ===
-                        "/uyarilar" &&
-                      openAlerts > 0 ? (
-                        <b>
-                          {openAlerts}
-                        </b>
-                      ) : null}
-
-                      {item.href ===
-                        "/onay-merkezi" &&
-                      pendingApprovals > 0 ? (
-                        <b>
-                          {pendingApprovals}
-                        </b>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-            </div>
-          ))}
-        </nav>
-
-        <div className="proUser">
-          <div className="avatar">
-            {(
-              profile.full_name ||
-              profile.email ||
-              "S"
-            )
-              .charAt(0)
-              .toUpperCase()}
-          </div>
-
-          <div>
-            <strong>
-              {profile.full_name ||
-                profile.email ||
-                "Kullanıcı"}
-            </strong>
-
-            <span>
-              {roleLabels[profile.role]}
-            </span>
-          </div>
-
-          <Link
-            href="/auth/signout"
-            title="Güvenli Çıkış"
-            aria-label="Güvenli Çıkış"
+        {loading ? (
+          <span
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              whiteSpace: "nowrap",
+            }}
           >
-            <Icons.logout />
-          </Link>
-        </div>
-      </aside>
+            Aranıyor...
+          </span>
+        ) : query ? (
+          <button
+            type="button"
+            title="Aramayı Temizle"
+            onClick={(event) => {
+              event.stopPropagation();
 
-      <section className="proMain">
-        <header className="proTopbar">
-          <GlobalSearch />
+              setQuery("");
+              setResults([]);
+              setSelected(null);
+              setOpen(false);
 
-          <div className="topActions">
-            <Link
-              href="/uyarilar"
-              aria-label="Bildirimler"
-              title="Bildirimleri Aç"
-              style={{
-                position: "relative",
-              }}
-            >
-              <Icons.bell />
+              inputRef.current?.focus();
+            }}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              color: "#64748b",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                "center",
+              fontSize: "16px",
+            }}
+          >
+            ×
+          </button>
+        ) : (
+          <kbd>⌘ K</kbd>
+        )}
+      </div>
 
-              {openAlerts > 0 ||
-              pendingApprovals > 0 ? (
-                <i />
-              ) : null}
-            </Link>
+      {/* =====================================================
+          SONUÇ PENCERESİ
+      ===================================================== */}
 
-            <span className="dateText">
-              {today}
-            </span>
-          </div>
-        </header>
+      {open ? (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 9px)",
+            left: 0,
+            right: 0,
 
-        <div className="dashboardContent">
-          <section className="heroRow">
+            background: "#ffffff",
+
+            border:
+              "1px solid #dfe7f1",
+
+            borderRadius: "16px",
+
+            boxShadow:
+              "0 22px 55px rgba(15,23,42,0.18)",
+
+            zIndex: 9999,
+
+            overflow: "hidden",
+
+            maxHeight: "520px",
+          }}
+        >
+          {/* =================================================
+              ÖĞRENCİ ÖN İZLEME
+          ================================================= */}
+
+          {selected ? (
             <div>
-              <p className="heroEyebrow">
-                SPRİNT YÜZME OKULU
-              </p>
+              {/* ÜST */}
 
-              <h1>
-                Hoş geldiniz, {firstName}
-              </h1>
+              <div
+                style={{
+                  padding:
+                    "17px 18px",
 
-              <p>
-                {isCoach
-                  ? "Bugünkü derslerinizi, öğrencilerinizi ve yoklamalarınızı buradan yönetin."
-                  : isGuardian
-                  ? "Öğrencinizin ders, paket ve ödeme bilgilerini takip edin."
-                  : "Günlük operasyonunuzu tek ekrandan yönetin."}
-              </p>
-            </div>
+                  background:
+                    "linear-gradient(135deg,#f7faff,#eef5ff)",
 
-            <div className="heroActions">
-              {isCoach ? (
-                <Link
-                  className="actionPrimary"
-                  href="/yoklama"
-                >
-                  <Icons.check />
-                  Derse Geldim
-                </Link>
-              ) : isGuardian ? (
-                <Link
-                  className="actionPrimary"
-                  href="/ders-programi"
-                >
-                  <Icons.calendar />
-                  Ders Programım
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    className="actionSecondary"
-                    href="/hazir-mesajlar"
-                  >
-                    <Icons.message />
-                    Hızlı Mesaj
-                  </Link>
-
-                  <Link
-                    className="actionPrimary"
-                    href="/on-kayit"
-                  >
-                    <span>+</span>
-                    Yeni Ön Kayıt
-                  </Link>
-                </>
-              )}
-            </div>
-          </section>
-
-          <section className="proStats">
-            {stats.map((stat) => {
-              const Icon =
-                Icons[stat.icon];
-
-              return (
-                <Link
-                  href={stat.href}
-                  className={`proStat ${stat.tone}`}
-                  key={stat.label}
+                  borderBottom:
+                    "1px solid #e8eef6",
+                }}
+              >
+                <div
                   style={{
-                    textDecoration: "none",
-                    color: "inherit",
+                    display: "flex",
+                    alignItems:
+                      "flex-start",
+                    justifyContent:
+                      "space-between",
+                    gap: "12px",
                   }}
                 >
-                  <div className="statIcon">
-                    <Icon />
-                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems:
+                        "center",
+                      gap: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius:
+                          "14px",
 
-                  <div>
-                    <span>
-                      {stat.label}
-                    </span>
+                        background:
+                          "#e7f1ff",
 
-                    <strong>
-                      {stat.value}
-                    </strong>
+                        display: "flex",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "center",
 
-                    <small>
-                      {stat.note}
-                    </small>
-                  </div>
-                </Link>
-              );
-            })}
-          </section>
+                        color:
+                          "#1769e8",
 
-          <section className="dashboardGrid">
-            <article className="dashCard scheduleCard">
-              <div className="dashCardHeader">
-                <div>
-                  <p>GÜNLÜK OPERASYON</p>
-
-                  <h2>
-                    {isCoach
-                      ? "Bugünkü Programım"
-                      : isGuardian
-                      ? "Yaklaşan Dersler"
-                      : "Bugünkü Dersler ve Yoklamalar"}
-                  </h2>
-                </div>
-
-                <Link href="/ders-programi">
-                  Takvimi Aç <Icons.arrow />
-                </Link>
-              </div>
-
-              <div className="emptyPro">
-                <div className="emptyIcon">
-                  <Icons.calendar />
-                </div>
-
-                <strong>
-                  Bugünkü program hazırlanıyor
-                </strong>
-
-                <span>
-                  Bir sonraki aşamada bugünün
-                  derslerini saat, grup, şube,
-                  eğitmen, öğrenci sayısı ve
-                  yoklama durumu ile burada
-                  canlı göstereceğiz.
-                </span>
-
-                <Link href="/ders-programi">
-                  Ders programına git
-                </Link>
-              </div>
-            </article>
-
-            <article className="dashCard alertCard">
-              <div className="dashCardHeader">
-                <div>
-                  <p>ÖNCELİKLER</p>
-                  <h2>Akıllı Uyarılar</h2>
-                </div>
-
-                <Link href="/uyarilar">
-                  Tümünü Gör <Icons.arrow />
-                </Link>
-              </div>
-
-              <div className="alertList">
-                {openAlerts > 0 ? (
-                  <div className="alertItem urgent">
-                    <span>
-                      <Icons.bell />
-                    </span>
-
-                    <div>
-                      <strong>
-                        {openAlerts} açık uyarı bulunuyor
-                      </strong>
-
-                      <small>
-                        Öncelikli işlemleri kontrol edin.
-                      </small>
-                    </div>
-
-                    <Link href="/uyarilar">
-                      İncele
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="alertItem success">
-                    <span>
-                      <Icons.check />
-                    </span>
-
-                    <div>
-                      <strong>
-                        Her şey yolunda
-                      </strong>
-
-                      <small>
-                        Şu anda açık uyarı bulunmuyor.
-                      </small>
-                    </div>
-                  </div>
-                )}
-
-                {isManager &&
-                pendingApprovals > 0 ? (
-                  <div className="alertItem warning">
-                    <span>
-                      <Icons.approval />
-                    </span>
-
-                    <div>
-                      <strong>
-                        {pendingApprovals} işlem onay bekliyor
-                      </strong>
-
-                      <small>
-                        Onay Merkezi'nde kararınızı belirtin.
-                      </small>
-                    </div>
-
-                    <Link href="/onay-merkezi">
-                      Aç
-                    </Link>
-                  </div>
-                ) : null}
-
-                {pendingCash > 0 ? (
-                  <div className="alertItem warning">
-                    <span>
-                      <Icons.wallet />
-                    </span>
-
-                    <div>
-                      <strong>
-                        {pendingCash} kasa işlemi bekliyor
-                      </strong>
-
-                      <small>
-                        Teslim ve kasa işlemlerini kontrol edin.
-                      </small>
-                    </div>
-
-                    <Link href="/kasa">
-                      Aç
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            </article>
-
-            <article
-              className="dashCard quickCard"
-              style={{
-                gridColumn: "1 / -1",
-              }}
-            >
-              <div className="dashCardHeader">
-                <div>
-                  <p>HIZLI ERİŞİM</p>
-
-                  <h2>
-                    İhtiyacınız Olan Modüle Tek Tıkla Ulaşın
-                  </h2>
-                </div>
-              </div>
-
-              <div className="quickGrid">
-                {visibleQuickItems.map((item) => {
-                  const Icon =
-                    Icons[item.icon];
-
-                  return (
-                    <Link
-                      key={item.label}
-                      href={item.href}
+                        flexShrink: 0,
+                      }}
                     >
-                      <span>
-                        <Icon />
-                      </span>
+                      <Icons.child />
+                    </div>
 
-                      <strong>
-                        {item.label}
+                    <div>
+                      <div
+                        style={{
+                          fontSize:
+                            "11px",
+                          fontWeight:
+                            800,
+
+                          letterSpacing:
+                            "1px",
+
+                          color:
+                            "#1769e8",
+
+                          marginBottom:
+                            "4px",
+                        }}
+                      >
+                        ÖĞRENCİ HIZLI
+                        KARTI
+                      </div>
+
+                      <strong
+                        style={{
+                          display:
+                            "block",
+
+                          fontSize:
+                            "17px",
+
+                          color:
+                            "#13233f",
+                        }}
+                      >
+                        {selected.name}
                       </strong>
 
-                      {item.badge &&
-                      item.badge > 0 ? (
-                        <b
-                          style={{
-                            marginLeft: "auto",
-                            marginRight: "8px",
-                            minWidth: "22px",
-                            height: "22px",
-                            borderRadius: "999px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "11px",
-                            padding: "0 6px",
-                            background: "#eaf2ff",
-                            color: "#1769e8",
-                          }}
-                        >
-                          {item.badge}
-                        </b>
-                      ) : null}
+                      <small
+                        style={{
+                          color:
+                            "#64748b",
+                        }}
+                      >
+                        {durumMetni(
+                          selected.status
+                        )}
+                      </small>
+                    </div>
+                  </div>
 
-                      <Icons.arrow />
-                    </Link>
-                  );
-                })}
+                  <button
+                    type="button"
+                    onClick={
+                      closePreview
+                    }
+                    title="Geri"
+                    style={{
+                      border:
+                        "1px solid #dfe7f1",
+
+                      background:
+                        "#ffffff",
+
+                      borderRadius:
+                        "9px",
+
+                      padding:
+                        "7px 10px",
+
+                      cursor:
+                        "pointer",
+
+                      color:
+                        "#475569",
+
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    ← Sonuçlar
+                  </button>
+                </div>
               </div>
-            </article>
 
-            <article className="dashCard branchCard">
-              <div className="dashCardHeader">
-                <div>
-                  <p>ŞUBE DURUMU</p>
-                  <h2>Aktif Lokasyonlar</h2>
+              {/* BİLGİLER */}
+
+              <div
+                style={{
+                  padding:
+                    "16px 18px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+
+                    gridTemplateColumns:
+                      "repeat(2,minmax(0,1fr))",
+
+                    gap: "10px",
+                  }}
+                >
+                  <InfoBox
+                    title="Şube"
+                    value={
+                      selected.branchName ||
+                      "Belirtilmemiş"
+                    }
+                  />
+
+                  <InfoBox
+                    title="Grup"
+                    value={
+                      selected.groupName ||
+                      "Belirtilmemiş"
+                    }
+                  />
+
+                  <InfoBox
+                    title="Seviye"
+                    value={
+                      selected.swimmingLevel ||
+                      "Belirtilmemiş"
+                    }
+                  />
+
+                  <InfoBox
+                    title="Öğrenci No"
+                    value={
+                      selected.studentNumber ||
+                      "—"
+                    }
+                  />
+
+                  <InfoBox
+                    title="Veli"
+                    value={
+                      selected.guardianName ||
+                      "Belirtilmemiş"
+                    }
+                  />
+
+                  <InfoBox
+                    title="Telefon"
+                    value={
+                      selected.guardianPhone ||
+                      selected.phone ||
+                      "Belirtilmemiş"
+                    }
+                  />
                 </div>
 
-                <Link href="/subeler">
-                  Yönet <Icons.arrow />
-                </Link>
-              </div>
+                {/* İŞLEMLER */}
 
-              <div className="branchList">
-                {[
-                  "Lara Life City",
-                  "Konyaaltı Öğretmenevi",
-                  "Meltem Yüzme Havuzu",
-                  "Süleyman Erol Olimpik",
-                ].map((name, index) => (
-                  <div key={name}>
-                    <span
-                      className={`branchDot b${index + 1}`}
+                <div
+                  style={{
+                    marginTop: "17px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "11px",
+
+                      fontWeight:
+                        800,
+
+                      color:
+                        "#64748b",
+
+                      letterSpacing:
+                        ".9px",
+
+                      marginBottom:
+                        "9px",
+                    }}
+                  >
+                    HIZLI İŞLEMLER
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+
+                      gridTemplateColumns:
+                        "repeat(2,minmax(0,1fr))",
+
+                      gap: "8px",
+                    }}
+                  >
+                    <ActionButton
+                      text="Öğrenci Dosyası"
+                      onClick={() =>
+                        router.push(
+                          `/ogrenciler?ogrenci=${encodeURIComponent(
+                            selected.id
+                          )}`
+                        )
+                      }
                     />
 
-                    <strong>
-                      {name}
+                    <ActionButton
+                      text="Yoklama"
+                      onClick={() =>
+                        router.push(
+                          `/yoklama?ogrenci=${encodeURIComponent(
+                            selected.id
+                          )}`
+                        )
+                      }
+                    />
+
+                    <ActionButton
+                      text="Ödemeler"
+                      onClick={() =>
+                        router.push(
+                          `/odemeler?ogrenci=${encodeURIComponent(
+                            selected.id
+                          )}`
+                        )
+                      }
+                    />
+
+                    <ActionButton
+                      text="Mesaj Gönder"
+                      onClick={() =>
+                        router.push(
+                          `/hazir-mesajlar?ogrenci=${encodeURIComponent(
+                            selected.id
+                          )}`
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* SONUÇ BAŞLIĞI */}
+
+              <div
+                style={{
+                  padding:
+                    "12px 15px",
+
+                  borderBottom:
+                    "1px solid #edf1f6",
+
+                  background:
+                    "#fafcff",
+
+                  display: "flex",
+
+                  alignItems:
+                    "center",
+
+                  justifyContent:
+                    "space-between",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize:
+                      "12px",
+
+                    color:
+                      "#475569",
+                  }}
+                >
+                  ARAMA SONUÇLARI
+                </strong>
+
+                {!loading &&
+                results.length >
+                  0 ? (
+                  <span
+                    style={{
+                      fontSize:
+                        "11px",
+
+                      color:
+                        "#94a3b8",
+                    }}
+                  >
+                    {results.length}{" "}
+                    kayıt
+                  </span>
+                ) : null}
+              </div>
+
+              {/* SONUÇLAR */}
+
+              <div
+                style={{
+                  maxHeight:
+                    "410px",
+
+                  overflowY:
+                    "auto",
+                }}
+              >
+                {loading ? (
+                  <div
+                    style={{
+                      padding:
+                        "24px 18px",
+
+                      textAlign:
+                        "center",
+
+                      color:
+                        "#64748b",
+
+                      fontSize:
+                        "13px",
+                    }}
+                  >
+                    Öğrenciler
+                    aranıyor...
+                  </div>
+                ) : results.length ===
+                  0 ? (
+                  <div
+                    style={{
+                      padding:
+                        "25px 18px",
+
+                      textAlign:
+                        "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width:
+                          "44px",
+
+                        height:
+                          "44px",
+
+                        margin:
+                          "0 auto 9px",
+
+                        borderRadius:
+                          "13px",
+
+                        background:
+                          "#f1f5f9",
+
+                        display:
+                          "flex",
+
+                        alignItems:
+                          "center",
+
+                        justifyContent:
+                          "center",
+
+                        color:
+                          "#64748b",
+                      }}
+                    >
+                      <Icons.search />
+                    </div>
+
+                    <strong
+                      style={{
+                        display:
+                          "block",
+
+                        color:
+                          "#334155",
+
+                        fontSize:
+                          "13px",
+                      }}
+                    >
+                      Sonuç bulunamadı
                     </strong>
 
-                    <small>
-                      Aktif
+                    <small
+                      style={{
+                        display:
+                          "block",
+
+                        marginTop:
+                          "5px",
+
+                        color:
+                          "#94a3b8",
+                      }}
+                    >
+                      Ad, soyad,
+                      veli veya
+                      telefonla
+                      tekrar
+                      deneyebilirsiniz.
                     </small>
                   </div>
-                ))}
+                ) : (
+                  results.map(
+                    (result) => (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        type="button"
+                        onClick={() =>
+                          selectResult(
+                            result
+                          )
+                        }
+                        style={{
+                          display:
+                            "flex",
+
+                          width:
+                            "100%",
+
+                          alignItems:
+                            "center",
+
+                          gap: "12px",
+
+                          padding:
+                            "13px 15px",
+
+                          border: 0,
+
+                          borderBottom:
+                            "1px solid #eef2f7",
+
+                          background:
+                            "#ffffff",
+
+                          cursor:
+                            "pointer",
+
+                          textAlign:
+                            "left",
+                        }}
+                      >
+                        <span
+                          style={{
+                            width:
+                              "40px",
+
+                            height:
+                              "40px",
+
+                            borderRadius:
+                              "12px",
+
+                            background:
+                              "#edf5ff",
+
+                            display:
+                              "flex",
+
+                            alignItems:
+                              "center",
+
+                            justifyContent:
+                              "center",
+
+                            color:
+                              "#1769e8",
+
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Icons.child />
+                        </span>
+
+                        <span
+                          style={{
+                            display:
+                              "flex",
+
+                            flexDirection:
+                              "column",
+
+                            minWidth: 0,
+
+                            flex: 1,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color:
+                                "#13233f",
+
+                              fontSize:
+                                "14px",
+
+                              overflow:
+                                "hidden",
+
+                              textOverflow:
+                                "ellipsis",
+
+                              whiteSpace:
+                                "nowrap",
+                            }}
+                          >
+                            {result.name}
+                          </strong>
+
+                          {result.subtitle ? (
+                            <small
+                              style={{
+                                color:
+                                  "#64748b",
+
+                                marginTop:
+                                  "3px",
+
+                                overflow:
+                                  "hidden",
+
+                                textOverflow:
+                                  "ellipsis",
+
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
+                              {
+                                result.subtitle
+                              }
+                            </small>
+                          ) : null}
+                        </span>
+
+                        <span
+                          style={{
+                            color:
+                              "#94a3b8",
+
+                            fontSize:
+                              "18px",
+                          }}
+                        >
+                          ›
+                        </span>
+                      </button>
+                    )
+                  )
+                )}
               </div>
-            </article>
-          </section>
+            </>
+          )}
         </div>
-      </section>
-    </main>
+      ) : null}
+    </div>
   );
 }
+
+/*
+ * =========================================================
+ * BİLGİ KUTUSU
+ * =========================================================
+ */
+
+function InfoBox({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        border:
+          "1px solid #e7edf5",
+
+        borderRadius:
+          "11px",
+
+        padding:
+          "10px 11px",
+
+        background:
+          "#fbfcfe",
+      }}
+    >
+      <small
+        style={{
+          display:
+            "block",
+
+          color:
+            "#94a3b8",
+
+          fontSize:
+            "10px",
+
+          fontWeight:
+            800,
+
+          letterSpacing:
+            ".5px",
+
+          marginBottom:
+            "4px",
+        }}
+      >
+        {title.toUpperCase()}
+      </small>
+
+      <strong
+        style={{
+          display:
+            "block",
+
+          color:
+            "#334155",
+
+          fontSize:
+            "12px",
+
+          overflow:
+            "hidden",
+
+          textOverflow:
+            "ellipsis",
+
+          whiteSpace:
+            "nowrap",
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+/*
+ * =========================================================
+ * HIZLI İŞLEM BUTONU
+ * =========================================================
+ */
+
+function ActionButton({
+  text,
+  onClick,
+}: {
+  text: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        minHeight:
+          "42px",
+
+        border:
+          "1px solid #dce5f2",
+
+        borderRadius:
+          "11px",
+
+        background:
+          "#ffffff",
+
+        color:
+          "#1769e8",
+
+        fontSize:
+          "12px",
+
+        fontWeight:
+          750,
+
+        cursor:
+          "pointer",
+
+        padding:
+          "9px 11px",
+
+        textAlign:
+          "center",
+      }}
+    >
+      {text}
+    </button>
+  );
+} getir bebeğim
