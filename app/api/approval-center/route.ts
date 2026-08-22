@@ -22,12 +22,21 @@ type UnifiedApprovalRequest = {
   id: string;
 
   source:
+    | "approval_request"
     | "student_status"
     | "lesson_adjustment";
 
   category:
+    | "finance"
     | "student"
-    | "lesson";
+    | "enrollment"
+    | "lesson"
+    | "attendance"
+    | "staff"
+    | "system";
+
+  module?: string | null;
+  priority?: string | null;
 
   request_type: string;
   request_label: string;
@@ -35,6 +44,9 @@ type UnifiedApprovalRequest = {
   student_id: string | null;
   branch_id: string | null;
   group_id: string | null;
+
+  entity_type?: string | null;
+  entity_id?: string | null;
 
   lesson_count: number | null;
 
@@ -45,11 +57,22 @@ type UnifiedApprovalRequest = {
   new_status: string | null;
   requested_status: string | null;
 
+  old_values?: Record<string, unknown>;
+  new_values?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+
   status: string;
 
   requested_by: string | null;
+  requested_by_name?: string | null;
   requested_at: string | null;
   created_at: string | null;
+
+  reviewed_by?: string | null;
+  reviewed_by_name?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  applied_at?: string | null;
 
   student: StudentInfo | null;
 
@@ -68,6 +91,7 @@ type ApprovalActionBody = {
   id?: string;
   source?: string;
   action?: string;
+  review_note?: string;
 };
 
 function clean(
@@ -266,6 +290,62 @@ function buildSuggestedMessage(params: {
   );
 }
 
+
+function centralRequestLabel(
+  requestType: string,
+  fallback?: string | null
+) {
+  if (fallback && fallback.trim()) {
+    return fallback.trim();
+  }
+
+  const labels: Record<string, string> = {
+    payment_due_date_change: "Ödeme Vadesi Değiştirme",
+    payment_edit: "Ödeme Düzeltme",
+    payment_cancel: "Ödeme İptal / Silme",
+    cash_handover_approve: "Kasa Teslim Onayı",
+    compensation_add: "Telafi Ekleme",
+    compensation_delete: "Telafi Silme",
+    attendance_edit: "Yoklama Düzeltme",
+    lesson_right_change: "Ders Hakkı Düzeltme",
+    group_change: "Grup Değişikliği",
+    branch_change: "Şube Değişikliği",
+    enrollment_freeze: "Kayıt Dondurma",
+    enrollment_cancel: "Kayıt İptali",
+    package_change: "Paket Değişikliği",
+    staff_role_change: "Personel Yetki / Rol Değişikliği",
+    staff_delete: "Personel Silme / Pasife Alma",
+  };
+
+  return labels[requestType] || requestType || "Onay Talebi";
+}
+
+function centralCategory(moduleValue?: string | null) {
+  switch ((moduleValue || "").toLowerCase()) {
+    case "finance":
+    case "cash":
+      return "finance" as const;
+    case "student":
+      return "student" as const;
+    case "enrollment":
+      return "enrollment" as const;
+    case "lesson":
+      return "lesson" as const;
+    case "attendance":
+      return "attendance" as const;
+    case "staff":
+      return "staff" as const;
+    default:
+      return "system" as const;
+  }
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 /* =========================================================
    POST
    ONAYLA / REDDET
@@ -307,6 +387,7 @@ export async function POST(request: NextRequest) {
     const id = clean(body.id, 100);
     const source = clean(body.source, 50);
     const action = clean(body.action, 20);
+    const reviewNote = clean(body.review_note, 1000) || null;
 
     if (!id) {
       return NextResponse.json(
@@ -319,6 +400,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (
+      source !== "approval_request" &&
       source !== "student_status" &&
       source !== "lesson_adjustment"
     ) {
@@ -363,6 +445,490 @@ export async function POST(request: NextRequest) {
 
     const actorId = profile?.id ?? user.id;
     const actorName = profile?.full_name ?? user.email ?? "Yönetici";
+
+    /* =====================================================
+       MERKEZİ approval_requests TALEBİ
+       ===================================================== */
+
+    if (source === "approval_request") {
+      if (!profile?.organization_id) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Kurum bilgisi bulunamadı.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!["owner", "admin"].includes(profile.role ?? "")) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Bu işlem için yönetici yetkisi gerekiyor.",
+          },
+          { status: 403 }
+        );
+      }
+
+      const {
+        data: approvalRequest,
+        error: approvalRequestError,
+      } = await supabase
+        .from("approval_requests")
+        .select("*")
+        .eq("id", id)
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle();
+
+      if (approvalRequestError || !approvalRequest) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Onay talebi bulunamadı.",
+            details: approvalRequestError?.message,
+          },
+          { status: 404 }
+        );
+      }
+
+      if (approvalRequest.status !== "pending") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Bu talep daha önce işlenmiş.",
+          },
+          { status: 409 }
+        );
+      }
+
+      const organizationId = approvalRequest.organization_id;
+      const requestType = clean(approvalRequest.request_type, 100);
+      const studentId =
+        typeof approvalRequest.student_id === "string"
+          ? approvalRequest.student_id
+          : null;
+
+      const oldValues = asObject(approvalRequest.old_values);
+      const newValues = asObject(approvalRequest.new_values);
+      const decidedAt = new Date().toISOString();
+
+      /* ---------------- REDDET ---------------- */
+
+      if (action === "reject") {
+        const { error: rejectError } = await supabase
+          .from("approval_requests")
+          .update({
+            status: "rejected",
+            reviewed_by: actorId,
+            reviewed_by_name: actorName,
+            reviewed_at: decidedAt,
+            review_note: reviewNote,
+          })
+          .eq("id", id)
+          .eq("organization_id", organizationId)
+          .eq("status", "pending");
+
+        if (rejectError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Talep reddedilemedi.",
+              details: rejectError.message,
+            },
+            { status: 500 }
+          );
+        }
+
+        const { error: auditError } = await supabase
+          .from("approval_audit_logs")
+          .insert({
+            organization_id: organizationId,
+            approval_request_id: id,
+            module: approvalRequest.module ?? null,
+            request_type: requestType,
+            entity_type: approvalRequest.entity_type ?? null,
+            entity_id: approvalRequest.entity_id ?? null,
+            student_id: studentId,
+            branch_id: approvalRequest.branch_id ?? null,
+            group_id: approvalRequest.group_id ?? null,
+            decision: "rejected",
+            requested_by: approvalRequest.requested_by ?? null,
+            requested_by_name: approvalRequest.requested_by_name ?? null,
+            requested_at:
+              approvalRequest.requested_at ??
+              approvalRequest.created_at ??
+              null,
+            decided_by: actorId,
+            decided_by_name: actorName,
+            decided_at: decidedAt,
+            reason: approvalRequest.reason ?? null,
+            review_note: reviewNote,
+            old_values: oldValues,
+            new_values: newValues,
+            snapshot: approvalRequest,
+          });
+
+        if (auditError) {
+          console.error("central approval reject audit error:", auditError);
+        }
+
+        await supabase.from("system_notifications").insert({
+          organization_id: organizationId,
+          recipient_profile_id: null,
+          notification_type: "approval_rejected",
+          title: `${centralRequestLabel(
+            requestType,
+            approvalRequest.request_label
+          )} reddedildi`,
+          body: `${actorName} tarafından reddedildi.${
+            reviewNote ? ` Not: ${reviewNote}` : ""
+          }`,
+          priority: "normal",
+          student_id: studentId,
+          source_type: "approval_request",
+          source_id: id,
+          target_path: "/onay-merkezi",
+          push_required: false,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          action: "rejected",
+          source,
+          id,
+          message: "Talep reddedildi ve denetim kaydına işlendi.",
+        });
+      }
+
+      /* ---------------- ONAYLA / UYGULA ---------------- */
+
+      let appliedEntityType =
+        typeof approvalRequest.entity_type === "string"
+          ? approvalRequest.entity_type
+          : null;
+
+      let appliedEntityId =
+        typeof approvalRequest.entity_id === "string"
+          ? approvalRequest.entity_id
+          : null;
+
+      if (requestType === "payment_due_date_change") {
+        const dueDate =
+          typeof newValues.payment_due_date === "string"
+            ? newValues.payment_due_date
+            : "";
+
+        if (!appliedEntityId || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Vade değişikliği talep verisi eksik veya geçersiz.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const { error: applyError } = await supabase
+          .from("student_enrollments")
+          .update({
+            payment_due_date: dueDate,
+            updated_at: decidedAt,
+          })
+          .eq("id", appliedEntityId)
+          .eq("organization_id", organizationId);
+
+        if (applyError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Ödeme vadesi uygulanamadı.",
+              details: applyError.message,
+            },
+            { status: 500 }
+          );
+        }
+      } else if (requestType === "payment_edit") {
+        if (!appliedEntityId) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Düzeltilecek ödeme kaydı bulunamadı.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const amount =
+          typeof newValues.amount === "number"
+            ? newValues.amount
+            : Number(newValues.amount);
+
+        const paymentMethod =
+          typeof newValues.payment_method === "string"
+            ? newValues.payment_method
+            : "";
+
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0 ||
+          !["cash", "card", "bank_transfer", "eft", "other"].includes(
+            paymentMethod
+          )
+        ) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Ödeme düzeltme verisi geçersiz.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const isCash = paymentMethod === "cash";
+
+        const { error: applyError } = await supabase
+          .from("student_payments")
+          .update({
+            amount,
+            payment_method: paymentMethod,
+            description:
+              typeof newValues.description === "string"
+                ? newValues.description
+                : null,
+            cash_handover_status: isCash
+              ? "with_staff"
+              : "main_cash_confirmed",
+            cash_handover_requested_at: null,
+            cash_handover_approved_by: isCash ? null : actorId,
+            cash_handover_approved_at: isCash ? null : decidedAt,
+          })
+          .eq("id", appliedEntityId)
+          .eq("organization_id", organizationId);
+
+        if (applyError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Ödeme düzeltmesi uygulanamadı.",
+              details: applyError.message,
+            },
+            { status: 500 }
+          );
+        }
+      } else if (requestType === "payment_cancel") {
+        if (!appliedEntityId) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "İptal edilecek ödeme kaydı bulunamadı.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const cancellationReason =
+          typeof newValues.cancellation_reason === "string"
+            ? newValues.cancellation_reason
+            : approvalRequest.reason ?? "Yönetici onayı ile iptal edildi.";
+
+        const { error: applyError } = await supabase
+          .from("student_payments")
+          .update({
+            payment_status: "cancelled",
+            cancellation_reason: cancellationReason,
+            cancelled_by: actorId,
+            cancelled_at: decidedAt,
+          })
+          .eq("id", appliedEntityId)
+          .eq("organization_id", organizationId);
+
+        if (applyError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Ödeme iptali uygulanamadı.",
+              details: applyError.message,
+            },
+            { status: 500 }
+          );
+        }
+      } else if (requestType === "cash_handover_approve") {
+        if (!appliedEntityId) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Kasa teslim kaydı bulunamadı.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const { error: applyError } = await supabase
+          .from("student_payments")
+          .update({
+            cash_handover_status: "main_cash_confirmed",
+            cash_handover_approved_by: actorId,
+            cash_handover_approved_at: decidedAt,
+          })
+          .eq("id", appliedEntityId)
+          .eq("organization_id", organizationId);
+
+        if (applyError) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Kasa teslim onayı uygulanamadı.",
+              details: applyError.message,
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        /*
+         * Güvenlik:
+         * Handler'ı yazılmamış bir kritik işlem "onaylandı" sayılmaz.
+         * Yeni modül eklenirken gerçek uygulama handler'ı da eklenmelidir.
+         */
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              `Bu talep türünün uygulama adımı henüz bağlanmadı: ${requestType}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const { error: finishError } = await supabase
+        .from("approval_requests")
+        .update({
+          status: "approved",
+          reviewed_by: actorId,
+          reviewed_by_name: actorName,
+          reviewed_at: decidedAt,
+          review_note: reviewNote,
+          applied_at: decidedAt,
+        })
+        .eq("id", id)
+        .eq("organization_id", organizationId)
+        .eq("status", "pending");
+
+      if (finishError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "İşlem uygulandı ancak onay talebi tamamlandı olarak işaretlenemedi.",
+            details: finishError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: auditError } = await supabase
+        .from("approval_audit_logs")
+        .insert({
+          organization_id: organizationId,
+          approval_request_id: id,
+          module: approvalRequest.module ?? null,
+          request_type: requestType,
+          entity_type: appliedEntityType,
+          entity_id: appliedEntityId,
+          student_id: studentId,
+          branch_id: approvalRequest.branch_id ?? null,
+          group_id: approvalRequest.group_id ?? null,
+          decision: "approved",
+          requested_by: approvalRequest.requested_by ?? null,
+          requested_by_name: approvalRequest.requested_by_name ?? null,
+          requested_at:
+            approvalRequest.requested_at ??
+            approvalRequest.created_at ??
+            null,
+          decided_by: actorId,
+          decided_by_name: actorName,
+          decided_at: decidedAt,
+          reason: approvalRequest.reason ?? null,
+          review_note: reviewNote,
+          old_values: oldValues,
+          new_values: newValues,
+          snapshot: {
+            ...approvalRequest,
+            applied_by_name: actorName,
+            applied_at: decidedAt,
+          },
+        });
+
+      if (auditError) {
+        console.error("central approval audit error:", auditError);
+      }
+
+      if (studentId) {
+        const { error: activityError } = await supabase
+          .from("student_activity_logs")
+          .insert({
+            organization_id: organizationId,
+            student_id: studentId,
+            activity_type: "approval_applied",
+            title: centralRequestLabel(
+              requestType,
+              approvalRequest.request_label
+            ),
+            description:
+              approvalRequest.reason ??
+              "Yönetici onayı ile işlem uygulandı.",
+            old_value: oldValues,
+            new_value: newValues,
+            source_type: "approval_request",
+            source_id: id,
+            performed_by: actorId,
+            approved_by: actorId,
+            performed_at: decidedAt,
+            approved_at: decidedAt,
+          });
+
+        if (activityError) {
+          console.error("central student activity error:", activityError);
+        }
+      }
+
+      const { error: notificationError } = await supabase
+        .from("system_notifications")
+        .insert({
+          organization_id: organizationId,
+          recipient_profile_id: null,
+          notification_type: "approval_approved",
+          title: `${centralRequestLabel(
+            requestType,
+            approvalRequest.request_label
+          )} onaylandı`,
+          body: `${actorName} tarafından onaylandı ve uygulandı.`,
+          priority: "normal",
+          student_id: studentId,
+          source_type: "approval_request",
+          source_id: id,
+          target_path: "/onay-merkezi",
+          push_required: false,
+        });
+
+      if (notificationError) {
+        console.error("central approval notification error:", notificationError);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action: "approved",
+        source,
+        id,
+        request_type: requestType,
+        student_id: studentId,
+        approved_by: actorName,
+        message: `${centralRequestLabel(
+          requestType,
+          approvalRequest.request_label
+        )} onaylandı ve uygulandı.`,
+      });
+    }
 
     /* =====================================================
        ÖĞRENCİ DURUM TALEBİ
@@ -1327,78 +1893,141 @@ export async function POST(request: NextRequest) {
 
 /* =========================================================
    GET
-   BEKLEYEN ONAYLARI GETİR
+   MERKEZİ ONAY TALEPLERİNİ GETİR
    ========================================================= */
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase =
-      await createClient();
+    const supabase = await createClient();
 
     const {
       data: { user },
       error: userError,
-    } =
-      await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
-    if (
-      userError ||
-      !user
-    ) {
+    if (userError || !user) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Oturum bulunamadı.",
+          error: "Oturum bulunamadı.",
         },
-        {
-          status: 401,
-        }
+        { status: 401 }
       );
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id,organization_id,full_name,role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("approval GET profile error:", profileError);
+    }
+
+    if (!profile?.organization_id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Kurum bilgisi bulunamadı.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!["owner", "admin", "branch_manager"].includes(profile.role ?? "")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Onay Merkezi için yetkiniz bulunmuyor.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const statusFilter = clean(url.searchParams.get("status"), 30) || "pending";
+    const moduleFilter = clean(url.searchParams.get("module"), 50);
+    const searchFilter = clean(url.searchParams.get("q"), 100).toLocaleLowerCase("tr-TR");
+
+    const allowedStatuses = [
+      "pending",
+      "approved",
+      "rejected",
+      "cancelled",
+      "all",
+    ];
+
+    const effectiveStatus = allowedStatuses.includes(statusFilter)
+      ? statusFilter
+      : "pending";
+
+    /*
+     * Merkezi talepler:
+     * payment / enrollment / attendance / staff / system ve yeni modüller.
+     */
+    let centralQuery = supabase
+      .from("approval_requests")
+      .select("*")
+      .eq("organization_id", profile.organization_id)
+      .order("created_at", { ascending: false });
+
+    if (effectiveStatus !== "all") {
+      centralQuery = centralQuery.eq("status", effectiveStatus);
+    }
+
+    if (moduleFilter && moduleFilter !== "all") {
+      centralQuery = centralQuery.eq("module", moduleFilter);
+    }
+
+    /*
+     * Legacy öğrenci/ders tabloları şimdilik korunuyor.
+     * Yeni modüller approval_requests'e yazılmalı.
+     */
+    let statusLegacyQuery = supabase
+      .from("student_status_change_requests")
+      .select("*")
+      .eq("organization_id", profile.organization_id)
+      .order("created_at", { ascending: false });
+
+    let lessonLegacyQuery = supabase
+      .from("lesson_adjustment_requests")
+      .select("*")
+      .eq("organization_id", profile.organization_id)
+      .order("requested_at", { ascending: false });
+
+    if (effectiveStatus !== "all") {
+      statusLegacyQuery = statusLegacyQuery.eq("status", effectiveStatus);
+      lessonLegacyQuery = lessonLegacyQuery.eq("status", effectiveStatus);
+    }
+
     const [
+      centralResult,
       statusRequestResult,
       lessonRequestResult,
     ] = await Promise.all([
-      supabase
-        .from(
-          "student_status_change_requests"
-        )
-        .select("*")
-        .eq(
-          "status",
-          "pending"
-        )
-        .order(
-          "created_at",
-          {
-            ascending:
-              false,
-          }
-        ),
-
-      supabase
-        .from(
-          "lesson_adjustment_requests"
-        )
-        .select("*")
-        .eq(
-          "status",
-          "pending"
-        )
-        .order(
-          "requested_at",
-          {
-            ascending:
-              false,
-          }
-        ),
+      centralQuery,
+      statusLegacyQuery,
+      lessonLegacyQuery,
     ]);
 
-    if (
-      statusRequestResult.error
-    ) {
+    if (centralResult.error) {
+      console.error(
+        "central approval list error:",
+        centralResult.error
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Merkezi onay talepleri alınamadı.",
+          details: centralResult.error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (statusRequestResult.error) {
       console.error(
         "student status approval list error:",
         statusRequestResult.error
@@ -1407,21 +2036,14 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Öğrenci durum talepleri alınamadı.",
-          details:
-            statusRequestResult
-              .error.message,
+          error: "Öğrenci durum talepleri alınamadı.",
+          details: statusRequestResult.error.message,
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    if (
-      lessonRequestResult.error
-    ) {
+    if (lessonRequestResult.error) {
       console.error(
         "lesson approval list error:",
         lessonRequestResult.error
@@ -1430,64 +2052,34 @@ export async function GET() {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Ders işlem talepleri alınamadı.",
-          details:
-            lessonRequestResult
-              .error.message,
+          error: "Ders işlem talepleri alınamadı.",
+          details: lessonRequestResult.error.message,
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
-    const statusRequests =
-      statusRequestResult.data ??
-      [];
+    const centralRequests = centralResult.data ?? [];
+    const statusRequests = statusRequestResult.data ?? [];
+    const lessonRequests = lessonRequestResult.data ?? [];
 
-    const lessonRequests =
-      lessonRequestResult.data ??
-      [];
-
-    const studentIds =
-      Array.from(
-        new Set(
-          [
-            ...statusRequests.map(
-              (item) =>
-                item.student_id
-            ),
-
-            ...lessonRequests.map(
-              (item) =>
-                item.student_id
-            ),
-          ].filter(
-            (
-              id
-            ): id is string =>
-              typeof id ===
-                "string" &&
-              id.trim().length >
-                0
-          )
+    const studentIds = Array.from(
+      new Set(
+        [
+          ...centralRequests.map((item) => item.student_id),
+          ...statusRequests.map((item) => item.student_id),
+          ...lessonRequests.map((item) => item.student_id),
+        ].filter(
+          (id): id is string =>
+            typeof id === "string" && id.trim().length > 0
         )
-      );
+      )
+    );
 
-    let students:
-      StudentInfo[] = [];
+    let students: StudentInfo[] = [];
 
-    if (
-      studentIds.length >
-      0
-    ) {
-      const {
-        data:
-          studentData,
-        error:
-          studentError,
-      } = await supabase
+    if (studentIds.length > 0) {
+      const { data: studentData, error: studentError } = await supabase
         .from("students")
         .select(
           `
@@ -1501,10 +2093,8 @@ export async function GET() {
             branch_id
           `
         )
-        .in(
-          "id",
-          studentIds
-        );
+        .eq("organization_id", profile.organization_id)
+        .in("id", studentIds);
 
       if (studentError) {
         console.error(
@@ -1515,322 +2105,303 @@ export async function GET() {
         return NextResponse.json(
           {
             ok: false,
-            error:
-              "Onay taleplerine ait öğrenci bilgileri alınamadı.",
-            details:
-              studentError.message,
+            error: "Onay taleplerine ait öğrenci bilgileri alınamadı.",
+            details: studentError.message,
           },
-          {
-            status: 500,
-          }
+          { status: 500 }
         );
       }
 
-      students =
-        (studentData ??
-          []) as StudentInfo[];
+      students = (studentData ?? []) as StudentInfo[];
     }
 
-    const studentMap =
-      new Map<
-        string,
-        StudentInfo
-      >(
-        students.map(
-          (student) => [
-            student.id,
+    const studentMap = new Map<string, StudentInfo>(
+      students.map((student) => [student.id, student])
+    );
+
+    const centralItems: UnifiedApprovalRequest[] =
+      centralRequests.map((item) => {
+        const student =
+          item.student_id
+            ? studentMap.get(item.student_id) ?? null
+            : null;
+
+        const recipient = getRecipient(student);
+        const oldValues = asObject(item.old_values);
+        const newValues = asObject(item.new_values);
+
+        return {
+          id: item.id,
+          source: "approval_request",
+          category: centralCategory(item.module),
+          module: item.module ?? null,
+          priority: item.priority ?? "normal",
+          request_type: item.request_type ?? "approval_request",
+          request_label: centralRequestLabel(
+            item.request_type ?? "",
+            item.request_label
+          ),
+          student_id: item.student_id ?? null,
+          branch_id: item.branch_id ?? student?.branch_id ?? null,
+          group_id: item.group_id ?? null,
+          entity_type: item.entity_type ?? null,
+          entity_id: item.entity_id ?? null,
+          lesson_count:
+            typeof newValues.lesson_count === "number"
+              ? newValues.lesson_count
+              : null,
+          reason: item.reason ?? null,
+          description: item.description ?? null,
+          old_status:
+            typeof oldValues.status === "string"
+              ? oldValues.status
+              : null,
+          new_status:
+            typeof newValues.status === "string"
+              ? newValues.status
+              : null,
+          requested_status:
+            typeof newValues.status === "string"
+              ? newValues.status
+              : null,
+          old_values: oldValues,
+          new_values: newValues,
+          metadata: asObject(item.metadata),
+          status: item.status ?? "pending",
+          requested_by: item.requested_by ?? null,
+          requested_by_name: item.requested_by_name ?? null,
+          requested_at:
+            item.requested_at ??
+            item.created_at ??
+            null,
+          created_at: item.created_at ?? null,
+          reviewed_by: item.reviewed_by ?? null,
+          reviewed_by_name: item.reviewed_by_name ?? null,
+          reviewed_at: item.reviewed_at ?? null,
+          review_note: item.review_note ?? null,
+          applied_at: item.applied_at ?? null,
+          student,
+          recipient_phone: recipient.phone,
+          recipient_type: recipient.type,
+          suggested_message: buildSuggestedMessage({
             student,
-          ]
-        )
-      );
+            requestType: item.request_type ?? "approval_request",
+            source: "approval_request",
+            lessonCount:
+              typeof newValues.lesson_count === "number"
+                ? newValues.lesson_count
+                : null,
+            requestedStatus:
+              typeof newValues.status === "string"
+                ? newValues.status
+                : null,
+          }),
+        };
+      });
 
-    const statusItems:
-      UnifiedApprovalRequest[] =
-      statusRequests.map(
-        (item) => {
-          const student =
-            item.student_id
-              ? studentMap.get(
-                  item.student_id
-                ) ?? null
-              : null;
+    const statusItems: UnifiedApprovalRequest[] =
+      statusRequests.map((item) => {
+        const student =
+          item.student_id
+            ? studentMap.get(item.student_id) ?? null
+            : null;
 
-          const recipient =
-            getRecipient(
-              student
-            );
+        const recipient = getRecipient(student);
 
-          const requestedStatus =
-            item.requested_status ??
-            item.new_status ??
-            null;
+        const requestedStatus =
+          item.requested_status ??
+          item.new_status ??
+          null;
 
-          return {
-            id: item.id,
-
-            source:
-              "student_status",
-
-            category:
-              "student",
-
-            request_type:
+        return {
+          id: item.id,
+          source: "student_status",
+          category: "student",
+          module: "student",
+          priority: "normal",
+          request_type:
+            item.request_type ??
+            "status_change",
+          request_label: requestLabel(
+            "student_status",
+            item.request_type ?? "status_change",
+            requestedStatus
+          ),
+          student_id: item.student_id ?? null,
+          branch_id: item.branch_id ?? null,
+          group_id: item.group_id ?? null,
+          entity_type: "student",
+          entity_id: item.student_id ?? null,
+          lesson_count: null,
+          reason: item.reason ?? null,
+          description: item.description ?? null,
+          old_status: item.old_status ?? null,
+          new_status: item.new_status ?? null,
+          requested_status: requestedStatus,
+          old_values: {
+            status: item.old_status ?? null,
+          },
+          new_values: {
+            status: requestedStatus,
+          },
+          metadata: {},
+          status: item.status ?? "pending",
+          requested_by: item.requested_by ?? null,
+          requested_at: item.requested_at ?? null,
+          created_at: item.created_at ?? null,
+          student,
+          recipient_phone: recipient.phone,
+          recipient_type: recipient.type,
+          suggested_message: buildSuggestedMessage({
+            student,
+            requestType:
               item.request_type ??
               "status_change",
+            source: "student_status",
+            lessonCount: null,
+            requestedStatus,
+          }),
+        };
+      });
 
-            request_label:
-              requestLabel(
-                "student_status",
-                item.request_type ??
-                  "status_change",
-                requestedStatus
-              ),
+    const lessonItems: UnifiedApprovalRequest[] =
+      lessonRequests.map((item) => {
+        const student =
+          item.student_id
+            ? studentMap.get(item.student_id) ?? null
+            : null;
 
-            student_id:
-              item.student_id ??
-              null,
+        const recipient = getRecipient(student);
 
-            branch_id:
-              item.branch_id ??
-              null,
-
-            group_id:
-              item.group_id ??
-              null,
-
-            lesson_count:
-              null,
-
-            reason:
-              item.reason ??
-              null,
-
-            description:
-              item.description ??
-              null,
-
-            old_status:
-              item.old_status ??
-              null,
-
-            new_status:
-              item.new_status ??
-              null,
-
-            requested_status:
-              requestedStatus,
-
-            status:
-              item.status ??
-              "pending",
-
-            requested_by:
-              item.requested_by ??
-              null,
-
-            requested_at:
-              item.requested_at ??
-              null,
-
-            created_at:
-              item.created_at ??
-              null,
-
-            student,
-
-            recipient_phone:
-              recipient.phone,
-
-            recipient_type:
-              recipient.type,
-
-            suggested_message:
-              buildSuggestedMessage({
-                student,
-
-                requestType:
-                  item.request_type ??
-                  "status_change",
-
-                source:
-                  "student_status",
-
-                lessonCount:
-                  null,
-
-                requestedStatus,
-              }),
-          };
-        }
-      );
-
-    const lessonItems:
-      UnifiedApprovalRequest[] =
-      lessonRequests.map(
-        (item) => {
-          const student =
+        return {
+          id: item.id,
+          source: "lesson_adjustment",
+          category: "lesson",
+          module: "lesson",
+          priority: "normal",
+          request_type:
+            item.request_type ??
+            "lesson_adjustment",
+          request_label: requestLabel(
+            "lesson_adjustment",
+            item.request_type ??
+              "lesson_adjustment"
+          ),
+          student_id: item.student_id ?? null,
+          branch_id: item.branch_id ?? null,
+          group_id: item.group_id ?? null,
+          entity_type:
             item.student_id
-              ? studentMap.get(
-                  item.student_id
-                ) ?? null
-              : null;
-
-          const recipient =
-            getRecipient(
-              student
-            );
-
-          return {
-            id: item.id,
-
-            source:
-              "lesson_adjustment",
-
-            category:
-              "lesson",
-
-            request_type:
+              ? "student"
+              : item.group_id
+              ? "group"
+              : "lesson",
+          entity_id:
+            item.student_id ??
+            item.group_id ??
+            item.id,
+          lesson_count: item.lesson_count ?? null,
+          reason: item.reason ?? null,
+          description: item.description ?? null,
+          old_status: null,
+          new_status: null,
+          requested_status: null,
+          old_values: {},
+          new_values: {
+            lesson_count: item.lesson_count ?? null,
+          },
+          metadata: {},
+          status: item.status ?? "pending",
+          requested_by: item.requested_by ?? null,
+          requested_at: item.requested_at ?? null,
+          created_at: item.created_at ?? null,
+          student,
+          recipient_phone: recipient.phone,
+          recipient_type: recipient.type,
+          suggested_message: buildSuggestedMessage({
+            student,
+            requestType:
               item.request_type ??
               "lesson_adjustment",
-
-            request_label:
-              requestLabel(
-                "lesson_adjustment",
-                item.request_type ??
-                  "lesson_adjustment"
-              ),
-
-            student_id:
-              item.student_id ??
-              null,
-
-            branch_id:
-              item.branch_id ??
-              null,
-
-            group_id:
-              item.group_id ??
-              null,
-
-            lesson_count:
+            source: "lesson_adjustment",
+            lessonCount:
               item.lesson_count ??
               null,
+            requestedStatus: null,
+          }),
+        };
+      });
 
-            reason:
-              item.reason ??
-              null,
-
-            description:
-              item.description ??
-              null,
-
-            old_status:
-              null,
-
-            new_status:
-              null,
-
-            requested_status:
-              null,
-
-            status:
-              item.status ??
-              "pending",
-
-            requested_by:
-              item.requested_by ??
-              null,
-
-            requested_at:
-              item.requested_at ??
-              null,
-
-            created_at:
-              item.created_at ??
-              null,
-
-            student,
-
-            recipient_phone:
-              recipient.phone,
-
-            recipient_type:
-              recipient.type,
-
-            suggested_message:
-              buildSuggestedMessage({
-                student,
-
-                requestType:
-                  item.request_type ??
-                  "lesson_adjustment",
-
-                source:
-                  "lesson_adjustment",
-
-                lessonCount:
-                  item.lesson_count ??
-                  null,
-
-                requestedStatus:
-                  null,
-              }),
-          };
-        }
-      );
-
-    const requests = [
+    let requests = [
+      ...centralItems,
       ...statusItems,
       ...lessonItems,
-    ].sort(
-      (a, b) => {
-        const aDate =
-          a.requested_at ??
-          a.created_at ??
-          "";
+    ].sort((a, b) => {
+      const aDate = a.requested_at ?? a.created_at ?? "";
+      const bDate = b.requested_at ?? b.created_at ?? "";
 
-        const bDate =
-          b.requested_at ??
-          b.created_at ??
-          "";
+      const aTime = aDate ? new Date(aDate).getTime() : 0;
+      const bTime = bDate ? new Date(bDate).getTime() : 0;
 
-        const aTime =
-          aDate
-            ? new Date(
-                aDate
-              ).getTime()
-            : 0;
+      return bTime - aTime;
+    });
 
-        const bTime =
-          bDate
-            ? new Date(
-                bDate
-              ).getTime()
-            : 0;
+    if (searchFilter) {
+      requests = requests.filter((item) => {
+        const studentName = item.student
+          ? `${item.student.first_name ?? ""} ${
+              item.student.last_name ?? ""
+            }`
+              .trim()
+              .toLocaleLowerCase("tr-TR")
+          : "";
 
-        return (
-          bTime - aTime
-        );
-      }
-    );
+        const haystack = [
+          item.request_label,
+          item.request_type,
+          item.reason,
+          item.description,
+          item.requested_by_name,
+          item.module,
+          item.entity_type,
+          item.entity_id,
+          studentName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("tr-TR");
+
+        return haystack.includes(searchFilter);
+      });
+    }
+
+    const counts = {
+      total: requests.length,
+      finance: requests.filter((item) => item.category === "finance").length,
+      student: requests.filter((item) => item.category === "student").length,
+      enrollment: requests.filter((item) => item.category === "enrollment").length,
+      lesson: requests.filter((item) => item.category === "lesson").length,
+      attendance: requests.filter((item) => item.category === "attendance").length,
+      staff: requests.filter((item) => item.category === "staff").length,
+      system: requests.filter((item) => item.category === "system").length,
+      pending: requests.filter((item) => item.status === "pending").length,
+      approved: requests.filter((item) => item.status === "approved").length,
+      rejected: requests.filter((item) => item.status === "rejected").length,
+      cancelled: requests.filter((item) => item.status === "cancelled").length,
+      critical: requests.filter(
+        (item) => (item.priority ?? "").toLowerCase() === "critical"
+      ).length,
+    };
 
     return NextResponse.json({
       ok: true,
-
-      counts: {
-        total:
-          requests.length,
-
-        student:
-          statusItems.length,
-
-        lesson:
-          lessonItems.length,
+      filters: {
+        status: effectiveStatus,
+        module: moduleFilter || "all",
+        q: searchFilter,
       },
-
-      students_found:
-        students.length,
-
+      counts,
+      students_found: students.length,
       requests,
     });
   } catch (error) {
@@ -1845,9 +2416,7 @@ export async function GET() {
         error:
           "Onay Merkezi talepleri alınırken beklenmeyen bir hata oluştu.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
