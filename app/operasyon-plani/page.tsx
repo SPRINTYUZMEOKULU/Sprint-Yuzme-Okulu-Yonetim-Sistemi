@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 import { Icons } from "@/app/components/dashboard-icons";
+import UstGezinme from "@/app/components/UstGezinme";
 
 export const dynamic = "force-dynamic";
 
@@ -697,8 +698,25 @@ export default async function OperasyonPlaniPage({
     "branch_manager",
   ].includes(profile.role);
 
+  function gorunumHref(gorunum: string) {
+    const qp = new URLSearchParams();
+
+    qp.set("tarih", selectedDate);
+    qp.set("gorunum", gorunum);
+
+    if (params.sube) qp.set("sube", params.sube);
+    if (params.saat) qp.set("saat", params.saat);
+    if (params.egitmen) qp.set("egitmen", params.egitmen);
+    if (params.grup) qp.set("grup", params.grup);
+    if (params.seviye) qp.set("seviye", params.seviye);
+
+    return `/operasyon-plani?${qp.toString()}`;
+  }
+
   return (
-    <main style={pageStyle}>
+    <>
+      <UstGezinme />
+      <main style={pageStyle}>
       <div style={containerStyle}>
         {/* =================================================
             ÜST ALAN
@@ -1023,6 +1041,7 @@ export default async function OperasyonPlaniPage({
               filteredSchedules.length
             }
             icon={<Icons.calendar />}
+            href={gorunumHref("seans")}
           />
 
           <SummaryCard
@@ -1031,6 +1050,7 @@ export default async function OperasyonPlaniPage({
               shownCoachIds.size
             }
             icon={<Icons.users />}
+            href={gorunumHref("egitmen")}
           />
 
           <SummaryCard
@@ -1039,6 +1059,7 @@ export default async function OperasyonPlaniPage({
               shownStudentIds.size
             }
             icon={<Icons.child />}
+            href={gorunumHref("ogrenci")}
           />
 
           <SummaryCard
@@ -1047,6 +1068,7 @@ export default async function OperasyonPlaniPage({
               shownGroupIds.size
             }
             icon={<Icons.branch />}
+            href={gorunumHref("grup")}
           />
         </section>
 
@@ -2112,8 +2134,9 @@ export default async function OperasyonPlaniPage({
             )}
           </section>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </>
   );
 }
 
@@ -2125,18 +2148,24 @@ function SummaryCard({
   label,
   value,
   icon,
+  href,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
+  href: string;
 }) {
   return (
-    <div style={summaryCardStyle}>
+    <Link
+      href={href}
+      style={summaryCardLinkStyle}
+      title={`${label} görünümünü aç`}
+    >
       <div style={summaryIconStyle}>
         {icon}
       </div>
 
-      <div>
+      <div style={{ flex: 1 }}>
         <span style={summaryLabelStyle}>
           {label}
         </span>
@@ -2145,7 +2174,9 @@ function SummaryCard({
           {value}
         </strong>
       </div>
-    </div>
+
+      <span style={summaryArrowStyle}>→</span>
+    </Link>
   );
 }
 
@@ -2332,7 +2363,7 @@ const summaryGridStyle: React.CSSProperties = {
   marginBottom: 16,
 };
 
-const summaryCardStyle: React.CSSProperties = {
+const summaryCardLinkStyle: React.CSSProperties = {
   background: "#fff",
   border: "1px solid #e1e8f2",
   borderRadius: 16,
@@ -2340,6 +2371,17 @@ const summaryCardStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
+  textDecoration: "none",
+  color: "inherit",
+  cursor: "pointer",
+  boxShadow: "0 6px 18px rgba(15,23,42,0.035)",
+};
+
+const summaryArrowStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  color: "#1769e8",
+  fontSize: 18,
+  fontWeight: 900,
 };
 
 const summaryIconStyle: React.CSSProperties = {
