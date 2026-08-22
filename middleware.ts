@@ -34,26 +34,16 @@ export async function middleware(request: NextRequest) {
         },
 
         setAll(cookiesToSet) {
-          /*
-           * Supabase session yenilerse önce request üzerindeki
-           * cookie'leri güncelliyoruz.
-           */
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
 
-          /*
-           * Güncellenmiş request ile response'u yeniden oluşturuyoruz.
-           */
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           });
 
-          /*
-           * Yeni session cookie'lerini browser'a gönderiyoruz.
-           */
           cookiesToSet.forEach(
             ({ name, value, options }) => {
               response.cookies.set(
@@ -68,47 +58,26 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  /*
-   * Kullanıcının Supabase oturumunu doğrula.
-   * Session gerekiyorsa bu işlem sırasında yenilenebilir.
-   */
+  // Kullanıcının Supabase oturumunu doğrula.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
-  /*
-   * Herkesin erişebileceği sayfalar.
-   */
+  // Herkesin erişebileceği sayfalar.
   const isPublicPath = PUBLIC_PATHS.some(
     (path) =>
       pathname === path ||
       pathname.startsWith(`${path}/`)
   );
 
-  /*
-   * Ön kayıt formunun kullandığı public API yolları.
-   */
+  // Ön kayıt formunun kullandığı public API yolları.
   const isPublicApi =
     pathname.startsWith("/api/pre-registrations") ||
     pathname.startsWith("/api/public-registration-options");
 
-  /*
-   * =========================================================
-   * OTURUM YOK
-   * =========================================================
-   *
-   * Kullanıcı korumalı bir sayfaya gidiyorsa login'e gönder.
-   *
-   * Örneğin:
-   *
-   * /ayarlar
-   *
-   * =>
-   *
-   * /login?next=/ayarlar
-   */
+  // OTURUM YOKSA
   if (
     !user &&
     !isPublicPath &&
@@ -126,10 +95,6 @@ export async function middleware(request: NextRequest) {
     const redirectResponse =
       NextResponse.redirect(loginUrl);
 
-    /*
-     * Supabase bu request sırasında session cookie'sini
-     * yenilediyse redirect response'a da aktar.
-     */
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);
     });
@@ -142,14 +107,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  /*
-   * =========================================================
-   * KULLANICI ZATEN GİRİŞ YAPMIŞ
-   * =========================================================
-   *
-   * Giriş yapmış kullanıcı /login sayfasına giderse
-   * tekrar login ekranında bırakma.
-   */
+  // KULLANICI ZATEN GİRİŞ YAPMIŞSA
   if (user && pathname === "/login") {
     const requestedNext =
       request.nextUrl.searchParams.get("next");
@@ -157,9 +115,6 @@ export async function middleware(request: NextRequest) {
     const targetUrl =
       request.nextUrl.clone();
 
-    /*
-     * Sadece uygulama içindeki relative URL'lere izin veriyoruz.
-     */
     if (
       requestedNext &&
       requestedNext.startsWith("/") &&
@@ -187,10 +142,6 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  /*
-   * Auth kullanan sayfaların Vercel/CDN tarafından
-   * yanlış session ile cache edilmesini engelle.
-   */
   response.headers.set(
     "Cache-Control",
     "private, no-store"
@@ -201,6 +152,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
