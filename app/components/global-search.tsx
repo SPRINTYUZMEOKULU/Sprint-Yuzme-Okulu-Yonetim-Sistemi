@@ -1101,4 +1101,4 @@ function ActionButton({
       {text}
     </button>
   );
-} getir bebeğim
+}
