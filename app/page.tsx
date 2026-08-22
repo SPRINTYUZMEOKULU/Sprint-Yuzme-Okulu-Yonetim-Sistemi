@@ -127,6 +127,13 @@ const menu: MenuItem[] = [
     group: "EĞİTİM",
   },
   {
+  label: "Operasyon Planı",
+  href: "/operasyon-plani",
+  roles: allRoles,
+  icon: "calendar",
+  group: "EĞİTİM",
+},
+  {
     label: "Yoklama",
     href: "/yoklama",
     roles: [
