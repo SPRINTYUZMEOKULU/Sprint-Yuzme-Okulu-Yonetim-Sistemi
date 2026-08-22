@@ -1,8 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireProfile, type UserRole } from "@/lib/auth/profile";
+
+import {
+  requireProfile,
+  type UserRole,
+} from "@/lib/auth/profile";
+
 import { createClient } from "@/lib/supabase/server";
+
 import { Icons } from "@/app/components/dashboard-icons";
+import GlobalSearch from "@/app/components/global-search";
+
 import "./dashboard.css";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +76,12 @@ const menu: MenuItem[] = [
   {
     label: "Ön Kayıtlar",
     href: "/on-kayitlar",
-    roles: ["owner", "admin", "branch_manager", "registration_staff"],
+    roles: [
+      "owner",
+      "admin",
+      "branch_manager",
+      "registration_staff",
+    ],
     icon: "note",
     group: "GENEL",
   },
@@ -82,7 +95,12 @@ const menu: MenuItem[] = [
   {
     label: "Veliler",
     href: "/veliler",
-    roles: ["owner", "admin", "branch_manager", "registration_staff"],
+    roles: [
+      "owner",
+      "admin",
+      "branch_manager",
+      "registration_staff",
+    ],
     icon: "users",
     group: "GENEL",
   },
@@ -111,7 +129,12 @@ const menu: MenuItem[] = [
   {
     label: "Yoklama",
     href: "/yoklama",
-    roles: ["owner", "admin", "branch_manager", "coach"],
+    roles: [
+      "owner",
+      "admin",
+      "branch_manager",
+      "coach",
+    ],
     icon: "check",
     group: "EĞİTİM",
   },
@@ -133,7 +156,12 @@ const menu: MenuItem[] = [
   {
     label: "Günlük Kasa",
     href: "/kasa",
-    roles: ["owner", "admin", "branch_manager", "accounting"],
+    roles: [
+      "owner",
+      "admin",
+      "branch_manager",
+      "accounting",
+    ],
     icon: "wallet",
     group: "FİNANS",
   },
@@ -176,7 +204,10 @@ const menu: MenuItem[] = [
   {
     label: "Kullanıcılar ve Yetkiler",
     href: "/kullanicilar-ve-yetkiler",
-    roles: ["owner", "admin"],
+    roles: [
+      "owner",
+      "admin",
+    ],
     icon: "users",
     group: "YÖNETİM",
   },
@@ -190,7 +221,10 @@ const menu: MenuItem[] = [
   {
     label: "Ayarlar",
     href: "/ayarlar",
-    roles: ["owner", "admin"],
+    roles: [
+      "owner",
+      "admin",
+    ],
     icon: "settings",
     group: "YÖNETİM",
   },
@@ -225,10 +259,27 @@ async function safeCount(
       query = query.eq(key, value);
     }
 
-    const { count, error } = await query;
+    const {
+      count,
+      error,
+    } = await query;
 
-    return error ? 0 : count || 0;
-  } catch {
+    if (error) {
+      console.error(
+        `${table} sayaç hatası:`,
+        error
+      );
+
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error(
+      `${table} sayaç işlemi başarısız:`,
+      error
+    );
+
     return 0;
   }
 }
@@ -236,17 +287,23 @@ async function safeCount(
 export default async function HomePage() {
   const profile = await requireProfile();
 
+  /*
+   * VELİ ANA YÖNETİM EKRANINI GÖRMEZ.
+   */
   if (profile.role === "guardian") {
     redirect("/veli-paneli");
   }
 
-  const visibleMenu = menu.filter((item) =>
-    item.roles.includes(profile.role)
+  const visibleMenu = menu.filter(
+    (item) =>
+      item.roles.includes(profile.role)
   );
 
-  const isCoach = profile.role === "coach";
-  const isGuardian = String(profile.role) === "guardian";
-  const isManager = management.includes(profile.role);
+  const isCoach =
+    profile.role === "coach";
+
+  const isManager =
+    management.includes(profile.role);
 
   const [
     activeStudents,
@@ -255,34 +312,56 @@ export default async function HomePage() {
     pendingApprovals,
     pendingCash,
   ] = await Promise.all([
-    safeCount("students", [["status", "active"]]),
+    safeCount(
+      "students",
+      [["status", "active"]]
+    ),
 
-    safeCount("students", [
-      ["status", "pre_registration"],
-    ]),
+    safeCount(
+      "students",
+      [["status", "pre_registration"]]
+    ),
 
-    safeCount("alerts", [["status", "open"]]),
+    safeCount(
+      "alerts",
+      [["status", "open"]]
+    ),
 
-    safeCount("approval_requests", [
-      ["status", "pending"],
-    ]),
+    safeCount(
+      "approval_requests",
+      [["status", "pending"]]
+    ),
 
-    safeCount("payments", [
-      ["cash_status", "handoff_pending"],
-    ]),
+    safeCount(
+      "payments",
+      [["cash_status", "handoff_pending"]]
+    ),
   ]);
 
-  const today = new Intl.DateTimeFormat("tr-TR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+  const today =
+    new Intl.DateTimeFormat(
+      "tr-TR",
+      {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }
+    ).format(new Date());
 
   const firstName = (
     profile.full_name ||
+    profile.email ||
     "SprintOS Kullanıcısı"
-  ).split(" ")[0];
+  )
+    .trim()
+    .split(" ")[0];
+
+  /*
+   * =========================================================
+   * ANA SAYFA İSTATİSTİKLERİ
+   * =========================================================
+   */
 
   const managerStats: StatItem[] = [
     {
@@ -329,7 +408,7 @@ export default async function HomePage() {
       href: "/ders-programi",
     },
     {
-      label: "Bu Ay Girdiğim",
+      label: "Bu Ay Girdiğim Ders",
       value: 0,
       note: "Onaylı ders",
       icon: "check",
@@ -347,53 +426,23 @@ export default async function HomePage() {
     {
       label: "Açık Görev",
       value: openAlerts,
-      note: "Size atanan",
+      note: "İşlem gerektiriyor",
       icon: "bell",
       tone: "purple",
       href: "/uyarilar",
     },
   ];
 
-  const guardianStats: StatItem[] = [
-    {
-      label: "Kalan Ders",
-      value: 0,
-      note: "Aktif paket",
-      icon: "calendar",
-      tone: "blue",
-      href: "/paketler",
-    },
-    {
-      label: "Sıradaki Ders",
-      value: "—",
-      note: "Program bilgisi",
-      icon: "clock",
-      tone: "green",
-      href: "/ders-programi",
-    },
-    {
-      label: "Devam Oranı",
-      value: "%0",
-      note: "Katılım geçmişi",
-      icon: "chart",
-      tone: "orange",
-      href: "/yoklama",
-    },
-    {
-      label: "Ödeme Durumu",
-      value: "—",
-      note: "Aktif paket",
-      icon: "wallet",
-      tone: "purple",
-      href: "/odemeler",
-    },
-  ];
+  const stats =
+    isCoach
+      ? coachStats
+      : managerStats;
 
-  const stats = isCoach
-    ? coachStats
-    : isGuardian
-    ? guardianStats
-    : managerStats;
+  /*
+   * =========================================================
+   * HIZLI ERİŞİM
+   * =========================================================
+   */
 
   const quickItems: QuickItem[] = [
     {
@@ -437,6 +486,12 @@ export default async function HomePage() {
       ],
     },
     {
+      label: "Şubeler",
+      href: "/subeler",
+      icon: "branch",
+      roles: management,
+    },
+    {
       label: "Gruplar",
       href: "/gruplar",
       icon: "branch",
@@ -446,7 +501,7 @@ export default async function HomePage() {
       label: "Ders Programı",
       href: "/ders-programi",
       icon: "calendar",
-      roles: allRoles,
+      roles: staff,
     },
     {
       label: "Yoklama",
@@ -506,7 +561,10 @@ export default async function HomePage() {
       label: "Kullanıcılar ve Yetkiler",
       href: "/kullanicilar-ve-yetkiler",
       icon: "users",
-      roles: ["owner", "admin"],
+      roles: [
+        "owner",
+        "admin",
+      ],
     },
     {
       label: "Raporlar",
@@ -518,22 +576,33 @@ export default async function HomePage() {
       label: "Ayarlar",
       href: "/ayarlar",
       icon: "settings",
-      roles: ["owner", "admin"],
+      roles: [
+        "owner",
+        "admin",
+      ],
     },
   ];
 
-  const visibleQuickItems = quickItems.filter(
-    (item) => item.roles.includes(profile.role)
-  );
+  const visibleQuickItems =
+    quickItems.filter(
+      (item) =>
+        item.roles.includes(profile.role)
+    );
 
   const groups = [
     ...new Set(
-      visibleMenu.map((item) => item.group)
+      visibleMenu.map(
+        (item) => item.group
+      )
     ),
   ];
 
   return (
     <main className="proShell">
+      {/* =====================================================
+          SOL MENÜ
+      ===================================================== */}
+
       <aside className="proSidebar">
         <Link
           href="/"
@@ -554,67 +623,91 @@ export default async function HomePage() {
           </div>
 
           <div>
-            <strong>SprintOS</strong>
-            <span>Yüzme Okulu Yönetimi</span>
+            <strong>
+              SprintOS
+            </strong>
+
+            <span>
+              Yüzme Okulu Yönetimi
+            </span>
           </div>
         </Link>
 
         <nav className="proNav">
-          {groups.map((group) => (
-            <div
-              className="navGroup"
-              key={group}
-            >
-              <p>{group}</p>
+          {groups.map(
+            (group) => (
+              <div
+                className="navGroup"
+                key={group}
+              >
+                <p>
+                  {group}
+                </p>
 
-              {visibleMenu
-                .filter(
-                  (item) =>
-                    item.group === group
-                )
-                .map((item) => {
-                  const Icon =
-                    Icons[item.icon];
+                {visibleMenu
+                  .filter(
+                    (item) =>
+                      item.group ===
+                      group
+                  )
+                  .map(
+                    (item) => {
+                      const Icon =
+                        Icons[
+                          item.icon
+                        ];
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={
-                        item.href === "/"
-                          ? "proNavItem active"
-                          : "proNavItem"
-                      }
-                    >
-                      <Icon />
-
-                      <span>
-                        {item.label}
-                      </span>
-
-                      {item.href ===
-                        "/uyarilar" &&
-                      openAlerts > 0 ? (
-                        <b>
-                          {openAlerts}
-                        </b>
-                      ) : null}
-
-                      {item.href ===
-                        "/onay-merkezi" &&
-                      pendingApprovals >
-                        0 ? (
-                        <b>
-                          {
-                            pendingApprovals
+                      return (
+                        <Link
+                          key={
+                            item.href
                           }
-                        </b>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-            </div>
-          ))}
+                          href={
+                            item.href
+                          }
+                          className={
+                            item.href ===
+                            "/"
+                              ? "proNavItem active"
+                              : "proNavItem"
+                          }
+                        >
+                          <Icon />
+
+                          <span>
+                            {
+                              item.label
+                            }
+                          </span>
+
+                          {item.href ===
+                            "/uyarilar" &&
+                          openAlerts >
+                            0 ? (
+                            <b>
+                              {
+                                openAlerts
+                              }
+                            </b>
+                          ) : null}
+
+                          {item.href ===
+                            "/onay-merkezi" &&
+                          pendingApprovals >
+                            0 ? (
+                            <b>
+                              {
+                                pendingApprovals
+                              }
+                            </b>
+                          ) : null}
+                        </Link>
+                      );
+                    }
+                  )}
+              </div>
+            )
+          )}
         </nav>
 
         <div className="proUser">
@@ -654,22 +747,21 @@ export default async function HomePage() {
         </div>
       </aside>
 
+      {/* =====================================================
+          ANA İÇERİK
+      ===================================================== */}
+
       <section className="proMain">
+        {/* ===================================================
+            ÜST BAR
+        =================================================== */}
+
         <header className="proTopbar">
-          <Link
-            href="/ogrenciler"
-            className="searchBox"
-            title="Öğrenci aramayı aç"
-          >
-            <Icons.search />
-
-            <span>
-              Öğrenci, veli, telefon
-              veya grup ara...
-            </span>
-
-            <kbd>⌘ K</kbd>
-          </Link>
+          {/*
+           * BURASI ARTIK LINK DEĞİL.
+           * GERÇEK ARAMA BİLEŞENİ.
+           */}
+          <GlobalSearch />
 
           <div className="topActions">
             <Link
@@ -697,6 +789,10 @@ export default async function HomePage() {
         </header>
 
         <div className="dashboardContent">
+          {/* =================================================
+              KARŞILAMA
+          ================================================= */}
+
           <section className="heroRow">
             <div>
               <p className="heroEyebrow">
@@ -711,8 +807,6 @@ export default async function HomePage() {
               <p>
                 {isCoach
                   ? "Bugünkü derslerinizi, öğrencilerinizi ve yoklamalarınızı buradan yönetin."
-                  : isGuardian
-                  ? "Öğrencinizin ders, paket ve ödeme bilgilerini takip edin."
                   : "Günlük operasyonunuzu tek ekrandan yönetin."}
               </p>
             </div>
@@ -724,15 +818,8 @@ export default async function HomePage() {
                   href="/yoklama"
                 >
                   <Icons.check />
+
                   Derse Geldim
-                </Link>
-              ) : isGuardian ? (
-                <Link
-                  className="actionPrimary"
-                  href="/ders-programi"
-                >
-                  <Icons.calendar />
-                  Ders Programım
                 </Link>
               ) : (
                 <>
@@ -741,6 +828,7 @@ export default async function HomePage() {
                     href="/hazir-mesajlar"
                   >
                     <Icons.message />
+
                     Hızlı Mesaj
                   </Link>
 
@@ -748,13 +836,20 @@ export default async function HomePage() {
                     className="actionPrimary"
                     href="/on-kayit"
                   >
-                    <span>+</span>
+                    <span>
+                      +
+                    </span>
+
                     Yeni Ön Kayıt
                   </Link>
                 </>
               )}
             </div>
           </section>
+
+          {/* =================================================
+              İSTATİSTİK KARTLARI
+          ================================================= */}
 
           <section className="proStats">
             {stats.map(
@@ -809,20 +904,23 @@ export default async function HomePage() {
             )}
           </section>
 
+          {/* =================================================
+              ANA SAYFA GRID
+          ================================================= */}
+
           <section className="dashboardGrid">
+            {/* BUGÜNKÜ DERSLER */}
+
             <article className="dashCard scheduleCard">
               <div className="dashCardHeader">
                 <div>
                   <p>
-                    GÜNLÜK
-                    OPERASYON
+                    GÜNLÜK OPERASYON
                   </p>
 
                   <h2>
                     {isCoach
                       ? "Bugünkü Programım"
-                      : isGuardian
-                      ? "Yaklaşan Dersler"
                       : "Bugünkü Dersler ve Yoklamalar"}
                   </h2>
                 </div>
@@ -839,18 +937,17 @@ export default async function HomePage() {
                 </div>
 
                 <strong>
-                  Bugünkü program
-                  hazırlanıyor
+                  Bugünkü program hazırlanıyor
                 </strong>
 
                 <span>
-                  Bir sonraki
-                  aşamada bugünün
+                  Bir sonraki adımda
+                  bugünün tüm
                   derslerini saat,
-                  grup, şube,
+                  şube, grup,
                   eğitmen, öğrenci
                   sayısı ve yoklama
-                  durumu ile burada
+                  durumuyla burada
                   canlı göstereceğiz.
                 </span>
 
@@ -860,6 +957,8 @@ export default async function HomePage() {
               </div>
             </article>
 
+            {/* UYARILAR */}
+
             <article className="dashCard alertCard">
               <div className="dashCardHeader">
                 <div>
@@ -868,8 +967,7 @@ export default async function HomePage() {
                   </p>
 
                   <h2>
-                    Akıllı
-                    Uyarılar
+                    Akıllı Uyarılar
                   </h2>
                 </div>
 
@@ -888,9 +986,7 @@ export default async function HomePage() {
 
                     <div>
                       <strong>
-                        {
-                          openAlerts
-                        }{" "}
+                        {openAlerts}{" "}
                         açık uyarı
                         bulunuyor
                       </strong>
@@ -898,8 +994,7 @@ export default async function HomePage() {
                       <small>
                         Öncelikli
                         işlemleri
-                        kontrol
-                        edin.
+                        kontrol edin.
                       </small>
                     </div>
 
@@ -915,14 +1010,12 @@ export default async function HomePage() {
 
                     <div>
                       <strong>
-                        Her şey
-                        yolunda
+                        Her şey yolunda
                       </strong>
 
                       <small>
                         Şu anda açık
-                        uyarı
-                        bulunmuyor.
+                        uyarı bulunmuyor.
                       </small>
                     </div>
                   </div>
@@ -946,10 +1039,8 @@ export default async function HomePage() {
                       </strong>
 
                       <small>
-                        Onay
-                        Merkezi'nde
-                        kararınızı
-                        belirtin.
+                        Onay Merkezi'ni
+                        kontrol edin.
                       </small>
                     </div>
 
@@ -976,11 +1067,9 @@ export default async function HomePage() {
                       </strong>
 
                       <small>
-                        Teslim ve
-                        kasa
+                        Teslim ve kasa
                         işlemlerini
-                        kontrol
-                        edin.
+                        kontrol edin.
                       </small>
                     </div>
 
@@ -991,6 +1080,10 @@ export default async function HomePage() {
                 ) : null}
               </div>
             </article>
+
+            {/* =================================================
+                HIZLI ERİŞİM
+            ================================================= */}
 
             <article
               className="dashCard quickCard"
@@ -1006,9 +1099,7 @@ export default async function HomePage() {
                   </p>
 
                   <h2>
-                    İhtiyacınız Olan
-                    Modüle Tek Tıkla
-                    Ulaşın
+                    İhtiyacınız Olan Modüle Tek Tıkla Ulaşın
                   </h2>
                 </div>
               </div>
@@ -1047,26 +1138,37 @@ export default async function HomePage() {
                             style={{
                               marginLeft:
                                 "auto",
+
                               marginRight:
                                 "8px",
+
                               minWidth:
                                 "22px",
+
                               height:
                                 "22px",
+
                               borderRadius:
                                 "999px",
+
                               display:
                                 "inline-flex",
+
                               alignItems:
                                 "center",
+
                               justifyContent:
                                 "center",
+
                               fontSize:
                                 "11px",
+
                               padding:
                                 "0 6px",
+
                               background:
                                 "#eaf2ff",
+
                               color:
                                 "#1769e8",
                             }}
@@ -1085,6 +1187,10 @@ export default async function HomePage() {
               </div>
             </article>
 
+            {/* =================================================
+                ŞUBE DURUMU
+            ================================================= */}
+
             <article className="dashCard branchCard">
               <div className="dashCardHeader">
                 <div>
@@ -1093,8 +1199,7 @@ export default async function HomePage() {
                   </p>
 
                   <h2>
-                    Aktif
-                    Lokasyonlar
+                    Aktif Lokasyonlar
                   </h2>
                 </div>
 
