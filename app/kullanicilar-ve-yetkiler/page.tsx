@@ -1,17 +1,46 @@
 import UstGezinme from "@/app/components/UstGezinme";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import YetkiPaneliClient from "./YetkiPaneliClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL bulunamadı.");
+  }
+
+  if (!key) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY bulunamadı. Vercel Environment Variables bölümüne eklenmelidir."
+    );
+  }
+
+  return createAdminClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 export default async function Page() {
+  /*
+   * 1) Önce normal kullanıcı oturumunu doğrula.
+   * Service Role ile kimlik doğrulama yapılmaz.
+   */
   const supabase = await createClient();
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
     return (
       <main style={{ padding: 40 }}>
         Giriş yapmanız gerekiyor.
@@ -19,26 +48,47 @@ export default async function Page() {
     );
   }
 
-  const { data: currentProfile } = await supabase
+  /*
+   * 2) Giriş yapan kişinin yönetici olup olmadığını normal oturumla doğrula.
+   */
+  const { data: currentProfile, error: currentProfileError } = await supabase
     .from("profiles")
     .select("id, organization_id, role, is_active")
     .eq("id", user.id)
     .single();
 
   if (
+    currentProfileError ||
     !currentProfile ||
     !currentProfile.is_active ||
     !["owner", "admin"].includes(String(currentProfile.role)) ||
     !currentProfile.organization_id
   ) {
     return (
-      <main style={{ padding: 40 }}>
-        Bu bölüme erişim yetkiniz bulunmuyor.
-      </main>
+      <>
+        <UstGezinme />
+        <main style={{ padding: 40 }}>
+          Bu bölüme erişim yetkiniz bulunmuyor.
+        </main>
+      </>
     );
   }
 
   const organizationId = currentProfile.organization_id;
+
+  /*
+   * 3) Yönetici doğrulandıktan sonra yönetim verilerini Service Role ile oku.
+   *
+   * ÖNEMLİ:
+   * actions.ts zaten yazma işlemlerini Service Role ile yapıyor.
+   * Sayfa ise daha önce normal RLS istemcisi ile okuyordu.
+   * Bu nedenle veri veritabanında TRUE olsa bile arayüz eski/KAPALI
+   * görünebiliyordu.
+   *
+   * Service Role yalnızca bu SERVER COMPONENT içinde kullanılır.
+   * Tarayıcıya key gönderilmez.
+   */
+  const admin = getAdminClient();
 
   const [
     profilesResult,
@@ -49,7 +99,7 @@ export default async function Page() {
     staffPermissionsResult,
     auditLogsResult,
   ] = await Promise.all([
-    supabase
+    admin
       .from("profiles")
       .select(
         "id, full_name, email, phone, role, is_active, last_sign_in_at"
@@ -57,21 +107,21 @@ export default async function Page() {
       .eq("organization_id", organizationId)
       .order("full_name"),
 
-    supabase
+    admin
       .from("staff")
       .select(
         "id, auth_user_id, login_enabled, is_super_user, must_change_password, all_branches"
       )
       .eq("organization_id", organizationId),
 
-    supabase
+    admin
       .from("branches")
       .select("id, name, short_name")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("name"),
 
-    supabase
+    admin
       .from("permission_definitions")
       .select(
         "permission_key, module_key, label, description, sort_order"
@@ -79,17 +129,17 @@ export default async function Page() {
       .eq("is_active", true)
       .order("sort_order"),
 
-    supabase
+    admin
       .from("staff_branches")
       .select("staff_id, branch_id")
       .eq("organization_id", organizationId),
 
-    supabase
+    admin
       .from("staff_permissions")
       .select("staff_id, permission_key, is_allowed")
       .eq("organization_id", organizationId),
 
-    supabase
+    admin
       .from("audit_logs")
       .select(
         "id, actor_profile_id, actor_staff_id, module_key, action_key, action_label, entity_id, description, success, created_at"
