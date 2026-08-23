@@ -29,7 +29,7 @@ const allowedRoles: Record<LoginRole, string[]> = {
   guardian: ["guardian"],
 };
 
-function normalizeTurkishPhone(value: string) {
+function getLocalTurkishDigits(value: string) {
   let digits = String(value || "").replace(/\D/g, "");
 
   if (!digits) return "";
@@ -49,22 +49,30 @@ function normalizeTurkishPhone(value: string) {
   if (digits.length !== 10) return "";
   if (!digits.startsWith("5")) return "";
 
-  return `+90${digits}`;
+  return digits;
+}
+
+/**
+ * Aynı Türkiye cep telefonu için olası Auth biçimlerini üretir.
+ * Öncelik E.164 (+90...), ardından Supabase Auth tablosunda görülebilen
+ * 90... biçimi. Böylece eski/yeni hesap formatı farkları girişe engel olmaz.
+ */
+function getPhoneLoginCandidates(value: string) {
+  const local = getLocalTurkishDigits(value);
+  if (!local) return [];
+
+  return Array.from(
+    new Set([
+      `+90${local}`,
+      `90${local}`,
+    ])
+  );
 }
 
 function formatPhoneForDisplay(value: string) {
-  const digits = value.replace(/\D/g, "");
-  let local = digits;
+  const local = getLocalTurkishDigits(value);
 
-  if (local.startsWith("90") && local.length >= 12) {
-    local = local.slice(2);
-  }
-
-  if (local.startsWith("0")) {
-    local = local.slice(1);
-  }
-
-  if (local.length !== 10) return value;
+  if (!local) return value;
 
   return `0${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(
     6,
@@ -198,7 +206,6 @@ export default function LoginForm() {
     setError("");
 
     const form = new FormData(event.currentTarget);
-
     const identifier = String(form.get("identifier") || "").trim();
     const password = String(form.get("password") || "");
 
@@ -210,50 +217,67 @@ export default function LoginForm() {
 
     const supabase = createClient();
 
-    let credentials:
-      | { email: string; password: string }
-      | { phone: string; password: string };
+    let authUser = null as Awaited<
+      ReturnType<typeof supabase.auth.signInWithPassword>
+    >["data"]["user"];
+
+    let lastSignInError: Awaited<
+      ReturnType<typeof supabase.auth.signInWithPassword>
+    >["error"] = null;
 
     if (method === "email") {
-      credentials = {
-        email: identifier.toLowerCase(),
-        password,
-      };
-    } else {
-      const normalizedPhone = normalizeTurkishPhone(identifier);
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: identifier.toLowerCase(),
+          password,
+        });
 
-      if (!normalizedPhone) {
+      authUser = data.user;
+      lastSignInError = signInError;
+    } else {
+      const phoneCandidates = getPhoneLoginCandidates(identifier);
+
+      if (!phoneCandidates.length) {
         setError("Telefon numaranızı 05XX XXX XX XX şeklinde yazın.");
         setLoading(false);
         return;
       }
 
-      credentials = {
-        phone: normalizedPhone,
-        password,
-      };
+      for (const phone of phoneCandidates) {
+        const { data, error: signInError } =
+          await supabase.auth.signInWithPassword({
+            phone,
+            password,
+          });
+
+        if (data.user && !signInError) {
+          authUser = data.user;
+          lastSignInError = null;
+          break;
+        }
+
+        lastSignInError = signInError;
+
+        console.error("SPRINTOS PHONE LOGIN ATTEMPT", {
+          phone,
+          message: signInError?.message,
+          status: signInError?.status,
+          code: signInError?.code,
+        });
+      }
     }
 
-    const { data, error: signInError } =
-      await supabase.auth.signInWithPassword(credentials);
+    if (lastSignInError || !authUser) {
+      const technicalMessage =
+        lastSignInError?.message || "Kullanıcı oturumu oluşturulamadı.";
 
-    if (signInError || !data.user) {
       console.error("SPRINTOS LOGIN ERROR", {
-        message: signInError?.message,
-        status: signInError?.status,
-        code: signInError?.code,
+        message: lastSignInError?.message,
+        status: lastSignInError?.status,
+        code: lastSignInError?.code,
         method,
         identifier,
-        normalized:
-          method === "phone" && "phone" in credentials
-            ? credentials.phone
-            : method === "email" && "email" in credentials
-            ? credentials.email
-            : null,
       });
-
-      const technicalMessage =
-        signInError?.message || "Kullanıcı oturumu oluşturulamadı.";
 
       setError(`Giriş başarısız: ${technicalMessage}`);
       setLoading(false);
@@ -263,7 +287,7 @@ export default function LoginForm() {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id, role, is_active")
-      .eq("id", data.user.id)
+      .eq("id", authUser.id)
       .single();
 
     if (profileError || !profile) {
@@ -285,8 +309,8 @@ export default function LoginForm() {
     if (profile.role !== "guardian") {
       const { data: staffAccount, error: staffError } = await supabase
         .from("staff")
-        .select("login_enabled, is_active")
-        .eq("auth_user_id", data.user.id)
+        .select("login_enabled, is_active, is_super_user")
+        .eq("auth_user_id", authUser.id)
         .maybeSingle();
 
       if (staffError) {
@@ -338,6 +362,17 @@ export default function LoginForm() {
       setError("Oturum oluşturulamadı. Lütfen tekrar giriş yapın.");
       setLoading(false);
       return;
+    }
+
+    // Profildeki son giriş alanını mümkünse güncelle.
+    // RLS izin vermiyorsa girişin kendisini bozmaz.
+    try {
+      await supabase
+        .from("profiles")
+        .update({ last_sign_in_at: new Date().toISOString() })
+        .eq("id", authUser.id);
+    } catch (logError) {
+      console.error("SPRINTOS LAST SIGN IN UPDATE ERROR", logError);
     }
 
     const rawNext = searchParams.get("next");
