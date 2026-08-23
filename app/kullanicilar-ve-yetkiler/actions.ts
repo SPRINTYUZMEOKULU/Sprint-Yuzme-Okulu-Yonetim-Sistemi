@@ -321,14 +321,7 @@ export async function createStaff(formData: FormData) {
 
   revalidatePath(PAGE_PATH);
 
-  return {
-    success: true,
-    userId: newUserId,
-    fullName,
-    email,
-    phone,
-    role: requestedRole,
-  };
+  return;
 }
 
 export async function updateStaffProfile(formData: FormData) {
