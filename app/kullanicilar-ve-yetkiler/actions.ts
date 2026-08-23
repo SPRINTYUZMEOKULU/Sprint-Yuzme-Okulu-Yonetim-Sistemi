@@ -23,7 +23,7 @@ function clean(value: FormDataEntryValue | null) {
 }
 
 function normalizeEmail(value: string) {
-  return value.trim().toLocaleLowerCase("tr-TR");
+  return value.trim().toLowerCase();
 }
 
 function normalizePhone(value: string) {
@@ -43,15 +43,51 @@ function normalizePhone(value: string) {
     return `+90${digits}`;
   }
 
-  if (value.startsWith("+")) {
-    return `+${digits}`;
-  }
-
   return `+${digits}`;
 }
 
 function isAllowedRole(value: string): value is UserRole {
   return ALLOWED_ROLES.includes(value as UserRole);
+}
+
+function roleTitle(role: string) {
+  const titles: Record<string, string> = {
+    owner: "Sistem Sahibi",
+    admin: "Yönetici",
+    branch_manager: "Şube Yöneticisi",
+    registration_staff: "Kayıt Personeli",
+    accounting: "Muhasebe",
+    coach: "Eğitmen",
+    guardian: "Veli",
+  };
+
+  return titles[role] ?? role;
+}
+
+function splitName(fullName: string) {
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return {
+      firstName: "Personel",
+      lastName: "-",
+    };
+  }
+
+  if (parts.length === 1) {
+    return {
+      firstName: parts[0],
+      lastName: "-",
+    };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }
 
 function getAdminClient() {
@@ -64,7 +100,7 @@ function getAdminClient() {
 
   if (!serviceRoleKey) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY bulunamadı. Vercel Environment Variables bölümüne eklenmelidir."
+      "SUPABASE_SERVICE_ROLE_KEY bulunamadı. Vercel Environment Variables bölümüne ekleyin."
     );
   }
 
@@ -88,13 +124,13 @@ async function requireOwnerOrAdmin() {
     throw new Error("Bu işlem için giriş yapmalısınız.");
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("id, organization_id, role, is_active")
     .eq("id", user.id)
     .single();
 
-  if (profileError || !profile) {
+  if (error || !profile) {
     throw new Error("Kullanıcı profili bulunamadı.");
   }
 
@@ -116,28 +152,181 @@ async function requireOwnerOrAdmin() {
   };
 }
 
-async function assertStaffBelongsToOrganization(
-  staffId: string,
+async function getProfile(
+  profileId: string,
   organizationId: string
 ) {
   const admin = getAdminClient();
 
   const { data, error } = await admin
     .from("profiles")
-    .select("id, organization_id, role, full_name, email, phone, is_active")
-    .eq("id", staffId)
+    .select(
+      "id, organization_id, branch_id, full_name, email, phone, role, is_active"
+    )
+    .eq("id", profileId)
     .eq("organization_id", organizationId)
     .single();
 
   if (error || !data) {
-    throw new Error("Personel bulunamadı veya bu organizasyona ait değil.");
+    throw new Error(
+      "Kullanıcı bulunamadı veya bu organizasyona ait değil."
+    );
   }
 
   return data;
 }
 
-export async function createStaff(formData: FormData): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+async function getStaffByAuthUser(
+  authUserId: string,
+  organizationId: string
+) {
+  const admin = getAdminClient();
+
+  const { data, error } = await admin
+    .from("staff")
+    .select(
+      "id, organization_id, auth_user_id, first_name, last_name, phone, email, title, staff_type, is_active, login_enabled, is_super_user, must_change_password, all_branches"
+    )
+    .eq("organization_id", organizationId)
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Personel kaydı okunamadı: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function ensureStaffRecord(
+  profileId: string,
+  organizationId: string
+) {
+  const admin = getAdminClient();
+
+  const profile = await getProfile(profileId, organizationId);
+
+  const existing = await getStaffByAuthUser(
+    profileId,
+    organizationId
+  );
+
+  if (existing) {
+    return existing;
+  }
+
+  const { firstName, lastName } = splitName(
+    profile.full_name || profile.email || "Personel"
+  );
+
+  const { data: staff, error } = await admin
+    .from("staff")
+    .insert({
+      organization_id: organizationId,
+      auth_user_id: profileId,
+
+      first_name: firstName,
+      last_name: lastName,
+
+      phone: profile.phone || null,
+      email: profile.email || null,
+
+      title: roleTitle(String(profile.role)),
+      staff_type: String(profile.role || "coach"),
+
+      is_active: Boolean(profile.is_active),
+      login_enabled: true,
+      is_super_user: profile.role === "owner",
+      must_change_password: false,
+      all_branches: profile.role === "owner",
+    })
+    .select(
+      "id, organization_id, auth_user_id, first_name, last_name, phone, email, title, staff_type, is_active, login_enabled, is_super_user, must_change_password, all_branches"
+    )
+    .single();
+
+  if (error || !staff) {
+    throw new Error(
+      `Personel kaydı oluşturulamadı: ${
+        error?.message ?? "Bilinmeyen hata"
+      }`
+    );
+  }
+
+  return staff;
+}
+
+async function validateBranches(
+  organizationId: string,
+  branchIds: string[]
+) {
+  if (!branchIds.length) return;
+
+  const admin = getAdminClient();
+
+  const { data, error } = await admin
+    .from("branches")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("id", branchIds);
+
+  if (error) {
+    throw new Error(`Şubeler kontrol edilemedi: ${error.message}`);
+  }
+
+  if ((data ?? []).length !== new Set(branchIds).size) {
+    throw new Error(
+      "Seçilen şubelerden biri bu organizasyona ait değil."
+    );
+  }
+}
+
+async function getAllActiveBranchIds(organizationId: string) {
+  const admin = getAdminClient();
+
+  const { data, error } = await admin
+    .from("branches")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new Error(`Şubeler alınamadı: ${error.message}`);
+  }
+
+  return (data ?? []).map((row) => String(row.id));
+}
+
+async function validatePermissions(permissionKeys: string[]) {
+  if (!permissionKeys.length) return;
+
+  const admin = getAdminClient();
+
+  const { data, error } = await admin
+    .from("permission_definitions")
+    .select("permission_key")
+    .eq("is_active", true)
+    .in("permission_key", permissionKeys);
+
+  if (error) {
+    throw new Error(`Yetkiler kontrol edilemedi: ${error.message}`);
+  }
+
+  if ((data ?? []).length !== new Set(permissionKeys).size) {
+    throw new Error("Seçilen yetkilerden biri geçersiz.");
+  }
+}
+
+/* ============================================================
+   YENİ KULLANICI
+   ============================================================ */
+
+export async function createStaff(
+  formData: FormData
+): Promise<void> {
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
   const fullName = clean(formData.get("full_name"));
@@ -146,19 +335,8 @@ export async function createStaff(formData: FormData): Promise<void> {
   const password = clean(formData.get("password"));
   const requestedRole = clean(formData.get("role"));
 
-  const email = rawEmail ? normalizeEmail(rawEmail) : "";
-  const phone = rawPhone ? normalizePhone(rawPhone) : "";
-
   if (!fullName) {
     throw new Error("Ad soyad zorunludur.");
-  }
-
-  if (!email && !phone) {
-    throw new Error("E-posta veya telefon numarasından en az biri zorunludur.");
-  }
-
-  if (!password || password.length < 8) {
-    throw new Error("Şifre en az 8 karakter olmalıdır.");
   }
 
   if (!isAllowedRole(requestedRole)) {
@@ -167,61 +345,61 @@ export async function createStaff(formData: FormData): Promise<void> {
 
   if (requestedRole === "owner") {
     throw new Error(
-      "Yeni owner hesabı bu ekrandan oluşturulamaz. Süper kullanıcı yetkisini ayrıca verebilirsiniz."
+      "Yeni Sistem Sahibi hesabı bu ekrandan oluşturulamaz."
     );
   }
 
-  const branchIds = [
+  if (!password || password.length < 8) {
+    throw new Error("Şifre en az 8 karakter olmalıdır.");
+  }
+
+  const email = rawEmail
+    ? normalizeEmail(rawEmail)
+    : "";
+
+  const phone = rawPhone
+    ? normalizePhone(rawPhone)
+    : "";
+
+  if (!email && !phone) {
+    throw new Error(
+      "E-posta veya telefon numarasından en az biri zorunludur."
+    );
+  }
+
+  let branchIds = [
     ...new Set(
       formData
         .getAll("branch_ids")
-        .map((item) => String(item))
+        .map(String)
         .filter(Boolean)
     ),
   ];
+
+  const allBranches =
+    clean(formData.get("all_branches")) === "true";
+
+  if (allBranches) {
+    branchIds = await getAllActiveBranchIds(
+      currentProfile.organization_id
+    );
+  }
 
   const permissionKeys = [
     ...new Set(
       formData
         .getAll("permission_keys")
-        .map((item) => String(item))
+        .map(String)
         .filter(Boolean)
     ),
   ];
 
-  if (branchIds.length > 0) {
-    const { data: validBranches, error: branchError } = await admin
-      .from("branches")
-      .select("id")
-      .eq("organization_id", currentProfile.organization_id)
-      .in("id", branchIds);
+  await validateBranches(
+    currentProfile.organization_id,
+    branchIds
+  );
 
-    if (branchError) {
-      throw new Error(`Şubeler kontrol edilemedi: ${branchError.message}`);
-    }
-
-    if ((validBranches ?? []).length !== branchIds.length) {
-      throw new Error("Seçilen şubelerden biri organizasyona ait değil.");
-    }
-  }
-
-  if (permissionKeys.length > 0) {
-    const { data: validPermissions, error: permissionError } = await admin
-      .from("permission_definitions")
-      .select("permission_key")
-      .eq("is_active", true)
-      .in("permission_key", permissionKeys);
-
-    if (permissionError) {
-      throw new Error(
-        `Yetkiler kontrol edilemedi: ${permissionError.message}`
-      );
-    }
-
-    if ((validPermissions ?? []).length !== permissionKeys.length) {
-      throw new Error("Seçilen yetkilerden biri geçersiz.");
-    }
-  }
+  await validatePermissions(permissionKeys);
 
   const createPayload: {
     email?: string;
@@ -232,10 +410,13 @@ export async function createStaff(formData: FormData): Promise<void> {
     user_metadata: Record<string, string>;
   } = {
     password,
+
     user_metadata: {
       full_name: fullName,
       role: requestedRole,
-      organization_id: String(currentProfile.organization_id),
+      organization_id: String(
+        currentProfile.organization_id
+      ),
     },
   };
 
@@ -260,22 +441,41 @@ export async function createStaff(formData: FormData): Promise<void> {
     );
   }
 
-  const newUserId = created.user.id;
+  const authUserId = created.user.id;
+
+  let createdStaffId: string | null = null;
 
   try {
+    /* PROFILE */
+
     const { error: profileError } = await admin
       .from("profiles")
       .upsert(
         {
-          id: newUserId,
-          organization_id: currentProfile.organization_id,
-          branch_id: branchIds[0] ?? null,
-          email: email || null,
-          phone: phone || null,
+          id: authUserId,
+
+          organization_id:
+            currentProfile.organization_id,
+
+          branch_id:
+            branchIds[0] ?? null,
+
           full_name: fullName,
-          role: requestedRole,
-          is_active: true,
-          updated_at: new Date().toISOString(),
+
+          email:
+            email || null,
+
+          phone:
+            phone || null,
+
+          role:
+            requestedRole,
+
+          is_active:
+            true,
+
+          updated_at:
+            new Date().toISOString(),
         },
         {
           onConflict: "id",
@@ -283,266 +483,568 @@ export async function createStaff(formData: FormData): Promise<void> {
       );
 
     if (profileError) {
-      throw new Error(`Profil kaydedilemedi: ${profileError.message}`);
+      throw new Error(
+        `Profil kaydedilemedi: ${profileError.message}`
+      );
     }
 
-    if (branchIds.length > 0) {
-      const branchRows = branchIds.map((branchId) => ({
-        organization_id: currentProfile.organization_id,
-        staff_id: newUserId,
-        branch_id: branchId,
-      }));
+    /* STAFF */
 
-      const { error: branchInsertError } = await admin
-        .from("staff_branches")
-        .insert(branchRows);
+    const { firstName, lastName } =
+      splitName(fullName);
 
-      if (branchInsertError) {
+    const isSuperUser =
+      permissionKeys.includes(
+        "system.superuser"
+      );
+
+    const { data: staffRow, error: staffError } =
+      await admin
+        .from("staff")
+        .insert({
+          organization_id:
+            currentProfile.organization_id,
+
+          auth_user_id:
+            authUserId,
+
+          first_name:
+            firstName,
+
+          last_name:
+            lastName,
+
+          phone:
+            phone || null,
+
+          email:
+            email || null,
+
+          title:
+            roleTitle(requestedRole),
+
+          staff_type:
+            requestedRole,
+
+          is_active:
+            true,
+
+          login_enabled:
+            true,
+
+          is_super_user:
+            isSuperUser,
+
+          must_change_password:
+            true,
+
+          all_branches:
+            allBranches,
+        })
+        .select("id")
+        .single();
+
+    if (staffError || !staffRow) {
+      throw new Error(
+        `Personel kaydı oluşturulamadı: ${
+          staffError?.message ??
+          "Bilinmeyen hata"
+        }`
+      );
+    }
+
+    createdStaffId = staffRow.id;
+
+    /* ŞUBELER */
+
+    if (branchIds.length) {
+      const branchRows =
+        branchIds.map((branchId) => ({
+          organization_id:
+            currentProfile.organization_id,
+
+          staff_id:
+            createdStaffId,
+
+          branch_id:
+            branchId,
+        }));
+
+      const { error: branchError } =
+        await admin
+          .from("staff_branches")
+          .insert(branchRows);
+
+      if (branchError) {
         throw new Error(
-          `Personel şubeleri kaydedilemedi: ${branchInsertError.message}`
+          `Personel şubeleri kaydedilemedi: ${branchError.message}`
         );
       }
     }
 
-    if (permissionKeys.length > 0) {
-      const permissionRows = permissionKeys.map((permissionKey) => ({
-        organization_id: currentProfile.organization_id,
-        staff_id: newUserId,
-        permission_key: permissionKey,
-        is_allowed: true,
-      }));
+    /* YETKİLER */
 
-      const { error: permissionInsertError } = await admin
-        .from("staff_permissions")
-        .insert(permissionRows);
+    if (permissionKeys.length) {
+      const permissionRows =
+        permissionKeys.map(
+          (permissionKey) => ({
+            organization_id:
+              currentProfile.organization_id,
 
-      if (permissionInsertError) {
+            staff_id:
+              createdStaffId,
+
+            permission_key:
+              permissionKey,
+
+            is_allowed:
+              true,
+          })
+        );
+
+      const { error: permissionError } =
+        await admin
+          .from("staff_permissions")
+          .insert(permissionRows);
+
+      if (permissionError) {
         throw new Error(
-          `Personel yetkileri kaydedilemedi: ${permissionInsertError.message}`
+          `Personel yetkileri kaydedilemedi: ${permissionError.message}`
         );
       }
     }
   } catch (error) {
-    await admin.auth.admin.deleteUser(newUserId);
+    if (createdStaffId) {
+      await admin
+        .from("staff")
+        .delete()
+        .eq("id", createdStaffId);
+    }
+
+    await admin.auth.admin.deleteUser(
+      authUserId
+    );
+
     throw error;
   }
 
   revalidatePath(PAGE_PATH);
 }
 
+/* ============================================================
+   PROFİL
+   ============================================================ */
+
 export async function updateStaffProfile(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const fullName = clean(formData.get("full_name"));
-  const rawEmail = clean(formData.get("email"));
-  const rawPhone = clean(formData.get("phone"));
-  const requestedRole = clean(formData.get("role"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const fullName =
+    clean(formData.get("full_name"));
+
+  const rawEmail =
+    clean(formData.get("email"));
+
+  const rawPhone =
+    clean(formData.get("phone"));
+
+  const requestedRole =
+    clean(formData.get("role"));
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  if (staff.role === "owner") {
-    throw new Error("Sistem sahibi hesabı bu ekrandan değiştirilemez.");
+  if (profile.role === "owner") {
+    throw new Error(
+      "Sistem Sahibi hesabı bu ekrandan değiştirilemez."
+    );
   }
 
   if (!fullName) {
     throw new Error("Ad soyad zorunludur.");
   }
 
-  if (!isAllowedRole(requestedRole)) {
+  if (
+    !isAllowedRole(requestedRole) ||
+    requestedRole === "owner"
+  ) {
     throw new Error("Geçersiz kullanıcı rolü.");
   }
 
-  if (requestedRole === "owner") {
-    throw new Error("Owner rolü bu ekrandan atanamaz.");
-  }
+  const email = rawEmail
+    ? normalizeEmail(rawEmail)
+    : "";
 
-  const email = rawEmail ? normalizeEmail(rawEmail) : "";
-  const phone = rawPhone ? normalizePhone(rawPhone) : "";
+  const phone = rawPhone
+    ? normalizePhone(rawPhone)
+    : "";
 
   if (!email && !phone) {
-    throw new Error("E-posta veya telefon numarasından en az biri zorunludur.");
+    throw new Error(
+      "E-posta veya telefon numarasından en az biri zorunludur."
+    );
   }
 
   const authAttributes: {
     email?: string;
     phone?: string;
-    user_metadata?: Record<string, string>;
+    user_metadata: Record<string, string>;
   } = {
     user_metadata: {
       full_name: fullName,
       role: requestedRole,
-      organization_id: String(currentProfile.organization_id),
+      organization_id: String(
+        currentProfile.organization_id
+      ),
     },
   };
 
-  if (email) authAttributes.email = email;
-  if (phone) authAttributes.phone = phone;
-
-  const { error: authError } =
-    await admin.auth.admin.updateUserById(staffId, authAttributes);
-
-  if (authError) {
-    throw new Error(`Auth hesabı güncellenemedi: ${authError.message}`);
+  if (email) {
+    authAttributes.email = email;
   }
 
-  const { error: profileError } = await admin
-    .from("profiles")
-    .update({
-      full_name: fullName,
-      email: email || null,
-      phone: phone || null,
-      role: requestedRole,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", staffId)
-    .eq("organization_id", currentProfile.organization_id);
+  if (phone) {
+    authAttributes.phone = phone;
+  }
+
+  const { error: authError } =
+    await admin.auth.admin.updateUserById(
+      profileId,
+      authAttributes
+    );
+
+  if (authError) {
+    throw new Error(
+      `Giriş hesabı güncellenemedi: ${authError.message}`
+    );
+  }
+
+  const { error: profileError } =
+    await admin
+      .from("profiles")
+      .update({
+        full_name: fullName,
+
+        email:
+          email || null,
+
+        phone:
+          phone || null,
+
+        role:
+          requestedRole,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", profileId)
+      .eq(
+        "organization_id",
+        currentProfile.organization_id
+      );
 
   if (profileError) {
-    throw new Error(`Profil güncellenemedi: ${profileError.message}`);
+    throw new Error(
+      `Profil güncellenemedi: ${profileError.message}`
+    );
+  }
+
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
+
+  const { firstName, lastName } =
+    splitName(fullName);
+
+  const { error: staffError } =
+    await admin
+      .from("staff")
+      .update({
+        first_name:
+          firstName,
+
+        last_name:
+          lastName,
+
+        phone:
+          phone || null,
+
+        email:
+          email || null,
+
+        title:
+          roleTitle(requestedRole),
+
+        staff_type:
+          requestedRole,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", staff.id);
+
+  if (staffError) {
+    throw new Error(
+      `Personel bilgisi güncellenemedi: ${staffError.message}`
+    );
   }
 
   revalidatePath(PAGE_PATH);
 }
+
+/* ============================================================
+   AKTİF / PASİF
+   ============================================================ */
 
 export async function setStaffActive(
   formData: FormData
 ): Promise<void> {
-  const { user, profile: currentProfile } = await requireOwnerOrAdmin();
+  const {
+    user,
+    profile: currentProfile,
+  } = await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const activeValue = clean(formData.get("is_active"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const isActive =
+    clean(formData.get("is_active")) ===
+    "true";
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
-  if (staffId === user.id && activeValue !== "true") {
-    throw new Error("Kendi hesabınızı pasif duruma getiremezsiniz.");
+  if (
+    profileId === user.id &&
+    !isActive
+  ) {
+    throw new Error(
+      "Kendi hesabınızı pasif yapamazsınız."
+    );
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  if (staff.role === "owner" && activeValue !== "true") {
-    throw new Error("Sistem sahibi hesabı pasif duruma getirilemez.");
+  if (
+    profile.role === "owner" &&
+    !isActive
+  ) {
+    throw new Error(
+      "Sistem Sahibi hesabı pasif yapılamaz."
+    );
   }
 
-  const isActive = activeValue === "true";
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
 
-  const { error } = await admin
-    .from("profiles")
-    .update({
-      is_active: isActive,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", staffId)
-    .eq("organization_id", currentProfile.organization_id);
+  const { error: profileError } =
+    await admin
+      .from("profiles")
+      .update({
+        is_active:
+          isActive,
 
-  if (error) {
-    throw new Error(`Hesap durumu değiştirilemedi: ${error.message}`);
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", profileId)
+      .eq(
+        "organization_id",
+        currentProfile.organization_id
+      );
+
+  if (profileError) {
+    throw new Error(
+      `Hesap durumu değiştirilemedi: ${profileError.message}`
+    );
+  }
+
+  const { error: staffError } =
+    await admin
+      .from("staff")
+      .update({
+        is_active:
+          isActive,
+
+        login_enabled:
+          isActive,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", staff.id);
+
+  if (staffError) {
+    throw new Error(
+      `Personel durumu değiştirilemedi: ${staffError.message}`
+    );
   }
 
   revalidatePath(PAGE_PATH);
 }
+
+/* ============================================================
+   ŞİFRE
+   ============================================================ */
 
 export async function changeStaffPassword(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const newPassword = clean(formData.get("password"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const password =
+    clean(formData.get("password"));
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
-  if (!newPassword || newPassword.length < 8) {
-    throw new Error("Yeni şifre en az 8 karakter olmalıdır.");
+  if (
+    !password ||
+    password.length < 8
+  ) {
+    throw new Error(
+      "Yeni şifre en az 8 karakter olmalıdır."
+    );
   }
 
-  await assertStaffBelongsToOrganization(
-    staffId,
+  await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  const { error } = await admin.auth.admin.updateUserById(staffId, {
-    password: newPassword,
-  });
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
+
+  const { error } =
+    await admin.auth.admin.updateUserById(
+      profileId,
+      {
+        password,
+      }
+    );
 
   if (error) {
-    throw new Error(`Şifre değiştirilemedi: ${error.message}`);
+    throw new Error(
+      `Şifre değiştirilemedi: ${error.message}`
+    );
   }
+
+  await admin
+    .from("staff")
+    .update({
+      must_change_password:
+        true,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", staff.id);
 
   revalidatePath(PAGE_PATH);
 }
 
+/* ============================================================
+   ŞUBELER
+   ============================================================ */
+
 export async function setStaffBranches(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  const branchIds = [
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
+  }
+
+  const profile = await getProfile(
+    profileId,
+    currentProfile.organization_id
+  );
+
+  if (profile.role === "owner") {
+    throw new Error(
+      "Sistem Sahibinin şube erişimi sınırlandırılamaz."
+    );
+  }
+
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
+
+  let branchIds = [
     ...new Set(
       formData
         .getAll("branch_ids")
-        .map((item) => String(item))
+        .map(String)
         .filter(Boolean)
     ),
   ];
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const allBranches =
+    clean(formData.get("all_branches")) ===
+    "true";
+
+  if (allBranches) {
+    branchIds = await getAllActiveBranchIds(
+      currentProfile.organization_id
+    );
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
-    currentProfile.organization_id
+  await validateBranches(
+    currentProfile.organization_id,
+    branchIds
   );
 
-  if (staff.role === "owner") {
-    throw new Error("Sistem sahibinin şube erişimi sınırlandırılamaz.");
-  }
-
-  if (branchIds.length > 0) {
-    const { data: validBranches, error: branchError } = await admin
-      .from("branches")
-      .select("id")
-      .eq("organization_id", currentProfile.organization_id)
-      .in("id", branchIds);
-
-    if (branchError) {
-      throw new Error(`Şubeler kontrol edilemedi: ${branchError.message}`);
-    }
-
-    if ((validBranches ?? []).length !== branchIds.length) {
-      throw new Error("Seçilen şubelerden biri organizasyona ait değil.");
-    }
-  }
-
-  const { error: deleteError } = await admin
-    .from("staff_branches")
-    .delete()
-    .eq("organization_id", currentProfile.organization_id)
-    .eq("staff_id", staffId);
+  const { error: deleteError } =
+    await admin
+      .from("staff_branches")
+      .delete()
+      .eq(
+        "organization_id",
+        currentProfile.organization_id
+      )
+      .eq(
+        "staff_id",
+        staff.id
+      );
 
   if (deleteError) {
     throw new Error(
@@ -550,268 +1052,426 @@ export async function setStaffBranches(
     );
   }
 
-  if (branchIds.length > 0) {
-    const rows = branchIds.map((branchId) => ({
-      organization_id: currentProfile.organization_id,
-      staff_id: staffId,
-      branch_id: branchId,
-    }));
+  if (branchIds.length) {
+    const rows =
+      branchIds.map((branchId) => ({
+        organization_id:
+          currentProfile.organization_id,
 
-    const { error: insertError } = await admin
-      .from("staff_branches")
-      .insert(rows);
+        staff_id:
+          staff.id,
 
-    if (insertError) {
+        branch_id:
+          branchId,
+      }));
+
+    const { error } =
+      await admin
+        .from("staff_branches")
+        .insert(rows);
+
+    if (error) {
       throw new Error(
-        `Yeni şube atamaları kaydedilemedi: ${insertError.message}`
+        `Şubeler kaydedilemedi: ${error.message}`
       );
     }
   }
 
-  const { error: profileError } = await admin
+  await admin
+    .from("staff")
+    .update({
+      all_branches:
+        allBranches,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", staff.id);
+
+  await admin
     .from("profiles")
     .update({
-      branch_id: branchIds[0] ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", staffId)
-    .eq("organization_id", currentProfile.organization_id);
+      branch_id:
+        branchIds[0] ?? null,
 
-  if (profileError) {
-    throw new Error(
-      `Ana şube bilgisi güncellenemedi: ${profileError.message}`
-    );
-  }
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", profileId);
 
   revalidatePath(PAGE_PATH);
 }
+
+/* ============================================================
+   TEK YETKİ
+   ============================================================ */
 
 export async function setStaffPermission(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const permissionKey = clean(formData.get("permission_key"));
-  const allowedValue = clean(formData.get("is_allowed"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId || !permissionKey) {
-    throw new Error("Personel veya yetki bilgisi eksik.");
+  const permissionKey =
+    clean(formData.get("permission_key"));
+
+  const isAllowed =
+    clean(formData.get("is_allowed")) ===
+    "true";
+
+  if (
+    !profileId ||
+    !permissionKey
+  ) {
+    throw new Error(
+      "Kullanıcı veya yetki bilgisi eksik."
+    );
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  if (staff.role === "owner") {
-    throw new Error("Sistem sahibinin yetkileri kapatılamaz.");
-  }
-
-  const { data: permissionDefinition, error: permissionError } =
-    await admin
-      .from("permission_definitions")
-      .select("permission_key, is_active")
-      .eq("permission_key", permissionKey)
-      .eq("is_active", true)
-      .single();
-
-  if (permissionError || !permissionDefinition) {
-    throw new Error("Geçersiz veya pasif yetki.");
-  }
-
-  const isAllowed = allowedValue === "true";
-
-  const { error } = await admin
-    .from("staff_permissions")
-    .upsert(
-      {
-        organization_id: currentProfile.organization_id,
-        staff_id: staffId,
-        permission_key: permissionKey,
-        is_allowed: isAllowed,
-      },
-      {
-        onConflict: "staff_id,permission_key",
-      }
+  if (profile.role === "owner") {
+    throw new Error(
+      "Sistem Sahibinin yetkileri değiştirilemez."
     );
+  }
+
+  await validatePermissions([
+    permissionKey,
+  ]);
+
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
+
+  const { error } =
+    await admin
+      .from("staff_permissions")
+      .upsert(
+        {
+          organization_id:
+            currentProfile.organization_id,
+
+          staff_id:
+            staff.id,
+
+          permission_key:
+            permissionKey,
+
+          is_allowed:
+            isAllowed,
+        },
+        {
+          onConflict:
+            "staff_id,permission_key",
+        }
+      );
 
   if (error) {
-    throw new Error(`Yetki değiştirilemedi: ${error.message}`);
+    throw new Error(
+      `Yetki değiştirilemedi: ${error.message}`
+    );
+  }
+
+  if (
+    permissionKey ===
+    "system.superuser"
+  ) {
+    await admin
+      .from("staff")
+      .update({
+        is_super_user:
+          isAllowed,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", staff.id);
   }
 
   revalidatePath(PAGE_PATH);
 }
+
+/* ============================================================
+   TÜM YETKİLER
+   ============================================================ */
 
 export async function setAllStaffPermissions(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const allowedValue = clean(formData.get("is_allowed"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const isAllowed =
+    clean(formData.get("is_allowed")) ===
+    "true";
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  if (staff.role === "owner") {
-    throw new Error("Sistem sahibinin yetkileri değiştirilemez.");
+  if (profile.role === "owner") {
+    throw new Error(
+      "Sistem Sahibinin yetkileri değiştirilemez."
+    );
   }
 
-  const isAllowed = allowedValue === "true";
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
 
-  const { data: permissions, error: permissionError } = await admin
-    .from("permission_definitions")
-    .select("permission_key")
-    .eq("is_active", true);
+  const { data: permissions, error } =
+    await admin
+      .from("permission_definitions")
+      .select("permission_key")
+      .eq("is_active", true);
 
-  if (permissionError) {
-    throw new Error(`Yetki listesi alınamadı: ${permissionError.message}`);
+  if (error) {
+    throw new Error(
+      `Yetkiler alınamadı: ${error.message}`
+    );
   }
 
   if (!permissions?.length) {
-    throw new Error("Aktif yetki tanımı bulunamadı.");
+    throw new Error(
+      "Aktif yetki tanımı bulunamadı."
+    );
   }
 
-  const rows = permissions.map((permission) => ({
-    organization_id: currentProfile.organization_id,
-    staff_id: staffId,
-    permission_key: permission.permission_key,
-    is_allowed: isAllowed,
-  }));
+  const rows =
+    permissions.map((permission) => ({
+      organization_id:
+        currentProfile.organization_id,
 
-  const { error } = await admin.from("staff_permissions").upsert(rows, {
-    onConflict: "staff_id,permission_key",
-  });
+      staff_id:
+        staff.id,
 
-  if (error) {
-    throw new Error(`Yetkiler değiştirilemedi: ${error.message}`);
+      permission_key:
+        permission.permission_key,
+
+      is_allowed:
+        isAllowed,
+    }));
+
+  const { error: permissionError } =
+    await admin
+      .from("staff_permissions")
+      .upsert(rows, {
+        onConflict:
+          "staff_id,permission_key",
+      });
+
+  if (permissionError) {
+    throw new Error(
+      `Yetkiler kaydedilemedi: ${permissionError.message}`
+    );
   }
+
+  await admin
+    .from("staff")
+    .update({
+      is_super_user:
+        isAllowed,
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", staff.id);
 
   revalidatePath(PAGE_PATH);
 }
+
+/* ============================================================
+   MUHASEBE
+   ============================================================ */
 
 export async function setAccountingPermissions(
   formData: FormData
 ): Promise<void> {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
+
   const admin = getAdminClient();
 
-  const staffId = clean(formData.get("staff_id"));
-  const allowedValue = clean(formData.get("is_allowed"));
+  const profileId =
+    clean(formData.get("staff_id"));
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const isAllowed =
+    clean(formData.get("is_allowed")) ===
+    "true";
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  if (staff.role === "owner") {
-    throw new Error("Sistem sahibinin muhasebe yetkileri değiştirilemez.");
-  }
-
-  const isAllowed = allowedValue === "true";
-
-  const { data: definitions, error: definitionsError } = await admin
-    .from("permission_definitions")
-    .select("permission_key, module_key")
-    .eq("is_active", true);
-
-  if (definitionsError) {
+  if (profile.role === "owner") {
     throw new Error(
-      `Muhasebe yetkileri alınamadı: ${definitionsError.message}`
+      "Sistem Sahibinin muhasebe yetkileri değiştirilemez."
     );
   }
 
-  const accountingPermissions = (definitions ?? []).filter((item) => {
-    const moduleKey = String(item.module_key ?? "").toLowerCase();
-    const permissionKey = String(item.permission_key ?? "").toLowerCase();
+  const staff = await ensureStaffRecord(
+    profileId,
+    currentProfile.organization_id
+  );
 
-    return (
-      moduleKey.includes("account") ||
-      moduleKey.includes("payment") ||
-      moduleKey.includes("cash") ||
-      moduleKey.includes("finance") ||
-      permissionKey.includes("account") ||
-      permissionKey.includes("payment") ||
-      permissionKey.includes("cash") ||
-      permissionKey.includes("finance")
-    );
-  });
-
-  if (!accountingPermissions.length) {
-    throw new Error(
-      "Muhasebe/ödeme/kasa modüllerine ait aktif yetki tanımı bulunamadı."
-    );
-  }
-
-  const rows = accountingPermissions.map((permission) => ({
-    organization_id: currentProfile.organization_id,
-    staff_id: staffId,
-    permission_key: permission.permission_key,
-    is_allowed: isAllowed,
-  }));
-
-  const { error } = await admin.from("staff_permissions").upsert(rows, {
-    onConflict: "staff_id,permission_key",
-  });
+  const { data: definitions, error } =
+    await admin
+      .from("permission_definitions")
+      .select(
+        "permission_key, module_key"
+      )
+      .eq("is_active", true);
 
   if (error) {
     throw new Error(
-      `Muhasebe yetkileri değiştirilemedi: ${error.message}`
+      `Yetkiler alınamadı: ${error.message}`
+    );
+  }
+
+  const accountingPermissions =
+    (definitions ?? []).filter(
+      (item) => {
+        const moduleKey =
+          String(
+            item.module_key ?? ""
+          ).toLowerCase();
+
+        const permissionKey =
+          String(
+            item.permission_key ?? ""
+          ).toLowerCase();
+
+        return (
+          moduleKey.includes("account") ||
+          moduleKey.includes("finance") ||
+          moduleKey.includes("payment") ||
+          moduleKey.includes("cash") ||
+          permissionKey.includes("account") ||
+          permissionKey.includes("finance") ||
+          permissionKey.includes("payment") ||
+          permissionKey.includes("cash")
+        );
+      }
+    );
+
+  if (!accountingPermissions.length) {
+    throw new Error(
+      "Muhasebe, ödeme veya kasa yetkisi bulunamadı."
+    );
+  }
+
+  const rows =
+    accountingPermissions.map(
+      (permission) => ({
+        organization_id:
+          currentProfile.organization_id,
+
+        staff_id:
+          staff.id,
+
+        permission_key:
+          permission.permission_key,
+
+        is_allowed:
+          isAllowed,
+      })
+    );
+
+  const { error: saveError } =
+    await admin
+      .from("staff_permissions")
+      .upsert(rows, {
+        onConflict:
+          "staff_id,permission_key",
+      });
+
+  if (saveError) {
+    throw new Error(
+      `Muhasebe yetkileri kaydedilemedi: ${saveError.message}`
     );
   }
 
   revalidatePath(PAGE_PATH);
 }
 
-export async function generateLoginMessage(formData: FormData) {
-  const { profile: currentProfile } = await requireOwnerOrAdmin();
+/* ============================================================
+   GİRİŞ MESAJI
+   ============================================================ */
 
-  const staffId = clean(formData.get("staff_id"));
-  const password = clean(formData.get("password"));
+export async function generateLoginMessage(
+  formData: FormData
+) {
+  const { profile: currentProfile } =
+    await requireOwnerOrAdmin();
 
-  if (!staffId) {
-    throw new Error("Personel ID bulunamadı.");
+  const profileId =
+    clean(formData.get("staff_id"));
+
+  const password =
+    clean(formData.get("password"));
+
+  if (!profileId) {
+    throw new Error("Kullanıcı ID bulunamadı.");
   }
 
   if (!password) {
-    throw new Error("Gönderilecek geçici şifreyi giriniz.");
+    throw new Error(
+      "Gönderilecek geçici şifreyi giriniz."
+    );
   }
 
-  const staff = await assertStaffBelongsToOrganization(
-    staffId,
+  const profile = await getProfile(
+    profileId,
     currentProfile.organization_id
   );
 
-  const loginName =
-    staff.phone || staff.email || "Tanımlı kullanıcı hesabınız";
+  const login =
+    profile.phone ||
+    profile.email ||
+    "Tanımlı kullanıcı hesabınız";
 
   const message = `SPRİNT YÜZME OKULU – SprintOS Giriş Bilgileri
 
-Sayın ${staff.full_name || "Personelimiz"},
+Sayın ${profile.full_name || "Personelimiz"},
 
-SprintOS personel hesabınız oluşturulmuştur.
+SprintOS kullanıcı hesabınız oluşturulmuştur.
 
 Kullanıcı Adı / Giriş:
-${loginName}
+${login}
 
 Geçici Şifreniz:
 ${password}
 
-Güvenlik Uyarısı:
-Giriş bilgilerinizi ve şifrenizi hiç kimseyle paylaşmayınız. Şifreniz yalnızca size özeldir. Şüpheli bir giriş veya yetkisiz erişim fark etmeniz halinde Sprint Yüzme Okulu yönetimine bilgi veriniz.
+GÜVENLİK UYARISI:
+Giriş bilgilerinizi ve şifrenizi hiç kimseyle paylaşmayınız. Şifreniz yalnızca size özeldir.
+
+Şüpheli bir giriş veya yetkisiz erişim fark etmeniz halinde Sprint Yüzme Okulu yönetimine bilgi veriniz.
 
 İlk girişinizden sonra şifrenizi değiştirmeniz önerilir.
 
@@ -820,7 +1480,7 @@ Sprint Yüzme Okulu Yönetimi`;
   return {
     success: true,
     message,
-    phone: staff.phone,
-    email: staff.email,
+    phone: profile.phone,
+    email: profile.email,
   };
 }
