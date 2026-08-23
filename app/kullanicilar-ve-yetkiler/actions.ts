@@ -136,7 +136,7 @@ async function assertStaffBelongsToOrganization(
   return data;
 }
 
-export async function createStaff(formData: FormData) {
+export async function createStaff(formData: FormData): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -171,15 +171,23 @@ export async function createStaff(formData: FormData) {
     );
   }
 
-  const branchIds = formData
-    .getAll("branch_ids")
-    .map((item) => String(item))
-    .filter(Boolean);
+  const branchIds = [
+    ...new Set(
+      formData
+        .getAll("branch_ids")
+        .map((item) => String(item))
+        .filter(Boolean)
+    ),
+  ];
 
-  const permissionKeys = formData
-    .getAll("permission_keys")
-    .map((item) => String(item))
-    .filter(Boolean);
+  const permissionKeys = [
+    ...new Set(
+      formData
+        .getAll("permission_keys")
+        .map((item) => String(item))
+        .filter(Boolean)
+    ),
+  ];
 
   if (branchIds.length > 0) {
     const { data: validBranches, error: branchError } = await admin
@@ -192,7 +200,7 @@ export async function createStaff(formData: FormData) {
       throw new Error(`Şubeler kontrol edilemedi: ${branchError.message}`);
     }
 
-    if ((validBranches ?? []).length !== new Set(branchIds).size) {
+    if ((validBranches ?? []).length !== branchIds.length) {
       throw new Error("Seçilen şubelerden biri organizasyona ait değil.");
     }
   }
@@ -210,7 +218,7 @@ export async function createStaff(formData: FormData) {
       );
     }
 
-    if ((validPermissions ?? []).length !== new Set(permissionKeys).size) {
+    if ((validPermissions ?? []).length !== permissionKeys.length) {
       throw new Error("Seçilen yetkilerden biri geçersiz.");
     }
   }
@@ -320,11 +328,11 @@ export async function createStaff(formData: FormData) {
   }
 
   revalidatePath(PAGE_PATH);
-
-  return;
 }
 
-export async function updateStaffProfile(formData: FormData) {
+export async function updateStaffProfile(
+  formData: FormData
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -338,10 +346,14 @@ export async function updateStaffProfile(formData: FormData) {
     throw new Error("Personel ID bulunamadı.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner") {
+    throw new Error("Sistem sahibi hesabı bu ekrandan değiştirilemez.");
+  }
 
   if (!fullName) {
     throw new Error("Ad soyad zorunludur.");
@@ -358,6 +370,10 @@ export async function updateStaffProfile(formData: FormData) {
   const email = rawEmail ? normalizeEmail(rawEmail) : "";
   const phone = rawPhone ? normalizePhone(rawPhone) : "";
 
+  if (!email && !phone) {
+    throw new Error("E-posta veya telefon numarasından en az biri zorunludur.");
+  }
+
   const authAttributes: {
     email?: string;
     phone?: string;
@@ -370,13 +386,8 @@ export async function updateStaffProfile(formData: FormData) {
     },
   };
 
-  if (email) {
-    authAttributes.email = email;
-  }
-
-  if (phone) {
-    authAttributes.phone = phone;
-  }
+  if (email) authAttributes.email = email;
+  if (phone) authAttributes.phone = phone;
 
   const { error: authError } =
     await admin.auth.admin.updateUserById(staffId, authAttributes);
@@ -402,13 +413,11 @@ export async function updateStaffProfile(formData: FormData) {
   }
 
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-  };
 }
 
-export async function setStaffActive(formData: FormData) {
+export async function setStaffActive(
+  formData: FormData
+): Promise<void> {
   const { user, profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -423,10 +432,14 @@ export async function setStaffActive(formData: FormData) {
     throw new Error("Kendi hesabınızı pasif duruma getiremezsiniz.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner" && activeValue !== "true") {
+    throw new Error("Sistem sahibi hesabı pasif duruma getirilemez.");
+  }
 
   const isActive = activeValue === "true";
 
@@ -443,27 +456,12 @@ export async function setStaffActive(formData: FormData) {
     throw new Error(`Hesap durumu değiştirilemedi: ${error.message}`);
   }
 
-  if (!isActive) {
-    const { error: signOutError } =
-      await admin.auth.admin.signOut(staffId, "global");
-
-    if (signOutError) {
-      console.warn(
-        "Kullanıcı oturumları kapatılamadı:",
-        signOutError.message
-      );
-    }
-  }
-
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-    isActive,
-  };
 }
 
-export async function changeStaffPassword(formData: FormData) {
+export async function changeStaffPassword(
+  formData: FormData
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -491,34 +489,38 @@ export async function changeStaffPassword(formData: FormData) {
     throw new Error(`Şifre değiştirilemedi: ${error.message}`);
   }
 
-  await admin.auth.admin.signOut(staffId, "global");
-
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-  };
 }
 
-export async function setStaffBranches(formData: FormData) {
+export async function setStaffBranches(
+  formData: FormData
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
   const staffId = clean(formData.get("staff_id"));
 
-  const branchIds = formData
-    .getAll("branch_ids")
-    .map((item) => String(item))
-    .filter(Boolean);
+  const branchIds = [
+    ...new Set(
+      formData
+        .getAll("branch_ids")
+        .map((item) => String(item))
+        .filter(Boolean)
+    ),
+  ];
 
   if (!staffId) {
     throw new Error("Personel ID bulunamadı.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner") {
+    throw new Error("Sistem sahibinin şube erişimi sınırlandırılamaz.");
+  }
 
   if (branchIds.length > 0) {
     const { data: validBranches, error: branchError } = await admin
@@ -531,7 +533,7 @@ export async function setStaffBranches(formData: FormData) {
       throw new Error(`Şubeler kontrol edilemedi: ${branchError.message}`);
     }
 
-    if ((validBranches ?? []).length !== new Set(branchIds).size) {
+    if ((validBranches ?? []).length !== branchIds.length) {
       throw new Error("Seçilen şubelerden biri organizasyona ait değil.");
     }
   }
@@ -549,7 +551,7 @@ export async function setStaffBranches(formData: FormData) {
   }
 
   if (branchIds.length > 0) {
-    const rows = [...new Set(branchIds)].map((branchId) => ({
+    const rows = branchIds.map((branchId) => ({
       organization_id: currentProfile.organization_id,
       staff_id: staffId,
       branch_id: branchId,
@@ -582,13 +584,11 @@ export async function setStaffBranches(formData: FormData) {
   }
 
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-  };
 }
 
-export async function setStaffPermission(formData: FormData) {
+export async function setStaffPermission(
+  formData: FormData
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -600,10 +600,14 @@ export async function setStaffPermission(formData: FormData) {
     throw new Error("Personel veya yetki bilgisi eksik.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner") {
+    throw new Error("Sistem sahibinin yetkileri kapatılamaz.");
+  }
 
   const { data: permissionDefinition, error: permissionError } =
     await admin
@@ -629,7 +633,7 @@ export async function setStaffPermission(formData: FormData) {
         is_allowed: isAllowed,
       },
       {
-        onConflict: "organization_id,staff_id,permission_key",
+        onConflict: "staff_id,permission_key",
       }
     );
 
@@ -638,15 +642,11 @@ export async function setStaffPermission(formData: FormData) {
   }
 
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-    permissionKey,
-    isAllowed,
-  };
 }
 
-export async function setAllStaffPermissions(formData: FormData) {
+export async function setAllStaffPermissions(
+  formData: FormData
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -657,10 +657,14 @@ export async function setAllStaffPermissions(formData: FormData) {
     throw new Error("Personel ID bulunamadı.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner") {
+    throw new Error("Sistem sahibinin yetkileri değiştirilemez.");
+  }
 
   const isAllowed = allowedValue === "true";
 
@@ -670,9 +674,7 @@ export async function setAllStaffPermissions(formData: FormData) {
     .eq("is_active", true);
 
   if (permissionError) {
-    throw new Error(
-      `Yetki listesi alınamadı: ${permissionError.message}`
-    );
+    throw new Error(`Yetki listesi alınamadı: ${permissionError.message}`);
   }
 
   if (!permissions?.length) {
@@ -686,27 +688,20 @@ export async function setAllStaffPermissions(formData: FormData) {
     is_allowed: isAllowed,
   }));
 
-  const { error } = await admin
-    .from("staff_permissions")
-    .upsert(rows, {
-      onConflict: "organization_id,staff_id,permission_key",
-    });
+  const { error } = await admin.from("staff_permissions").upsert(rows, {
+    onConflict: "staff_id,permission_key",
+  });
 
   if (error) {
     throw new Error(`Yetkiler değiştirilemedi: ${error.message}`);
   }
 
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-    isAllowed,
-  };
 }
 
 export async function setAccountingPermissions(
   formData: FormData
-) {
+): Promise<void> {
   const { profile: currentProfile } = await requireOwnerOrAdmin();
   const admin = getAdminClient();
 
@@ -717,10 +712,14 @@ export async function setAccountingPermissions(
     throw new Error("Personel ID bulunamadı.");
   }
 
-  await assertStaffBelongsToOrganization(
+  const staff = await assertStaffBelongsToOrganization(
     staffId,
     currentProfile.organization_id
   );
+
+  if (staff.role === "owner") {
+    throw new Error("Sistem sahibinin muhasebe yetkileri değiştirilemez.");
+  }
 
   const isAllowed = allowedValue === "true";
 
@@ -737,9 +736,7 @@ export async function setAccountingPermissions(
 
   const accountingPermissions = (definitions ?? []).filter((item) => {
     const moduleKey = String(item.module_key ?? "").toLowerCase();
-    const permissionKey = String(
-      item.permission_key ?? ""
-    ).toLowerCase();
+    const permissionKey = String(item.permission_key ?? "").toLowerCase();
 
     return (
       moduleKey.includes("account") ||
@@ -766,11 +763,9 @@ export async function setAccountingPermissions(
     is_allowed: isAllowed,
   }));
 
-  const { error } = await admin
-    .from("staff_permissions")
-    .upsert(rows, {
-      onConflict: "organization_id,staff_id,permission_key",
-    });
+  const { error } = await admin.from("staff_permissions").upsert(rows, {
+    onConflict: "staff_id,permission_key",
+  });
 
   if (error) {
     throw new Error(
@@ -779,11 +774,6 @@ export async function setAccountingPermissions(
   }
 
   revalidatePath(PAGE_PATH);
-
-  return {
-    success: true,
-    isAllowed,
-  };
 }
 
 export async function generateLoginMessage(formData: FormData) {
@@ -805,7 +795,8 @@ export async function generateLoginMessage(formData: FormData) {
     currentProfile.organization_id
   );
 
-  const loginName = staff.phone || staff.email || "Tanımlı kullanıcı hesabınız";
+  const loginName =
+    staff.phone || staff.email || "Tanımlı kullanıcı hesabınız";
 
   const message = `SPRİNT YÜZME OKULU – SprintOS Giriş Bilgileri
 
