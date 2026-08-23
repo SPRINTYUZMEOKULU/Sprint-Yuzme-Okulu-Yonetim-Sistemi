@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,9 @@ const MODULE_LABELS: Record<string, string> = {
   operations: "Operasyon Planı",
   attendance: "Yoklama",
   finance: "Muhasebe ve Ödemeler",
+  accounting: "Muhasebe",
+  payments: "Ödemeler",
+  cash: "Günlük Kasa",
   staff: "Personel",
   accounts: "Kullanıcı Hesapları",
   permissions: "Yetkiler",
@@ -51,55 +55,46 @@ const MODULE_LABELS: Record<string, string> = {
   branches: "Şubeler",
 };
 
-function cardStyle(): React.CSSProperties {
-  return {
-    background: "#ffffff",
-    border: "1px solid #e3eaf3",
-    borderRadius: 18,
-    padding: 22,
-    boxShadow: "0 8px 25px rgba(15,23,42,.05)",
-  };
-}
+const card: CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e3eaf3",
+  borderRadius: 18,
+  padding: 22,
+  boxShadow: "0 8px 25px rgba(15,23,42,.05)",
+};
 
-function inputStyle(): React.CSSProperties {
-  return {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "12px 13px",
-    borderRadius: 10,
-    border: "1px solid #d7e0ec",
-    background: "#ffffff",
-    color: "#13233f",
-    fontSize: 14,
-    outline: "none",
-  };
-}
+const input: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "12px 13px",
+  borderRadius: 10,
+  border: "1px solid #d7e0ec",
+  background: "#fff",
+  color: "#13233f",
+  fontSize: 14,
+};
 
-function primaryButton(): React.CSSProperties {
-  return {
-    border: 0,
-    borderRadius: 10,
-    padding: "11px 16px",
-    background: "#1769e8",
-    color: "#ffffff",
-    fontWeight: 750,
-    cursor: "pointer",
-  };
-}
+const blueButton: CSSProperties = {
+  border: 0,
+  borderRadius: 10,
+  padding: "11px 16px",
+  background: "#1769e8",
+  color: "#fff",
+  fontWeight: 800,
+  cursor: "pointer",
+};
 
-function secondaryButton(): React.CSSProperties {
-  return {
-    border: "1px solid #d7e0ec",
-    borderRadius: 10,
-    padding: "10px 14px",
-    background: "#ffffff",
-    color: "#334155",
-    fontWeight: 700,
-    cursor: "pointer",
-  };
-}
+const whiteButton: CSSProperties = {
+  border: "1px solid #d7e0ec",
+  borderRadius: 10,
+  padding: "10px 14px",
+  background: "#fff",
+  color: "#334155",
+  fontWeight: 750,
+  cursor: "pointer",
+};
 
-export default async function KullanicilarVeYetkilerPage() {
+export default async function Page() {
   const supabase = await createClient();
 
   const {
@@ -109,63 +104,73 @@ export default async function KullanicilarVeYetkilerPage() {
   if (!user) {
     return (
       <main style={{ padding: 40 }}>
-        <h1>Oturum bulunamadı</h1>
-        <p>Bu sayfayı görüntülemek için giriş yapmalısınız.</p>
+        Giriş yapmanız gerekiyor.
       </main>
     );
   }
 
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("id, organization_id, role, full_name, is_active")
-    .eq("id", user.id)
-    .single();
+  const { data: currentProfile } =
+    await supabase
+      .from("profiles")
+      .select(
+        "id, organization_id, role, is_active"
+      )
+      .eq("id", user.id)
+      .single();
 
   if (
     !currentProfile ||
     !currentProfile.is_active ||
-    !["owner", "admin"].includes(String(currentProfile.role))
+    !["owner", "admin"].includes(
+      String(currentProfile.role)
+    )
   ) {
     return (
       <main style={{ padding: 40 }}>
-        <h1>Yetkisiz erişim</h1>
-        <p>
-          Bu bölüm yalnızca sistem sahibi ve yöneticiler tarafından
-          kullanılabilir.
-        </p>
+        Bu bölüme erişim yetkiniz bulunmuyor.
       </main>
     );
   }
 
-  if (!currentProfile.organization_id) {
+  const organizationId =
+    currentProfile.organization_id;
+
+  if (!organizationId) {
     return (
       <main style={{ padding: 40 }}>
-        <h1>Organizasyon bulunamadı</h1>
+        Organizasyon bulunamadı.
       </main>
     );
   }
-
-  const organizationId = currentProfile.organization_id;
 
   const [
     profilesResult,
     branchesResult,
     permissionsResult,
+    staffResult,
     staffBranchesResult,
     staffPermissionsResult,
   ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "id, full_name, email, phone, role, is_active, branch_id, created_at, last_sign_in_at"
+        "id, full_name, email, phone, role, is_active, branch_id, last_sign_in_at"
       )
-      .eq("organization_id", organizationId)
+      .eq(
+        "organization_id",
+        organizationId
+      )
       .order("full_name"),
 
     supabase
       .from("branches")
-      .select("id, name, short_name, is_active")
-      .eq("organization_id", organizationId)
+      .select(
+        "id, name, short_name, is_active"
+      )
+      .eq(
+        "organization_id",
+        organizationId
+      )
       .order("name"),
 
     supabase
@@ -177,59 +182,96 @@ export default async function KullanicilarVeYetkilerPage() {
       .order("sort_order"),
 
     supabase
+      .from("staff")
+      .select(
+        "id, auth_user_id, is_super_user, all_branches, login_enabled, must_change_password"
+      )
+      .eq(
+        "organization_id",
+        organizationId
+      ),
+
+    supabase
       .from("staff_branches")
-      .select("staff_id, branch_id")
-      .eq("organization_id", organizationId),
+      .select(
+        "staff_id, branch_id"
+      )
+      .eq(
+        "organization_id",
+        organizationId
+      ),
 
     supabase
       .from("staff_permissions")
-      .select("staff_id, permission_key, is_allowed")
-      .eq("organization_id", organizationId),
+      .select(
+        "staff_id, permission_key, is_allowed"
+      )
+      .eq(
+        "organization_id",
+        organizationId
+      ),
   ]);
 
-  const loadError =
+  const error =
     profilesResult.error ||
     branchesResult.error ||
     permissionsResult.error ||
+    staffResult.error ||
     staffBranchesResult.error ||
     staffPermissionsResult.error;
 
-  if (loadError) {
+  if (error) {
     return (
       <main style={{ padding: 40 }}>
         <h1>Kullanıcılar ve Yetkiler</h1>
         <p style={{ color: "#b91c1c" }}>
-          Veriler yüklenemedi: {loadError.message}
+          Veriler yüklenemedi: {error.message}
         </p>
       </main>
     );
   }
 
-  const profiles = profilesResult.data ?? [];
-  const branches = branchesResult.data ?? [];
-  const permissions = permissionsResult.data ?? [];
-  const staffBranches = staffBranchesResult.data ?? [];
-  const staffPermissions = staffPermissionsResult.data ?? [];
+  const profiles =
+    profilesResult.data ?? [];
 
-  const activeProfiles = profiles.filter((p) => p.is_active);
-  const coaches = profiles.filter((p) => p.role === "coach");
-  const managers = profiles.filter((p) =>
-    ["owner", "admin", "branch_manager"].includes(String(p.role))
-  );
+  const branches =
+    branchesResult.data ?? [];
 
-  const permissionGroups = permissions.reduce<
-    Record<string, typeof permissions>
-  >((acc, permission) => {
-    const key = permission.module_key || "other";
+  const permissions =
+    permissionsResult.data ?? [];
 
-    if (!acc[key]) {
-      acc[key] = [];
-    }
+  const staffRows =
+    staffResult.data ?? [];
 
-    acc[key].push(permission);
+  const staffBranches =
+    staffBranchesResult.data ?? [];
 
-    return acc;
-  }, {});
+  const staffPermissions =
+    staffPermissionsResult.data ?? [];
+
+  const staffByAuthUser =
+    new Map(
+      staffRows.map((staff) => [
+        staff.auth_user_id,
+        staff,
+      ])
+    );
+
+  const permissionGroups =
+    permissions.reduce<
+      Record<string, typeof permissions>
+    >((result, permission) => {
+      const key =
+        permission.module_key || "other";
+
+      if (!result[key]) {
+        result[key] = [];
+      }
+
+      result[key].push(permission);
+
+      return result;
+    }, {});
 
   return (
     <main
@@ -237,40 +279,42 @@ export default async function KullanicilarVeYetkilerPage() {
         minHeight: "100vh",
         background: "#f4f7fc",
         padding: 30,
-        fontFamily:
-          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         color: "#13233f",
+        fontFamily:
+          "Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
       }}
     >
-      <div style={{ maxWidth: 1450, margin: "0 auto" }}>
-        <div
+      <div
+        style={{
+          maxWidth: 1450,
+          margin: "0 auto",
+        }}
+      >
+        <header
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
             gap: 20,
             flexWrap: "wrap",
-            marginBottom: 26,
+            marginBottom: 24,
           }}
         >
           <div>
             <div
               style={{
                 color: "#1769e8",
-                fontWeight: 850,
                 fontSize: 12,
-                letterSpacing: 1.4,
-                marginBottom: 7,
+                fontWeight: 900,
+                letterSpacing: 1,
               }}
             >
-              SPRİNT YÜZME OKULU · SİSTEM YÖNETİMİ
+              SPRİNT YÜZME OKULU · SPRINTOS
             </div>
 
             <h1
               style={{
-                margin: 0,
+                margin: "6px 0 0",
                 fontSize: 32,
-                letterSpacing: "-0.6px",
               }}
             >
               Kullanıcılar ve Yetkiler
@@ -279,11 +323,11 @@ export default async function KullanicilarVeYetkilerPage() {
             <p
               style={{
                 color: "#64748b",
-                margin: "8px 0 0",
+                margin: "7px 0 0",
               }}
             >
-              Personel hesapları, şubeler, giriş bilgileri ve SprintOS
-              erişim yetkilerini tek merkezden yönetin.
+              Personel, giriş, şube ve yetkileri
+              tek merkezden yönetin.
             </p>
           </div>
 
@@ -291,13 +335,12 @@ export default async function KullanicilarVeYetkilerPage() {
             style={{
               display: "flex",
               gap: 8,
-              flexWrap: "wrap",
             }}
           >
             <Link
               href="/operasyon-plani"
               style={{
-                ...secondaryButton(),
+                ...whiteButton,
                 textDecoration: "none",
               }}
             >
@@ -307,49 +350,72 @@ export default async function KullanicilarVeYetkilerPage() {
             <Link
               href="/"
               style={{
-                ...primaryButton(),
+                ...blueButton,
                 textDecoration: "none",
               }}
             >
               Ana Sayfa
             </Link>
           </div>
-        </div>
+        </header>
 
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-            gap: 14,
-            marginBottom: 24,
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(180px,1fr))",
+            gap: 12,
+            marginBottom: 22,
           }}
         >
           {[
-            ["Toplam Kullanıcı", profiles.length],
-            ["Aktif Kullanıcı", activeProfiles.length],
-            ["Eğitmen", coaches.length],
-            ["Yönetici", managers.length],
-            ["Aktif Şube", branches.filter((b) => b.is_active).length],
-            ["Tanımlı Yetki", permissions.length],
-          ].map(([label, value]) => (
-            <div key={String(label)} style={cardStyle()}>
-              <div
+            [
+              "Toplam Kullanıcı",
+              profiles.length,
+            ],
+            [
+              "Aktif Kullanıcı",
+              profiles.filter(
+                (x) => x.is_active
+              ).length,
+            ],
+            [
+              "Eğitmen",
+              profiles.filter(
+                (x) => x.role === "coach"
+              ).length,
+            ],
+            [
+              "Aktif Şube",
+              branches.filter(
+                (x) => x.is_active
+              ).length,
+            ],
+            [
+              "Tanımlı Yetki",
+              permissions.length,
+            ],
+          ].map(([title, number]) => (
+            <div
+              key={String(title)}
+              style={card}
+            >
+              <strong
                 style={{
-                  fontSize: 27,
-                  fontWeight: 850,
+                  fontSize: 28,
                 }}
               >
-                {value}
-              </div>
+                {number}
+              </strong>
 
               <div
                 style={{
                   color: "#64748b",
                   fontSize: 13,
-                  marginTop: 4,
+                  marginTop: 5,
                 }}
               >
-                {label}
+                {title}
               </div>
             </div>
           ))}
@@ -357,66 +423,66 @@ export default async function KullanicilarVeYetkilerPage() {
 
         <section
           style={{
-            ...cardStyle(),
-            marginBottom: 24,
+            ...card,
+            marginBottom: 22,
           }}
         >
-          <div style={{ marginBottom: 20 }}>
-            <div
-              style={{
-                color: "#1769e8",
-                fontSize: 12,
-                fontWeight: 850,
-                letterSpacing: 1,
-                marginBottom: 7,
-              }}
-            >
-              YENİ PERSONEL / KULLANICI
-            </div>
-
-            <h2 style={{ margin: 0, fontSize: 21 }}>
-              Yeni Kullanıcı Oluştur
-            </h2>
-
-            <p
-              style={{
-                color: "#64748b",
-                fontSize: 14,
-                margin: "7px 0 0",
-              }}
-            >
-              Kullanıcı hesabını, geçici şifresini, şubelerini ve
-              başlangıç yetkilerini tek işlemde oluşturun.
-            </p>
+          <div
+            style={{
+              color: "#1769e8",
+              fontWeight: 900,
+              fontSize: 12,
+              letterSpacing: 1,
+            }}
+          >
+            YENİ PERSONEL / KULLANICI
           </div>
+
+          <h2
+            style={{
+              margin: "6px 0 4px",
+            }}
+          >
+            Yeni Kullanıcı Oluştur
+          </h2>
+
+          <p
+            style={{
+              color: "#64748b",
+              marginTop: 0,
+            }}
+          >
+            Hesap, şifre, şube ve yetkileri
+            birlikte oluşturun.
+          </p>
 
           <form action={createStaff}>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit,minmax(210px,1fr))",
-                gap: 12,
+                  "repeat(auto-fit,minmax(200px,1fr))",
+                gap: 10,
               }}
             >
               <input
                 name="full_name"
                 required
                 placeholder="Ad Soyad"
-                style={inputStyle()}
+                style={input}
               />
 
               <input
                 name="email"
                 type="email"
                 placeholder="E-posta"
-                style={inputStyle()}
+                style={input}
               />
 
               <input
                 name="phone"
-                placeholder="Telefon: 05xx..."
-                style={inputStyle()}
+                placeholder="05xx..."
+                style={input}
               />
 
               <input
@@ -424,97 +490,125 @@ export default async function KullanicilarVeYetkilerPage() {
                 type="password"
                 minLength={8}
                 required
-                placeholder="Geçici şifre - en az 8 karakter"
-                style={inputStyle()}
+                placeholder="Geçici şifre"
+                style={input}
               />
 
               <select
                 name="role"
-                required
                 defaultValue=""
-                style={inputStyle()}
+                required
+                style={input}
               >
-                <option value="" disabled>
-                  Görev / Rol seçiniz
+                <option
+                  value=""
+                  disabled
+                >
+                  Rol seç
                 </option>
 
-                {STAFF_ROLES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {STAFF_ROLES.map(
+                  ([value, label]) => (
+                    <option
+                      key={value}
+                      value={value}
+                    >
+                      {label}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
+            <hr
+              style={{
+                border: 0,
+                borderTop:
+                  "1px solid #edf1f6",
+                margin: "20px 0",
+              }}
+            />
+
+            <strong>
+              Çalışabileceği Şubeler
+            </strong>
+
             <div
               style={{
-                marginTop: 20,
-                paddingTop: 18,
-                borderTop: "1px solid #edf1f6",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 9,
+                marginTop: 10,
               }}
             >
-              <div
+              <label
                 style={{
+                  padding: "9px 12px",
+                  border:
+                    "1px solid #b9d4fa",
+                  borderRadius: 10,
+                  background: "#eef6ff",
                   fontWeight: 800,
-                  marginBottom: 10,
                 }}
               >
-                Çalışabileceği Şubeler
-              </div>
+                <input
+                  type="checkbox"
+                  name="all_branches"
+                  value="true"
+                />{" "}
+                Tüm Şubeler
+              </label>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                }}
-              >
-                {branches
-                  .filter((branch) => branch.is_active)
-                  .map((branch) => (
-                    <label
-                      key={branch.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        border: "1px solid #dce5f1",
-                        borderRadius: 10,
-                        padding: "10px 13px",
-                        cursor: "pointer",
-                        background: "#fbfcfe",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        name="branch_ids"
-                        value={branch.id}
-                      />
-
-                      {branch.name}
-                    </label>
-                  ))}
-              </div>
+              {branches
+                .filter(
+                  (branch) =>
+                    branch.is_active
+                )
+                .map((branch) => (
+                  <label
+                    key={branch.id}
+                    style={{
+                      padding: "9px 12px",
+                      border:
+                        "1px solid #dce5f1",
+                      borderRadius: 10,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      name="branch_ids"
+                      value={branch.id}
+                    />{" "}
+                    {branch.name}
+                  </label>
+                ))}
             </div>
 
+            <hr
+              style={{
+                border: 0,
+                borderTop:
+                  "1px solid #edf1f6",
+                margin: "20px 0",
+              }}
+            />
+
+            <strong>
+              Başlangıç Yetkileri
+            </strong>
+
             <div
               style={{
-                marginTop: 20,
-                paddingTop: 18,
-                borderTop: "1px solid #edf1f6",
+                marginTop: 12,
               }}
             >
-              <div
-                style={{
-                  fontWeight: 800,
-                  marginBottom: 12,
-                }}
-              >
-                Başlangıç Yetkileri
-              </div>
-
-              {Object.entries(permissionGroups).map(
-                ([moduleKey, modulePermissions]) => (
+              {Object.entries(
+                permissionGroups
+              ).map(
+                ([
+                  moduleKey,
+                  modulePermissions,
+                ]) => (
                   <div
                     key={moduleKey}
                     style={{
@@ -523,15 +617,15 @@ export default async function KullanicilarVeYetkilerPage() {
                   >
                     <div
                       style={{
-                        fontSize: 12,
-                        fontWeight: 850,
                         color: "#64748b",
+                        fontSize: 12,
+                        fontWeight: 900,
                         marginBottom: 8,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.7,
                       }}
                     >
-                      {MODULE_LABELS[moduleKey] || moduleKey}
+                      {MODULE_LABELS[
+                        moduleKey
+                      ] || moduleKey}
                     </div>
 
                     <div
@@ -542,150 +636,186 @@ export default async function KullanicilarVeYetkilerPage() {
                         gap: 8,
                       }}
                     >
-                      {modulePermissions.map((permission) => (
-                        <label
-                          key={permission.permission_key}
-                          style={{
-                            display: "flex",
-                            gap: 9,
-                            alignItems: "flex-start",
-                            padding: 11,
-                            borderRadius: 10,
-                            background: "#f8fafc",
-                            border: "1px solid #e7edf5",
-                            fontSize: 13,
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            name="permission_keys"
-                            value={permission.permission_key}
-                          />
-
-                          <span>
-                            <strong>{permission.label}</strong>
+                      {modulePermissions.map(
+                        (permission) => (
+                          <label
+                            key={
+                              permission.permission_key
+                            }
+                            style={{
+                              padding: 11,
+                              border:
+                                "1px solid #e5ebf4",
+                              borderRadius: 10,
+                              background:
+                                "#fafbfc",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              name="permission_keys"
+                              value={
+                                permission.permission_key
+                              }
+                            />{" "}
+                            <strong>
+                              {
+                                permission.label
+                              }
+                            </strong>
 
                             {permission.description ? (
                               <div
                                 style={{
-                                  color: "#64748b",
-                                  marginTop: 3,
-                                  lineHeight: 1.4,
+                                  color:
+                                    "#64748b",
+                                  fontSize: 12,
+                                  marginTop: 4,
                                 }}
                               >
-                                {permission.description}
+                                {
+                                  permission.description
+                                }
                               </div>
                             ) : null}
-                          </span>
-                        </label>
-                      ))}
+                          </label>
+                        )
+                      )}
                     </div>
                   </div>
                 )
               )}
-
-              <button type="submit" style={primaryButton()}>
-                + Kullanıcıyı Oluştur
-              </button>
             </div>
+
+            <button
+              type="submit"
+              style={blueButton}
+            >
+              + Kullanıcıyı Oluştur
+            </button>
           </form>
         </section>
 
-        <section style={cardStyle()}>
-          <div style={{ marginBottom: 20 }}>
-            <h2 style={{ margin: 0, fontSize: 21 }}>
-              Personel ve Yetki Yönetimi
-            </h2>
+        <section style={card}>
+          <h2
+            style={{
+              marginTop: 0,
+            }}
+          >
+            Personel ve Yetki Yönetimi
+          </h2>
 
-            <p
-              style={{
-                color: "#64748b",
-                margin: "6px 0 0",
-                fontSize: 14,
-              }}
-            >
-              {profiles.length} kullanıcı bulundu.
-            </p>
-          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: 16,
+            }}
+          >
+            {profiles.map((profile) => {
+              const staff =
+                staffByAuthUser.get(
+                  profile.id
+                );
 
-          <div style={{ display: "grid", gap: 18 }}>
-            {profiles.map((staff) => {
-              const assignedBranchIds = new Set(
-                staffBranches
-                  .filter((item) => item.staff_id === staff.id)
-                  .map((item) => item.branch_id)
-              );
+              const realStaffId =
+                staff?.id;
 
-              const permissionMap = new Map(
-                staffPermissions
-                  .filter((item) => item.staff_id === staff.id)
-                  .map((item) => [
-                    item.permission_key,
-                    Boolean(item.is_allowed),
-                  ])
-              );
+              const assignedBranches =
+                new Set(
+                  realStaffId
+                    ? staffBranches
+                        .filter(
+                          (x) =>
+                            x.staff_id ===
+                            realStaffId
+                        )
+                        .map(
+                          (x) =>
+                            x.branch_id
+                        )
+                    : []
+                );
 
-              const isOwner = staff.role === "owner";
+              const permissionMap =
+                new Map(
+                  realStaffId
+                    ? staffPermissions
+                        .filter(
+                          (x) =>
+                            x.staff_id ===
+                            realStaffId
+                        )
+                        .map((x) => [
+                          x.permission_key,
+                          Boolean(
+                            x.is_allowed
+                          ),
+                        ])
+                    : []
+                );
+
+              const isOwner =
+                profile.role === "owner";
 
               const isSuperUser =
                 isOwner ||
-                permissionMap.get("system.superuser") === true;
+                staff?.is_super_user ||
+                permissionMap.get(
+                  "system.superuser"
+                ) === true;
 
               return (
                 <article
-                  key={staff.id}
+                  key={profile.id}
                   style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 16,
+                    border:
+                      "1px solid #e2e8f0",
+                    borderRadius: 15,
                     overflow: "hidden",
-                    background: "#ffffff",
                   }}
                 >
                   <div
                     style={{
-                      padding: 18,
+                      padding: 16,
+                      background:
+                        "#fbfcfe",
+                      borderBottom:
+                        "1px solid #e8edf4",
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 15,
+                      justifyContent:
+                        "space-between",
+                      gap: 10,
                       flexWrap: "wrap",
-                      background: "#fbfcfe",
-                      borderBottom: "1px solid #e8edf4",
                     }}
                   >
                     <div>
-                      <div
+                      <strong
                         style={{
-                          fontWeight: 850,
                           fontSize: 17,
                         }}
                       >
-                        {staff.full_name || "İsimsiz Kullanıcı"}
-
-                        {staff.id === user.id ? (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#1769e8",
-                              marginLeft: 8,
-                            }}
-                          >
-                            SİZ
-                          </span>
-                        ) : null}
-                      </div>
+                        {profile.full_name ||
+                          "İsimsiz Kullanıcı"}
+                      </strong>
 
                       <div
                         style={{
-                          color: "#64748b",
+                          color:
+                            "#64748b",
                           fontSize: 13,
                           marginTop: 4,
                         }}
                       >
-                        {ROLE_LABELS[String(staff.role)] ||
-                          String(staff.role)}
+                        {ROLE_LABELS[
+                          String(
+                            profile.role
+                          )
+                        ] ||
+                          profile.role}
                         {" • "}
-                        {staff.phone || staff.email || "Giriş bilgisi yok"}
+                        {profile.phone ||
+                          profile.email ||
+                          "Giriş bilgisi yok"}
                       </div>
                     </div>
 
@@ -693,101 +823,162 @@ export default async function KullanicilarVeYetkilerPage() {
                       style={{
                         display: "flex",
                         gap: 7,
-                        flexWrap: "wrap",
                       }}
                     >
-                      {isSuperUser ? (
+                      {isSuperUser && (
                         <span
                           style={{
-                            borderRadius: 999,
-                            padding: "7px 11px",
-                            background: "#eef2ff",
-                            color: "#4338ca",
-                            fontWeight: 800,
+                            padding:
+                              "6px 10px",
+                            borderRadius:
+                              999,
+                            background:
+                              "#eef2ff",
+                            color:
+                              "#4338ca",
+                            fontWeight:
+                              800,
                             fontSize: 12,
                           }}
                         >
                           ★ Süper Kullanıcı
                         </span>
-                      ) : null}
+                      )}
 
                       <span
                         style={{
-                          borderRadius: 999,
-                          padding: "7px 11px",
-                          fontWeight: 750,
+                          padding:
+                            "6px 10px",
+                          borderRadius:
+                            999,
+                          background:
+                            profile.is_active
+                              ? "#eaf8ef"
+                              : "#fff0f0",
+                          color:
+                            profile.is_active
+                              ? "#15803d"
+                              : "#dc2626",
+                          fontWeight: 800,
                           fontSize: 12,
-                          background: staff.is_active
-                            ? "#eaf8ef"
-                            : "#fff0f0",
-                          color: staff.is_active
-                            ? "#15803d"
-                            : "#dc2626",
                         }}
                       >
-                        {staff.is_active ? "● Aktif" : "● Pasif"}
+                        {profile.is_active
+                          ? "● Aktif"
+                          : "● Pasif"}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ padding: 18 }}>
-                    {!isOwner ? (
+                  <div
+                    style={{
+                      padding: 16,
+                    }}
+                  >
+                    {isOwner ? (
+                      <div
+                        style={{
+                          padding: 13,
+                          background:
+                            "#fff8e8",
+                          border:
+                            "1px solid #fde7ad",
+                          borderRadius: 10,
+                          color:
+                            "#854d0e",
+                        }}
+                      >
+                        Sistem Sahibi
+                        hesabının temel
+                        erişimleri bu
+                        ekrandan
+                        kapatılamaz.
+                      </div>
+                    ) : (
                       <>
-                        <form action={updateStaffProfile}>
+                        <form
+                          action={
+                            updateStaffProfile
+                          }
+                        >
                           <input
                             type="hidden"
                             name="staff_id"
-                            value={staff.id}
+                            value={
+                              profile.id
+                            }
                           />
 
                           <div
                             style={{
-                              display: "grid",
+                              display:
+                                "grid",
                               gridTemplateColumns:
                                 "repeat(auto-fit,minmax(190px,1fr))",
-                              gap: 10,
+                              gap: 9,
                             }}
                           >
                             <input
                               name="full_name"
                               required
-                              defaultValue={staff.full_name ?? ""}
-                              style={inputStyle()}
+                              defaultValue={
+                                profile.full_name ??
+                                ""
+                              }
+                              style={input}
                             />
 
                             <input
                               name="email"
-                              type="email"
-                              defaultValue={staff.email ?? ""}
-                              placeholder="E-posta"
-                              style={inputStyle()}
+                              defaultValue={
+                                profile.email ??
+                                ""
+                              }
+                              style={input}
                             />
 
                             <input
                               name="phone"
-                              defaultValue={staff.phone ?? ""}
-                              placeholder="Telefon"
-                              style={inputStyle()}
+                              defaultValue={
+                                profile.phone ??
+                                ""
+                              }
+                              style={input}
                             />
 
                             <select
                               name="role"
-                              defaultValue={staff.role ?? ""}
-                              style={inputStyle()}
+                              defaultValue={
+                                profile.role
+                              }
+                              style={input}
                             >
-                              {STAFF_ROLES.map(([value, label]) => (
-                                <option key={value} value={value}>
-                                  {label}
-                                </option>
-                              ))}
+                              {STAFF_ROLES.map(
+                                ([
+                                  value,
+                                  label,
+                                ]) => (
+                                  <option
+                                    key={
+                                      value
+                                    }
+                                    value={
+                                      value
+                                    }
+                                  >
+                                    {
+                                      label
+                                    }
+                                  </option>
+                                )
+                              )}
                             </select>
                           </div>
 
                           <button
-                            type="submit"
                             style={{
-                              ...secondaryButton(),
-                              marginTop: 10,
+                              ...whiteButton,
+                              marginTop: 9,
                             }}
                           >
                             Profili Kaydet
@@ -796,56 +987,65 @@ export default async function KullanicilarVeYetkilerPage() {
 
                         <div
                           style={{
-                            marginTop: 18,
-                            paddingTop: 18,
-                            borderTop: "1px solid #edf1f6",
                             display: "flex",
+                            gap: 8,
                             flexWrap: "wrap",
-                            gap: 10,
+                            borderTop:
+                              "1px solid #edf1f6",
+                            marginTop: 16,
+                            paddingTop: 16,
                           }}
                         >
-                          <form action={setStaffActive}>
+                          <form
+                            action={
+                              setStaffActive
+                            }
+                          >
                             <input
                               type="hidden"
                               name="staff_id"
-                              value={staff.id}
+                              value={
+                                profile.id
+                              }
                             />
 
                             <input
                               type="hidden"
                               name="is_active"
                               value={
-                                staff.is_active ? "false" : "true"
+                                profile.is_active
+                                  ? "false"
+                                  : "true"
                               }
                             />
 
                             <button
-                              type="submit"
-                              style={{
-                                ...secondaryButton(),
-                                color: staff.is_active
-                                  ? "#dc2626"
-                                  : "#15803d",
-                              }}
+                              style={
+                                whiteButton
+                              }
                             >
-                              {staff.is_active
-                                ? "Hesabı Pasif Yap"
-                                : "Hesabı Aktif Yap"}
+                              {profile.is_active
+                                ? "Pasif Yap"
+                                : "Aktif Yap"}
                             </button>
                           </form>
 
                           <form
-                            action={changeStaffPassword}
+                            action={
+                              changeStaffPassword
+                            }
                             style={{
-                              display: "flex",
-                              gap: 8,
-                              flexWrap: "wrap",
+                              display:
+                                "flex",
+                              gap: 7,
                             }}
                           >
                             <input
                               type="hidden"
                               name="staff_id"
-                              value={staff.id}
+                              value={
+                                profile.id
+                              }
                             />
 
                             <input
@@ -853,251 +1053,303 @@ export default async function KullanicilarVeYetkilerPage() {
                               type="password"
                               minLength={8}
                               required
-                              placeholder="Yeni / geçici şifre"
+                              placeholder="Yeni şifre"
                               style={{
-                                ...inputStyle(),
-                                width: 210,
+                                ...input,
+                                width: 180,
                               }}
                             />
 
                             <button
-                              type="submit"
-                              style={secondaryButton()}
+                              style={
+                                whiteButton
+                              }
                             >
-                              Şifreyi Değiştir
+                              Şifre Ver
                             </button>
                           </form>
                         </div>
 
-                        <div
+                        <form
+                          action={
+                            setStaffBranches
+                          }
                           style={{
-                            marginTop: 20,
-                            paddingTop: 18,
-                            borderTop: "1px solid #edf1f6",
+                            borderTop:
+                              "1px solid #edf1f6",
+                            marginTop: 16,
+                            paddingTop: 16,
                           }}
                         >
+                          <input
+                            type="hidden"
+                            name="staff_id"
+                            value={
+                              profile.id
+                            }
+                          />
+
+                          <strong>
+                            Şubeler
+                          </strong>
+
                           <div
                             style={{
-                              fontWeight: 800,
-                              marginBottom: 10,
+                              display:
+                                "flex",
+                              flexWrap:
+                                "wrap",
+                              gap: 8,
+                              marginTop: 9,
                             }}
                           >
-                            Çalışabileceği Şubeler
-                          </div>
+                            <label>
+                              <input
+                                type="checkbox"
+                                name="all_branches"
+                                value="true"
+                                defaultChecked={
+                                  Boolean(
+                                    staff?.all_branches
+                                  )
+                                }
+                              />{" "}
+                              Tüm Şubeler
+                            </label>
 
-                          <form action={setStaffBranches}>
-                            <input
-                              type="hidden"
-                              name="staff_id"
-                              value={staff.id}
-                            />
-
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 9,
-                              }}
-                            >
-                              {branches
-                                .filter((branch) => branch.is_active)
-                                .map((branch) => (
+                            {branches
+                              .filter(
+                                (x) =>
+                                  x.is_active
+                              )
+                              .map(
+                                (branch) => (
                                   <label
-                                    key={branch.id}
-                                    style={{
-                                      border: "1px solid #dce5f1",
-                                      borderRadius: 10,
-                                      padding: "9px 12px",
-                                      display: "flex",
-                                      gap: 7,
-                                      alignItems: "center",
-                                      fontSize: 13,
-                                    }}
+                                    key={
+                                      branch.id
+                                    }
                                   >
                                     <input
                                       type="checkbox"
                                       name="branch_ids"
-                                      value={branch.id}
-                                      defaultChecked={assignedBranchIds.has(
+                                      value={
+                                        branch.id
+                                      }
+                                      defaultChecked={assignedBranches.has(
                                         branch.id
                                       )}
-                                    />
-
-                                    {branch.name}
+                                    />{" "}
+                                    {
+                                      branch.name
+                                    }
                                   </label>
-                                ))}
-                            </div>
+                                )
+                              )}
+                          </div>
 
-                            <button
-                              type="submit"
-                              style={{
-                                ...secondaryButton(),
-                                marginTop: 10,
-                              }}
-                            >
-                              Şubeleri Kaydet
-                            </button>
-                          </form>
-                        </div>
+                          <button
+                            style={{
+                              ...whiteButton,
+                              marginTop: 9,
+                            }}
+                          >
+                            Şubeleri Kaydet
+                          </button>
+                        </form>
 
                         <div
                           style={{
-                            marginTop: 20,
-                            paddingTop: 18,
-                            borderTop: "1px solid #edf1f6",
+                            borderTop:
+                              "1px solid #edf1f6",
+                            marginTop: 16,
+                            paddingTop: 16,
                           }}
                         >
                           <div
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              flexWrap: "wrap",
-                              gap: 10,
-                              marginBottom: 14,
+                              display:
+                                "flex",
+                              gap: 7,
+                              flexWrap:
+                                "wrap",
+                              marginBottom:
+                                12,
                             }}
                           >
-                            <div style={{ fontWeight: 800 }}>
-                              Yetkiler
-                            </div>
-
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 7,
-                              }}
+                            <form
+                              action={
+                                setAllStaffPermissions
+                              }
                             >
-                              <form action={setAllStaffPermissions}>
-                                <input
-                                  type="hidden"
-                                  name="staff_id"
-                                  value={staff.id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="is_allowed"
-                                  value="true"
-                                />
+                              <input
+                                type="hidden"
+                                name="staff_id"
+                                value={
+                                  profile.id
+                                }
+                              />
+                              <input
+                                type="hidden"
+                                name="is_allowed"
+                                value="true"
+                              />
 
-                                <button
-                                  type="submit"
-                                  style={secondaryButton()}
-                                >
-                                  Tümünü Aç
-                                </button>
-                              </form>
+                              <button
+                                style={
+                                  whiteButton
+                                }
+                              >
+                                Tümünü Aç
+                              </button>
+                            </form>
 
-                              <form action={setAllStaffPermissions}>
-                                <input
-                                  type="hidden"
-                                  name="staff_id"
-                                  value={staff.id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="is_allowed"
-                                  value="false"
-                                />
+                            <form
+                              action={
+                                setAllStaffPermissions
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="staff_id"
+                                value={
+                                  profile.id
+                                }
+                              />
+                              <input
+                                type="hidden"
+                                name="is_allowed"
+                                value="false"
+                              />
 
-                                <button
-                                  type="submit"
-                                  style={secondaryButton()}
-                                >
-                                  Tümünü Kapat
-                                </button>
-                              </form>
+                              <button
+                                style={
+                                  whiteButton
+                                }
+                              >
+                                Tümünü Kapat
+                              </button>
+                            </form>
 
-                              <form action={setAccountingPermissions}>
-                                <input
-                                  type="hidden"
-                                  name="staff_id"
-                                  value={staff.id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="is_allowed"
-                                  value="true"
-                                />
+                            <form
+                              action={
+                                setAccountingPermissions
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="staff_id"
+                                value={
+                                  profile.id
+                                }
+                              />
+                              <input
+                                type="hidden"
+                                name="is_allowed"
+                                value="true"
+                              />
 
-                                <button
-                                  type="submit"
-                                  style={secondaryButton()}
-                                >
-                                  Muhasebeyi Aç
-                                </button>
-                              </form>
+                              <button
+                                style={
+                                  whiteButton
+                                }
+                              >
+                                Muhasebeyi Aç
+                              </button>
+                            </form>
 
-                              <form action={setAccountingPermissions}>
-                                <input
-                                  type="hidden"
-                                  name="staff_id"
-                                  value={staff.id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="is_allowed"
-                                  value="false"
-                                />
+                            <form
+                              action={
+                                setAccountingPermissions
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="staff_id"
+                                value={
+                                  profile.id
+                                }
+                              />
+                              <input
+                                type="hidden"
+                                name="is_allowed"
+                                value="false"
+                              />
 
-                                <button
-                                  type="submit"
-                                  style={secondaryButton()}
-                                >
-                                  Muhasebeyi Kapat
-                                </button>
-                              </form>
-                            </div>
+                              <button
+                                style={
+                                  whiteButton
+                                }
+                              >
+                                Muhasebeyi Kapat
+                              </button>
+                            </form>
                           </div>
 
-                          {Object.entries(permissionGroups).map(
-                            ([moduleKey, modulePermissions]) => (
+                          {Object.entries(
+                            permissionGroups
+                          ).map(
+                            ([
+                              moduleKey,
+                              modulePermissions,
+                            ]) => (
                               <div
-                                key={moduleKey}
+                                key={
+                                  moduleKey
+                                }
                                 style={{
-                                  marginBottom: 18,
+                                  marginBottom:
+                                    16,
                                 }}
                               >
-                                <div
+                                <strong
                                   style={{
-                                    fontSize: 12,
-                                    fontWeight: 850,
-                                    color: "#64748b",
-                                    marginBottom: 8,
-                                    textTransform: "uppercase",
-                                    letterSpacing: 0.7,
+                                    color:
+                                      "#64748b",
+                                    fontSize:
+                                      12,
                                   }}
                                 >
-                                  {MODULE_LABELS[moduleKey] ||
+                                  {MODULE_LABELS[
+                                    moduleKey
+                                  ] ||
                                     moduleKey}
-                                </div>
+                                </strong>
 
                                 <div
                                   style={{
-                                    display: "grid",
+                                    display:
+                                      "grid",
                                     gridTemplateColumns:
-                                      "repeat(auto-fit,minmax(220px,1fr))",
-                                    gap: 8,
+                                      "repeat(auto-fit,minmax(210px,1fr))",
+                                    gap: 7,
+                                    marginTop: 7,
                                   }}
                                 >
                                   {modulePermissions.map(
-                                    (permission) => {
+                                    (
+                                      permission
+                                    ) => {
                                       const allowed =
                                         permissionMap.get(
                                           permission.permission_key
-                                        ) === true;
+                                        ) ===
+                                        true;
 
                                       return (
                                         <form
                                           key={
                                             permission.permission_key
                                           }
-                                          action={setStaffPermission}
+                                          action={
+                                            setStaffPermission
+                                          }
                                         >
                                           <input
                                             type="hidden"
                                             name="staff_id"
-                                            value={staff.id}
+                                            value={
+                                              profile.id
+                                            }
                                           />
 
                                           <input
@@ -1119,48 +1371,50 @@ export default async function KullanicilarVeYetkilerPage() {
                                           />
 
                                           <button
-                                            type="submit"
                                             style={{
-                                              width: "100%",
-                                              height: "100%",
-                                              textAlign: "left",
-                                              border: allowed
-                                                ? "1px solid #b9ddc6"
-                                                : "1px solid #e2e8f0",
-                                              borderRadius: 11,
-                                              padding: 12,
-                                              background: allowed
-                                                ? "#f0faf4"
-                                                : "#fafbfc",
-                                              cursor: "pointer",
-                                              color: "#13233f",
+                                              width:
+                                                "100%",
+                                              border:
+                                                allowed
+                                                  ? "1px solid #b9ddc6"
+                                                  : "1px solid #e2e8f0",
+                                              borderRadius:
+                                                10,
+                                              padding:
+                                                11,
+                                              textAlign:
+                                                "left",
+                                              background:
+                                                allowed
+                                                  ? "#f0faf4"
+                                                  : "#fafbfc",
+                                              color:
+                                                "#13233f",
+                                              cursor:
+                                                "pointer",
                                             }}
                                           >
+                                            <strong>
+                                              {
+                                                permission.label
+                                              }
+                                            </strong>
+
                                             <div
                                               style={{
-                                                display: "flex",
-                                                justifyContent:
-                                                  "space-between",
-                                                gap: 8,
-                                                fontWeight: 750,
-                                                fontSize: 13,
-                                              }}
-                                            >
-                                              <span>
-                                                {permission.label}
-                                              </span>
-
-                                              <span
-                                                style={{
-                                                  color: allowed
+                                                color:
+                                                  allowed
                                                     ? "#15803d"
                                                     : "#94a3b8",
-                                                }}
-                                              >
-                                                {allowed
-                                                  ? "AÇIK"
-                                                  : "KAPALI"}
-                                              </span>
+                                                fontSize:
+                                                  11,
+                                                marginTop:
+                                                  3,
+                                              }}
+                                            >
+                                              {allowed
+                                                ? "AÇIK"
+                                                : "KAPALI"}
                                             </div>
                                           </button>
                                         </form>
@@ -1173,21 +1427,6 @@ export default async function KullanicilarVeYetkilerPage() {
                           )}
                         </div>
                       </>
-                    ) : (
-                      <div
-                        style={{
-                          background: "#fff8e8",
-                          border: "1px solid #fde7ad",
-                          borderRadius: 10,
-                          padding: 14,
-                          color: "#854d0e",
-                          fontSize: 13,
-                        }}
-                      >
-                        Bu hesap SprintOS sistem sahibidir. Owner rolü,
-                        hesap durumu ve temel erişimleri bu ekrandan
-                        kapatılamaz.
-                      </div>
                     )}
                   </div>
                 </article>
