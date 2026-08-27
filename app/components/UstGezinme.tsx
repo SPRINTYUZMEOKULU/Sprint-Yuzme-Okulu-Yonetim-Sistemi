@@ -2,61 +2,91 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-type MenuItem = {
-  label: string;
-  href: string;
+type MenuItem = { label: string; href: string; moduleKey: string };
+
+type AccessResponse = {
+  ok: boolean;
+  role?: string;
+  is_super_user?: boolean;
+  allowed_modules?: string[];
 };
 
 const menuItems: MenuItem[] = [
-  {
-    label: "Ana Sayfa",
-    href: "/",
-  },
-  {
-    label: "Öğrenciler",
-    href: "/ogrenciler",
-  },
-  {
-    label: "Gruplar",
-    href: "/gruplar",
-  },
-  {
-    label: "Ders Programı",
-    href: "/ders-programi",
-  },
-  {
-    label: "Operasyon Planı",
-    href: "/operasyon-plani",
-  },
-  {
-    label: "Yoklama",
-    href: "/yoklama",
-  },
-  {
-    label: "Ödemeler",
-    href: "/odemeler",
-  },
-  {
-    label: "Kullanıcılar ve Yetkiler",
-    href: "/kullanicilar-ve-yetkiler",
-  },
+  { label: "Ana Sayfa", href: "/", moduleKey: "dashboard" },
+  { label: "Öğrenciler", href: "/ogrenciler", moduleKey: "students" },
+  { label: "Gruplar", href: "/gruplar", moduleKey: "groups" },
+  { label: "Ders Programı", href: "/ders-programi", moduleKey: "schedule" },
+  { label: "Operasyon Planı", href: "/operasyon-plani", moduleKey: "operations" },
+  { label: "Yoklama", href: "/yoklama", moduleKey: "attendance" },
+  { label: "Ödemeler", href: "/odemeler", moduleKey: "finance" },
+  { label: "Kullanıcılar ve Yetkiler", href: "/kullanicilar-ve-yetkiler", moduleKey: "permissions" },
 ];
 
 export default function UstGezinme() {
   const pathname = usePathname();
   const router = useRouter();
 
-  function isActive(href: string) {
-    if (href === "/") {
-      return pathname === "/";
+  const [loadingAccess, setLoadingAccess] = useState(true);
+  const [role, setRole] = useState("");
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [allowedModules, setAllowedModules] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAccess() {
+      try {
+        const response = await fetch("/api/auth/access", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+
+        const data = (await response.json()) as AccessResponse;
+        if (cancelled) return;
+
+        if (!response.ok || !data.ok) {
+          setRole("");
+          setIsSuperUser(false);
+          setAllowedModules([]);
+          return;
+        }
+
+        setRole(String(data.role || ""));
+        setIsSuperUser(Boolean(data.is_super_user));
+        setAllowedModules(
+          Array.isArray(data.allowed_modules) ? data.allowed_modules : []
+        );
+      } catch (error) {
+        console.error("SPRINTOS ACCESS MENU ERROR", error);
+        if (!cancelled) {
+          setRole("");
+          setIsSuperUser(false);
+          setAllowedModules([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingAccess(false);
+      }
     }
 
-    return (
-      pathname === href ||
-      pathname.startsWith(`${href}/`)
-    );
+    loadAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  const visibleMenuItems = useMemo(() => {
+    if (role === "owner" || isSuperUser) return menuItems;
+    return menuItems.filter((item) => allowedModules.includes(item.moduleKey));
+  }, [role, isSuperUser, allowedModules]);
+
+  function isActive(href: string) {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (
@@ -83,7 +113,6 @@ export default function UstGezinme() {
           gap: 12,
         }}
       >
-        {/* GERİ */}
         <button
           type="button"
           onClick={() => router.back()}
@@ -107,7 +136,6 @@ export default function UstGezinme() {
           ←
         </button>
 
-        {/* LOGO */}
         <Link
           href="/"
           title="Ana Sayfa"
@@ -137,42 +165,20 @@ export default function UstGezinme() {
               alt="Sprint Yüzme Okulu"
               width={38}
               height={38}
-              style={{
-                objectFit: "contain",
-              }}
+              style={{ objectFit: "contain" }}
             />
           </span>
 
-          <span
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              lineHeight: 1.1,
-            }}
-          >
-            <strong
-              style={{
-                color: "#13233f",
-                fontSize: 14,
-                fontWeight: 900,
-              }}
-            >
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+            <strong style={{ color: "#13233f", fontSize: 14, fontWeight: 900 }}>
               SprintOS
             </strong>
-
-            <small
-              style={{
-                color: "#64748b",
-                fontSize: 9,
-                marginTop: 3,
-              }}
-            >
+            <small style={{ color: "#64748b", fontSize: 9, marginTop: 3 }}>
               Sprint Yüzme Okulu
             </small>
           </span>
         </Link>
 
-        {/* SAYFA MENÜSÜ */}
         <nav
           style={{
             flex: 1,
@@ -184,63 +190,63 @@ export default function UstGezinme() {
             scrollbarWidth: "thin",
           }}
         >
-          {menuItems.map((item) => {
-            const active = isActive(item.href);
+          {loadingAccess ? (
+            <span style={{ color: "#94a3b8", fontSize: 10, padding: "10px 12px" }}>
+              Yetkiler yükleniyor…
+            </span>
+          ) : (
+            visibleMenuItems.map((item) => {
+              const active = isActive(item.href);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  whiteSpace: "nowrap",
-                  textDecoration: "none",
-                  padding: "10px 12px",
-                  borderRadius: 9,
-                  fontSize: 11,
-                  fontWeight: 850,
-                  transition: "all .15s ease",
-
-                  background: active
-                    ? "#1769e8"
-                    : "transparent",
-
-                  color: active
-                    ? "#ffffff"
-                    : "#475569",
-
-                  border: active
-                    ? "1px solid #1769e8"
-                    : "1px solid transparent",
-                }}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    whiteSpace: "nowrap",
+                    textDecoration: "none",
+                    padding: "10px 12px",
+                    borderRadius: 9,
+                    fontSize: 11,
+                    fontWeight: 850,
+                    transition: "all .15s ease",
+                    background: active ? "#1769e8" : "transparent",
+                    color: active ? "#ffffff" : "#475569",
+                    border: active ? "1px solid #1769e8" : "1px solid transparent",
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })
+          )}
         </nav>
 
-        {/* ANA SAYFA KISAYOLU */}
-        <Link
-          href="/"
-          title="Ana Sayfa"
-          style={{
-            flexShrink: 0,
-            height: 40,
-            padding: "0 13px",
-            borderRadius: 10,
-            background: "#edf5ff",
-            border: "1px solid #dbeafe",
-            color: "#1769e8",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 11,
-            fontWeight: 900,
-          }}
-        >
-          Ana Sayfa
-        </Link>
+        {(role === "owner" ||
+          isSuperUser ||
+          allowedModules.includes("dashboard")) && (
+          <Link
+            href="/"
+            title="Ana Sayfa"
+            style={{
+              flexShrink: 0,
+              height: 40,
+              padding: "0 13px",
+              borderRadius: 10,
+              background: "#edf5ff",
+              border: "1px solid #dbeafe",
+              color: "#1769e8",
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 900,
+            }}
+          >
+            Ana Sayfa
+          </Link>
+        )}
       </div>
     </div>
   );
