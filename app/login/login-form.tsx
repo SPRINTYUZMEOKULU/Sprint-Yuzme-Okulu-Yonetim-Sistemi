@@ -34,44 +34,16 @@ function getLocalTurkishDigits(value: string) {
 
   if (!digits) return "";
 
-  if (digits.startsWith("0090")) {
-    digits = digits.slice(4);
-  }
+  if (digits.startsWith("0090")) digits = digits.slice(4);
+  if (digits.startsWith("90") && digits.length === 12) digits = digits.slice(2);
+  if (digits.startsWith("0") && digits.length === 11) digits = digits.slice(1);
 
-  if (digits.startsWith("90") && digits.length === 12) {
-    digits = digits.slice(2);
-  }
-
-  if (digits.startsWith("0") && digits.length === 11) {
-    digits = digits.slice(1);
-  }
-
-  if (digits.length !== 10) return "";
-  if (!digits.startsWith("5")) return "";
-
+  if (digits.length !== 10 || !digits.startsWith("5")) return "";
   return digits;
-}
-
-/**
- * Aynı Türkiye cep telefonu için olası Auth biçimlerini üretir.
- * Öncelik E.164 (+90...), ardından Supabase Auth tablosunda görülebilen
- * 90... biçimi. Böylece eski/yeni hesap formatı farkları girişe engel olmaz.
- */
-function getPhoneLoginCandidates(value: string) {
-  const local = getLocalTurkishDigits(value);
-  if (!local) return [];
-
-  return Array.from(
-    new Set([
-      `+90${local}`,
-      `90${local}`,
-    ])
-  );
 }
 
 function formatPhoneForDisplay(value: string) {
   const local = getLocalTurkishDigits(value);
-
   if (!local) return value;
 
   return `0${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(
@@ -197,9 +169,46 @@ export default function LoginForm() {
     [role]
   );
 
+  async function verifyBrowserProfile(
+    authUserId: string,
+    currentRole: LoginRole
+  ) {
+    const supabase = createClient();
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, role, is_active")
+      .eq("id", authUserId)
+      .single();
+
+    if (profileError || !profile) {
+      await supabase.auth.signOut();
+      throw new Error(
+        "Kullanıcı profiliniz bulunamadı. Yöneticiyle iletişime geçin."
+      );
+    }
+
+    if (profile.is_active === false) {
+      await supabase.auth.signOut();
+      throw new Error(
+        "Hesabınız pasif durumda. Yöneticiyle iletişime geçin."
+      );
+    }
+
+    if (!allowedRoles[currentRole].includes(profile.role)) {
+      await supabase.auth.signOut();
+      throw new Error(
+        `Bu hesap ${activeRole.label.toLocaleLowerCase(
+          "tr-TR"
+        )} yetkisine sahip değil.`
+      );
+    }
+
+    return profile;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (loading) return;
 
     setLoading(true);
@@ -217,184 +226,186 @@ export default function LoginForm() {
 
     const supabase = createClient();
 
-    let authUser = null as Awaited<
-      ReturnType<typeof supabase.auth.signInWithPassword>
-    >["data"]["user"];
+    try {
+      let authUserId = "";
 
-    let lastSignInError: Awaited<
-      ReturnType<typeof supabase.auth.signInWithPassword>
-    >["error"] = null;
-
-    if (method === "email") {
-      const { data, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: identifier.toLowerCase(),
-          password,
-        });
-
-      authUser = data.user;
-      lastSignInError = signInError;
-    } else {
-      const phoneCandidates = getPhoneLoginCandidates(identifier);
-
-      if (!phoneCandidates.length) {
-        setError("Telefon numaranızı 05XX XXX XX XX şeklinde yazın.");
-        setLoading(false);
-        return;
-      }
-
-      for (const phone of phoneCandidates) {
+      if (method === "email") {
         const { data, error: signInError } =
           await supabase.auth.signInWithPassword({
-            phone,
+            email: identifier.toLowerCase(),
             password,
           });
 
-        if (data.user && !signInError) {
-          authUser = data.user;
-          lastSignInError = null;
-          break;
+        if (signInError || !data.user || !data.session) {
+          throw new Error(
+            signInError?.message || "E-posta veya şifre hatalı."
+          );
         }
 
-        lastSignInError = signInError;
+        authUserId = data.user.id;
+        await verifyBrowserProfile(authUserId, role);
 
-        console.error("SPRINTOS PHONE LOGIN ATTEMPT", {
-          phone,
-          message: signInError?.message,
-          status: signInError?.status,
-          code: signInError?.code,
+        if (role !== "guardian") {
+          const { data: staffAccount, error: staffError } = await supabase
+            .from("staff")
+            .select("login_enabled, is_active")
+            .eq("auth_user_id", authUserId)
+            .maybeSingle();
+
+          if (staffError) {
+            console.error("SPRINTOS STAFF CHECK ERROR", staffError);
+          }
+
+          if (staffAccount?.is_active === false) {
+            await supabase.auth.signOut();
+            throw new Error("Personel hesabınız pasif durumda.");
+          }
+
+          if (staffAccount?.login_enabled === false) {
+            await supabase.auth.signOut();
+            throw new Error("Bu hesap için sisteme giriş izni kapalı.");
+          }
+        }
+
+        try {
+          await supabase
+            .from("profiles")
+            .update({ last_sign_in_at: new Date().toISOString() })
+            .eq("id", authUserId);
+        } catch (logError) {
+          console.error("SPRINTOS LAST SIGN IN UPDATE ERROR", logError);
+        }
+      } else {
+        const localPhone = getLocalTurkishDigits(identifier);
+
+        if (!localPhone) {
+          throw new Error(
+            "Telefon numaranızı 05XX XXX XX XX şeklinde yazın."
+          );
+        }
+
+        const response = await fetch("/api/auth/phone-password", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            phone: localPhone,
+            password,
+            role,
+          }),
         });
-      }
-    }
 
-    if (lastSignInError || !authUser) {
-      const technicalMessage =
-        lastSignInError?.message || "Kullanıcı oturumu oluşturulamadı.";
+        let result: {
+          ok?: boolean;
+          message?: string;
+          access_token?: string;
+          refresh_token?: string;
+          user_id?: string;
+          role?: string;
+        } = {};
 
-      console.error("SPRINTOS LOGIN ERROR", {
-        message: lastSignInError?.message,
-        status: lastSignInError?.status,
-        code: lastSignInError?.code,
-        method,
-        identifier,
-      });
-
-      setError(`Giriş başarısız: ${technicalMessage}`);
-      setLoading(false);
-      return;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, role, is_active")
-      .eq("id", authUser.id)
-      .single();
-
-    if (profileError || !profile) {
-      await supabase.auth.signOut();
-      setError(
-        "Kullanıcı profiliniz bulunamadı. Yöneticiyle iletişime geçin."
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (profile.is_active === false) {
-      await supabase.auth.signOut();
-      setError("Hesabınız pasif durumda. Yöneticiyle iletişime geçin.");
-      setLoading(false);
-      return;
-    }
-
-    if (profile.role !== "guardian") {
-      const { data: staffAccount, error: staffError } = await supabase
-        .from("staff")
-        .select("login_enabled, is_active, is_super_user")
-        .eq("auth_user_id", authUser.id)
-        .maybeSingle();
-
-      if (staffError) {
-        console.error("SPRINTOS STAFF CHECK ERROR", staffError);
-      }
-
-      if (staffAccount) {
-        if (staffAccount.is_active === false) {
-          await supabase.auth.signOut();
-          setError("Personel hesabınız pasif durumda.");
-          setLoading(false);
-          return;
+        try {
+          result = await response.json();
+        } catch {
+          throw new Error(
+            "Giriş servisi geçersiz yanıt verdi. Lütfen tekrar deneyin."
+          );
         }
 
-        if (staffAccount.login_enabled === false) {
-          await supabase.auth.signOut();
-          setError("Bu hesap için sisteme giriş izni kapalı.");
-          setLoading(false);
-          return;
+        if (
+          !response.ok ||
+          !result.ok ||
+          !result.access_token ||
+          !result.refresh_token
+        ) {
+          throw new Error(
+            result.message || "Telefon numarası veya şifre hatalı."
+          );
         }
-      }
-    }
 
-    if (!allowedRoles[role].includes(profile.role)) {
-      await supabase.auth.signOut();
+        const { data: sessionData, error: setSessionError } =
+          await supabase.auth.setSession({
+            access_token: result.access_token,
+            refresh_token: result.refresh_token,
+          });
+
+        if (
+          setSessionError ||
+          !sessionData.session ||
+          !sessionData.user
+        ) {
+          throw new Error(
+            setSessionError?.message ||
+              "Oturum oluşturulamadı. Lütfen tekrar deneyin."
+          );
+        }
+
+        authUserId = sessionData.user.id;
+        await verifyBrowserProfile(authUserId, role);
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error(
+          "Oturum oluşturulamadı. Lütfen tekrar giriş yapın."
+        );
+      }
+
+      if (!rememberMe) {
+        sessionStorage.setItem("sprintos-session-only", "true");
+      } else {
+        sessionStorage.removeItem("sprintos-session-only");
+      }
+
+      const rawNext = searchParams.get("next");
+      const fallback = role === "guardian" ? "/veli-paneli" : "/";
+
+      const next =
+        rawNext &&
+        rawNext.startsWith("/") &&
+        !rawNext.startsWith("//")
+          ? rawNext
+          : fallback;
+
+      window.location.assign(next);
+    } catch (loginError) {
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+
+      const message =
+        loginError instanceof Error
+          ? loginError.message
+          : "Giriş sırasında beklenmeyen bir hata oluştu.";
+
+      console.error("SPRINTOS LOGIN ERROR", loginError);
 
       setError(
-        `Bu hesap ${activeRole.label.toLocaleLowerCase(
-          "tr-TR"
-        )} yetkisine sahip değil.`
+        message.startsWith("Telefon") ||
+          message.startsWith("E-posta") ||
+          message.startsWith("Bu hesap") ||
+          message.startsWith("Hesabınız") ||
+          message.startsWith("Personel") ||
+          message.startsWith("Kullanıcı") ||
+          message.startsWith("Oturum") ||
+          message.startsWith("Giriş servisi")
+          ? message
+          : `Giriş başarısız: ${message}`
       );
 
       setLoading(false);
-      return;
     }
-
-    if (!rememberMe) {
-      sessionStorage.setItem("sprintos-session-only", "true");
-    } else {
-      sessionStorage.removeItem("sprintos-session-only");
-    }
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session) {
-      setError("Oturum oluşturulamadı. Lütfen tekrar giriş yapın.");
-      setLoading(false);
-      return;
-    }
-
-    // Profildeki son giriş alanını mümkünse güncelle.
-    // RLS izin vermiyorsa girişin kendisini bozmaz.
-    try {
-      await supabase
-        .from("profiles")
-        .update({ last_sign_in_at: new Date().toISOString() })
-        .eq("id", authUser.id);
-    } catch (logError) {
-      console.error("SPRINTOS LAST SIGN IN UPDATE ERROR", logError);
-    }
-
-    const rawNext = searchParams.get("next");
-    const fallback = role === "guardian" ? "/veli-paneli" : "/";
-
-    const next =
-      rawNext &&
-      rawNext.startsWith("/") &&
-      !rawNext.startsWith("//")
-        ? rawNext
-        : fallback;
-
-    window.location.assign(next);
   }
 
   return (
     <div>
-      <div
-        className="v2RoleTabs"
-        role="tablist"
-        aria-label="Giriş türü"
-      >
+      <div className="v2RoleTabs" role="tablist" aria-label="Giriş türü">
         {roles.map((item) => (
           <button
             key={item.value}
@@ -402,9 +413,7 @@ export default function LoginForm() {
             role="tab"
             aria-selected={role === item.value}
             className={
-              role === item.value
-                ? "v2RoleTab active"
-                : "v2RoleTab"
+              role === item.value ? "v2RoleTab active" : "v2RoleTab"
             }
             onClick={() => {
               setRole(item.value);
@@ -507,11 +516,7 @@ export default function LoginForm() {
             <button
               type="button"
               className="v2PasswordToggle"
-              aria-label={
-                showPassword
-                  ? "Şifreyi gizle"
-                  : "Şifreyi göster"
-              }
+              aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
               onClick={() => setShowPassword((current) => !current)}
             >
               <Icon name={showPassword ? "eyeOff" : "eye"} />
@@ -524,9 +529,7 @@ export default function LoginForm() {
             <input
               type="checkbox"
               checked={rememberMe}
-              onChange={(event) =>
-                setRememberMe(event.target.checked)
-              }
+              onChange={(event) => setRememberMe(event.target.checked)}
             />
             <span>Beni hatırla</span>
           </label>
