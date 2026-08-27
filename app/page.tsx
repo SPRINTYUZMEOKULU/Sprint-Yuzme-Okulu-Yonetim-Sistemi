@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/profile";
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { Icons } from "@/app/components/dashboard-icons";
 import GlobalSearch from "@/app/components/global-search";
@@ -21,6 +22,7 @@ type MenuItem = {
   roles: UserRole[];
   icon: keyof typeof Icons;
   group: string;
+  moduleKey: string;
 };
 
 type StatItem = {
@@ -30,6 +32,7 @@ type StatItem = {
   icon: keyof typeof Icons;
   tone: string;
   href: string;
+  moduleKey: string;
 };
 
 type QuickItem = {
@@ -37,6 +40,7 @@ type QuickItem = {
   href: string;
   icon: keyof typeof Icons;
   roles: UserRole[];
+  moduleKey: string;
   badge?: number;
 };
 
@@ -72,18 +76,15 @@ const menu: MenuItem[] = [
     roles: allRoles,
     icon: "dashboard",
     group: "GENEL",
+    moduleKey: "dashboard",
   },
   {
     label: "Ön Kayıtlar",
     href: "/on-kayitlar",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "registration_staff",
-    ],
+    roles: ["owner", "admin", "branch_manager", "registration_staff"],
     icon: "note",
     group: "GENEL",
+    moduleKey: "preregistration",
   },
   {
     label: "Öğrenciler",
@@ -91,26 +92,23 @@ const menu: MenuItem[] = [
     roles: staff,
     icon: "child",
     group: "GENEL",
+    moduleKey: "students",
   },
   {
     label: "Veliler",
     href: "/veliler",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "registration_staff",
-    ],
+    roles: ["owner", "admin", "branch_manager", "registration_staff"],
     icon: "users",
     group: "GENEL",
+    moduleKey: "students",
   },
-
   {
     label: "Şubeler",
     href: "/subeler",
     roles: management,
     icon: "branch",
     group: "EĞİTİM",
+    moduleKey: "branches",
   },
   {
     label: "Gruplar",
@@ -118,6 +116,7 @@ const menu: MenuItem[] = [
     roles: staff,
     icon: "branch",
     group: "EĞİTİM",
+    moduleKey: "groups",
   },
   {
     label: "Ders Programı",
@@ -125,27 +124,24 @@ const menu: MenuItem[] = [
     roles: allRoles,
     icon: "calendar",
     group: "EĞİTİM",
+    moduleKey: "schedule",
   },
   {
-  label: "Operasyon Planı",
-  href: "/operasyon-plani",
-  roles: allRoles,
-  icon: "calendar",
-  group: "EĞİTİM",
-},
+    label: "Operasyon Planı",
+    href: "/operasyon-plani",
+    roles: allRoles,
+    icon: "calendar",
+    group: "EĞİTİM",
+    moduleKey: "operations",
+  },
   {
     label: "Yoklama",
     href: "/yoklama",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "coach",
-    ],
+    roles: ["owner", "admin", "branch_manager", "coach"],
     icon: "check",
     group: "EĞİTİM",
+    moduleKey: "attendance",
   },
-
   {
     label: "Paketler",
     href: "/paketler",
@@ -159,47 +155,39 @@ const menu: MenuItem[] = [
     ],
     icon: "approval",
     group: "FİNANS",
+    moduleKey: "finance",
   },
   {
     label: "Günlük Kasa",
     href: "/kasa",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "accounting",
-    ],
+    roles: ["owner", "admin", "branch_manager", "accounting"],
     icon: "wallet",
     group: "FİNANS",
+    moduleKey: "finance",
   },
   {
     label: "Ödemeler",
     href: "/odemeler",
-    roles: [
-      "owner",
-      "admin",
-      "branch_manager",
-      "accounting",
-      "guardian",
-    ],
+    roles: ["owner", "admin", "branch_manager", "accounting", "guardian"],
     icon: "wallet",
     group: "FİNANS",
+    moduleKey: "finance",
   },
-
   {
     label: "Hazır Mesajlar",
     href: "/hazir-mesajlar",
     roles: staff,
     icon: "message",
     group: "İLETİŞİM",
+    moduleKey: "dashboard",
   },
-
   {
     label: "Uyarılar",
     href: "/uyarilar",
     roles: staff,
     icon: "bell",
     group: "YÖNETİM",
+    moduleKey: "dashboard",
   },
   {
     label: "Onay Merkezi",
@@ -207,16 +195,15 @@ const menu: MenuItem[] = [
     roles: management,
     icon: "approval",
     group: "YÖNETİM",
+    moduleKey: "permissions",
   },
   {
     label: "Kullanıcılar ve Yetkiler",
     href: "/kullanicilar-ve-yetkiler",
-    roles: [
-      "owner",
-      "admin",
-    ],
+    roles: ["owner", "admin"],
     icon: "users",
     group: "YÖNETİM",
+    moduleKey: "permissions",
   },
   {
     label: "Raporlar",
@@ -224,16 +211,15 @@ const menu: MenuItem[] = [
     roles: management,
     icon: "chart",
     group: "YÖNETİM",
+    moduleKey: "reports",
   },
   {
     label: "Ayarlar",
     href: "/ayarlar",
-    roles: [
-      "owner",
-      "admin",
-    ],
+    roles: ["owner", "admin"],
     icon: "settings",
     group: "YÖNETİM",
+    moduleKey: "permissions",
   },
 ];
 
@@ -247,6 +233,100 @@ const roleLabels: Record<UserRole, string> = {
   coach: "Eğitmen",
   guardian: "Veli",
 };
+
+
+async function getAllowedModules(profileId: string, role: UserRole) {
+  if (role === "owner") {
+    return {
+      fullAccess: true,
+      allowedModules: ["*"],
+    };
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    console.error("SprintOS ana sayfa yetki kontrolü için ortam değişkenleri eksik.");
+    return {
+      fullAccess: false,
+      allowedModules: [] as string[],
+    };
+  }
+
+  const admin = createAdminClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const { data: staffRow, error: staffError } = await admin
+    .from("staff")
+    .select("id, is_active, login_enabled, is_super_user")
+    .eq("auth_user_id", profileId)
+    .maybeSingle();
+
+  if (
+    staffError ||
+    !staffRow ||
+    !staffRow.is_active ||
+    !staffRow.login_enabled
+  ) {
+    return {
+      fullAccess: false,
+      allowedModules: [] as string[],
+    };
+  }
+
+  if (staffRow.is_super_user) {
+    return {
+      fullAccess: true,
+      allowedModules: ["*"],
+    };
+  }
+
+  const { data: permissionRows, error: permissionError } = await admin
+    .from("staff_permissions")
+    .select("permission_key")
+    .eq("staff_id", staffRow.id)
+    .eq("is_allowed", true);
+
+  if (permissionError || !permissionRows?.length) {
+    return {
+      fullAccess: false,
+      allowedModules: [] as string[],
+    };
+  }
+
+  const permissionKeys = permissionRows.map((row) =>
+    String(row.permission_key)
+  );
+
+  const { data: definitions, error: definitionsError } = await admin
+    .from("permission_definitions")
+    .select("module_key")
+    .in("permission_key", permissionKeys)
+    .eq("is_active", true);
+
+  if (definitionsError) {
+    return {
+      fullAccess: false,
+      allowedModules: [] as string[],
+    };
+  }
+
+  return {
+    fullAccess: false,
+    allowedModules: Array.from(
+      new Set(
+        (definitions ?? [])
+          .map((row) => String(row.module_key || ""))
+          .filter(Boolean)
+      )
+    ),
+  };
+}
 
 async function safeCount(
   table: string,
@@ -301,9 +381,17 @@ export default async function HomePage() {
     redirect("/veli-paneli");
   }
 
+  const access = await getAllowedModules(profile.id, profile.role);
+
+  const canAccessModule = (moduleKey: string) =>
+    access.fullAccess ||
+    access.allowedModules.includes("*") ||
+    access.allowedModules.includes(moduleKey);
+
   const visibleMenu = menu.filter(
     (item) =>
-      item.roles.includes(profile.role)
+      item.roles.includes(profile.role) &&
+      canAccessModule(item.moduleKey)
   );
 
   const isCoach =
@@ -378,6 +466,7 @@ export default async function HomePage() {
       icon: "child",
       tone: "blue",
       href: "/ogrenciler?durum=active",
+      moduleKey: "students",
     },
     {
       label: "Bekleyen Ön Kayıt",
@@ -386,6 +475,7 @@ export default async function HomePage() {
       icon: "note",
       tone: "orange",
       href: "/on-kayitlar?durum=bekleyen",
+      moduleKey: "preregistration",
     },
     {
       label: "Açık Uyarı",
@@ -394,6 +484,7 @@ export default async function HomePage() {
       icon: "bell",
       tone: "red",
       href: "/uyarilar?durum=open",
+      moduleKey: "dashboard",
     },
     {
       label: "Kasa Onayı",
@@ -402,6 +493,7 @@ export default async function HomePage() {
       icon: "wallet",
       tone: "purple",
       href: "/kasa?durum=handoff_pending",
+      moduleKey: "finance",
     },
   ];
 
@@ -413,6 +505,7 @@ export default async function HomePage() {
       icon: "calendar",
       tone: "blue",
       href: "/ders-programi",
+      moduleKey: "schedule",
     },
     {
       label: "Bu Ay Girdiğim Ders",
@@ -421,6 +514,7 @@ export default async function HomePage() {
       icon: "check",
       tone: "green",
       href: "/yoklama",
+      moduleKey: "attendance",
     },
     {
       label: "Yoklama Bekleyen",
@@ -429,6 +523,7 @@ export default async function HomePage() {
       icon: "clock",
       tone: "orange",
       href: "/yoklama",
+      moduleKey: "attendance",
     },
     {
       label: "Açık Görev",
@@ -437,13 +532,13 @@ export default async function HomePage() {
       icon: "bell",
       tone: "purple",
       href: "/uyarilar",
+      moduleKey: "dashboard",
     },
   ];
 
-  const stats =
-    isCoach
-      ? coachStats
-      : managerStats;
+  const stats = (isCoach ? coachStats : managerStats).filter((item) =>
+    canAccessModule(item.moduleKey)
+  );
 
   /*
    * =========================================================
@@ -456,23 +551,15 @@ export default async function HomePage() {
       label: "Yeni Ön Kayıt",
       href: "/on-kayit",
       icon: "note",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
+      roles: ["owner", "admin", "branch_manager", "registration_staff"],
+      moduleKey: "preregistration",
     },
     {
       label: "Ön Kayıtlar",
       href: "/on-kayitlar",
       icon: "note",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
+      roles: ["owner", "admin", "branch_manager", "registration_staff"],
+      moduleKey: "preregistration",
       badge: preRegistrations,
     },
     {
@@ -480,68 +567,56 @@ export default async function HomePage() {
       href: "/ogrenciler",
       icon: "child",
       roles: staff,
+      moduleKey: "students",
     },
     {
       label: "Veliler",
       href: "/veliler",
       icon: "users",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "registration_staff",
-      ],
+      roles: ["owner", "admin", "branch_manager", "registration_staff"],
+      moduleKey: "students",
     },
     {
       label: "Şubeler",
       href: "/subeler",
       icon: "branch",
       roles: management,
+      moduleKey: "branches",
     },
     {
       label: "Gruplar",
       href: "/gruplar",
       icon: "branch",
       roles: staff,
+      moduleKey: "groups",
     },
     {
       label: "Ders Programı",
       href: "/ders-programi",
       icon: "calendar",
       roles: staff,
+      moduleKey: "schedule",
     },
     {
       label: "Yoklama",
       href: "/yoklama",
       icon: "check",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "coach",
-      ],
+      roles: ["owner", "admin", "branch_manager", "coach"],
+      moduleKey: "attendance",
     },
     {
       label: "Ödemeler",
       href: "/odemeler",
       icon: "wallet",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "accounting",
-      ],
+      roles: ["owner", "admin", "branch_manager", "accounting"],
+      moduleKey: "finance",
     },
     {
       label: "Günlük Kasa",
       href: "/kasa",
       icon: "wallet",
-      roles: [
-        "owner",
-        "admin",
-        "branch_manager",
-        "accounting",
-      ],
+      roles: ["owner", "admin", "branch_manager", "accounting"],
+      moduleKey: "finance",
       badge: pendingCash,
     },
     {
@@ -549,6 +624,7 @@ export default async function HomePage() {
       href: "/onay-merkezi",
       icon: "approval",
       roles: management,
+      moduleKey: "permissions",
       badge: pendingApprovals,
     },
     {
@@ -556,44 +632,43 @@ export default async function HomePage() {
       href: "/hazir-mesajlar",
       icon: "message",
       roles: staff,
+      moduleKey: "dashboard",
     },
     {
       label: "Uyarılar",
       href: "/uyarilar",
       icon: "bell",
       roles: staff,
+      moduleKey: "dashboard",
       badge: openAlerts,
     },
     {
       label: "Kullanıcılar ve Yetkiler",
       href: "/kullanicilar-ve-yetkiler",
       icon: "users",
-      roles: [
-        "owner",
-        "admin",
-      ],
+      roles: ["owner", "admin"],
+      moduleKey: "permissions",
     },
     {
       label: "Raporlar",
       href: "/raporlar",
       icon: "chart",
       roles: management,
+      moduleKey: "reports",
     },
     {
       label: "Ayarlar",
       href: "/ayarlar",
       icon: "settings",
-      roles: [
-        "owner",
-        "admin",
-      ],
+      roles: ["owner", "admin"],
+      moduleKey: "permissions",
     },
   ];
-
   const visibleQuickItems =
     quickItems.filter(
       (item) =>
-        item.roles.includes(profile.role)
+        item.roles.includes(profile.role) &&
+        canAccessModule(item.moduleKey)
     );
 
   const groups = [
@@ -871,35 +946,41 @@ export default async function HomePage() {
 
             <div className="heroActions">
               {isCoach ? (
-                <Link
-                  className="actionPrimary"
-                  href="/yoklama"
-                >
-                  <Icons.check />
-
-                  Derse Geldim
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    className="actionSecondary"
-                    href="/hazir-mesajlar"
-                  >
-                    <Icons.message />
-
-                    Hızlı Mesaj
-                  </Link>
-
+                canAccessModule("attendance") ? (
                   <Link
                     className="actionPrimary"
-                    href="/on-kayit"
+                    href="/yoklama"
                   >
-                    <span>
-                      +
-                    </span>
+                    <Icons.check />
 
-                    Yeni Ön Kayıt
+                    Derse Geldim
                   </Link>
+                ) : null
+              ) : (
+                <>
+                  {canAccessModule("dashboard") ? (
+                    <Link
+                      className="actionSecondary"
+                      href="/hazir-mesajlar"
+                    >
+                      <Icons.message />
+
+                      Hızlı Mesaj
+                    </Link>
+                  ) : null}
+
+                  {canAccessModule("preregistration") ? (
+                    <Link
+                      className="actionPrimary"
+                      href="/on-kayit"
+                    >
+                      <span>
+                        +
+                      </span>
+
+                      Yeni Ön Kayıt
+                    </Link>
+                  ) : null}
                 </>
               )}
             </div>
@@ -969,6 +1050,7 @@ export default async function HomePage() {
           <section className="dashboardGrid">
             {/* BUGÜNKÜ DERSLER */}
 
+            {canAccessModule("schedule") ? (
             <article className="dashCard scheduleCard">
               <div className="dashCardHeader">
                 <div>
@@ -1014,6 +1096,7 @@ export default async function HomePage() {
                 </Link>
               </div>
             </article>
+            ) : null}
 
             {/* UYARILAR */}
 
@@ -1080,6 +1163,7 @@ export default async function HomePage() {
                 )}
 
                 {isManager &&
+                canAccessModule("permissions") &&
                 pendingApprovals >
                   0 ? (
                   <div className="alertItem warning">
@@ -1108,7 +1192,8 @@ export default async function HomePage() {
                   </div>
                 ) : null}
 
-                {pendingCash >
+                {canAccessModule("finance") &&
+                pendingCash >
                 0 ? (
                   <div className="alertItem warning">
                     <span>
@@ -1249,6 +1334,7 @@ export default async function HomePage() {
                 ŞUBE DURUMU
             ================================================= */}
 
+            {canAccessModule("branches") ? (
             <article className="dashCard branchCard">
               <div className="dashCardHeader">
                 <div>
@@ -1302,6 +1388,7 @@ export default async function HomePage() {
                 )}
               </div>
             </article>
+            ) : null}
           </section>
         </div>
       </section>
