@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
 const ROUTE_MODULES: Array<{ path: string; moduleKey: string }> = [
   { path: "/on-kayitlar", moduleKey: "preregistration" },
   { path: "/ogrenciler", moduleKey: "students" },
+  { path: "/veliler", moduleKey: "students" },
   { path: "/subeler", moduleKey: "branches" },
   { path: "/gruplar", moduleKey: "groups" },
   { path: "/ders-programi", moduleKey: "schedule" },
