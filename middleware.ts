@@ -15,12 +15,48 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const pathname = request.nextUrl.pathname;
 
-  // Supabase environment variables yoksa isteği normal devam ettir.
+  /*
+   * PUBLIC API
+   *
+   * Telefon + şifre giriş endpoint'i burada özellikle public olmalı.
+   * Kullanıcı henüz oturum açmadan bu endpoint'e POST gönderiyor.
+   */
+  const isPublicApi =
+    pathname.startsWith("/api/auth/phone-password") ||
+    pathname.startsWith("/api/pre-registrations") ||
+    pathname.startsWith("/api/public-registration-options");
+
+  /*
+   * Public API isteklerini Supabase oturum kontrolüne sokma.
+   *
+   * Özellikle:
+   * POST /api/auth/phone-password
+   *
+   * /login sayfasına redirect edilmemeli.
+   */
+  if (isPublicApi) {
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store"
+    );
+
+    return response;
+  }
+
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Environment variables yoksa isteği normal devam ettir.
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase ortam değişkenleri bulunamadı.");
+    console.error(
+      "Supabase ortam değişkenleri bulunamadı."
+    );
+
     return response;
   }
 
@@ -34,9 +70,14 @@ export async function middleware(request: NextRequest) {
         },
 
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
+          cookiesToSet.forEach(
+            ({ name, value }) => {
+              request.cookies.set(
+                name,
+                value
+              );
+            }
+          );
 
           response = NextResponse.next({
             request: {
@@ -45,7 +86,11 @@ export async function middleware(request: NextRequest) {
           });
 
           cookiesToSet.forEach(
-            ({ name, value, options }) => {
+            ({
+              name,
+              value,
+              options,
+            }) => {
               response.cookies.set(
                 name,
                 value,
@@ -63,41 +108,49 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
+  /*
+   * PUBLIC SAYFALAR
+   */
+  const isPublicPath =
+    PUBLIC_PATHS.some(
+      (path) =>
+        pathname === path ||
+        pathname.startsWith(
+          `${path}/`
+        )
+    );
 
-  // Herkesin erişebileceği sayfalar.
-  const isPublicPath = PUBLIC_PATHS.some(
-    (path) =>
-      pathname === path ||
-      pathname.startsWith(`${path}/`)
-  );
-
-  // Ön kayıt formunun kullandığı public API yolları.
-  const isPublicApi =
-    pathname.startsWith("/api/pre-registrations") ||
-    pathname.startsWith("/api/public-registration-options");
-
-  // OTURUM YOKSA
+  /*
+   * OTURUM YOKSA
+   */
   if (
     !user &&
-    !isPublicPath &&
-    !isPublicApi
+    !isPublicPath
   ) {
-    const loginUrl = request.nextUrl.clone();
+    const loginUrl =
+      request.nextUrl.clone();
 
     loginUrl.pathname = "/login";
+
     loginUrl.search = "";
+
     loginUrl.searchParams.set(
       "next",
       pathname
     );
 
     const redirectResponse =
-      NextResponse.redirect(loginUrl);
+      NextResponse.redirect(
+        loginUrl
+      );
 
-    response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie);
-    });
+    response.cookies
+      .getAll()
+      .forEach((cookie) => {
+        redirectResponse.cookies.set(
+          cookie
+        );
+      });
 
     redirectResponse.headers.set(
       "Cache-Control",
@@ -107,10 +160,18 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // KULLANICI ZATEN GİRİŞ YAPMIŞSA
-  if (user && pathname === "/login") {
+  /*
+   * KULLANICI ZATEN GİRİŞ YAPMIŞSA
+   * /login sayfasında bırakma.
+   */
+  if (
+    user &&
+    pathname === "/login"
+  ) {
     const requestedNext =
-      request.nextUrl.searchParams.get("next");
+      request.nextUrl.searchParams.get(
+        "next"
+      );
 
     const targetUrl =
       request.nextUrl.clone();
@@ -120,7 +181,8 @@ export async function middleware(request: NextRequest) {
       requestedNext.startsWith("/") &&
       !requestedNext.startsWith("//")
     ) {
-      targetUrl.pathname = requestedNext;
+      targetUrl.pathname =
+        requestedNext;
     } else {
       targetUrl.pathname = "/";
     }
@@ -128,11 +190,17 @@ export async function middleware(request: NextRequest) {
     targetUrl.search = "";
 
     const redirectResponse =
-      NextResponse.redirect(targetUrl);
+      NextResponse.redirect(
+        targetUrl
+      );
 
-    response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie);
-    });
+    response.cookies
+      .getAll()
+      .forEach((cookie) => {
+        redirectResponse.cookies.set(
+          cookie
+        );
+      });
 
     redirectResponse.headers.set(
       "Cache-Control",
