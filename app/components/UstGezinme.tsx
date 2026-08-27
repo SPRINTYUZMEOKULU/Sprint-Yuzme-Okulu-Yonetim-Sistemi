@@ -20,12 +20,16 @@ type AccessResponse = {
 
 const menuItems: MenuItem[] = [
   { label: "Ana Sayfa", href: "/", moduleKey: "dashboard" },
+  { label: "Ön Kayıtlar", href: "/on-kayitlar", moduleKey: "preregistration" },
   { label: "Öğrenciler", href: "/ogrenciler", moduleKey: "students" },
+  { label: "Şubeler", href: "/subeler", moduleKey: "branches" },
   { label: "Gruplar", href: "/gruplar", moduleKey: "groups" },
   { label: "Ders Programı", href: "/ders-programi", moduleKey: "schedule" },
   { label: "Operasyon Planı", href: "/operasyon-plani", moduleKey: "operations" },
   { label: "Yoklama", href: "/yoklama", moduleKey: "attendance" },
   { label: "Ödemeler", href: "/odemeler", moduleKey: "finance" },
+  { label: "Kasa", href: "/kasa", moduleKey: "finance" },
+  { label: "Raporlar", href: "/raporlar", moduleKey: "reports" },
   {
     label: "Kullanıcılar ve Yetkiler",
     href: "/kullanicilar-ve-yetkiler",
@@ -91,7 +95,8 @@ export default function UstGezinme() {
     };
   }, [pathname]);
 
-  const fullAccess = role === "owner" || isSuperUser;
+  const fullAccess =
+    role === "owner" || isSuperUser || allowedModules.includes("*");
 
   const visibleMenuItems = useMemo(() => {
     if (fullAccess) return menuItems;
