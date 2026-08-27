@@ -300,8 +300,6 @@ export default function LoginForm() {
         let result: {
           ok?: boolean;
           message?: string;
-          access_token?: string;
-          refresh_token?: string;
           user_id?: string;
           role?: string;
         } = {};
@@ -314,47 +312,35 @@ export default function LoginForm() {
           );
         }
 
-        if (
-          !response.ok ||
-          !result.ok ||
-          !result.access_token ||
-          !result.refresh_token
-        ) {
+        if (!response.ok || !result.ok || !result.user_id) {
           throw new Error(
             result.message || "Telefon numarası veya şifre hatalı."
           );
         }
 
-        const { data: sessionData, error: setSessionError } =
-          await supabase.auth.setSession({
-            access_token: result.access_token,
-            refresh_token: result.refresh_token,
-          });
-
-        if (
-          setSessionError ||
-          !sessionData.session ||
-          !sessionData.user
-        ) {
-          throw new Error(
-            setSessionError?.message ||
-              "Oturum oluşturulamadı. Lütfen tekrar deneyin."
-          );
-        }
-
-        authUserId = sessionData.user.id;
-        await verifyBrowserProfile(authUserId, role);
+        /*
+         * Telefon girişinde session artık API route tarafından SSR cookie
+         * olarak yazılıyor. Client tarafında setSession() YAPMIYORUZ.
+         */
+        authUserId = result.user_id;
       }
 
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      /*
+       * E-posta girişinde browser session zaten hazırdır.
+       * Telefon girişinde session cookie API response ile sunucu tarafından
+       * yazıldığı için doğrulamayı hedef sayfanın middleware/server katmanı yapar.
+       */
+      if (method === "email") {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-      if (sessionError || !session) {
-        throw new Error(
-          "Oturum oluşturulamadı. Lütfen tekrar giriş yapın."
-        );
+        if (sessionError || !session) {
+          throw new Error(
+            "Oturum oluşturulamadı. Lütfen tekrar giriş yapın."
+          );
+        }
       }
 
       if (!rememberMe) {
