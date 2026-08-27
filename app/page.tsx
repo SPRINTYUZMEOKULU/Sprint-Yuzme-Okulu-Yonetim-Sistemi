@@ -606,6 +606,57 @@ export default async function HomePage() {
 
   return (
     <main className="proShell">
+      {/* MOBİL GÜVENLİ ÇIKIŞ - SADECE TELEFON/TABLETTE GÖRÜNÜR */}
+      <Link
+        href="/auth/signout"
+        className="mobileSecureLogout"
+        title="Güvenli Çıkış"
+        aria-label="Güvenli Çıkış"
+      >
+        <Icons.logout />
+        <span>Çıkış</span>
+      </Link>
+
+      <style>{`
+        .mobileSecureLogout {
+          display: none;
+        }
+
+        @media (max-width: 768px) {
+          .mobileSecureLogout {
+            position: fixed;
+            top: 14px;
+            right: 12px;
+            z-index: 999999;
+
+            width: 46px;
+            height: 46px;
+            padding: 0;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.95);
+
+            background: #dc2626;
+            color: #ffffff;
+            text-decoration: none;
+
+            box-shadow: 0 10px 28px rgba(220,38,38,0.32);
+          }
+
+          .mobileSecureLogout svg {
+            width: 21px;
+            height: 21px;
+          }
+
+          .mobileSecureLogout span {
+            display: none;
+          }
+        }
+      `}</style>
       {/* =====================================================
           SOL MENÜ
       ===================================================== */}
