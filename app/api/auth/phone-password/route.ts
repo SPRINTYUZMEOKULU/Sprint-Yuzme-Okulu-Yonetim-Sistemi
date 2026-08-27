@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -258,10 +259,18 @@ export async function POST(request: NextRequest) {
      * Şifre doğrulamasını normal Supabase Auth istemcisi yapar.
      * Service Role ile şifresiz oturum açtırmıyoruz.
      */
-    const authClient = createClient(url, publicKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+    const response = NextResponse.json({ ok: true });
+
+    const authClient = createServerClient(url, publicKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
       },
     });
 
@@ -439,13 +448,21 @@ export async function POST(request: NextRequest) {
      * Tarayıcıya yalnızca kullanıcının normal Auth session tokenlarını döndürür.
      * SERVICE ROLE KEY hiçbir şekilde response içine girmez.
      */
-    return NextResponse.json({
-      ok: true,
-      access_token: signInData.session.access_token,
-      refresh_token: signInData.session.refresh_token,
-      user_id: signInData.user.id,
-      role: profile.role,
+    const finalResponse = NextResponse.json(
+      {
+        ok: true,
+        user_id: signInData.user.id,
+        role: profile.role,
+      },
+      { status: 200 }
+    );
+
+    response.cookies.getAll().forEach((cookie) => {
+      finalResponse.cookies.set(cookie);
     });
+
+    finalResponse.headers.set("Cache-Control", "no-store");
+    return finalResponse;
   } catch (error) {
     console.error("SPRINTOS PHONE LOGIN ROUTE ERROR", error);
 
