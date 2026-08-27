@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,12 +68,7 @@ function normalizeLocalPhone(value: unknown) {
 }
 
 function phoneCandidates(local: string) {
-  return [
-    `+90${local}`,
-    `90${local}`,
-    `0${local}`,
-    local,
-  ];
+  return [`+90${local}`, `90${local}`, `0${local}`, local];
 }
 
 function safeRole(value: unknown): LoginRole | null {
@@ -85,7 +80,7 @@ function safeRole(value: unknown): LoginRole | null {
 }
 
 async function logAttempt(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient<any, "public", any>,
   input: {
     organizationId?: string | null;
     profileId?: string | null;
@@ -97,7 +92,7 @@ async function logAttempt(
   if (!input.organizationId) return;
 
   try {
-    await admin.from("audit_logs").insert({
+    const { error } = await admin.from("audit_logs").insert({
       organization_id: input.organizationId,
       actor_profile_id: input.profileId ?? null,
       actor_staff_id: input.staffId ?? null,
@@ -111,6 +106,10 @@ async function logAttempt(
       success: input.success,
       created_at: new Date().toISOString(),
     });
+
+    if (error) {
+      console.error("SPRINTOS LOGIN AUDIT INSERT ERROR", error);
+    }
   } catch (error) {
     console.error("SPRINTOS LOGIN AUDIT ERROR", error);
   }
@@ -137,8 +136,8 @@ export async function POST(request: NextRequest) {
     const { url, serviceRole, publicKey } = getEnv();
 
     /*
-     * Service Role SADECE server tarafında kullanılır.
-     * Tarayıcıya hiçbir zaman gönderilmez.
+     * Service Role SADECE bu server route içinde kullanılır.
+     * Tarayıcıya kesinlikle gönderilmez.
      */
     const admin = createClient(url, serviceRole, {
       auth: {
@@ -151,23 +150,27 @@ export async function POST(request: NextRequest) {
 
     /*
      * Kullanıcıyı önce profiles, sonra staff üzerinden buluyoruz.
-     * Böylece public tarafta telefon -> Auth ID eşlemesi açılmıyor.
+     * Böylece telefon -> Auth User ID eşlemesini browser tarafına açmıyoruz.
      */
     let authUserId: string | null = null;
 
-    const { data: profileByPhone } = await admin
+    const { data: profileByPhone, error: profilePhoneError } = await admin
       .from("profiles")
       .select("id")
       .in("phone", candidates)
       .limit(1)
       .maybeSingle();
 
+    if (profilePhoneError) {
+      console.error("SPRINTOS PROFILE PHONE LOOKUP ERROR", profilePhoneError);
+    }
+
     if (profileByPhone?.id) {
       authUserId = profileByPhone.id;
     }
 
     if (!authUserId) {
-      const { data: staffByPhone } = await admin
+      const { data: staffByPhone, error: staffPhoneError } = await admin
         .from("staff")
         .select("auth_user_id")
         .in("phone", candidates)
@@ -175,14 +178,17 @@ export async function POST(request: NextRequest) {
         .limit(1)
         .maybeSingle();
 
+      if (staffPhoneError) {
+        console.error("SPRINTOS STAFF PHONE LOOKUP ERROR", staffPhoneError);
+      }
+
       if (staffByPhone?.auth_user_id) {
         authUserId = staffByPhone.auth_user_id;
       }
     }
 
     /*
-     * Kullanıcı var/yok bilgisini dışarı sızdırmamak için
-     * aynı genel hata mesajını döndürüyoruz.
+     * Kullanıcı var/yok bilgisini dışarı sızdırmamak için aynı mesajı döndür.
      */
     if (!authUserId) {
       return NextResponse.json(
@@ -200,6 +206,8 @@ export async function POST(request: NextRequest) {
     } = await admin.auth.admin.getUserById(authUserId);
 
     if (authUserError || !authUser) {
+      console.error("SPRINTOS AUTH USER LOOKUP ERROR", authUserError);
+
       return NextResponse.json(
         {
           ok: false,
@@ -212,12 +220,8 @@ export async function POST(request: NextRequest) {
     /*
      * Phone Provider / Twilio kullanmıyoruz.
      *
-     * Supabase Auth şifre doğrulamasını yine kendisi yapıyor;
-     * sadece telefonla giriş yapmak isteyen phone-only kullanıcıya
-     * server tarafında dahili bir e-posta kimliği ekliyoruz.
-     *
-     * Şifreyi veritabanından okumuyoruz, karşılaştırmıyoruz,
-     * hash'e müdahale etmiyoruz.
+     * Telefonla oluşturulmuş kullanıcıda e-posta yoksa yalnızca server tarafında
+     * dahili bir login e-postası ekliyoruz. Kullanıcının mevcut şifresi değişmez.
      */
     let loginEmail = authUser.email ?? "";
 
@@ -251,8 +255,8 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * Şifre doğrulaması PUBLIC Supabase Auth istemcisiyle yapılır.
-     * Service Role ile kullanıcıyı şifresiz içeri almıyoruz.
+     * Şifre doğrulamasını normal Supabase Auth istemcisi yapar.
+     * Service Role ile şifresiz oturum açtırmıyoruz.
      */
     const authClient = createClient(url, publicKey, {
       auth: {
@@ -285,7 +289,7 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * Giriş başarılı olduktan sonra profil, rol ve personel izinleri kontrol edilir.
+     * Kullanıcı doğrulandıktan sonra profil/rol/aktiflik kontrolü.
      */
     const { data: profile, error: profileError } = await admin
       .from("profiles")
@@ -294,6 +298,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (profileError || !profile) {
+      console.error("SPRINTOS LOGIN PROFILE ERROR", profileError);
+
       return NextResponse.json(
         {
           ok: false,
@@ -409,10 +415,17 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
 
-    await admin
+    const { error: lastSignInError } = await admin
       .from("profiles")
       .update({ last_sign_in_at: now })
       .eq("id", profile.id);
+
+    if (lastSignInError) {
+      console.error(
+        "SPRINTOS LAST SIGN IN UPDATE ERROR",
+        lastSignInError
+      );
+    }
 
     await logAttempt(admin, {
       organizationId: profile.organization_id,
@@ -423,8 +436,8 @@ export async function POST(request: NextRequest) {
     });
 
     /*
-     * Tarayıcıya yalnızca bu kullanıcının normal Auth session tokenlarını döndürürüz.
-     * SERVICE ROLE KEY kesinlikle dönmez.
+     * Tarayıcıya yalnızca kullanıcının normal Auth session tokenlarını döndürür.
+     * SERVICE ROLE KEY hiçbir şekilde response içine girmez.
      */
     return NextResponse.json({
       ok: true,
