@@ -2,36 +2,70 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-type MenuItem = { label: string; href: string; moduleKey: string };
+type MenuItem = {
+  label: string;
+  href: string;
+  moduleKey?: string;
+};
 
 type AccessResponse = {
-  ok: boolean;
-  role?: string;
-  is_super_user?: boolean;
-  allowed_modules?: string[];
+  authenticated?: boolean;
+  fullAccess?: boolean;
+  modules?: string[];
 };
 
 const menuItems: MenuItem[] = [
-  { label: "Ana Sayfa", href: "/", moduleKey: "dashboard" },
-  { label: "Öğrenciler", href: "/ogrenciler", moduleKey: "students" },
-  { label: "Gruplar", href: "/gruplar", moduleKey: "groups" },
-  { label: "Ders Programı", href: "/ders-programi", moduleKey: "schedule" },
-  { label: "Operasyon Planı", href: "/operasyon-plani", moduleKey: "operations" },
-  { label: "Yoklama", href: "/yoklama", moduleKey: "attendance" },
-  { label: "Ödemeler", href: "/odemeler", moduleKey: "finance" },
-  { label: "Kullanıcılar ve Yetkiler", href: "/kullanicilar-ve-yetkiler", moduleKey: "permissions" },
+  {
+    label: "Ana Sayfa",
+    href: "/",
+    moduleKey: "home",
+  },
+  {
+    label: "Öğrenciler",
+    href: "/ogrenciler",
+    moduleKey: "students",
+  },
+  {
+    label: "Gruplar",
+    href: "/gruplar",
+    moduleKey: "groups",
+  },
+  {
+    label: "Ders Programı",
+    href: "/ders-programi",
+    moduleKey: "schedule",
+  },
+  {
+    label: "Operasyon Planı",
+    href: "/operasyon-plani",
+    moduleKey: "operations",
+  },
+  {
+    label: "Yoklama",
+    href: "/yoklama",
+    moduleKey: "attendance",
+  },
+  {
+    label: "Ödemeler",
+    href: "/odemeler",
+    moduleKey: "payments",
+  },
+  {
+    label: "Kullanıcılar ve Yetkiler",
+    href: "/kullanicilar-ve-yetkiler",
+    moduleKey: "users",
+  },
 ];
 
 export default function UstGezinme() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [loadingAccess, setLoadingAccess] = useState(true);
-  const [role, setRole] = useState("");
-  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fullAccess, setFullAccess] = useState(false);
   const [allowedModules, setAllowedModules] = useState<string[]>([]);
 
   useEffect(() => {
@@ -41,34 +75,33 @@ export default function UstGezinme() {
       try {
         const response = await fetch("/api/auth/access", {
           method: "GET",
+          credentials: "include",
           cache: "no-store",
-          credentials: "same-origin",
         });
 
-        const data = (await response.json()) as AccessResponse;
-        if (cancelled) return;
-
-        if (!response.ok || !data.ok) {
-          setRole("");
-          setIsSuperUser(false);
-          setAllowedModules([]);
-          return;
+        if (!response.ok) {
+          throw new Error("Yetki bilgileri alınamadı.");
         }
 
-        setRole(String(data.role || ""));
-        setIsSuperUser(Boolean(data.is_super_user));
+        const data: AccessResponse = await response.json();
+
+        if (cancelled) return;
+
+        setFullAccess(Boolean(data.fullAccess));
         setAllowedModules(
-          Array.isArray(data.allowed_modules) ? data.allowed_modules : []
+          Array.isArray(data.modules) ? data.modules : []
         );
       } catch (error) {
-        console.error("SPRINTOS ACCESS MENU ERROR", error);
+        console.error("Üst menü yetkileri yüklenemedi:", error);
+
         if (!cancelled) {
-          setRole("");
-          setIsSuperUser(false);
+          setFullAccess(false);
           setAllowedModules([]);
         }
       } finally {
-        if (!cancelled) setLoadingAccess(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -77,16 +110,31 @@ export default function UstGezinme() {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
-
-  const visibleMenuItems = useMemo(() => {
-    if (role === "owner" || isSuperUser) return menuItems;
-    return menuItems.filter((item) => allowedModules.includes(item.moduleKey));
-  }, [role, isSuperUser, allowedModules]);
+  }, []);
 
   function isActive(href: string) {
-    if (href === "/") return pathname === "/";
-    return pathname === href || pathname.startsWith(`${href}/`);
+    if (href === "/") {
+      return pathname === "/";
+    }
+
+    return (
+      pathname === href ||
+      pathname.startsWith(`${href}/`)
+    );
+  }
+
+  function canSee(item: MenuItem) {
+    if (fullAccess) return true;
+
+    if (!item.moduleKey) return true;
+
+    return allowedModules.includes(item.moduleKey);
+  }
+
+  const visibleMenuItems = menuItems.filter(canSee);
+
+  function handleLogout() {
+    window.location.href = "/auth/signout";
   }
 
   return (
@@ -113,6 +161,7 @@ export default function UstGezinme() {
           gap: 12,
         }}
       >
+        {/* GERİ */}
         <button
           type="button"
           onClick={() => router.back()}
@@ -136,6 +185,7 @@ export default function UstGezinme() {
           ←
         </button>
 
+        {/* LOGO */}
         <Link
           href="/"
           title="Ana Sayfa"
@@ -165,20 +215,42 @@ export default function UstGezinme() {
               alt="Sprint Yüzme Okulu"
               width={38}
               height={38}
-              style={{ objectFit: "contain" }}
+              style={{
+                objectFit: "contain",
+              }}
             />
           </span>
 
-          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-            <strong style={{ color: "#13233f", fontSize: 14, fontWeight: 900 }}>
+          <span
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: 1.1,
+            }}
+          >
+            <strong
+              style={{
+                color: "#13233f",
+                fontSize: 14,
+                fontWeight: 900,
+              }}
+            >
               SprintOS
             </strong>
-            <small style={{ color: "#64748b", fontSize: 9, marginTop: 3 }}>
+
+            <small
+              style={{
+                color: "#64748b",
+                fontSize: 9,
+                marginTop: 3,
+              }}
+            >
               Sprint Yüzme Okulu
             </small>
           </span>
         </Link>
 
+        {/* YETKİYE GÖRE MENÜ */}
         <nav
           style={{
             flex: 1,
@@ -190,11 +262,7 @@ export default function UstGezinme() {
             scrollbarWidth: "thin",
           }}
         >
-          {loadingAccess ? (
-            <span style={{ color: "#94a3b8", fontSize: 10, padding: "10px 12px" }}>
-              Yetkiler yükleniyor…
-            </span>
-          ) : (
+          {!loading &&
             visibleMenuItems.map((item) => {
               const active = isActive(item.href);
 
@@ -210,43 +278,74 @@ export default function UstGezinme() {
                     fontSize: 11,
                     fontWeight: 850,
                     transition: "all .15s ease",
-                    background: active ? "#1769e8" : "transparent",
-                    color: active ? "#ffffff" : "#475569",
-                    border: active ? "1px solid #1769e8" : "1px solid transparent",
+
+                    background: active
+                      ? "#1769e8"
+                      : "transparent",
+
+                    color: active
+                      ? "#ffffff"
+                      : "#475569",
+
+                    border: active
+                      ? "1px solid #1769e8"
+                      : "1px solid transparent",
                   }}
                 >
                   {item.label}
                 </Link>
               );
-            })
-          )}
+            })}
         </nav>
 
-        {(role === "owner" ||
-          isSuperUser ||
-          allowedModules.includes("dashboard")) && (
-          <Link
-            href="/"
-            title="Ana Sayfa"
-            style={{
-              flexShrink: 0,
-              height: 40,
-              padding: "0 13px",
-              borderRadius: 10,
-              background: "#edf5ff",
-              border: "1px solid #dbeafe",
-              color: "#1769e8",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 11,
-              fontWeight: 900,
-            }}
-          >
-            Ana Sayfa
-          </Link>
-        )}
+        {/* ANA SAYFA */}
+        <Link
+          href="/"
+          title="Ana Sayfa"
+          style={{
+            flexShrink: 0,
+            height: 40,
+            padding: "0 13px",
+            borderRadius: 10,
+            background: "#edf5ff",
+            border: "1px solid #dbeafe",
+            color: "#1769e8",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 11,
+            fontWeight: 900,
+          }}
+        >
+          Ana Sayfa
+        </Link>
+
+        {/* GÜVENLİ ÇIKIŞ */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="Güvenli Çıkış"
+          style={{
+            flexShrink: 0,
+            height: 40,
+            padding: "0 14px",
+            borderRadius: 10,
+            background: "#fff1f2",
+            border: "1px solid #fecdd3",
+            color: "#be123c",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontSize: 11,
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          <span>🔒</span>
+          <span>Güvenli Çıkış</span>
+        </button>
       </div>
     </div>
   );
