@@ -607,7 +607,7 @@ export default async function HomePage() {
   return (
     <main className="proShell">
       {/* MOBİL GÜVENLİ ÇIKIŞ - SADECE TELEFON/TABLETTE GÖRÜNÜR */}
-      <Link
+      <a
         href="/auth/signout"
         className="mobileSecureLogout"
         title="Güvenli Çıkış"
@@ -615,7 +615,7 @@ export default async function HomePage() {
       >
         <Icons.logout />
         <span>Çıkış</span>
-      </Link>
+      </a>
 
       <style>{`
         .mobileSecureLogout {
@@ -795,13 +795,13 @@ export default async function HomePage() {
             </span>
           </div>
 
-          <Link
+          <a
             href="/auth/signout"
             title="Güvenli Çıkış"
             aria-label="Güvenli Çıkış"
           >
             <Icons.logout />
-          </Link>
+          </a>
         </div>
       </aside>
 
