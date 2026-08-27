@@ -78,7 +78,9 @@ export default function UstGezinme() {
           setAllowedModules([]);
         }
       } finally {
-        if (!cancelled) setLoadingAccess(false);
+        if (!cancelled) {
+          setLoadingAccess(false);
+        }
       }
     }
 
@@ -105,7 +107,7 @@ export default function UstGezinme() {
   }
 
   function handleLogout() {
-    window.location.assign("/auth/signout");
+    window.location.href = "/auth/signout";
   }
 
   const showHomeShortcut =
@@ -113,20 +115,20 @@ export default function UstGezinme() {
 
   return (
     <>
-      <header className="sprintTopbar">
-        <div className="sprintTopbarInner">
+      <header className="topbar">
+        <div className="topbarInner">
           <button
             type="button"
             onClick={() => router.back()}
-            title="Geri"
+            className="backBtn"
             aria-label="Geri"
-            className="backButton"
+            title="Geri"
           >
             ←
           </button>
 
-          <Link href="/" title="Ana Sayfa" className="brandLink">
-            <span className="logoBox">
+          <Link href="/" className="brand" title="Ana Sayfa">
+            <span className="logoWrap">
               <Image
                 src="/icons/icon-192.png"
                 alt="Sprint Yüzme Okulu"
@@ -142,9 +144,9 @@ export default function UstGezinme() {
             </span>
           </Link>
 
-          <nav className="menuScroll" aria-label="SprintOS ana menü">
+          <nav className="navScroll">
             {loadingAccess ? (
-              <span className="loadingText">Yetkiler yükleniyor…</span>
+              <span className="loading">Yetkiler yükleniyor…</span>
             ) : (
               visibleMenuItems.map((item) => {
                 const active = isActive(item.href);
@@ -153,7 +155,7 @@ export default function UstGezinme() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`menuLink ${active ? "active" : ""}`}
+                    className={`navItem ${active ? "active" : ""}`}
                   >
                     {item.label}
                   </Link>
@@ -163,7 +165,7 @@ export default function UstGezinme() {
           </nav>
 
           {showHomeShortcut && (
-            <Link href="/" title="Ana Sayfa" className="homeShortcut">
+            <Link href="/" className="homeBtn" title="Ana Sayfa">
               Ana Sayfa
             </Link>
           )}
@@ -171,52 +173,40 @@ export default function UstGezinme() {
           <button
             type="button"
             onClick={handleLogout}
-            title="Güvenli Çıkış"
+            className="logoutBtn"
             aria-label="Güvenli Çıkış"
-            className="desktopLogout"
+            title="Güvenli Çıkış"
           >
-            <span aria-hidden="true">🔒</span>
-            <span className="logoutLabel">Güvenli Çıkış</span>
+            <span className="logoutIcon">⎋</span>
+            <span className="logoutText">Güvenli Çıkış</span>
           </button>
         </div>
       </header>
 
-      {/* MOBİLDE HER ZAMAN GÖRÜNEN SABİT ÇIKIŞ BUTONU */}
-      <button
-        type="button"
-        onClick={handleLogout}
-        title="Güvenli Çıkış"
-        aria-label="Güvenli Çıkış"
-        className="mobileLogout"
-      >
-        <span aria-hidden="true">🔒</span>
-        <span>Çıkış</span>
-      </button>
-
       <style jsx>{`
-        .sprintTopbar {
+        .topbar {
           position: sticky;
           top: 0;
-          z-index: 100;
+          z-index: 1000;
           width: 100%;
-          background: rgba(255, 255, 255, 0.96);
+          background: rgba(255, 255, 255, 0.97);
           backdrop-filter: blur(14px);
           -webkit-backdrop-filter: blur(14px);
           border-bottom: 1px solid #e4eaf3;
-          box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
         }
 
-        .sprintTopbarInner {
+        .topbarInner {
           max-width: 1580px;
           margin: 0 auto;
           padding: 10px 18px;
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           min-width: 0;
         }
 
-        .backButton {
+        .backBtn {
           width: 40px;
           height: 40px;
           flex: 0 0 40px;
@@ -227,22 +217,20 @@ export default function UstGezinme() {
           font-size: 20px;
           font-weight: 900;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
 
-        .brandLink {
+        .brand {
           display: flex;
           align-items: center;
           gap: 9px;
           text-decoration: none;
-          flex-shrink: 0;
+          flex: 0 0 auto;
         }
 
-        .logoBox {
+        .logoWrap {
           width: 44px;
           height: 44px;
+          flex: 0 0 44px;
           border-radius: 12px;
           border: 1px solid #dce5f2;
           background: #ffffff;
@@ -270,45 +258,45 @@ export default function UstGezinme() {
           margin-top: 3px;
         }
 
-        .menuScroll {
+        .navScroll {
           flex: 1 1 auto;
           min-width: 0;
           display: flex;
           align-items: center;
           gap: 6px;
           overflow-x: auto;
+          overflow-y: hidden;
           padding: 2px;
           scrollbar-width: thin;
         }
 
-        .menuLink {
+        .navItem {
           white-space: nowrap;
           text-decoration: none;
           padding: 10px 12px;
           border-radius: 9px;
           font-size: 11px;
           font-weight: 850;
-          transition: all 0.15s ease;
-          background: transparent;
           color: #475569;
           border: 1px solid transparent;
+          background: transparent;
         }
 
-        .menuLink.active {
+        .navItem.active {
           background: #1769e8;
           color: #ffffff;
           border-color: #1769e8;
         }
 
-        .loadingText {
+        .loading {
           color: #94a3b8;
           font-size: 10px;
           padding: 10px 12px;
           white-space: nowrap;
         }
 
-        .homeShortcut {
-          flex-shrink: 0;
+        .homeBtn {
+          flex: 0 0 auto;
           height: 40px;
           padding: 0 13px;
           border-radius: 10px;
@@ -323,13 +311,13 @@ export default function UstGezinme() {
           font-weight: 900;
         }
 
-        .desktopLogout {
-          flex-shrink: 0;
+        .logoutBtn {
+          flex: 0 0 auto;
           height: 40px;
-          padding: 0 14px;
+          padding: 0 13px;
           border-radius: 10px;
-          background: #fff1f2;
           border: 1px solid #fecdd3;
+          background: #fff1f2;
           color: #be123c;
           display: flex;
           align-items: center;
@@ -340,96 +328,99 @@ export default function UstGezinme() {
           cursor: pointer;
         }
 
-        .mobileLogout {
-          display: none;
+        .logoutIcon {
+          font-size: 17px;
+          line-height: 1;
         }
 
         @media (max-width: 900px) {
-          .sprintTopbarInner {
-            padding: 8px 10px;
-            gap: 7px;
+          .topbarInner {
+            padding: 8px 8px;
+            gap: 6px;
           }
 
-          .backButton {
-            width: 38px;
-            height: 38px;
-            flex-basis: 38px;
+          .backBtn {
+            width: 36px;
+            height: 36px;
+            flex-basis: 36px;
           }
 
-          .logoBox {
-            width: 40px;
-            height: 40px;
+          .brand {
+            flex: 0 0 auto;
+          }
+
+          .logoWrap {
+            width: 36px;
+            height: 36px;
+            flex-basis: 36px;
           }
 
           .brandText {
             display: none;
           }
 
-          .homeShortcut {
+          .homeBtn {
             display: none;
           }
 
-          .desktopLogout {
-            display: none;
+          .navScroll {
+            flex: 1 1 0;
+            min-width: 0;
+            max-width: none;
           }
 
-          .menuScroll {
-            gap: 4px;
-          }
-
-          .menuLink {
-            padding: 9px 10px;
-            font-size: 10px;
-          }
-
-          .mobileLogout {
-            position: fixed;
-            right: 14px;
-            bottom: calc(16px + env(safe-area-inset-bottom));
-            z-index: 9999;
-            min-width: 92px;
-            height: 46px;
-            padding: 0 15px;
-            border-radius: 999px;
-            background: #be123c;
-            border: 1px solid #9f1239;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            font-size: 12px;
-            font-weight: 900;
-            cursor: pointer;
-            box-shadow: 0 10px 28px rgba(190, 18, 60, 0.28);
-          }
-        }
-
-        @media (max-width: 480px) {
-          .sprintTopbarInner {
-            padding-left: 8px;
-            padding-right: 8px;
-          }
-
-          .brandLink {
-            gap: 0;
-          }
-
-          .logoBox {
-            width: 38px;
-            height: 38px;
-          }
-
-          .menuLink {
+          .navItem {
             padding: 8px 9px;
             font-size: 9.5px;
           }
 
-          .mobileLogout {
-            right: 12px;
-            min-width: 88px;
-            height: 44px;
-            font-size: 11px;
+          .logoutBtn {
+            flex: 0 0 42px;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            border-radius: 12px;
+            background: #be123c;
+            color: #ffffff;
+            border-color: #be123c;
+          }
+
+          .logoutText {
+            display: none;
+          }
+
+          .logoutIcon {
+            font-size: 21px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .topbarInner {
+            padding-left: 6px;
+            padding-right: 6px;
+          }
+
+          .backBtn {
+            width: 34px;
+            height: 34px;
+            flex-basis: 34px;
+          }
+
+          .logoWrap {
+            width: 34px;
+            height: 34px;
+            flex-basis: 34px;
+          }
+
+          .logoutBtn {
+            flex-basis: 40px;
+            width: 40px;
+            height: 40px;
+          }
+
+          .navItem {
+            padding: 8px 8px;
+            font-size: 9px;
           }
         }
       `}</style>
