@@ -279,13 +279,12 @@ export default function PWARegister() {
         <div className="sprintPushActions">
           {state === "on" ? (
             <button
-              type="button"
-              onClick={disableNotifications}
-              disabled={state === "working"}
-              className="pushSecondary"
-            >
-              Kapat
-            </button>
+  type="button"
+  onClick={disableNotifications}
+  className="pushSecondary"
+>
+  Kapat
+</button>
           ) : (
             <button
               type="button"
