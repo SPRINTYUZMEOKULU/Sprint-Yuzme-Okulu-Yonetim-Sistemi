@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { updatePreRegistration } from "./actions";
+import { useFormStatus } from "react-dom";
+import {
+  archivePreRegistration,
+  deactivatePreRegistration,
+  updatePreRegistration,
+} from "./actions";
 
 type Student = {
   id: string;
@@ -26,6 +31,7 @@ type Student = {
 };
 
 type Branch = { id: string; name: string };
+
 type Group = {
   id: string;
   name: string;
@@ -33,12 +39,14 @@ type Group = {
   course_type: string | null;
   is_active: boolean | null;
 };
+
 type Package = {
   id: string;
   name: string;
   lesson_count: number | null;
   price: number | null;
   is_active: boolean | null;
+  course_type: string | null;
 };
 
 type Consent = {
@@ -82,6 +90,17 @@ function fmtDate(value: string | null | undefined) {
   }
 }
 
+function fmtBirthDate(value: string | null | undefined) {
+  if (!value) return "Belirtilmedi";
+  try {
+    return new Intl.DateTimeFormat("tr-TR", {
+      dateStyle: "medium",
+    }).format(new Date(`${value}T12:00:00`));
+  } catch {
+    return value;
+  }
+}
+
 function yesNo(value: boolean | null | undefined) {
   return value ? "Evet ✓" : "Hayır";
 }
@@ -112,31 +131,50 @@ function deviceSummary(userAgent: string | null | undefined) {
   if (!userAgent) return "Bilinmiyor";
 
   const ua = userAgent.toLowerCase();
-  const device =
-    ua.includes("iphone")
-      ? "iPhone"
-      : ua.includes("ipad")
-      ? "iPad"
-      : ua.includes("android")
-      ? "Android cihaz"
-      : ua.includes("macintosh")
-      ? "Mac"
-      : ua.includes("windows")
-      ? "Windows bilgisayar"
-      : "Cihaz";
+  const device = ua.includes("iphone")
+    ? "iPhone"
+    : ua.includes("ipad")
+    ? "iPad"
+    : ua.includes("android")
+    ? "Android cihaz"
+    : ua.includes("macintosh")
+    ? "Mac"
+    : ua.includes("windows")
+    ? "Windows bilgisayar"
+    : "Cihaz";
 
-  const browser =
-    ua.includes("edg/")
-      ? "Edge"
-      : ua.includes("chrome/")
-      ? "Chrome"
-      : ua.includes("safari/")
-      ? "Safari"
-      : ua.includes("firefox/")
-      ? "Firefox"
-      : "Tarayıcı";
+  const browser = ua.includes("edg/")
+    ? "Edge"
+    : ua.includes("chrome/")
+    ? "Chrome"
+    : ua.includes("safari/")
+    ? "Safari"
+    : ua.includes("firefox/")
+    ? "Firefox"
+    : "Tarayıcı";
 
   return `${device} · ${browser}`;
+}
+
+function SubmitButton({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      className={className}
+      disabled={pending}
+      aria-disabled={pending}
+    >
+      {pending ? "İşleniyor…" : children}
+    </button>
+  );
 }
 
 export default function PreRegistrationCenter({
@@ -166,14 +204,29 @@ export default function PreRegistrationCenter({
       : null
   );
 
+  const selected =
+    students.find((student) => student.id === selectedId) || null;
+
+  const [editBranchId, setEditBranchId] = useState(
+    selected?.branch_id || ""
+  );
+  const [editGroupId, setEditGroupId] = useState(
+    selected?.preferred_group_id || ""
+  );
+  const [editPackageId, setEditPackageId] = useState(
+    selected?.preferred_package_id || ""
+  );
+
   const branchMap = useMemo(
     () => new Map(branches.map((item) => [item.id, item.name])),
     [branches]
   );
+
   const groupMap = useMemo(
     () => new Map(groups.map((item) => [item.id, item.name])),
     [groups]
   );
+
   const packageMap = useMemo(
     () => new Map(packages.map((item) => [item.id, item.name])),
     [packages]
@@ -182,9 +235,7 @@ export default function PreRegistrationCenter({
   const consentByStudent = useMemo(() => {
     const map = new Map<string, Consent>();
     for (const consent of consents) {
-      if (!map.has(consent.student_id)) {
-        map.set(consent.student_id, consent);
-      }
+      if (!map.has(consent.student_id)) map.set(consent.student_id, consent);
     }
     return map;
   }, [consents]);
@@ -194,6 +245,7 @@ export default function PreRegistrationCenter({
     if (!q) return students;
 
     return students.filter((student) => {
+      const consent = consentByStudent.get(student.id);
       const haystack = [
         student.student_number,
         student.first_name,
@@ -208,6 +260,7 @@ export default function PreRegistrationCenter({
         student.preferred_package_id
           ? packageMap.get(student.preferred_package_id)
           : "",
+        consent?.health_note,
       ]
         .filter(Boolean)
         .join(" ")
@@ -215,13 +268,19 @@ export default function PreRegistrationCenter({
 
       return haystack.includes(q);
     });
-  }, [students, search, branchMap, groupMap, packageMap]);
+  }, [
+    students,
+    search,
+    branchMap,
+    groupMap,
+    packageMap,
+    consentByStudent,
+  ]);
 
-  const selected =
-    students.find((student) => student.id === selectedId) || null;
   const selectedConsent = selected
     ? consentByStudent.get(selected.id) || null
     : null;
+
   const selectedSnapshot = getSnapshot(selectedConsent);
 
   const selectedActivities = useMemo(
@@ -232,14 +291,46 @@ export default function PreRegistrationCenter({
     [activities, selected]
   );
 
+  const selectedEditGroup =
+    groups.find((group) => group.id === editGroupId) || null;
+
+  const editGroups = groups.filter((group) => {
+    const isCurrent = group.id === selected?.preferred_group_id;
+    const branchMatches = editBranchId ? group.branch_id === editBranchId : true;
+    return branchMatches && (group.is_active !== false || isCurrent);
+  });
+
+  const editPackages = packages.filter((pack) => {
+    const isCurrent = pack.id === selected?.preferred_package_id;
+    const activeOk = pack.is_active !== false || isCurrent;
+    const courseTypeOk =
+      !selectedEditGroup?.course_type ||
+      !pack.course_type ||
+      pack.course_type === selectedEditGroup.course_type;
+    return activeOk && courseTypeOk;
+  });
+
   function openStudent(id: string) {
+    const student = students.find((item) => item.id === id);
     setSelectedId(id);
+    setEditBranchId(student?.branch_id || "");
+    setEditGroupId(student?.preferred_group_id || "");
+    setEditPackageId(student?.preferred_package_id || "");
     setDetailTab("current");
+
     window.setTimeout(() => {
       document
         .getElementById("pre-registration-detail")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
+  }
+
+  function openEdit() {
+    if (!selected) return;
+    setEditBranchId(selected.branch_id || "");
+    setEditGroupId(selected.preferred_group_id || "");
+    setEditPackageId(selected.preferred_package_id || "");
+    setDetailTab("edit");
   }
 
   return (
@@ -253,6 +344,7 @@ export default function PreRegistrationCenter({
           Bekleyen Ön Kayıtlar
           <span>{students.length}</span>
         </button>
+
         <button
           type="button"
           className={mainTab === "archive" ? "active" : ""}
@@ -269,13 +361,29 @@ export default function PreRegistrationCenter({
             <div>
               <p>BAŞVURU LİSTESİ</p>
               <h2>Bekleyen Ön Kayıtlar</h2>
+              <span>
+                Öğrenci, veli, telefon, şube, grup, paket veya sağlık notunda arama yapabilirsiniz.
+              </span>
             </div>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              aria-label="Ön kayıt ara"
-              placeholder="Öğrenci, veli, telefon, şube, grup veya paket ara..."
-            />
+
+            <div className="preSearchWrap">
+              <span>⌕</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                aria-label="Ön kayıt ara"
+                placeholder="Öğrenci, veli, telefon veya sağlık notu ara..."
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Aramayı temizle"
+                >
+                  Temizle
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="preRegistrationGrid">
@@ -291,6 +399,7 @@ export default function PreRegistrationCenter({
                 ? packageMap.get(student.preferred_package_id) ||
                   "Paket bulunamadı"
                 : "Paket seçilmedi";
+              const hasHealthNote = Boolean(consent?.health_note?.trim());
 
               return (
                 <button
@@ -310,11 +419,19 @@ export default function PreRegistrationCenter({
                         {student.first_name} {student.last_name}
                       </h3>
                     </div>
-                    <span className="preStatus">Bekliyor</span>
+
+                    <div className="preCardBadges">
+                      {hasHealthNote && (
+                        <span className="preHealthBadge">Sağlık Notu</span>
+                      )}
+                      <span className="preStatus">Bekliyor</span>
+                    </div>
                   </div>
 
                   <div className="preCardContact">
-                    <strong>{student.guardian_name || "Yetişkin kayıt"}</strong>
+                    <strong>
+                      {student.guardian_name || "Yetişkin kayıt"}
+                    </strong>
                     <span>
                       {student.guardian_phone ||
                         student.phone ||
@@ -338,7 +455,9 @@ export default function PreRegistrationCenter({
                   </div>
 
                   <div className="preCardBottom">
-                    <span>{fmtDate(consent?.accepted_at || student.created_at)}</span>
+                    <span>
+                      {fmtDate(consent?.accepted_at || student.created_at)}
+                    </span>
                     <strong>Detayı Aç →</strong>
                   </div>
                 </button>
@@ -348,7 +467,9 @@ export default function PreRegistrationCenter({
             {!filteredStudents.length && (
               <div className="preRegistrationEmpty">
                 <strong>Bekleyen ön kayıt bulunamadı.</strong>
-                <span>Arama kriterini değiştirin veya yeni başvuruyu bekleyin.</span>
+                <span>
+                  Arama kriterini değiştirin veya yeni başvuruyu bekleyin.
+                </span>
               </div>
             )}
           </div>
@@ -365,7 +486,9 @@ export default function PreRegistrationCenter({
                     {selected.first_name} {selected.last_name}
                   </h2>
                   <p>
-                    {selected.student_number || "Öğrenci numarası henüz yok"} ·{" "}
+                    {selected.student_number ||
+                      "Öğrenci numarası henüz yok"}{" "}
+                    ·{" "}
                     {fmtDate(
                       selectedConsent?.accepted_at || selected.created_at
                     )}
@@ -400,7 +523,7 @@ export default function PreRegistrationCenter({
                 <button
                   type="button"
                   className={detailTab === "edit" ? "active" : ""}
-                  onClick={() => setDetailTab("edit")}
+                  onClick={openEdit}
                 >
                   Düzenle
                 </button>
@@ -421,7 +544,7 @@ export default function PreRegistrationCenter({
                       {selected.first_name} {selected.last_name}
                     </Info>
                     <Info label="Doğum Tarihi">
-                      {selected.birth_date || "Belirtilmedi"}
+                      {fmtBirthDate(selected.birth_date)}
                     </Info>
                     <Info label="Telefon">
                       {selected.phone || "Belirtilmedi"}
@@ -461,15 +584,24 @@ export default function PreRegistrationCenter({
                     </Info>
                   </div>
 
+                  <HealthNotice
+                    declaration={selectedConsent?.health_declaration}
+                    note={selectedConsent?.health_note}
+                  />
+
                   <div className="preNoteBox">
                     <span>Kayıt Notu</span>
-                    <p>{selected.registration_note || "Not bulunmuyor."}</p>
+                    <p>
+                      {selected.registration_note || "Not bulunmuyor."}
+                    </p>
                   </div>
 
                   <div className="preConsentStrip">
                     <div>
                       <span>Kurallar</span>
-                      <strong>{yesNo(selectedConsent?.rules_accepted)}</strong>
+                      <strong>
+                        {yesNo(selectedConsent?.rules_accepted)}
+                      </strong>
                     </div>
                     <div>
                       <span>Sağlık Beyanı</span>
@@ -486,19 +618,68 @@ export default function PreRegistrationCenter({
                   </div>
 
                   <div className="preActionFooter">
-                    <button
-                      type="button"
-                      className="secondaryPreAction"
-                      onClick={() => setDetailTab("edit")}
-                    >
-                      ✎ Bilgileri Düzenle
-                    </button>
-                    <Link
-                      className="primaryPreAction"
-                      href={`/kayit-tamamlama/${selected.id}`}
-                    >
-                      Kayda Aktar →
-                    </Link>
+                    <div className="preDangerActions">
+                      <form
+                        action={deactivatePreRegistration}
+                        onSubmit={(event) => {
+                          if (
+                            !window.confirm(
+                              "Bu ön kayıt pasife alınacak. Devam etmek istiyor musunuz?"
+                            )
+                          ) {
+                            event.preventDefault();
+                          }
+                        }}
+                      >
+                        <input
+                          type="hidden"
+                          name="student_id"
+                          value={selected.id}
+                        />
+                        <SubmitButton className="warningPreAction">
+                          Pasife Al
+                        </SubmitButton>
+                      </form>
+
+                      <form
+                        action={archivePreRegistration}
+                        onSubmit={(event) => {
+                          if (
+                            !window.confirm(
+                              "Bu ön kayıt yönetim listesinden silinecek. Elektronik form ve işlem geçmişi korunacaktır. Devam edilsin mi?"
+                            )
+                          ) {
+                            event.preventDefault();
+                          }
+                        }}
+                      >
+                        <input
+                          type="hidden"
+                          name="student_id"
+                          value={selected.id}
+                        />
+                        <SubmitButton className="dangerPreAction">
+                          Sil
+                        </SubmitButton>
+                      </form>
+                    </div>
+
+                    <div className="prePrimaryActions">
+                      <button
+                        type="button"
+                        className="secondaryPreAction"
+                        onClick={openEdit}
+                      >
+                        ✎ Bilgileri Düzenle
+                      </button>
+
+                      <Link
+                        className="primaryPreAction"
+                        href={`/kayit-tamamlama/${selected.id}`}
+                      >
+                        Kayda Aktar →
+                      </Link>
+                    </div>
                   </div>
                 </div>
               )}
@@ -509,7 +690,7 @@ export default function PreRegistrationCenter({
                     <strong>Değiştirilemez Orijinal Form Kaydı</strong>
                     <span>
                       Bu bölüm başvurunun gönderildiği andaki elektronik
-                      kaydıdır. Sonradan yapılan düzenlemeler bu kaydı
+                      kayıttır. Sonradan yapılan düzenlemeler bu kaydı
                       değiştirmez.
                     </span>
                   </div>
@@ -543,10 +724,18 @@ export default function PreRegistrationCenter({
                     </Info>
                   </div>
 
+                  <HealthNotice
+                    declaration={selectedConsent?.health_declaration}
+                    note={selectedConsent?.health_note}
+                    original
+                  />
+
                   <div className="preTechnicalBox">
                     <div>
                       <span>IP Adresi</span>
-                      <strong>{selectedConsent?.ip_address || "Alınamadı"}</strong>
+                      <strong>
+                        {selectedConsent?.ip_address || "Alınamadı"}
+                      </strong>
                     </div>
                     <div>
                       <span>Cihaz / Tarayıcı</span>
@@ -555,8 +744,12 @@ export default function PreRegistrationCenter({
                       </strong>
                     </div>
                     <details>
-                      <summary>Ham User-Agent bilgisini göster</summary>
-                      <code>{selectedConsent?.user_agent || "Alınamadı"}</code>
+                      <summary>
+                        Ham User-Agent bilgisini göster
+                      </summary>
+                      <code>
+                        {selectedConsent?.user_agent || "Alınamadı"}
+                      </code>
                     </details>
                   </div>
 
@@ -567,12 +760,15 @@ export default function PreRegistrationCenter({
               {detailTab === "edit" && (
                 <div className="preDetailBody">
                   <div className="preEditWarning">
-                    Buradaki değişiklikler öğrencinin güncel ön kayıt bilgilerini
-                    günceller. Orijinal form kaydı değişmez. Her değişiklik
-                    işlem geçmişine otomatik kaydedilir.
+                    Buradaki değişiklikler öğrencinin güncel ön kayıt
+                    bilgilerini günceller. Orijinal form kaydı değişmez.
+                    Her değişiklik işlem geçmişine otomatik kaydedilir.
                   </div>
 
-                  <form action={updatePreRegistration} className="preEditForm">
+                  <form
+                    action={updatePreRegistration}
+                    className="preEditForm"
+                  >
                     <input
                       type="hidden"
                       name="student_id"
@@ -588,6 +784,7 @@ export default function PreRegistrationCenter({
                           required
                         />
                       </label>
+
                       <label>
                         <span>Soyad</span>
                         <input
@@ -596,6 +793,7 @@ export default function PreRegistrationCenter({
                           required
                         />
                       </label>
+
                       <label>
                         <span>Doğum Tarihi</span>
                         <input
@@ -604,6 +802,7 @@ export default function PreRegistrationCenter({
                           defaultValue={selected.birth_date || ""}
                         />
                       </label>
+
                       <label>
                         <span>Telefon</span>
                         <input
@@ -611,6 +810,7 @@ export default function PreRegistrationCenter({
                           defaultValue={selected.phone || ""}
                         />
                       </label>
+
                       <label>
                         <span>Veli Adı Soyadı</span>
                         <input
@@ -618,6 +818,7 @@ export default function PreRegistrationCenter({
                           defaultValue={selected.guardian_name || ""}
                         />
                       </label>
+
                       <label>
                         <span>Veli Telefonu</span>
                         <input
@@ -630,7 +831,13 @@ export default function PreRegistrationCenter({
                         <span>Şube</span>
                         <select
                           name="branch_id"
-                          defaultValue={selected.branch_id || ""}
+                          value={editBranchId}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setEditBranchId(value);
+                            setEditGroupId("");
+                            setEditPackageId("");
+                          }}
                         >
                           <option value="">Şube seçilmedi</option>
                           {branches.map((branch) => (
@@ -645,33 +852,53 @@ export default function PreRegistrationCenter({
                         <span>Grup</span>
                         <select
                           name="preferred_group_id"
-                          defaultValue={selected.preferred_group_id || ""}
+                          value={editGroupId}
+                          onChange={(event) => {
+                            setEditGroupId(event.target.value);
+                            setEditPackageId("");
+                          }}
                         >
                           <option value="">Grup seçilmedi</option>
-                          {groups.map((group) => (
+                          {editGroups.map((group) => (
                             <option key={group.id} value={group.id}>
                               {group.name}
+                              {group.is_active === false ? " · Pasif" : ""}
                             </option>
                           ))}
                         </select>
+                        {editBranchId && !editGroups.length && (
+                          <small>
+                            Bu şubede seçilebilir grup bulunmuyor.
+                          </small>
+                        )}
                       </label>
 
                       <label>
                         <span>Paket</span>
                         <select
                           name="preferred_package_id"
-                          defaultValue={selected.preferred_package_id || ""}
+                          value={editPackageId}
+                          onChange={(event) =>
+                            setEditPackageId(event.target.value)
+                          }
                         >
                           <option value="">Paket seçilmedi</option>
-                          {packages.map((pack) => (
+                          {editPackages.map((pack) => (
                             <option key={pack.id} value={pack.id}>
                               {pack.name}
                               {pack.lesson_count
                                 ? ` · ${pack.lesson_count} ders`
                                 : ""}
+                              {pack.is_active === false ? " · Pasif" : ""}
                             </option>
                           ))}
                         </select>
+                        {selectedEditGroup?.course_type && (
+                          <small>
+                            Paketler “{selectedEditGroup.course_type}” kurs
+                            türüne göre filtreleniyor.
+                          </small>
+                        )}
                       </label>
 
                       <label>
@@ -715,7 +942,9 @@ export default function PreRegistrationCenter({
                       >
                         Vazgeç
                       </button>
-                      <button type="submit">Değişiklikleri Kaydet</button>
+                      <SubmitButton>
+                        Değişiklikleri Kaydet
+                      </SubmitButton>
                     </div>
                   </form>
                 </div>
@@ -735,7 +964,9 @@ export default function PreRegistrationCenter({
                             <strong>
                               {activity.title || "İşlem kaydı"}
                             </strong>
-                            <span>{fmtDate(activity.performed_at)}</span>
+                            <span>
+                              {fmtDate(activity.performed_at)}
+                            </span>
                           </div>
                           <p>
                             {activity.description ||
@@ -788,6 +1019,49 @@ function Info({
   );
 }
 
+function HealthNotice({
+  declaration,
+  note,
+  original = false,
+}: {
+  declaration: boolean | null | undefined;
+  note: string | null | undefined;
+  original?: boolean;
+}) {
+  const clean = note?.trim();
+  const hasNote = Boolean(clean);
+
+  return (
+    <div
+      className={`preHealthNotice ${hasNote ? "attention" : "clear"}`}
+      role={hasNote ? "alert" : undefined}
+    >
+      <div className="preHealthIcon">
+        {hasNote ? "!" : "✓"}
+      </div>
+      <div>
+        <span>
+          {original
+            ? "ORİJİNAL SAĞLIK / ANTRENÖR BİLGİLENDİRMESİ"
+            : "SAĞLIK / ANTRENÖR BİLGİLENDİRMESİ"}
+        </span>
+        <strong>
+          {hasNote
+            ? "Başvuruda sağlıkla ilgili açıklama var"
+            : "Ek sağlık açıklaması bulunmuyor"}
+        </strong>
+        <p>
+          {hasNote
+            ? clean
+            : declaration
+            ? "Sağlık beyanı onaylandı; ayrıca bir sağlık notu yazılmadı."
+            : "Sağlıkla ilgili ek açıklama bildirilmedi."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SnapshotView({
   snapshot,
 }: {
@@ -809,13 +1083,21 @@ function SnapshotView({
           {snapshot.student?.first_name || "—"}{" "}
           {snapshot.student?.last_name || ""}
         </Info>
-        <Info label="Telefon">{snapshot.student?.phone || "—"}</Info>
+        <Info label="Telefon">
+          {snapshot.student?.phone || "—"}
+        </Info>
         <Info label="Veli">
           {snapshot.guardian?.full_name || "Yetişkin kayıt"}
         </Info>
-        <Info label="Şube">{snapshot.course?.branch_name || "—"}</Info>
-        <Info label="Grup">{snapshot.course?.group_name || "—"}</Info>
-        <Info label="Paket">{snapshot.course?.package_name || "—"}</Info>
+        <Info label="Şube">
+          {snapshot.course?.branch_name || "—"}
+        </Info>
+        <Info label="Grup">
+          {snapshot.course?.group_name || "—"}
+        </Info>
+        <Info label="Paket">
+          {snapshot.course?.package_name || "—"}
+        </Info>
         <Info label="Tercih Günleri">
           {snapshot.course?.preferred_days || "—"}
         </Info>
@@ -829,6 +1111,7 @@ function SnapshotView({
           {contactLabel(snapshot.contact_request)}
         </Info>
       </div>
+
       <div className="preNoteBox">
         <span>İlk Gönderilen Not</span>
         <p>{snapshot.note || "Not bulunmuyor."}</p>
@@ -842,7 +1125,6 @@ function ChangeDetails({ value }: { value: unknown }) {
 
   const record = value as Record<string, any>;
   const changes = record.changes;
-
   if (!changes || typeof changes !== "object") return null;
 
   const labels: Record<string, string> = {
@@ -889,6 +1171,7 @@ function FormArchive({
   packageMap: Map<string, string>;
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
   const studentMap = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
     [students]
@@ -901,8 +1184,8 @@ function FormArchive({
           <p>ELEKTRONİK KAYIT ARŞİVİ</p>
           <h2>Ön Kayıt Form Arşivi</h2>
           <span>
-            Formun ilk gönderildiği an, onaylar, IP ve cihaz bilgisi burada
-            değiştirilemez kayıt olarak saklanır.
+            Formun ilk gönderildiği an, sağlık notu, onaylar, IP ve cihaz
+            bilgisi burada değiştirilemez kayıt olarak saklanır.
           </span>
         </div>
       </div>
@@ -911,16 +1194,21 @@ function FormArchive({
         {consents.map((consent, index) => {
           const student = studentMap.get(consent.student_id);
           const snapshot = getSnapshot(consent);
-          const name =
-            student
-              ? `${student.first_name} ${student.last_name}`
-              : `${snapshot?.student?.first_name || "Başvuru"} ${
-                  snapshot?.student?.last_name || ""
-                }`;
+
+          const name = student
+            ? `${student.first_name} ${student.last_name}`
+            : `${snapshot?.student?.first_name || "Başvuru"} ${
+                snapshot?.student?.last_name || ""
+              }`;
+
           const isOpen = openIndex === index;
+          const hasHealthNote = Boolean(consent.health_note?.trim());
 
           return (
-            <article className="preArchiveCard" key={`${consent.student_id}-${index}`}>
+            <article
+              className={`preArchiveCard ${isOpen ? "open" : ""}`}
+              key={`${consent.student_id}-${index}`}
+            >
               <button
                 type="button"
                 className="preArchiveCardButton"
@@ -933,11 +1221,19 @@ function FormArchive({
                   <h3>{name}</h3>
                   <p>{fmtDate(consent.accepted_at)}</p>
                 </div>
+
                 <div className="preArchiveBadges">
+                  {hasHealthNote && (
+                    <span className="health">Sağlık Notu !</span>
+                  )}
                   <span className={consent.rules_accepted ? "ok" : "no"}>
                     Kurallar {consent.rules_accepted ? "✓" : "—"}
                   </span>
-                  <span className={consent.whatsapp_permission ? "ok" : "no"}>
+                  <span
+                    className={
+                      consent.whatsapp_permission ? "ok" : "no"
+                    }
+                  >
                     WhatsApp {consent.whatsapp_permission ? "✓" : "—"}
                   </span>
                   <b>{isOpen ? "Kapat ↑" : "Formu Gör ↓"}</b>
@@ -973,6 +1269,12 @@ function FormArchive({
                     </Info>
                   </div>
 
+                  <HealthNotice
+                    declaration={consent.health_declaration}
+                    note={consent.health_note}
+                    original
+                  />
+
                   <SnapshotView snapshot={snapshot} />
 
                   {student && (
@@ -981,7 +1283,6 @@ function FormArchive({
                         type="button"
                         className="secondaryPreAction"
                         onClick={() => {
-                          setOpenIndex(null);
                           window.location.href = `/on-kayitlar?student=${encodeURIComponent(
                             student.id
                           )}`;
@@ -989,6 +1290,7 @@ function FormArchive({
                       >
                         Güncel Ön Kaydı Aç
                       </button>
+
                       <Link
                         className="primaryPreAction"
                         href={`/kayit-tamamlama/${student.id}`}
