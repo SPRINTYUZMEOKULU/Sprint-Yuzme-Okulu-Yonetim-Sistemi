@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<{
   student?: string;
   updated?: string;
+  status?: string;
 }>;
 
 type PreStudent = {
@@ -109,7 +110,7 @@ export default async function PreRegistrationsPage({
 
     supabase
       .from("course_packages")
-      .select("id,name,lesson_count,price,is_active")
+      .select("id,name,lesson_count,price,is_active,course_type")
       .eq("organization_id", profile.organization_id)
       .order("name"),
 
@@ -141,6 +142,11 @@ export default async function PreRegistrationsPage({
     (item) => item.created_at?.slice(0, 10) === today
   ).length;
 
+  const healthNoteCount = list.filter((student) => {
+    const consent = consentList.find((item) => item.student_id === student.id);
+    return Boolean(consent?.health_note?.trim());
+  }).length;
+
   const host = (await headers()).get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
   const formUrl = `${protocol}://${host}/on-kayit`;
@@ -152,16 +158,16 @@ export default async function PreRegistrationsPage({
           <p>SPRİNTOS · KAYIT OPERASYONU</p>
           <h1>Ön Kayıt Merkezi</h1>
           <span>
-            Başvuruyu görüntüleyin, gerektiğinde düzenleyin, tüm değişiklikleri
-            işlem geçmişinde izleyin ve son kontrolden sonra kayda aktarın.
+            Başvuruları inceleyin, sağlık notlarını görün, bilgileri güncelleyin
+            ve son kontrolden sonra kesin kayda aktarın.
           </span>
         </div>
 
-        <div className="operationActions">
-          <Link href="/">Dashboard</Link>
+        <div className="operationActions preTopActions">
+          <Link href="/">Ana Sayfa</Link>
           <Link href="/gruplar">Grupları Yönet</Link>
-          <Link href="/on-kayit" target="_blank">
-            Formu Aç
+          <Link href="/on-kayit" target="_blank" rel="noreferrer">
+            Formu Aç ↗
           </Link>
           <Link href="/ayarlar/on-kayit-formu">Form Ayarları</Link>
           <CopyLinkButton url={formUrl} />
@@ -182,14 +188,31 @@ export default async function PreRegistrationsPage({
           <strong>{consentList.length}</strong>
         </article>
         <article>
-          <span>Form Durumu</span>
-          <strong style={{ fontSize: 16, color: "#16875b" }}>Aktif</strong>
+          <span>Sağlık Notu</span>
+          <strong className={healthNoteCount ? "preStatAttention" : "preStatOk"}>
+            {healthNoteCount}
+          </strong>
         </article>
       </section>
 
       {params.updated === "1" && (
         <div className="preRegistrationFlash" role="status">
-          ✓ Ön kayıt bilgileri güncellendi ve işlem geçmişine kaydedildi.
+          <strong>✓ Değişiklikler kaydedildi.</strong>
+          <span>Ön kayıt güncellendi ve işlem geçmişine eklendi.</span>
+        </div>
+      )}
+
+      {params.status === "passive" && (
+        <div className="preRegistrationFlash warning" role="status">
+          <strong>Ön kayıt pasife alındı.</strong>
+          <span>Kayıt ve elektronik form geçmişi korunuyor.</span>
+        </div>
+      )}
+
+      {params.status === "archived" && (
+        <div className="preRegistrationFlash danger" role="status">
+          <strong>Ön kayıt listeden silindi.</strong>
+          <span>Denetim ve form kayıtları güvenlik amacıyla korunuyor.</span>
         </div>
       )}
 
