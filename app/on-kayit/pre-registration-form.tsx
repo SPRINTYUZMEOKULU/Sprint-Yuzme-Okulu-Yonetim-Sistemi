@@ -7,10 +7,6 @@ import {
   useState,
 } from "react";
 
-/* =========================================================
-   TYPES
-   ========================================================= */
-
 type Branch = {
   id: string;
   name: string;
@@ -48,72 +44,17 @@ type Level = {
   sort_order: number;
 };
 
-type FieldOption = {
-  value: string;
-  label: string;
-};
-
-type FormField = {
-  id: string;
-  field_key: string;
-  section_key: string;
-  label: string;
-  field_type:
-    | "text"
-    | "textarea"
-    | "number"
-    | "date"
-    | "phone"
-    | "select"
-    | "radio"
-    | "checkbox"
-    | "multiselect"
-    | "info";
-
-  placeholder: string | null;
-  help_text: string | null;
-
-  options:
-    | FieldOption[]
-    | null;
-
-  is_visible: boolean;
-  is_required: boolean;
-  is_system: boolean;
-  is_deletable: boolean;
-
-  applies_to:
-    | "all"
-    | "child"
-    | "adult";
-
-  sort_order: number;
-};
-
 type Options = {
   branches: Branch[];
   groups: Group[];
   schedules: Schedule[];
   packages: Package[];
   levels: Level[];
-
-  formFields: FormField[];
-  visibleFormFields: FormField[];
 };
 
 type RegistrationFor =
   | "child"
   | "adult";
-
-type SubmitStatus =
-  | "idle"
-  | "sending"
-  | "success"
-  | "error";
-
-/* =========================================================
-   SABİTLER
-   ========================================================= */
 
 const days = [
   "Pazar",
@@ -125,333 +66,28 @@ const days = [
   "Cumartesi",
 ];
 
-const fallbackFieldSettings: Record<
-  string,
-  Partial<FormField>
-> = {
-  registration_for: {
-    label: "Kimin İçin Kayıt?",
-    is_visible: true,
-    is_required: true,
-  },
-
-  first_name: {
-    label:
-      "Öğrenci / Katılımcı Adı",
-    is_visible: true,
-    is_required: true,
-  },
-
-  last_name: {
-    label: "Soyadı",
-    is_visible: true,
-    is_required: true,
-  },
-
-  birth_date: {
-    label: "Doğum Tarihi",
-    is_visible: true,
-    is_required: true,
-  },
-
-  guardian_name: {
-    label: "Veli Adı Soyadı",
-    is_visible: true,
-    is_required: true,
-  },
-
-  phone: {
-    label: "Telefon",
-    is_visible: true,
-    is_required: true,
-  },
-
-  course_type: {
-    label: "Kurs Türü",
-    is_visible: true,
-    is_required: true,
-  },
-
-  branch: {
-    label: "Şube",
-    is_visible: true,
-    is_required: true,
-  },
-
-  group: {
-    label:
-      "Aktif Grup, Gün ve Saat",
-    is_visible: true,
-    is_required: true,
-  },
-
-  swimming_level: {
-    label: "Yüzme Seviyesi",
-    is_visible: true,
-    is_required: false,
-  },
-
-  package: {
-    label: "Paket Tercihi",
-    is_visible: true,
-    is_required: true,
-  },
-
-  contact_request: {
-    label: "İletişim Talebiniz",
-    is_visible: true,
-    is_required: true,
-  },
-
-  general_note: {
-    label:
-      "Açıklama / Özel Durum",
-    is_visible: true,
-    is_required: false,
-  },
-
-  health_declaration: {
-    label: "Sağlık Beyanı",
-    is_visible: true,
-    is_required: true,
-  },
-
-  health_note: {
-    label:
-      "Bildirilmesi Gereken Sağlık Bilgisi",
-    is_visible: true,
-    is_required: false,
-  },
-
-  rules_accepted: {
-    label:
-      "Sprint Yüzme Okulu Kuralları",
-    is_visible: true,
-    is_required: true,
-  },
-
-  whatsapp_permission: {
-    label:
-      "WhatsApp Bilgilendirme İzni",
-    is_visible: true,
-    is_required: true,
-  },
-};
-
-/* =========================================================
-   YARDIMCI FONKSİYONLAR
-   ========================================================= */
-
-function RequiredMark({
-  required,
-}: {
-  required: boolean;
-}) {
-  if (!required) {
-    return null;
-  }
-
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        color: "#e53935",
-        marginLeft: 4,
-        fontWeight: 900,
-      }}
-    >
-      *
-    </span>
-  );
-}
-
-function formatBirthDateInput(
-  value: string
-) {
-  const digits =
-    value
-      .replace(/\D/g, "")
-      .slice(0, 8);
-
-  if (digits.length <= 2) {
-    return digits;
-  }
-
-  if (digits.length <= 4) {
-    return `${digits.slice(
-      0,
-      2
-    )}/${digits.slice(2)}`;
-  }
-
-  return `${digits.slice(
-    0,
-    2
-  )}/${digits.slice(
-    2,
-    4
-  )}/${digits.slice(4)}`;
-}
-
-function normalizeBirthDate(
-  value: string
-) {
-  if (!value.trim()) {
-    return null;
-  }
-
-  const match =
-    value.match(
-      /^(\d{2})\/(\d{2})\/(\d{4})$/
-    );
-
-  if (!match) {
-    return null;
-  }
-
-  const day =
-    Number(match[1]);
-
-  const month =
-    Number(match[2]);
-
-  const year =
-    Number(match[3]);
-
-  if (
-    day < 1 ||
-    month < 1 ||
-    month > 12 ||
-    year < 1900
-  ) {
-    return null;
-  }
-
-  const test =
-    new Date(
-      year,
-      month - 1,
-      day
-    );
-
-  if (
-    test.getFullYear() !== year ||
-    test.getMonth() !==
-      month - 1 ||
-    test.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return `${String(
-    year
-  ).padStart(
-    4,
-    "0"
-  )}-${String(
-    month
-  ).padStart(
-    2,
-    "0"
-  )}-${String(
-    day
-  ).padStart(
-    2,
-    "0"
-  )}`;
-}
-
-function safeOptions(
-  value: unknown
-): FieldOption[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (
-        typeof item ===
-        "string"
-      ) {
-        return {
-          value: item,
-          label: item,
-        };
-      }
-
-      if (
-        item &&
-        typeof item ===
-          "object"
-      ) {
-        const row =
-          item as Record<
-            string,
-            unknown
-          >;
-
-        return {
-          value: String(
-            row.value ?? ""
-          ),
-          label: String(
-            row.label ??
-              row.value ??
-              ""
-          ),
-        };
-      }
-
-      return {
-        value: "",
-        label: "",
-      };
-    })
-    .filter(
-      (item) =>
-        item.value &&
-        item.label
-    );
-}
-
-/* =========================================================
-   COMPONENT
-   ========================================================= */
-
 export default function PreRegistrationForm() {
-  const [
-    status,
-    setStatus,
-  ] =
-    useState<SubmitStatus>(
-      "idle"
-    );
+  const [status, setStatus] =
+    useState<
+      "idle" |
+      "sending" |
+      "success" |
+      "error"
+    >("idle");
 
-  const [
-    message,
-    setMessage,
-  ] =
+  const [message, setMessage] =
     useState("");
 
-  const [
-    options,
-    setOptions,
-  ] =
+  const [options, setOptions] =
     useState<Options>({
       branches: [],
       groups: [],
       schedules: [],
       packages: [],
       levels: [],
-      formFields: [],
-      visibleFormFields: [],
     });
 
-  const [
-    loading,
-    setLoading,
-  ] =
+  const [loading, setLoading] =
     useState(true);
 
   const [
@@ -462,39 +98,14 @@ export default function PreRegistrationForm() {
       "child"
     );
 
-  const [
-    courseType,
-    setCourseType,
-  ] =
+  const [courseType, setCourseType] =
     useState("");
 
-  const [
-    branchId,
-    setBranchId,
-  ] =
+  const [branchId, setBranchId] =
     useState("");
 
-  const [
-    groupId,
-    setGroupId,
-  ] =
+  const [groupId, setGroupId] =
     useState("");
-
-  const [
-    packageId,
-    setPackageId,
-  ] =
-    useState("");
-
-  const [
-    birthDateInput,
-    setBirthDateInput,
-  ] =
-    useState("");
-
-  /* =======================================================
-     API YÜKLE
-     ======================================================= */
 
   useEffect(() => {
     fetch(
@@ -503,255 +114,40 @@ export default function PreRegistrationForm() {
         cache: "no-store",
       }
     )
-      .then(async (
-        response
-      ) => {
-        const data =
-          await response.json();
-
-        if (
-          !response.ok ||
-          data.error
-        ) {
+      .then((response) =>
+        response.json()
+      )
+      .then((data) => {
+        if (data.error) {
           throw new Error(
-            data.error ||
-              "Form seçenekleri yüklenemedi."
+            data.error
           );
         }
 
-        return data;
+        setOptions(data);
       })
-      .then((data) => {
-        setOptions({
-          branches:
-            data.branches ||
-            [],
-
-          groups:
-            data.groups ||
-            [],
-
-          schedules:
-            data.schedules ||
-            [],
-
-          packages:
-            data.packages ||
-            [],
-
-          levels:
-            data.levels ||
-            [],
-
-          formFields:
-            data.formFields ||
-            [],
-
-          visibleFormFields:
-            data.visibleFormFields ||
-            [],
-        });
-      })
-      .catch((error) => {
-        console.error(
-          error
-        );
-
-        setStatus("error");
-
+      .catch(() => {
         setMessage(
-          "Ön kayıt formu seçenekleri yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin."
+          "Grup ve saat seçenekleri yüklenemedi. Lütfen daha sonra tekrar deneyin."
         );
       })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  /* =======================================================
-     FIELD AYARLARI
-     ======================================================= */
-
-  function getField(
-    key: string
-  ): FormField | null {
-    const fromDatabase =
-      options.formFields.find(
-        (field) =>
-          field.field_key ===
-          key
+      .finally(() =>
+        setLoading(false)
       );
-
-    if (fromDatabase) {
-      return {
-        ...fromDatabase,
-        options:
-          safeOptions(
-            fromDatabase.options
-          ),
-      };
-    }
-
-    const fallback =
-      fallbackFieldSettings[
-        key
-      ];
-
-    if (!fallback) {
-      return null;
-    }
-
-    return {
-      id:
-        `fallback-${key}`,
-
-      field_key:
-        key,
-
-      section_key:
-        "general",
-
-      label:
-        fallback.label ||
-        key,
-
-      field_type:
-        "text",
-
-      placeholder:
-        null,
-
-      help_text:
-        null,
-
-      options:
-        [],
-
-      is_visible:
-        fallback.is_visible !==
-        false,
-
-      is_required:
-        fallback.is_required ===
-        true,
-
-      is_system:
-        true,
-
-      is_deletable:
-        false,
-
-      applies_to:
-        "all",
-
-      sort_order:
-        999,
-    };
-  }
-
-  function appliesToCurrent(
-    field:
-      | FormField
-      | null
-  ) {
-    if (!field) {
-      return false;
-    }
-
-    if (
-      field.applies_to ===
-      "all"
-    ) {
-      return true;
-    }
-
-    return (
-      field.applies_to ===
-      registrationFor
-    );
-  }
-
-  function fieldVisible(
-    key: string
-  ) {
-    const field =
-      getField(key);
-
-    if (!field) {
-      return false;
-    }
-
-    return (
-      field.is_visible &&
-      appliesToCurrent(
-        field
-      )
-    );
-  }
-
-  function fieldRequired(
-    key: string
-  ) {
-    const field =
-      getField(key);
-
-    if (
-      !field ||
-      !field.is_visible ||
-      !appliesToCurrent(
-        field
-      )
-    ) {
-      return false;
-    }
-
-    return (
-      field.is_required ===
-      true
-    );
-  }
-
-  function fieldLabel(
-    key: string,
-    fallback: string
-  ) {
-    return (
-      getField(key)?.label ||
-      fallback
-    );
-  }
-
-  function fieldPlaceholder(
-    key: string,
-    fallback = ""
-  ) {
-    return (
-      getField(key)
-        ?.placeholder ||
-      fallback
-    );
-  }
-
-  /* =======================================================
-     KURS FİLTRELERİ
-     ======================================================= */
+  }, []);
 
   const courseTypes =
     useMemo(
       () =>
         Array.from(
           new Set(
-            options.groups
-              .map(
-                (group) =>
-                  group.course_type
-              )
-              .filter(Boolean)
+            options.groups.map(
+              (group) =>
+                group.course_type
+            )
           )
         ),
-      [
-        options.groups,
-      ]
+      [options.groups]
     );
 
   const availableBranches =
@@ -769,8 +165,7 @@ export default function PreRegistrationForm() {
             )
         ),
       [
-        options.branches,
-        options.groups,
+        options,
         courseType,
       ]
     );
@@ -788,68 +183,16 @@ export default function PreRegistrationForm() {
                 branchId)
         ),
       [
-        options.groups,
+        options,
         courseType,
         branchId,
-      ]
-    );
-
-  /*
-   * Paket tablosunda henüz course_type bağlantısı
-   * olmadığı için isim üzerinden güvenli bir
-   * ilk filtre uyguluyoruz.
-   *
-   * "Yetişkin" yazan paket çocukta,
-   * "Çocuk" yazan paket yetişkinde gösterilmez.
-   *
-   * Daha sonra paket tablosuna course_type
-   * kolonu bağlayabiliriz.
-   */
-
-  const availablePackages =
-    useMemo(
-      () =>
-        options.packages.filter(
-          (item) => {
-            const name =
-              item.name.toLocaleLowerCase(
-                "tr-TR"
-              );
-
-            if (
-              registrationFor ===
-              "child" &&
-              name.includes(
-                "yetişkin"
-              )
-            ) {
-              return false;
-            }
-
-            if (
-              registrationFor ===
-              "adult" &&
-              name.includes(
-                "çocuk"
-              )
-            ) {
-              return false;
-            }
-
-            return true;
-          }
-        ),
-      [
-        options.packages,
-        registrationFor,
       ]
     );
 
   const selectedGroup =
     options.groups.find(
       (group) =>
-        group.id ===
-        groupId
+        group.id === groupId
     );
 
   const selectedSchedules =
@@ -890,64 +233,19 @@ export default function PreRegistrationForm() {
         )
       ).join(" – ");
 
-    const timeText =
-      schedules.length
-        ? Array.from(
-            new Set(
-              schedules.map(
-                (schedule) =>
-                  `${schedule.start_time.slice(
-                    0,
-                    5
-                  )}–${schedule.end_time.slice(
-                    0,
-                    5
-                  )}`
-              )
-            )
-          ).join(" / ")
+    const time =
+      schedules[0]
+        ? `${schedules[0].start_time.slice(
+            0,
+            5
+          )}–${schedules[0].end_time.slice(
+            0,
+            5
+          )}`
         : "Saat tanımlanmadı";
 
-    return `${group.name} · ${
-      dayText ||
-      "Gün tanımlanmadı"
-    } · ${timeText}`;
+    return `${group.name} · ${dayText} · ${time}`;
   }
-
-  /* =======================================================
-     ÖZEL ALANLAR
-     ======================================================= */
-
-  const customFields =
-    useMemo(
-      () =>
-        options.formFields
-          .filter(
-            (field) =>
-              !field.is_system &&
-              field.is_visible
-          )
-          .filter(
-            (field) =>
-              field.applies_to ===
-                "all" ||
-              field.applies_to ===
-                registrationFor
-          )
-          .sort(
-            (a, b) =>
-              a.sort_order -
-              b.sort_order
-          ),
-      [
-        options.formFields,
-        registrationFor,
-      ]
-    );
-
-  /* =======================================================
-     SUBMIT
-     ======================================================= */
 
   async function handleSubmit(
     event:
@@ -955,268 +253,25 @@ export default function PreRegistrationForm() {
   ) {
     event.preventDefault();
 
-    setStatus("idle");
+    setStatus("sending");
     setMessage("");
 
     const formElement =
       event.currentTarget;
 
-    const formData =
-      new FormData(
-        formElement
-      );
-
-    /*
-     * DOĞUM TARİHİ
-     */
-
-    if (
-      fieldVisible(
-        "birth_date"
-      )
-    ) {
-      if (
-        fieldRequired(
-          "birth_date"
-        ) &&
-        !birthDateInput.trim()
-      ) {
-        setStatus(
-          "error"
-        );
-
-        setMessage(
-          "Doğum tarihi zorunludur."
-        );
-
-        return;
-      }
-
-      if (
-        birthDateInput.trim()
-      ) {
-        const normalized =
-          normalizeBirthDate(
-            birthDateInput
-          );
-
-        if (!normalized) {
-          setStatus(
-            "error"
-          );
-
-          setMessage(
-            "Doğum tarihini GG/AA/YYYY formatında girin. Örnek: 15/08/2018"
-          );
-
-          return;
-        }
-
-        formData.set(
-          "birthDate",
-          normalized
-        );
-      }
-    }
-
-    /*
-     * KURS / GRUP
-     */
-
-    if (
-      fieldVisible(
-        "group"
-      ) &&
-      fieldRequired(
-        "group"
-      ) &&
-      !groupId
-    ) {
-      setStatus(
-        "error"
-      );
-
-      setMessage(
-        "Lütfen şube ve grup seçimini tamamlayın."
-      );
-
-      return;
-    }
-
-    /*
-     * PAKET
-     */
-
-    if (
-      fieldVisible(
-        "package"
-      ) &&
-      fieldRequired(
-        "package"
-      ) &&
-      !packageId
-    ) {
-      setStatus(
-        "error"
-      );
-
-      setMessage(
-        "Lütfen paket tercihini seçin."
-      );
-
-      return;
-    }
-
-    /*
-     * YETİŞKİN
-     */
-
-    if (
-      registrationFor ===
-      "adult"
-    ) {
-      const firstName =
-        String(
-          formData.get(
-            "firstName"
-          ) || ""
-        ).trim();
-
-      const lastName =
-        String(
-          formData.get(
-            "lastName"
-          ) || ""
-        ).trim();
-
-      formData.set(
-        "guardianName",
-        `${firstName} ${lastName}`.trim()
-      );
-    }
-
-    formData.set(
-      "registrationFor",
-      registrationFor
-    );
-
-    /*
-     * CUSTOM FIELD CEVAPLARI
-     *
-     * API'nin bir sonraki adımında
-     * registration_form_responses tablosuna
-     * bunları işleyeceğiz.
-     */
-
-    const customResponses:
-      Array<{
-        field_id: string;
-        field_key: string;
-        field_label: string;
-        value:
-          | string
-          | string[]
-          | boolean;
-      }> = [];
-
-    for (
-      const field of
-      customFields
-    ) {
-      const name =
-        `custom_${field.id}`;
-
-      if (
-        field.field_type ===
-        "multiselect"
-      ) {
-        const values =
-          formData
-            .getAll(name)
-            .map(String);
-
-        customResponses.push(
-          {
-            field_id:
-              field.id,
-
-            field_key:
-              field.field_key,
-
-            field_label:
-              field.label,
-
-            value:
-              values,
-          }
-        );
-      } else if (
-        field.field_type ===
-        "checkbox"
-      ) {
-        customResponses.push(
-          {
-            field_id:
-              field.id,
-
-            field_key:
-              field.field_key,
-
-            field_label:
-              field.label,
-
-            value:
-              formData.get(
-                name
-              ) === "true",
-          }
-        );
-      } else {
-        customResponses.push(
-          {
-            field_id:
-              field.id,
-
-            field_key:
-              field.field_key,
-
-            field_label:
-              field.label,
-
-            value:
-              String(
-                formData.get(
-                  name
-                ) || ""
-              ),
-          }
-        );
-      }
-    }
-
-    const payload:
-      Record<
-        string,
-        unknown
-      > =
+    const payload =
       Object.fromEntries(
-        formData.entries()
+        new FormData(
+          formElement
+        ).entries()
       );
-
-    payload.customResponses =
-      customResponses;
 
     try {
-      setStatus(
-        "sending"
-      );
-
       const response =
         await fetch(
           "/api/pre-registrations",
           {
-            method:
-              "POST",
+            method: "POST",
 
             headers: {
               "Content-Type":
@@ -1233,21 +288,17 @@ export default function PreRegistrationForm() {
       const result =
         await response.json();
 
-      if (
-        !response.ok
-      ) {
+      if (!response.ok) {
         throw new Error(
           result.error ||
-            "Ön kayıt oluşturulamadı."
+            "Kayıt oluşturulamadı."
         );
       }
 
-      setStatus(
-        "success"
-      );
+      setStatus("success");
 
       setMessage(
-        "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz başvurunuzu inceleyerek en kısa sürede sizinle iletişime geçecektir."
+        "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
       );
 
       formElement.reset();
@@ -1259,18 +310,8 @@ export default function PreRegistrationForm() {
       setCourseType("");
       setBranchId("");
       setGroupId("");
-      setPackageId("");
-      setBirthDateInput("");
-
-      window.scrollTo({
-        top: 0,
-        behavior:
-          "smooth",
-      });
     } catch (error) {
-      setStatus(
-        "error"
-      );
+      setStatus("error");
 
       setMessage(
         error instanceof Error
@@ -1280,441 +321,10 @@ export default function PreRegistrationForm() {
     }
   }
 
-  /* =======================================================
-     ÖZEL ALAN RENDER
-     ======================================================= */
-
-  function renderCustomField(
-    field: FormField
-  ) {
-    const name =
-      `custom_${field.id}`;
-
-    const fieldOptions =
-      safeOptions(
-        field.options
-      );
-
-    if (
-      field.field_type ===
-      "info"
-    ) {
-      return (
-        <div
-          key={
-            field.id
-          }
-          className="optionsLoading"
-        >
-          <strong>
-            {field.label}
-          </strong>
-
-          {field.help_text && (
-            <p
-              style={{
-                margin:
-                  "5px 0 0",
-              }}
-            >
-              {
-                field.help_text
-              }
-            </p>
-          )}
-        </div>
-      );
-    }
-
-    if (
-      field.field_type ===
-      "textarea"
-    ) {
-      return (
-        <label
-          key={
-            field.id
-          }
-          className="fullWidth"
-        >
-          <span>
-            {field.label}
-
-            <RequiredMark
-              required={
-                field.is_required
-              }
-            />
-          </span>
-
-          <textarea
-            name={
-              name
-            }
-            required={
-              field.is_required
-            }
-            rows={4}
-            placeholder={
-              field.placeholder ||
-              ""
-            }
-          />
-
-          {field.help_text && (
-            <small>
-              {
-                field.help_text
-              }
-            </small>
-          )}
-        </label>
-      );
-    }
-
-    if (
-      field.field_type ===
-      "select"
-    ) {
-      return (
-        <label
-          key={
-            field.id
-          }
-        >
-          <span>
-            {field.label}
-
-            <RequiredMark
-              required={
-                field.is_required
-              }
-            />
-          </span>
-
-          <select
-            name={
-              name
-            }
-            required={
-              field.is_required
-            }
-            defaultValue=""
-          >
-            <option
-              value=""
-              disabled={
-                field.is_required
-              }
-            >
-              Seçiniz
-            </option>
-
-            {fieldOptions.map(
-              (option) => (
-                <option
-                  key={
-                    option.value
-                  }
-                  value={
-                    option.value
-                  }
-                >
-                  {
-                    option.label
-                  }
-                </option>
-              )
-            )}
-          </select>
-
-          {field.help_text && (
-            <small>
-              {
-                field.help_text
-              }
-            </small>
-          )}
-        </label>
-      );
-    }
-
-    if (
-      field.field_type ===
-      "radio"
-    ) {
-      return (
-        <div
-          key={
-            field.id
-          }
-          className="fullWidth"
-        >
-          <label>
-            <span>
-              {field.label}
-
-              <RequiredMark
-                required={
-                  field.is_required
-                }
-              />
-            </span>
-          </label>
-
-          <div className="requestOptions">
-            {fieldOptions.map(
-              (
-                option,
-                index
-              ) => (
-                <label
-                  key={
-                    option.value
-                  }
-                >
-                  <input
-                    type="radio"
-                    name={
-                      name
-                    }
-                    value={
-                      option.value
-                    }
-                    required={
-                      field.is_required &&
-                      index ===
-                        0
-                    }
-                  />
-
-                  <span>
-                    {
-                      option.label
-                    }
-                  </span>
-                </label>
-              )
-            )}
-          </div>
-
-          {field.help_text && (
-            <small>
-              {
-                field.help_text
-              }
-            </small>
-          )}
-        </div>
-      );
-    }
-
-    if (
-      field.field_type ===
-      "checkbox"
-    ) {
-      return (
-        <label
-          key={
-            field.id
-          }
-          className="consent"
-        >
-          <input
-            type="checkbox"
-            name={
-              name
-            }
-            value="true"
-            required={
-              field.is_required
-            }
-          />
-
-          <span>
-            {field.label}
-
-            <RequiredMark
-              required={
-                field.is_required
-              }
-            />
-
-            {field.help_text && (
-              <>
-                <br />
-
-                <small>
-                  {
-                    field.help_text
-                  }
-                </small>
-              </>
-            )}
-          </span>
-        </label>
-      );
-    }
-
-    if (
-      field.field_type ===
-      "multiselect"
-    ) {
-      return (
-        <div
-          key={
-            field.id
-          }
-          className="fullWidth"
-        >
-          <label>
-            <span>
-              {field.label}
-
-              <RequiredMark
-                required={
-                  field.is_required
-                }
-              />
-            </span>
-          </label>
-
-          <div className="requestOptions">
-            {fieldOptions.map(
-              (option) => (
-                <label
-                  key={
-                    option.value
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    name={
-                      name
-                    }
-                    value={
-                      option.value
-                    }
-                  />
-
-                  <span>
-                    {
-                      option.label
-                    }
-                  </span>
-                </label>
-              )
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    const inputType =
-      field.field_type ===
-      "number"
-        ? "number"
-        : field.field_type ===
-            "phone"
-          ? "tel"
-          : field.field_type ===
-              "date"
-            ? "date"
-            : "text";
-
-    return (
-      <label
-        key={
-          field.id
-        }
-      >
-        <span>
-          {field.label}
-
-          <RequiredMark
-            required={
-              field.is_required
-            }
-          />
-        </span>
-
-        <input
-          name={
-            name
-          }
-          type={
-            inputType
-          }
-          required={
-            field.is_required
-          }
-          placeholder={
-            field.placeholder ||
-            ""
-          }
-        />
-
-        {field.help_text && (
-          <small>
-            {
-              field.help_text
-            }
-          </small>
-        )}
-      </label>
-    );
-  }
-
-  /* =======================================================
-     SYSTEM FIELDS
-     ======================================================= */
-
-  const registrationForField =
-    getField(
-      "registration_for"
-    );
-
-  const contactField =
-    getField(
-      "contact_request"
-    );
-
-  const contactOptions =
-    safeOptions(
-      contactField?.options
-    );
-
-  const finalContactOptions =
-    contactOptions.length
-      ? contactOptions
-      : [
-          {
-            value:
-              "call_me",
-
-            label:
-              "Online ön kaydımı oluşturdum, detaylı bilgi için aranmak istiyorum.",
-          },
-
-          {
-            value:
-              "ready_to_start",
-
-            label:
-              "Kaydım onaylandıktan sonra kursa başlayacağım.",
-          },
-        ];
-
-  /* =======================================================
-     RETURN
-     ======================================================= */
-
   return (
     <form
       className="registrationForm"
-      onSubmit={
-        handleSubmit
-      }
+      onSubmit={handleSubmit}
     >
       <input
         className="hiddenField"
@@ -1724,297 +334,156 @@ export default function PreRegistrationForm() {
         autoComplete="off"
       />
 
-      {/* ===================================================
-          1 · KATILIMCI
-          =================================================== */}
-
       <section className="formSection">
         <div className="formSectionTitle">
           <b>1</b>
 
           <div>
             <strong>
-              Öğrenci /
-              Katılımcı
-              Bilgileri
+              Öğrenci / Katılımcı
+              bilgileri
             </strong>
 
             <span>
-              Ön kayıt için
-              temel bilgileri
-              doldurun
+              Kimin için kayıt
+              oluşturduğunuzu seçin
             </span>
           </div>
         </div>
 
-        {registrationForField?.is_visible !==
-          false && (
-          <div className="registrationType">
-            <label
-              className={
+        <div className="registrationType">
+          <label
+            className={
+              registrationFor ===
+              "child"
+                ? "selected"
+                : ""
+            }
+          >
+            <input
+              type="radio"
+              name="registrationFor"
+              value="child"
+              checked={
                 registrationFor ===
                 "child"
-                  ? "selected"
-                  : ""
               }
-            >
-              <input
-                type="radio"
-                name="registrationFor"
-                value="child"
-                checked={
-                  registrationFor ===
+              onChange={() =>
+                setRegistrationFor(
                   "child"
-                }
-                onChange={() => {
-                  setRegistrationFor(
-                    "child"
-                  );
+                )
+              }
+            />
 
-                  setPackageId(
-                    ""
-                  );
-                }}
-              />
+            <strong>
+              Çocuğum için
+            </strong>
 
-              <strong>
-                Çocuğum İçin
-              </strong>
+            <span>
+              Veli olarak çocuğunuz
+              için ön kayıt
+              oluşturun.
+            </span>
+          </label>
 
-              <span>
-                Veli olarak
-                çocuğunuz için
-                ön kayıt
-                oluşturun.
-              </span>
-            </label>
-
-            <label
-              className={
+          <label
+            className={
+              registrationFor ===
+              "adult"
+                ? "selected"
+                : ""
+            }
+          >
+            <input
+              type="radio"
+              name="registrationFor"
+              value="adult"
+              checked={
                 registrationFor ===
                 "adult"
-                  ? "selected"
-                  : ""
               }
-            >
-              <input
-                type="radio"
-                name="registrationFor"
-                value="adult"
-                checked={
-                  registrationFor ===
+              onChange={() =>
+                setRegistrationFor(
                   "adult"
-                }
-                onChange={() => {
-                  setRegistrationFor(
-                    "adult"
-                  );
+                )
+              }
+            />
 
-                  setPackageId(
-                    ""
-                  );
-                }}
-              />
+            <strong>
+              Kendim için /
+              Yetişkin
+            </strong>
 
-              <strong>
-                Kendim İçin /
-                Yetişkin
-              </strong>
-
-              <span>
-                18 yaş ve üzeri
-                katılımcılar
-                için.
-              </span>
-            </label>
-          </div>
-        )}
+            <span>
+              18 yaş ve üzeri
+              katılımcılar için.
+            </span>
+          </label>
+        </div>
 
         <div className="formGrid">
-          {fieldVisible(
-            "first_name"
-          ) && (
-            <label>
-              <span>
-                {fieldLabel(
-                  "first_name",
-                  "Öğrenci / Katılımcı Adı"
-                )}
+          <label>
+            Öğrenci / Katılımcı adı
 
-                <RequiredMark
-                  required={fieldRequired(
-                    "first_name"
-                  )}
-                />
-              </span>
+            <input
+              name="firstName"
+              required
+              maxLength={60}
+              placeholder="Adı"
+            />
+          </label>
+
+          <label>
+            Soyadı
+
+            <input
+              name="lastName"
+              required
+              maxLength={60}
+              placeholder="Soyadı"
+            />
+          </label>
+
+          <label>
+            Doğum tarihi
+
+            <input
+              name="birthDate"
+              type="date"
+            />
+          </label>
+
+          {registrationFor ===
+            "child" && (
+            <label>
+              Veli adı soyadı
 
               <input
-                name="firstName"
-                required={fieldRequired(
-                  "first_name"
-                )}
-                maxLength={60}
-                placeholder={fieldPlaceholder(
-                  "first_name",
-                  "Adı"
-                )}
-                autoComplete="given-name"
+                name="guardianName"
+                required
+                maxLength={120}
+                placeholder="Veli adı soyadı"
               />
             </label>
           )}
 
-          {fieldVisible(
-            "last_name"
-          ) && (
-            <label>
-              <span>
-                {fieldLabel(
-                  "last_name",
-                  "Soyadı"
-                )}
+          <label>
+            Telefon
 
-                <RequiredMark
-                  required={fieldRequired(
-                    "last_name"
-                  )}
-                />
-              </span>
-
-              <input
-                name="lastName"
-                required={fieldRequired(
-                  "last_name"
-                )}
-                maxLength={60}
-                placeholder={fieldPlaceholder(
-                  "last_name",
-                  "Soyadı"
-                )}
-                autoComplete="family-name"
-              />
-            </label>
-          )}
-
-          {fieldVisible(
-            "birth_date"
-          ) && (
-            <label>
-              <span>
-                {fieldLabel(
-                  "birth_date",
-                  "Doğum Tarihi"
-                )}
-
-                <RequiredMark
-                  required={fieldRequired(
-                    "birth_date"
-                  )}
-                />
-              </span>
-
-              <input
-                type="text"
-                name="birthDateDisplay"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder={fieldPlaceholder(
-                  "birth_date",
-                  "GG/AA/YYYY"
-                )}
-                value={
-                  birthDateInput
-                }
-                onChange={(
-                  event
-                ) =>
-                  setBirthDateInput(
-                    formatBirthDateInput(
-                      event.target.value
-                    )
-                  )
-                }
-              />
-
-              <small>
-                Örnek:
-                15/08/2018
-              </small>
-            </label>
-          )}
-
-          {fieldVisible(
-            "guardian_name"
-          ) &&
-            registrationFor ===
-              "child" && (
-              <label>
-                <span>
-                  {fieldLabel(
-                    "guardian_name",
-                    "Veli Adı Soyadı"
-                  )}
-
-                  <RequiredMark
-                    required={fieldRequired(
-                      "guardian_name"
-                    )}
-                  />
-                </span>
-
-                <input
-                  name="guardianName"
-                  required={fieldRequired(
-                    "guardian_name"
-                  )}
-                  maxLength={120}
-                  placeholder={fieldPlaceholder(
-                    "guardian_name",
-                    "Veli adı soyadı"
-                  )}
-                  autoComplete="name"
-                />
-              </label>
-            )}
-
-          {fieldVisible(
-            "phone"
-          ) && (
-            <label>
-              <span>
-                {fieldLabel(
-                  "phone",
-                  "Telefon"
-                )}
-
-                <RequiredMark
-                  required={fieldRequired(
-                    "phone"
-                  )}
-                />
-              </span>
-
-              <input
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                required={fieldRequired(
-                  "phone"
-                )}
-                placeholder={fieldPlaceholder(
-                  "phone",
-                  "05xx xxx xx xx"
-                )}
-                maxLength={20}
-                autoComplete="tel"
-              />
-            </label>
-          )}
+            <input
+              name="phone"
+              type="tel"
+              required
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="05xx xxx xx xx"
+              maxLength={20}
+              pattern="(?:\+90|0)?5\d{9}"
+              title="Telefon numarasını 05XXXXXXXXX veya +905XXXXXXXXX formatında giriniz."
+            />
+          </label>
         </div>
       </section>
-
-      {/* ===================================================
-          2 · KURS
-          =================================================== */}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -2022,340 +491,204 @@ export default function PreRegistrationForm() {
 
           <div>
             <strong>
-              Kurs, Grup ve
-              Paket Tercihi
+              Kurs, grup ve paket
+              tercihi
             </strong>
 
             <span>
-              Aktif seçenekler
-              sistemden otomatik
-              gelir
+              Aktif gruplar sistemden
+              otomatik gelir
             </span>
           </div>
         </div>
 
         {loading ? (
           <div className="optionsLoading">
-            Aktif seçenekler
+            Aktif gruplar
             yükleniyor…
           </div>
         ) : (
           <div className="formGrid">
-            {fieldVisible(
-              "course_type"
-            ) && (
-              <label>
-                <span>
-                  {fieldLabel(
-                    "course_type",
-                    "Kurs Türü"
-                  )}
+            <label>
+              Kurs türü
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "course_type"
-                    )}
-                  />
-                </span>
+              <select
+                name="courseType"
+                required
+                value={courseType}
+                onChange={(event) => {
+                  setCourseType(
+                    event.target.value
+                  );
 
-                <select
-                  name="courseType"
-                  required={fieldRequired(
-                    "course_type"
-                  )}
-                  value={
-                    courseType
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setCourseType(
-                      event.target.value
-                    );
-
-                    setBranchId(
-                      ""
-                    );
-
-                    setGroupId(
-                      ""
-                    );
-                  }}
+                  setBranchId("");
+                  setGroupId("");
+                }}
+              >
+                <option
+                  value=""
+                  disabled
                 >
-                  <option
-                    value=""
-                    disabled
-                  >
-                    Seçiniz
-                  </option>
+                  Seçiniz
+                </option>
 
-                  {courseTypes.map(
-                    (type) => (
-                      <option
-                        key={
-                          type
-                        }
-                        value={
-                          type
-                        }
-                      >
-                        {type}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            )}
+                {courseTypes.map(
+                  (type) => (
+                    <option
+                      key={type}
+                      value={type}
+                    >
+                      {type}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
 
-            {fieldVisible(
-              "branch"
-            ) && (
-              <label>
-                <span>
-                  {fieldLabel(
-                    "branch",
-                    "Şube"
-                  )}
+            <label>
+              Şube
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "branch"
-                    )}
-                  />
-                </span>
+              <select
+                name="branchId"
+                required
+                value={branchId}
+                onChange={(event) => {
+                  setBranchId(
+                    event.target.value
+                  );
 
-                <select
-                  name="branchId"
-                  required={fieldRequired(
-                    "branch"
-                  )}
-                  value={
-                    branchId
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setBranchId(
-                      event.target.value
-                    );
-
-                    setGroupId(
-                      ""
-                    );
-                  }}
+                  setGroupId("");
+                }}
+              >
+                <option
+                  value=""
+                  disabled
                 >
-                  <option
-                    value=""
-                    disabled
-                  >
-                    Şube seçin
-                  </option>
+                  Şube seçin
+                </option>
 
-                  {availableBranches.map(
-                    (
-                      branch
-                    ) => (
-                      <option
-                        key={
-                          branch.id
-                        }
-                        value={
-                          branch.id
-                        }
-                      >
-                        {
-                          branch.name
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            )}
+                {availableBranches.map(
+                  (branch) => (
+                    <option
+                      value={
+                        branch.id
+                      }
+                      key={
+                        branch.id
+                      }
+                    >
+                      {branch.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
 
-            {fieldVisible(
-              "group"
-            ) && (
-              <label className="wideGroupSelect">
-                <span>
-                  {fieldLabel(
-                    "group",
-                    "Aktif Grup, Gün ve Saat"
-                  )}
+            <label className="wideGroupSelect">
+              Aktif grup, gün ve saat
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "group"
-                    )}
-                  />
-                </span>
-
-                <select
-                  name="groupId"
-                  required={fieldRequired(
-                    "group"
-                  )}
-                  value={
-                    groupId
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setGroupId(
-                      event.target.value
-                    )
-                  }
+              <select
+                name="groupId"
+                required
+                value={groupId}
+                onChange={(event) =>
+                  setGroupId(
+                    event.target.value
+                  )
+                }
+              >
+                <option
+                  value=""
+                  disabled
                 >
-                  <option
-                    value=""
-                    disabled
-                  >
-                    Grup seçin
-                  </option>
+                  Grup seçin
+                </option>
 
-                  {availableGroups.map(
-                    (group) => (
-                      <option
-                        key={
-                          group.id
-                        }
-                        value={
-                          group.id
-                        }
-                      >
-                        {groupLabel(
-                          group
-                        )}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            )}
+                {availableGroups.map(
+                  (group) => (
+                    <option
+                      value={
+                        group.id
+                      }
+                      key={
+                        group.id
+                      }
+                    >
+                      {groupLabel(
+                        group
+                      )}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
 
-            {fieldVisible(
-              "swimming_level"
-            ) && (
-              <label>
-                <span>
-                  {fieldLabel(
-                    "swimming_level",
-                    "Yüzme Seviyesi"
-                  )}
+            <label>
+              Yüzme seviyesi
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "swimming_level"
-                    )}
-                  />
-                </span>
+              <select
+                name="swimmingLevel"
+                defaultValue=""
+              >
+                <option value="">
+                  Seçiniz
+                </option>
 
-                <select
-                  name="swimmingLevel"
-                  required={fieldRequired(
-                    "swimming_level"
-                  )}
-                  defaultValue=""
-                >
-                  <option value="">
-                    Seçiniz
-                  </option>
+                {options.levels.map(
+                  (level) => (
+                    <option
+                      key={
+                        level.id
+                      }
+                    >
+                      {level.name}
+                    </option>
+                  )
+                )}
 
-                  {options.levels.map(
-                    (level) => (
-                      <option
-                        key={
-                          level.id
-                        }
-                        value={
-                          level.name
-                        }
-                      >
-                        {
-                          level.name
-                        }
-                      </option>
-                    )
-                  )}
+                <option>
+                  Bilmiyorum
+                </option>
+              </select>
+            </label>
 
-                  <option value="Bilmiyorum">
-                    Bilmiyorum
-                  </option>
-                </select>
-              </label>
-            )}
+            <label>
+              Paket tercihi
 
-            {fieldVisible(
-              "package"
-            ) && (
-              <label>
-                <span>
-                  {fieldLabel(
-                    "package",
-                    "Paket Tercihi"
-                  )}
+              <select
+                name="packageId"
+                defaultValue=""
+                required
+              >
+                <option value="">
+                  Paket seçin
+                </option>
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "package"
-                    )}
-                  />
-                </span>
-
-                <select
-                  name="packageId"
-                  required={fieldRequired(
-                    "package"
-                  )}
-                  value={
-                    packageId
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setPackageId(
-                      event.target.value
-                    )
-                  }
-                >
-                  <option
-                    value=""
-                    disabled
-                  >
-                    Paket seçin
-                  </option>
-
-                  {availablePackages.map(
-                    (item) => (
-                      <option
-                        value={
-                          item.id
-                        }
-                        key={
-                          item.id
-                        }
-                      >
-                        {
-                          item.name
-                        }{" "}
-                        ·{" "}
-                        {
-                          item.lesson_count
-                        }{" "}
-                        ders
-                        {item.price
-                          ? ` · ${Number(
-                              item.price
-                            ).toLocaleString(
-                              "tr-TR"
-                            )} ₺`
-                          : ""}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-            )}
+                {options.packages.map(
+                  (item) => (
+                    <option
+                      value={
+                        item.id
+                      }
+                      key={
+                        item.id
+                      }
+                    >
+                      {item.name} ·{" "}
+                      {item.lesson_count}{" "}
+                      ders
+                      {item.price
+                        ? ` · ${Number(
+                            item.price
+                          ).toLocaleString(
+                            "tr-TR"
+                          )} ₺`
+                        : ""}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
           </div>
         )}
 
@@ -2367,9 +700,7 @@ export default function PreRegistrationForm() {
               </span>
 
               <strong>
-                {
-                  selectedGroup.name
-                }
+                {selectedGroup.name}
               </strong>
 
               <small>
@@ -2389,9 +720,7 @@ export default function PreRegistrationForm() {
 
             <div className="selectedSchedule">
               {selectedSchedules.map(
-                (
-                  schedule
-                ) => (
+                (schedule) => (
                   <span
                     key={
                       schedule.id
@@ -2455,8 +784,7 @@ export default function PreRegistrationForm() {
                   (branch) =>
                     branch.id ===
                     selectedGroup.branch_id
-                )?.name ||
-                ""
+                )?.name || ""
               }
             />
 
@@ -2465,668 +793,487 @@ export default function PreRegistrationForm() {
               name="preferredDays"
               value={selectedSchedules
                 .map(
-                  (
-                    schedule
-                  ) =>
+                  (schedule) =>
                     days[
                       schedule.weekday
                     ]
                 )
-                .join(
-                  " - "
-                )}
+                .join(" - ")}
             />
 
             <input
               type="hidden"
               name="preferredTime"
               value={
-                selectedSchedules.length
-                  ? selectedSchedules
-                      .map(
-                        (
-                          schedule
-                        ) =>
-                          `${schedule.start_time.slice(
-                            0,
-                            5
-                          )}-${schedule.end_time.slice(
-                            0,
-                            5
-                          )}`
-                      )
-                      .join(
-                        " / "
-                      )
+                selectedSchedules[0]
+                  ? `${selectedSchedules[0].start_time.slice(
+                      0,
+                      5
+                    )} - ${selectedSchedules[0].end_time.slice(
+                      0,
+                      5
+                    )}`
                   : ""
               }
             />
           </div>
         ) : null}
+
+        {!loading &&
+        !options.groups.length ? (
+          <div className="noGroupWarning">
+            Şu anda ön kayda açık grup
+            bulunmuyor. Kayıt ekibimizle
+            iletişime geçebilirsiniz.
+          </div>
+        ) : null}
       </section>
 
-      {/* ===================================================
-          3 · İLETİŞİM
-          =================================================== */}
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>3</b>
 
-      {fieldVisible(
-        "contact_request"
-      ) && (
-        <section className="formSection">
-          <div className="formSectionTitle">
-            <b>3</b>
+          <div>
+            <strong>
+              İletişim talebiniz
+            </strong>
 
-            <div>
-              <strong>
-                {fieldLabel(
-                  "contact_request",
-                  "İletişim Talebiniz"
-                )}
-
-                <RequiredMark
-                  required={fieldRequired(
-                    "contact_request"
-                  )}
-                />
-              </strong>
-
-              <span>
-                Ön kayıt
-                sonrasında nasıl
-                ilerlemek
-                istediğinizi seçin
-              </span>
-            </div>
+            <span>
+              Ekibimizin size nasıl
+              dönüş yapmasını
+              istediğinizi seçin
+            </span>
           </div>
+        </div>
 
-          <div className="requestOptions">
-            {finalContactOptions.map(
-              (
-                option,
-                index
-              ) => (
-                <label
-                  key={
-                    option.value
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="contactRequest"
-                    value={
-                      option.value
-                    }
-                    required={
-                      fieldRequired(
-                        "contact_request"
-                      ) &&
-                      index ===
-                        0
-                    }
-                  />
+        <div className="requestOptions">
+          <label>
+            <input
+              type="radio"
+              name="contactRequest"
+              value="call_me"
+              required
+            />
+            Beni aramanızı istiyorum
+          </label>
 
-                  <span>
-                    {
-                      option.label
-                    }
-                  </span>
-                </label>
-              )
-            )}
+          <label>
+            <input
+              type="radio"
+              name="contactRequest"
+              value="whatsapp_info"
+            />
+            WhatsApp üzerinden detaylı
+            bilgi almak istiyorum
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              name="contactRequest"
+              value="ready_to_start"
+            />
+            Kaydım tamamlandığında
+            doğrudan kursa başlayacağım
+          </label>
+
+          <label>
+            <input
+              type="radio"
+              name="contactRequest"
+              value="need_information"
+            />
+            Karar vermeden önce detaylı
+            bilgi almak istiyorum
+          </label>
+        </div>
+      </section>
+
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>4</b>
+
+          <div>
+            <strong>
+              Ek bilgiler
+            </strong>
+
+            <span>
+              Özel durum ve
+              beklentilerinizi
+              paylaşabilirsiniz
+            </span>
           </div>
-        </section>
-      )}
+        </div>
 
-      {/* ===================================================
-          4 · EK BİLGİLER
-          =================================================== */}
+        <label className="fullWidth">
+          Açıklama / özel durum
 
-      {(fieldVisible(
-        "general_note"
-      ) ||
-        customFields.some(
-          (field) =>
-            field.section_key ===
-            "additional"
-        )) && (
-        <section className="formSection">
-          <div className="formSectionTitle">
-            <b>4</b>
+          <textarea
+            name="note"
+            rows={4}
+            maxLength={1000}
+            placeholder="Su korkusu veya kayıtla ilgili eklemek istediğiniz not..."
+          />
+        </label>
+      </section>
 
-            <div>
-              <strong>
-                Ek Bilgiler
-              </strong>
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>5</b>
 
-              <span>
-                Özel durum ve
-                beklentilerinizi
-                paylaşabilirsiniz
-              </span>
-            </div>
+          <div>
+            <strong>
+              Sağlık beyanı
+            </strong>
+
+            <span>
+              Yüzme eğitimine katılım açısından
+              bilinmesi gereken bir durum varsa
+              bizimle paylaşın
+            </span>
           </div>
+        </div>
 
-          <div className="formGrid">
-            {fieldVisible(
-              "general_note"
-            ) && (
-              <label className="fullWidth">
-                <span>
-                  {fieldLabel(
-                    "general_note",
-                    "Açıklama / Özel Durum"
-                  )}
+        <label className="consent">
+          <input
+            type="checkbox"
+            name="healthDeclaration"
+            value="true"
+            required
+          />
 
-                  <RequiredMark
-                    required={fieldRequired(
-                      "general_note"
-                    )}
-                  />
-                </span>
+          <span>
+            Öğrenci / katılımcının yüzme eğitimine
+            katılmasına engel teşkil eden, antrenörün
+            bilmesi gereken veya güvenliği etkileyebilecek
+            bir sağlık durumu varsa aşağıdaki alanda
+            eksiksiz olarak belirteceğimi; aksi durumda
+            yüzme eğitimine katılım açısından bilinen bir
+            engel bulunmadığını beyan ediyorum.
+          </span>
+        </label>
 
-                <textarea
-                  name="note"
-                  required={fieldRequired(
-                    "general_note"
-                  )}
-                  rows={4}
-                  maxLength={1000}
-                  placeholder={fieldPlaceholder(
-                    "general_note",
-                    "Kayıt ekibimizin bilmesini istediğiniz bir not varsa yazabilirsiniz."
-                  )}
-                />
-              </label>
-            )}
+        <label className="fullWidth">
+          Sağlıkla ilgili açıklama
+          <textarea
+            name="healthNote"
+            rows={3}
+            maxLength={1000}
+            placeholder="Varsa alerji, kronik rahatsızlık, özel gereksinim veya antrenörün bilmesi gereken durumu yazınız. Yoksa boş bırakabilirsiniz."
+          />
+        </label>
+      </section>
 
-            {customFields
-              .filter(
-                (field) =>
-                  field.section_key ===
-                  "additional"
-              )
-              .map(
-                renderCustomField
-              )}
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>6</b>
+
+          <div>
+            <strong>
+              Kurallar ve onaylar
+            </strong>
+
+            <span>
+              Başvurunuzu tamamlamadan
+              önce bilgilendirmeleri
+              inceleyin
+            </span>
           </div>
-        </section>
-      )}
+        </div>
 
-      {/* ===================================================
-          5 · SAĞLIK
-          =================================================== */}
+        <details className="rulesDetails">
+          <summary>
+            Sprint Yüzme Okulu
+            Kurallarını Görüntüle
+          </summary>
 
-      {(fieldVisible(
-        "health_declaration"
-      ) ||
-        fieldVisible(
-          "health_note"
-        ) ||
-        customFields.some(
-          (field) =>
-            field.section_key ===
-            "health"
-        )) && (
-        <section className="formSection">
-          <div className="formSectionTitle">
-            <b>5</b>
+          <div className="rulesContent">
+            <p>
+              <strong>1. Telafi dersi:</strong>{" "}
+              Hastalık, tatil, izin, şehir dışı veya
+              benzeri bireysel nedenlerle kaçırılan
+              dersler için telafi dersi uygulanmaz.
+              Telafi yalnızca tesis / havuz kaynaklı
+              olarak dersin yapılamadığı durumlarda
+              tanımlanır.
+            </p>
 
-            <div>
-              <strong>
-                Sağlık Bilgileri
-              </strong>
+            <p>
+              <strong>2. Kayıt dondurma ve ders ekleme:</strong>{" "}
+              Bireysel nedenlerle kayıt dondurma,
+              kullanılmayan dersleri ileri tarihe aktarma
+              veya pakete ek ders tanımlama yapılmaz.
+            </p>
 
-              <span>
-                Güvenli eğitim için
-                gerekli sağlık
-                bilgilerini paylaşın
-              </span>
-            </div>
+            <p>
+              <strong>3. Ücret ve indirim:</strong>{" "}
+              Başlanan veya planlanan kurs paketlerinde
+              bireysel devamsızlıklara bağlı ücret
+              indirimi, ders başına ücret düşümü veya
+              geriye dönük indirim uygulanmaz.
+            </p>
+
+            <p>
+              <strong>4. Grup ve saat düzeni:</strong>{" "}
+              Eğitim kalitesi, seviye dengesi, tesis
+              programı ve operasyon ihtiyacına göre
+              grup, saat, kulvar veya antrenör planlaması
+              Sprint Yüzme Okulu tarafından
+              güncellenebilir.
+            </p>
+
+            <p>
+              <strong>5. Sağlık ve güvenlik:</strong>{" "}
+              Öğrenci / katılımcının antrenör tarafından
+              bilinmesi gereken sağlık, alerji, özel
+              gereksinim veya güvenliği etkileyebilecek
+              durumları kayıt öncesinde bildirmek
+              kursiyer / veli sorumluluğundadır.
+            </p>
+
+            <p>
+              <strong>6. Ön kayıt:</strong>{" "}
+              Bu formun gönderilmesi kesin kayıt,
+              kesin kontenjan veya ödeme onayı anlamına
+              gelmez. Kesin kayıt, kayıt ekibinin
+              teyidiyle tamamlanır.
+            </p>
           </div>
+        </details>
 
-          {fieldVisible(
-            "health_declaration"
-          ) && (
-            <label className="consent">
-              <input
-                type="checkbox"
-                name="healthDeclaration"
-                value="true"
-                required={fieldRequired(
-                  "health_declaration"
-                )}
-              />
+        <label className="consent">
+          <input
+            type="checkbox"
+            name="rulesAccepted"
+            value="true"
+            required
+          />
 
-              <span>
-                {getField(
-                  "health_declaration"
-                )?.help_text ||
-                  "Öğrencinin / katılımcının yüzme eğitimine katılmasına engel teşkil eden bilinen bir sağlık problemi bulunmadığını beyan ediyorum."}
+          <span>
+            Sprint Yüzme Okulu
+            kurallarını okudum,
+            anladım ve kabul ediyorum.
+          </span>
+        </label>
 
-                <RequiredMark
-                  required={fieldRequired(
-                    "health_declaration"
-                  )}
-                />
-              </span>
-            </label>
-          )}
+        <label className="consent">
+          <input
+            type="checkbox"
+            name="whatsappPermission"
+            value="true"
+            required
+          />
 
-          {fieldVisible(
-            "health_note"
-          ) && (
-            <label className="fullWidth">
-              <span>
-                {fieldLabel(
-                  "health_note",
-                  "Bildirilmesi Gereken Sağlık Bilgisi"
-                )}
+          <span>
+            Kayıt süreci, ders programı ve kurs
+            bilgilendirmelerinin bu formda belirttiğim
+            telefon numarasına WhatsApp üzerinden
+            gönderilmesini kabul ediyorum.
+          </span>
+        </label>
+      </section>
 
-                <RequiredMark
-                  required={fieldRequired(
-                    "health_note"
-                  )}
-                />
-              </span>
-
-              <textarea
-                name="healthNote"
-                required={fieldRequired(
-                  "health_note"
-                )}
-                rows={3}
-                maxLength={1000}
-                placeholder={fieldPlaceholder(
-                  "health_note",
-                  "Alerji, kronik rahatsızlık, kullanılan ilaç veya bilinmesi gereken sağlık durumunu yazabilirsiniz."
-                )}
-              />
-            </label>
-          )}
-
-          <div className="formGrid">
-            {customFields
-              .filter(
-                (field) =>
-                  field.section_key ===
-                  "health"
-              )
-              .map(
-                renderCustomField
-              )}
-          </div>
-        </section>
-      )}
-
-      {/* ===================================================
-          6 · KURALLAR
-          =================================================== */}
-
-      {(fieldVisible(
-        "rules_accepted"
-      ) ||
-        fieldVisible(
-          "whatsapp_permission"
-        ) ||
-        customFields.some(
-          (field) =>
-            field.section_key ===
-            "consent"
-        )) && (
-        <section className="formSection">
-          <div className="formSectionTitle">
-            <b>6</b>
-
-            <div>
-              <strong>
-                Kurallar ve
-                Onaylar
-              </strong>
-
-              <span>
-                Başvuruyu
-                tamamlamadan önce
-                bilgilendirmeleri
-                okuyunuz
-              </span>
-            </div>
-          </div>
-
-          {fieldVisible(
-            "rules_accepted"
-          ) && (
-            <>
-              <details className="rulesDetails">
-                <summary>
-                  Sprint Yüzme Okulu
-                  Kurallarını
-                  Görüntüle
-                </summary>
-
-                <div className="rulesContent">
-                  <p>
-                    <strong>
-                      1. Ön Kayıt ve
-                      Kesin Kayıt
-                    </strong>
-                  </p>
-
-                  <p>
-                    Bu form üzerinden
-                    oluşturulan başvuru
-                    ön kayıt
-                    niteliğindedir.
-                    Tek başına kesin
-                    kayıt anlamına
-                    gelmez.
-                  </p>
-
-                  <p>
-                    Kayıt ekibimizin
-                    başvurunuzu
-                    onaylamasının
-                    ardından gerekli
-                    kayıt ve ödeme
-                    işlemlerinin
-                    tamamlanmasıyla
-                    kayıt işleminiz
-                    tamamlanmış ve
-                    kesinleşmiş sayılır.
-                  </p>
-
-                  <p>
-                    <strong>
-                      2. Ücret İadesi
-                    </strong>
-                  </p>
-
-                  <p>
-                    Kesin kayıt
-                    işlemleri
-                    tamamlandıktan
-                    sonra kurs
-                    ücretlerinde iade
-                    uygulaması
-                    bulunmamaktadır.
-                  </p>
-
-                  <p>
-                    <strong>
-                      3. Telafi
-                      Dersleri
-                    </strong>
-                  </p>
-
-                  <p>
-                    Bireysel
-                    nedenlerle
-                    kaçırılan
-                    derslerde{" "}
-                    <strong>
-                      (hastalık,
-                      tatil, izin, iş
-                      durumu ve
-                      benzeri kişisel
-                      nedenler dahil)
-                    </strong>{" "}
-                    telafi dersi
-                    uygulanmamaktadır.
-                  </p>
-
-                  <p>
-                    Telafi yalnızca
-                    tesis veya Sprint
-                    Yüzme Okulu
-                    kaynaklı olarak
-                    planlanan dersin
-                    gerçekleştirilemediği
-                    durumlarda
-                    uygulanır.
-                  </p>
-
-                  <p>
-                    <strong>
-                      4. Kayıt
-                      Dondurma
-                    </strong>
-                  </p>
-
-                  <p>
-                    Hastalık, tatil,
-                    izin, şehir
-                    dışında bulunma,
-                    iş durumu veya
-                    benzeri bireysel
-                    nedenlerle kayıt
-                    dondurma, ders
-                    ekleme veya ücret
-                    indirimi
-                    uygulanmaz.
-                  </p>
-
-                  <p>
-                    <strong>
-                      5. Grup, Saat
-                      ve Antrenör
-                    </strong>
-                  </p>
-
-                  <p>
-                    Eğitim kalitesi,
-                    seviye uyumu,
-                    kontenjan ve
-                    operasyonel
-                    ihtiyaçlar
-                    doğrultusunda
-                    grup, saat ve
-                    antrenör
-                    planlamalarında
-                    gerekli
-                    düzenlemeler
-                    Sprint Yüzme
-                    Okulu tarafından
-                    yapılabilir.
-                  </p>
-
-                  <p>
-                    <strong>
-                      6. Sağlık
-                      Bilgileri
-                    </strong>
-                  </p>
-
-                  <p>
-                    Kursiyerin yüzme
-                    eğitimine
-                    katılımını
-                    etkileyebilecek
-                    sağlık
-                    durumlarının
-                    kayıt sırasında
-                    eksiksiz
-                    bildirilmesi
-                    gerekmektedir.
-                  </p>
-                </div>
-              </details>
-
-              <label className="consent">
-                <input
-                  type="checkbox"
-                  name="rulesAccepted"
-                  value="true"
-                  required={fieldRequired(
-                    "rules_accepted"
-                  )}
-                />
-
-                <span>
-                  {getField(
-                    "rules_accepted"
-                  )?.help_text ||
-                    "Sprint Yüzme Okulu kurallarını okudum, anladım ve kabul ediyorum."}
-
-                  <RequiredMark
-                    required={fieldRequired(
-                      "rules_accepted"
-                    )}
-                  />
-                </span>
-              </label>
-            </>
-          )}
-
-          {fieldVisible(
-            "whatsapp_permission"
-          ) && (
-            <label className="consent">
-              <input
-                type="checkbox"
-                name="whatsappPermission"
-                value="true"
-                required={fieldRequired(
-                  "whatsapp_permission"
-                )}
-              />
-
-              <span>
-                {getField(
-                  "whatsapp_permission"
-                )?.help_text ||
-                  "Kayıt sürecine ilişkin bilgilendirmelerin WhatsApp üzerinden tarafıma gönderilmesini kabul ediyorum."}
-
-                <RequiredMark
-                  required={fieldRequired(
-                    "whatsapp_permission"
-                  )}
-                />
-              </span>
-            </label>
-          )}
-
-          <div className="formGrid">
-            {customFields
-              .filter(
-                (field) =>
-                  field.section_key ===
-                  "consent"
-              )
-              .map(
-                renderCustomField
-              )}
-          </div>
-        </section>
-      )}
-
-      {/* ===================================================
-          DİĞER ÖZEL ALANLAR
-          =================================================== */}
-
-      {customFields.filter(
-        (field) =>
-          ![
-            "additional",
-            "health",
-            "consent",
-          ].includes(
-            field.section_key
-          )
-      ).length >
-        0 && (
-        <section className="formSection">
-          <div className="formSectionTitle">
-            <b>+</b>
-
-            <div>
-              <strong>
-                Ek Form Alanları
-              </strong>
-
-              <span>
-                Yönetim tarafından
-                eklenen ek sorular
-              </span>
-            </div>
-          </div>
-
-          <div className="formGrid">
-            {customFields
-              .filter(
-                (field) =>
-                  ![
-                    "additional",
-                    "health",
-                    "consent",
-                  ].includes(
-                    field.section_key
-                  )
-              )
-              .map(
-                renderCustomField
-              )}
-          </div>
-        </section>
-      )}
-
-      {/* ===================================================
-          GÖNDER
-          =================================================== */}
+      <div
+        style={{
+          marginTop: 16,
+          padding: "14px 16px",
+          borderRadius: 12,
+          background: "#eff6ff",
+          border: "1px solid #bfdbfe",
+          color: "#1e3a8a",
+          fontSize: 13,
+          lineHeight: 1.55,
+        }}
+      >
+        <strong>Başvurunuz gönderildikten sonra:</strong>{" "}
+        Seçtiğiniz şube, grup ve paket bilgileri SprintOS
+        kayıt ekranına otomatik düşer. Kayıt ekibimiz
+        başvuruyu kontrol ederek sizinle iletişime geçer.
+      </div>
 
       <div className="submitRow">
         <button
           className="submitButton"
           disabled={
-            status ===
-              "sending" ||
-            loading
+            status === "sending" ||
+            loading ||
+            !options.groups.length
           }
           type="submit"
         >
-          {status ===
-          "sending"
+          {status === "sending"
             ? "Başvurunuz gönderiliyor..."
             : "Ön Kaydı Tamamla"}
         </button>
       </div>
 
-      <p
-        style={{
-          margin:
-            "-8px 0 0",
-          color:
-            "#7b8799",
-          fontSize:
-            11,
-          fontWeight:
-            600,
-        }}
-      >
-        <span
-          style={{
-            color:
-              "#e53935",
-            fontWeight:
-              900,
-          }}
-        >
-          *
-        </span>{" "}
-        işaretli alanlar
-        zorunludur.
-      </p>
-
-      {message && (
-        <p
-          className={
-            status ===
-            "success"
-              ? "formMessage success"
-              : "formMessage error"
-          }
-          role="status"
-        >
+      {status === "error" && message && (
+        <p className="formMessage error" role="alert">
           {message}
         </p>
+      )}
+
+      {status === "success" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pre-registration-success-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            background: "rgba(15, 23, 42, 0.64)",
+            backdropFilter: "blur(5px)",
+          }}
+        >
+          <div
+            style={{
+              width: "min(100%, 520px)",
+              borderRadius: 24,
+              background: "#ffffff",
+              boxShadow: "0 28px 80px rgba(15, 23, 42, 0.28)",
+              border: "1px solid rgba(226, 232, 240, 0.95)",
+              padding: "34px 28px 28px",
+              textAlign: "center",
+              animation: "sprintSuccessIn 220ms ease-out",
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                width: 76,
+                height: 76,
+                margin: "0 auto 20px",
+                borderRadius: "999px",
+                display: "grid",
+                placeItems: "center",
+                background: "#ecfdf5",
+                border: "1px solid #a7f3d0",
+                color: "#047857",
+                fontSize: 38,
+                fontWeight: 900,
+                lineHeight: 1,
+              }}
+            >
+              ✓
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 28,
+                padding: "6px 12px",
+                marginBottom: 14,
+                borderRadius: 999,
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: ".04em",
+              }}
+            >
+              SPRINT YÜZME OKULU
+            </div>
+
+            <h2
+              id="pre-registration-success-title"
+              style={{
+                margin: 0,
+                color: "#0f172a",
+                fontSize: "clamp(25px, 5vw, 32px)",
+                lineHeight: 1.15,
+                fontWeight: 900,
+              }}
+            >
+              Ön Kaydınız Alındı!
+            </h2>
+
+            <p
+              style={{
+                margin: "16px auto 0",
+                maxWidth: 430,
+                color: "#475569",
+                fontSize: 15,
+                lineHeight: 1.7,
+              }}
+            >
+              Başvurunuz başarıyla Sprint Yüzme Okulu kayıt
+              sistemine iletilmiştir.
+            </p>
+
+            <div
+              style={{
+                marginTop: 20,
+                padding: "16px 18px",
+                borderRadius: 16,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                color: "#334155",
+                fontSize: 14,
+                lineHeight: 1.65,
+              }}
+            >
+              Kayıt ekibimiz başvurunuzu inceleyecek ve
+              <strong> en kısa sürede sizinle iletişime geçecektir.</strong>
+            </div>
+
+            <p
+              style={{
+                margin: "18px 0 0",
+                color: "#0f172a",
+                fontSize: 14,
+                lineHeight: 1.6,
+                fontWeight: 700,
+              }}
+            >
+              Başvurunuz için teşekkür ederiz. 🏊‍♂️
+            </p>
+
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                setStatus("idle");
+                setMessage("");
+              }}
+              style={{
+                width: "100%",
+                minHeight: 50,
+                marginTop: 24,
+                border: 0,
+                borderRadius: 14,
+                background: "#0b6ff4",
+                color: "#ffffff",
+                fontSize: 15,
+                fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: "0 10px 24px rgba(11, 111, 244, 0.22)",
+              }}
+            >
+              Tamam
+            </button>
+
+            <style jsx>{`
+              @keyframes sprintSuccessIn {
+                from {
+                  opacity: 0;
+                  transform: translateY(10px) scale(0.98);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                }
+              }
+            `}</style>
+          </div>
+        </div>
       )}
     </form>
   );
