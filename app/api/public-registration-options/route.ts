@@ -6,78 +6,48 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
-    const url =
-      process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const key =
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!url || !key) {
       return NextResponse.json(
-        {
-          error:
-            "Bağlantı ayarları eksik.",
-        },
+        { error: "Bağlantı ayarları eksik." },
         {
           status: 500,
           headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
           },
         }
       );
     }
 
-    const supabase =
-      createClient(url, key, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      });
+    const supabase = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-    /*
-     * Kurumu bul
-     */
-    const {
-      data: organization,
-      error: organizationError,
-    } = await supabase
+    const { data: organization, error: organizationError } = await supabase
       .from("organizations")
       .select("id")
-      .eq(
-        "name",
-        "Sprint Yüzme Okulu"
-      )
+      .eq("name", "Sprint Yüzme Okulu")
       .single();
 
-    if (
-      organizationError ||
-      !organization
-    ) {
-      console.error(
-        "Organization error:",
-        organizationError
-      );
+    if (organizationError || !organization) {
+      console.error("Organization error:", organizationError);
 
       return NextResponse.json(
-        {
-          error:
-            "Kurum bulunamadı.",
-        },
+        { error: "Kurum bulunamadı." },
         {
           status: 404,
           headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
           },
         }
       );
     }
 
-    /*
-     * Tüm form seçeneklerini paralel yükle
-     */
     const [
       branchesResult,
       groupsResult,
@@ -88,28 +58,13 @@ export async function GET() {
     ] = await Promise.all([
       supabase
         .from("branches")
-        .select(
-          "id,name"
-        )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .eq(
-          "is_active",
-          true
-        )
-        .order(
-          "name",
-          {
-            ascending: true,
-          }
-        ),
+        .select("id,name")
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .order("name", { ascending: true }),
 
       supabase
-        .from(
-          "training_groups"
-        )
+        .from("training_groups")
         .select(
           `
           id,
@@ -122,35 +77,14 @@ export async function GET() {
           sort_order
           `
         )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .eq(
-          "is_active",
-          true
-        )
-        .eq(
-          "public_registration",
-          true
-        )
-        .order(
-          "sort_order",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "name",
-          {
-            ascending: true,
-          }
-        ),
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .eq("public_registration", true)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
 
       supabase
-        .from(
-          "lesson_schedules"
-        )
+        .from("lesson_schedules")
         .select(
           `
           id,
@@ -160,58 +94,29 @@ export async function GET() {
           end_time
           `
         )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .eq(
-          "is_active",
-          true
-        )
-        .order(
-          "weekday",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "start_time",
-          {
-            ascending: true,
-          }
-        ),
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .order("weekday", { ascending: true })
+        .order("start_time", { ascending: true }),
 
       supabase
-        .from(
-          "course_packages"
-        )
+        .from("course_packages")
         .select(
           `
           id,
           name,
           lesson_count,
-          price
+          price,
+          course_type
           `
         )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .eq(
-          "is_active",
-          true
-        )
-        .order(
-          "lesson_count",
-          {
-            ascending: true,
-          }
-        ),
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .order("lesson_count", { ascending: true })
+        .order("name", { ascending: true }),
 
       supabase
-        .from(
-          "swimming_levels"
-        )
+        .from("swimming_levels")
         .select(
           `
           id,
@@ -219,28 +124,12 @@ export async function GET() {
           sort_order
           `
         )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .eq(
-          "is_active",
-          true
-        )
-        .order(
-          "sort_order",
-          {
-            ascending: true,
-          }
-        ),
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
 
-      /*
-       * ÖN KAYIT FORMU AYARLARI
-       */
       supabase
-        .from(
-          "registration_form_fields"
-        )
+        .from("registration_form_fields")
         .select(
           `
           id,
@@ -259,21 +148,10 @@ export async function GET() {
           sort_order
           `
         )
-        .eq(
-          "organization_id",
-          organization.id
-        )
-        .order(
-          "sort_order",
-          {
-            ascending: true,
-          }
-        ),
+        .eq("organization_id", organization.id)
+        .order("sort_order", { ascending: true }),
     ]);
 
-    /*
-     * Kritik sorgu hatalarını kontrol et
-     */
     const queryErrors = [
       branchesResult.error,
       groupsResult.error,
@@ -283,107 +161,50 @@ export async function GET() {
       formFieldsResult.error,
     ].filter(Boolean);
 
-    if (
-      queryErrors.length
-    ) {
-      console.error(
-        "Public registration query errors:",
-        queryErrors
-      );
+    if (queryErrors.length) {
+      console.error("Public registration query errors:", queryErrors);
 
       return NextResponse.json(
-        {
-          error:
-            "Kayıt seçeneklerinin bir bölümü yüklenemedi.",
-        },
+        { error: "Kayıt seçeneklerinin bir bölümü yüklenemedi." },
         {
           status: 500,
           headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
           },
         }
       );
     }
 
-    /*
-     * Sadece yayında olan form alanlarını
-     * ayrıca hazır olarak veriyoruz.
-     *
-     * Böylece istemci isterse tüm alanları,
-     * isterse yalnızca görünür alanları kullanabilir.
-     */
-    const formFields =
-      formFieldsResult.data ||
-      [];
-
-    const visibleFormFields =
-      formFields.filter(
-        (field) =>
-          field.is_visible
-      );
+    const formFields = formFieldsResult.data || [];
+    const visibleFormFields = formFields.filter((field) => field.is_visible);
 
     return NextResponse.json(
       {
-        branches:
-          branchesResult.data ||
-          [],
-
-        groups:
-          groupsResult.data ||
-          [],
-
-        schedules:
-          schedulesResult.data ||
-          [],
-
-        packages:
-          packagesResult.data ||
-          [],
-
-        levels:
-          levelsResult.data ||
-          [],
-
-        /*
-         * Tüm ayarlar
-         */
+        branches: branchesResult.data || [],
+        groups: groupsResult.data || [],
+        schedules: schedulesResult.data || [],
+        packages: packagesResult.data || [],
+        levels: levelsResult.data || [],
         formFields,
-
-        /*
-         * Canlı formda gösterilecek alanlar
-         */
         visibleFormFields,
       },
       {
         headers: {
-          "Cache-Control":
-            "no-store, no-cache, must-revalidate, proxy-revalidate",
-
-          Pragma:
-            "no-cache",
-
-          Expires:
-            "0",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       }
     );
   } catch (error) {
-    console.error(
-      "public-registration-options GET error:",
-      error
-    );
+    console.error("public-registration-options GET error:", error);
 
     return NextResponse.json(
-      {
-        error:
-          "Kayıt seçenekleri yüklenemedi.",
-      },
+      { error: "Kayıt seçenekleri yüklenemedi." },
       {
         status: 500,
         headers: {
-          "Cache-Control":
-            "no-store, no-cache, must-revalidate",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       }
     );
