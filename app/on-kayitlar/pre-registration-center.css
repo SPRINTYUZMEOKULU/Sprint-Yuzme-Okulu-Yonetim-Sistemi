@@ -1,0 +1,852 @@
+.preRegistrationPage {
+  padding-bottom: 80px;
+}
+
+.preRegistrationStats {
+  margin-bottom: 18px;
+}
+
+.preRegistrationFlash {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid #b7ebcf;
+  background: #ecfdf3;
+  color: #087443;
+  border-radius: 14px;
+  font-weight: 800;
+}
+
+.preRegistrationCenter {
+  display: grid;
+  gap: 18px;
+}
+
+.preRegistrationTabs {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: #eef3f9;
+  border-radius: 16px;
+  width: fit-content;
+}
+
+.preRegistrationTabs button,
+.preDetailTabs button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.preRegistrationTabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  color: #53647a;
+  font-weight: 800;
+}
+
+.preRegistrationTabs button.active {
+  background: #fff;
+  color: #0b5ed7;
+  box-shadow: 0 5px 18px rgba(33, 56, 89, 0.09);
+}
+
+.preRegistrationTabs button span,
+.preDetailTabs button span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e5eefb;
+  color: #0b5ed7;
+  font-size: 12px;
+}
+
+.preRegistrationToolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: end;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #e5ebf2;
+  border-radius: 20px;
+}
+
+.preRegistrationToolbar p {
+  margin: 0 0 5px;
+  color: #0b6ef3;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.preRegistrationToolbar h2 {
+  margin: 0;
+  color: #10284d;
+  font-size: 24px;
+}
+
+.preRegistrationToolbar > div > span {
+  display: block;
+  margin-top: 6px;
+  color: #718096;
+  font-size: 13px;
+}
+
+.preRegistrationToolbar input {
+  width: min(100%, 440px);
+  min-height: 46px;
+  padding: 0 15px;
+  border: 1px solid #dce4ee;
+  border-radius: 13px;
+  outline: none;
+  font: inherit;
+}
+
+.preRegistrationToolbar input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.preRegistrationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.preRegistrationCard {
+  width: 100%;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid #e1e8f0;
+  border-radius: 19px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  box-shadow: 0 7px 24px rgba(15, 39, 71, 0.045);
+  transition: transform 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.preRegistrationCard:hover {
+  transform: translateY(-2px);
+  border-color: #9ec8ff;
+  box-shadow: 0 13px 34px rgba(15, 76, 160, 0.11);
+}
+
+.preRegistrationCard.selected {
+  border-color: #2782f3;
+  box-shadow: 0 0 0 3px rgba(39, 130, 243, 0.1),
+    0 15px 38px rgba(15, 76, 160, 0.12);
+}
+
+.preCardTop,
+.preCardBottom,
+.preDetailHeader,
+.preHistoryTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.preCardEyebrow,
+.preDetailKicker {
+  display: inline-block;
+  color: #718096;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+.preCardTop h3,
+.preArchiveCard h3 {
+  margin: 5px 0 0;
+  color: #10284d;
+  font-size: 20px;
+}
+
+.preStatus {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff7e7;
+  color: #a65d00;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.preCardContact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 13px;
+  background: #f7f9fc;
+  border-radius: 13px;
+}
+
+.preCardContact strong {
+  color: #263c59;
+}
+
+.preCardContact span {
+  color: #607089;
+  font-size: 13px;
+}
+
+.preCardRoute {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.preCardRoute > div {
+  padding: 10px 11px;
+  border: 1px solid #edf1f5;
+  border-radius: 12px;
+}
+
+.preCardRoute span,
+.preInfo span,
+.preNoteBox > span,
+.preTechnicalBox span {
+  display: block;
+  color: #7b8a9e;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.preCardRoute strong {
+  display: block;
+  color: #273e5d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.preCardBottom {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #edf1f5;
+  align-items: center;
+}
+
+.preCardBottom span {
+  color: #8290a3;
+  font-size: 12px;
+}
+
+.preCardBottom strong {
+  color: #0b6ef3;
+  font-size: 13px;
+}
+
+.preRegistrationDetail {
+  overflow: hidden;
+  margin-top: 5px;
+  border: 1px solid #dce5ef;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 20px 55px rgba(18, 49, 88, 0.1);
+}
+
+.preDetailHeader {
+  padding: 24px 25px 18px;
+  background: linear-gradient(135deg, #082c64 0%, #0b63d7 100%);
+  color: #fff;
+}
+
+.preDetailHeader h2 {
+  margin: 4px 0 4px;
+  font-size: 30px;
+}
+
+.preDetailHeader p {
+  margin: 0;
+  opacity: 0.82;
+}
+
+.preDetailKicker {
+  color: #a8d0ff;
+}
+
+.preCloseButton {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 27px;
+  cursor: pointer;
+}
+
+.preDetailTabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e9eef4;
+  background: #f9fbfd;
+}
+
+.preDetailTabs button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 11px;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.preDetailTabs button.active {
+  color: #0b63d7;
+  background: #eaf3ff;
+}
+
+.preDetailBody {
+  padding: 24px;
+}
+
+.preInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.preInfo {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #e8edf3;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.preInfo strong {
+  display: block;
+  color: #203752;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.preNoteBox {
+  margin-top: 13px;
+  padding: 15px;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+  border-radius: 14px;
+}
+
+.preNoteBox p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.preConsentStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.preConsentStrip > div {
+  padding: 13px 14px;
+  border-radius: 13px;
+  background: #effaf4;
+  border: 1px solid #d5f0df;
+}
+
+.preConsentStrip span {
+  display: block;
+  color: #5b7b68;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.preConsentStrip strong {
+  display: block;
+  margin-top: 4px;
+  color: #087443;
+}
+
+.preActionFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #edf1f5;
+}
+
+.primaryPreAction,
+.secondaryPreAction {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryPreAction {
+  border: 0;
+  background: #0b6ef3;
+  color: #fff;
+  box-shadow: 0 9px 22px rgba(11, 110, 243, 0.23);
+}
+
+.secondaryPreAction {
+  border: 1px solid #d9e2ec;
+  background: #fff;
+  color: #31506f;
+}
+
+.preArchiveNotice,
+.preEditWarning {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  line-height: 1.55;
+}
+
+.preArchiveNotice {
+  border: 1px solid #cfe2ff;
+  background: #eef6ff;
+  color: #164b87;
+}
+
+.preArchiveNotice strong,
+.preArchiveNotice span {
+  display: block;
+}
+
+.preEditWarning {
+  border: 1px solid #f5dba2;
+  background: #fff8e9;
+  color: #7b5715;
+}
+
+.preTechnicalBox {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 15px;
+  border-radius: 14px;
+  background: #172033;
+  color: #fff;
+}
+
+.preTechnicalBox strong {
+  overflow-wrap: anywhere;
+}
+
+.preTechnicalBox details {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 10px;
+}
+
+.preTechnicalBox summary {
+  cursor: pointer;
+  color: #b8c8dd;
+  font-size: 12px;
+}
+
+.preTechnicalBox code {
+  display: block;
+  margin-top: 8px;
+  color: #cbe2ff;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.preSnapshot {
+  margin-top: 17px;
+  padding-top: 17px;
+  border-top: 1px dashed #dbe4ef;
+}
+
+.preSnapshot h3 {
+  margin: 0 0 13px;
+  color: #18395f;
+}
+
+.preEditGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.preEditGrid label {
+  display: grid;
+  gap: 6px;
+}
+
+.preEditGrid label.full {
+  grid-column: 1 / -1;
+}
+
+.preEditGrid label > span {
+  color: #53657b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.preEditGrid input,
+.preEditGrid select,
+.preEditGrid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d9e2ec;
+  border-radius: 11px;
+  padding: 11px 12px;
+  background: #fff;
+  font: inherit;
+  outline: none;
+}
+
+.preEditGrid input:focus,
+.preEditGrid select:focus,
+.preEditGrid textarea:focus {
+  border-color: #6aa8f7;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.09);
+}
+
+.preEditActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.preEditActions button {
+  min-height: 46px;
+  padding: 0 17px;
+  border-radius: 11px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.preEditActions button:first-child {
+  border: 1px solid #dbe3ec;
+  background: #fff;
+  color: #465c75;
+}
+
+.preEditActions button:last-child {
+  border: 0;
+  background: #0b6ef3;
+  color: #fff;
+}
+
+.preHistory {
+  display: grid;
+}
+
+.preHistoryItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 13px;
+  padding-bottom: 22px;
+}
+
+.preHistoryItem:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 15px;
+  bottom: -2px;
+  width: 2px;
+  background: #e1e8f0;
+}
+
+.preHistoryDot {
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #0b6ef3;
+  border: 4px solid #e8f2ff;
+}
+
+.preHistoryTop strong {
+  color: #213a58;
+}
+
+.preHistoryTop span {
+  color: #8795a6;
+  font-size: 12px;
+}
+
+.preHistoryItem p {
+  margin: 6px 0 0;
+  color: #5e6e82;
+  line-height: 1.55;
+}
+
+.preChangeList {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.preChangeList > div {
+  display: grid;
+  grid-template-columns: 140px 1fr 24px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f7f9fc;
+  font-size: 12px;
+}
+
+.preChangeList > div > strong {
+  color: #31506f;
+}
+
+.preChangeList > div > span {
+  overflow-wrap: anywhere;
+  color: #68788d;
+}
+
+.preChangeList > div > b {
+  text-align: center;
+  color: #0b6ef3;
+}
+
+.preArchiveSection {
+  display: grid;
+  gap: 14px;
+}
+
+.preArchiveList {
+  display: grid;
+  gap: 10px;
+}
+
+.preArchiveCard {
+  overflow: hidden;
+  border: 1px solid #e2e9f1;
+  border-radius: 17px;
+  background: #fff;
+}
+
+.preArchiveCardButton {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 0;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preArchiveCardButton p {
+  margin: 4px 0 0;
+  color: #7d8b9d;
+  font-size: 12px;
+}
+
+.preArchiveBadges {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.preArchiveBadges span {
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.preArchiveBadges span.ok {
+  background: #eaf9f0;
+  color: #087443;
+}
+
+.preArchiveBadges span.no {
+  background: #f1f3f6;
+  color: #6f7d8e;
+}
+
+.preArchiveBadges b {
+  color: #0b6ef3;
+  font-size: 12px;
+}
+
+.preArchiveExpanded {
+  padding: 18px;
+  border-top: 1px solid #edf1f5;
+  background: #fbfcfe;
+}
+
+.preRegistrationEmpty {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+  place-items: center;
+  min-height: 150px;
+  padding: 24px;
+  border: 1px dashed #ced9e5;
+  border-radius: 17px;
+  background: #fafcff;
+  color: #65758a;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .preRegistrationToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preRegistrationToolbar input {
+    width: 100%;
+  }
+
+  .preRegistrationGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .preInfoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .preCardRoute {
+    grid-template-columns: 1fr;
+  }
+
+  .preEditGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .preEditGrid label.full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .preRegistrationPage {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .preRegistrationTabs {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .preRegistrationTabs button {
+    flex: 1;
+    justify-content: center;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .preRegistrationCard {
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .preCardTop h3 {
+    font-size: 18px;
+  }
+
+  .preCardContact {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .preCardRoute {
+    gap: 7px;
+  }
+
+  .preDetailHeader {
+    padding: 20px 17px 16px;
+  }
+
+  .preDetailHeader h2 {
+    font-size: 23px;
+  }
+
+  .preDetailBody {
+    padding: 16px;
+  }
+
+  .preInfoGrid,
+  .preConsentStrip,
+  .preTechnicalBox {
+    grid-template-columns: 1fr;
+  }
+
+  .preTechnicalBox details {
+    grid-column: auto;
+  }
+
+  .preActionFooter,
+  .preEditActions {
+    flex-direction: column;
+  }
+
+  .primaryPreAction,
+  .secondaryPreAction,
+  .preEditActions button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .preHistoryTop {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .preChangeList > div {
+    grid-template-columns: 1fr;
+  }
+
+  .preChangeList > div > b {
+    text-align: left;
+  }
+
+  .preArchiveCardButton {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .preArchiveBadges {
+    justify-content: flex-start;
+  }
+}
