@@ -850,3 +850,400 @@
     justify-content: flex-start;
   }
 }
+
+/* ===== SprintOS Ön Kayıt Merkezi · Profesyonel etkileşim revizyonu ===== */
+
+.preTopActions a,
+.preTopActions button,
+.preRegistrationTabs button,
+.preDetailTabs button,
+.preRegistrationCard,
+.preArchiveCardButton,
+.primaryPreAction,
+.secondaryPreAction,
+.warningPreAction,
+.dangerPreAction,
+.preEditActions button,
+.preCloseButton,
+.preSearchWrap button {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.preTopActions a:hover,
+.preTopActions button:hover,
+.primaryPreAction:hover,
+.secondaryPreAction:hover,
+.warningPreAction:hover,
+.dangerPreAction:hover,
+.preEditActions button:hover {
+  transform: translateY(-1px);
+}
+
+.preTopActions a:active,
+.preTopActions button:active,
+.preRegistrationTabs button:active,
+.preDetailTabs button:active,
+.preRegistrationCard:active,
+.preArchiveCardButton:active,
+.primaryPreAction:active,
+.secondaryPreAction:active,
+.warningPreAction:active,
+.dangerPreAction:active,
+.preEditActions button:active,
+.preCloseButton:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.preTopActions a:focus-visible,
+.preTopActions button:focus-visible,
+.preRegistrationTabs button:focus-visible,
+.preDetailTabs button:focus-visible,
+.preRegistrationCard:focus-visible,
+.preArchiveCardButton:focus-visible,
+.primaryPreAction:focus-visible,
+.secondaryPreAction:focus-visible,
+.warningPreAction:focus-visible,
+.dangerPreAction:focus-visible,
+.preEditActions button:focus-visible,
+.preCloseButton:focus-visible,
+.preSearchWrap button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
+.preRegistrationTabs button.active,
+.preDetailTabs button.active {
+  color: #fff;
+  background: linear-gradient(135deg, #0b6ef3 0%, #0759c8 100%);
+  box-shadow: 0 9px 22px rgba(11, 110, 243, 0.22);
+}
+
+.preRegistrationTabs button.active span,
+.preDetailTabs button.active span {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.preRegistrationCard.selected {
+  border-color: #0b6ef3;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  box-shadow:
+    0 0 0 3px rgba(11, 110, 243, 0.11),
+    0 18px 42px rgba(15, 76, 160, 0.14);
+}
+
+.preCardBadges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.preHealthBadge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #b42318;
+  border: 1px solid #fecdd3;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.preHealthNotice {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 13px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.preHealthNotice.attention {
+  border: 1px solid #fecaca;
+  background: linear-gradient(135deg, #fff7f7 0%, #fff1f2 100%);
+  box-shadow: 0 8px 24px rgba(185, 28, 28, 0.06);
+}
+
+.preHealthNotice.clear {
+  border: 1px solid #ccebd9;
+  background: linear-gradient(135deg, #f3fcf7 0%, #ecfdf3 100%);
+}
+
+.preHealthIcon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.preHealthNotice.attention .preHealthIcon {
+  background: #fee2e2;
+  color: #b42318;
+}
+
+.preHealthNotice.clear .preHealthIcon {
+  background: #dff7e9;
+  color: #087443;
+}
+
+.preHealthNotice > div:last-child > span {
+  display: block;
+  margin-bottom: 3px;
+  color: #7a8798;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.preHealthNotice strong {
+  display: block;
+  color: #233d5b;
+  font-size: 15px;
+}
+
+.preHealthNotice.attention strong {
+  color: #a61b1b;
+}
+
+.preHealthNotice p {
+  margin: 6px 0 0;
+  color: #52657b;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preSearchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(100%, 480px);
+}
+
+.preSearchWrap > span {
+  position: absolute;
+  left: 14px;
+  z-index: 1;
+  color: #8393a8;
+  pointer-events: none;
+}
+
+.preRegistrationToolbar .preSearchWrap input {
+  width: 100%;
+  padding-left: 38px;
+  padding-right: 78px;
+}
+
+.preSearchWrap button {
+  position: absolute;
+  right: 8px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 9px;
+  background: #edf4ff;
+  color: #0b63d7;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.preSearchWrap button:hover {
+  background: #dceaff;
+}
+
+.preRegistrationFlash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preRegistrationFlash > span {
+  font-weight: 650;
+}
+
+.preRegistrationFlash.warning {
+  border-color: #f3d19e;
+  background: #fff8e8;
+  color: #805813;
+}
+
+.preRegistrationFlash.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #a61b1b;
+}
+
+.preStatAttention {
+  color: #c2410c !important;
+}
+
+.preStatOk {
+  color: #16875b !important;
+}
+
+.preActionFooter {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preDangerActions,
+.prePrimaryActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.preDangerActions form {
+  margin: 0;
+}
+
+.warningPreAction,
+.dangerPreAction {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 17px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.warningPreAction {
+  border: 1px solid #f2c46d;
+  background: #fff8e8;
+  color: #9a6505;
+}
+
+.warningPreAction:hover {
+  background: #fff2cc;
+  border-color: #e9ad3a;
+  box-shadow: 0 8px 20px rgba(180, 113, 8, 0.12);
+}
+
+.dangerPreAction {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.dangerPreAction:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  box-shadow: 0 8px 20px rgba(185, 28, 28, 0.12);
+}
+
+.primaryPreAction:hover {
+  background: #075ecf;
+  box-shadow: 0 12px 28px rgba(11, 110, 243, 0.28);
+}
+
+.secondaryPreAction:hover {
+  border-color: #9fc5f4;
+  background: #f5f9ff;
+  color: #0b5ed7;
+  box-shadow: 0 8px 20px rgba(15, 76, 160, 0.08);
+}
+
+.warningPreAction:disabled,
+.dangerPreAction:disabled,
+.preEditActions button:disabled,
+.preCopyButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none !important;
+}
+
+.preCopyButton.copied {
+  border-color: #8dd9ae !important;
+  background: #ecfdf3 !important;
+  color: #087443 !important;
+  box-shadow: 0 8px 20px rgba(8, 116, 67, 0.12);
+}
+
+.preCopyButton.error {
+  border-color: #fecaca !important;
+  background: #fff1f2 !important;
+  color: #b42318 !important;
+}
+
+.preEditGrid small {
+  color: #748399;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preArchiveCard.open {
+  border-color: #9fc5f4;
+  box-shadow: 0 10px 30px rgba(15, 76, 160, 0.08);
+}
+
+.preArchiveCardButton:hover {
+  background: #f7fbff;
+}
+
+.preArchiveBadges span.health {
+  background: #fff1f2;
+  color: #b42318;
+  border: 1px solid #fecdd3;
+}
+
+@media (max-width: 640px) {
+  .preSearchWrap {
+    width: 100%;
+  }
+
+  .preActionFooter,
+  .preDangerActions,
+  .prePrimaryActions {
+    width: 100%;
+  }
+
+  .preDangerActions,
+  .prePrimaryActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .preDangerActions form,
+  .preDangerActions button,
+  .prePrimaryActions a,
+  .prePrimaryActions button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .preHealthNotice {
+    grid-template-columns: 38px 1fr;
+    padding: 14px;
+  }
+
+  .preHealthIcon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+  }
+
+  .preCardBadges {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+}
