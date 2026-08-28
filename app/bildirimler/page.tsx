@@ -2,25 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import BildirimMerkeziClient, {
+  type NotificationItem,
+} from "./BildirimMerkeziClient";
 
 export const dynamic = "force-dynamic";
 
-type NotificationRow = {
+type DeviceRow = {
   id: string;
-  title: string;
-  body: string | null;
-  message: string | null;
-  category: string | null;
-  notification_type: string;
-  severity: string | null;
-  priority: string | null;
-  target_path: string | null;
-  is_read: boolean;
-  push_required: boolean;
-  push_requested: boolean;
-  push_sent: boolean;
-  push_sent_at: string | null;
+  device_name: string | null;
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 function getAdminClient() {
@@ -37,55 +30,6 @@ function getAdminClient() {
       autoRefreshToken: false,
     },
   });
-}
-
-function categoryLabel(category?: string | null) {
-  switch (category) {
-    case "preregistration":
-      return "Ön Kayıt";
-    case "students":
-      return "Öğrenciler";
-    case "attendance":
-      return "Yoklama";
-    case "finance":
-      return "Finans";
-    case "payment":
-      return "Ödemeler";
-    case "cash":
-      return "Kasa";
-    case "approvals":
-      return "Onaylar";
-    case "staff":
-      return "Personel";
-    case "accounts":
-      return "Kullanıcılar";
-    case "permissions":
-      return "Yetkiler";
-    case "schedule":
-      return "Ders Programı";
-    case "operations":
-      return "Operasyon";
-    case "reports":
-      return "Raporlar";
-    case "system":
-      return "Sistem";
-    default:
-      return category || "Sistem";
-  }
-}
-
-function severityLabel(severity?: string | null) {
-  switch (severity) {
-    case "success":
-      return "Başarılı";
-    case "warning":
-      return "Uyarı";
-    case "error":
-    case "critical":
-      return "Kritik";
-    default:
-      return "Bilgi";
-  }
 }
 
 function formatDate(value: string) {
@@ -107,9 +51,10 @@ export default async function BildirimlerPage() {
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
     redirect("/login?next=/bildirimler");
   }
 
@@ -123,17 +68,83 @@ export default async function BildirimlerPage() {
 
   if (profileError || !profile) {
     return (
-      <main style={styles.errorPage}>
-        <section style={styles.errorCard}>
-          <div style={styles.errorIcon}>!</div>
-          <h1 style={styles.errorTitle}>Bildirim Merkezi açılamadı</h1>
-          <p style={styles.errorText}>
+      <main className="error-page">
+        <section className="error-card">
+          <div className="error-icon">!</div>
+
+          <h1>Bildirim Merkezi açılamadı</h1>
+
+          <p>
             Kullanıcı profili bulunamadı veya okunamadı.
           </p>
-          <Link href="/" style={styles.primaryButton}>
+
+          <Link href="/" className="primary-link">
             Ana Sayfaya Dön
           </Link>
         </section>
+
+        <style>{`
+          .error-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: #f3f7fc;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+
+          .error-card {
+            width: 100%;
+            max-width: 520px;
+            padding: 36px;
+            border-radius: 24px;
+            text-align: center;
+            background: #ffffff;
+            border: 1px solid #dfe7f2;
+            box-shadow: 0 18px 50px rgba(23, 49, 87, 0.08);
+          }
+
+          .error-icon {
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: #fff0ee;
+            color: #c84035;
+            font-size: 24px;
+            font-weight: 900;
+          }
+
+          .error-card h1 {
+            margin: 0;
+            color: #10213e;
+            font-size: 22px;
+          }
+
+          .error-card p {
+            margin: 10px 0 22px;
+            color: #718099;
+            font-size: 13px;
+          }
+
+          .primary-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: 13px;
+            background: #1264e8;
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 900;
+          }
+        `}</style>
       </main>
     );
   }
@@ -172,7 +183,9 @@ export default async function BildirimlerPage() {
 
     admin
       .from("push_subscriptions")
-      .select("id, device_name, is_active, created_at, updated_at")
+      .select(
+        "id, device_name, is_active, created_at, updated_at"
+      )
       .eq("organization_id", profile.organization_id)
       .eq("profile_id", profile.id)
       .eq("is_active", true)
@@ -180,9 +193,10 @@ export default async function BildirimlerPage() {
   ]);
 
   const notifications =
-    (notificationsResult.data as NotificationRow[] | null) ?? [];
+    (notificationsResult.data as NotificationItem[] | null) ?? [];
 
-  const devices = subscriptionsResult.data ?? [];
+  const devices =
+    (subscriptionsResult.data as DeviceRow[] | null) ?? [];
 
   const unreadCount = notifications.filter(
     (item) => !item.is_read
@@ -191,9 +205,14 @@ export default async function BildirimlerPage() {
   const todayKey = new Date().toLocaleDateString("tr-TR");
 
   const todayCount = notifications.filter((item) => {
-    return (
-      new Date(item.created_at).toLocaleDateString("tr-TR") === todayKey
-    );
+    try {
+      return (
+        new Date(item.created_at).toLocaleDateString("tr-TR") ===
+        todayKey
+      );
+    } catch {
+      return false;
+    }
   }).length;
 
   const pushSentCount = notifications.filter(
@@ -201,37 +220,52 @@ export default async function BildirimlerPage() {
   ).length;
 
   return (
-    <main style={styles.page}>
-      <div style={styles.container}>
-        <header style={styles.header}>
-          <div>
-            <div style={styles.eyebrow}>SPRINTOS • İLETİŞİM MERKEZİ</div>
+    <main className="page-shell">
+      <div className="page-container">
+        <header className="page-header">
+          <div className="header-copy">
+            <div className="eyebrow">
+              SPRINTOS • İLETİŞİM MERKEZİ
+            </div>
 
-            <h1 style={styles.title}>Bildirim Merkezi</h1>
+            <h1>Bildirim Merkezi</h1>
 
-            <p style={styles.subtitle}>
-              Sprint Yüzme Okulu genelindeki bildirimleri, uyarıları ve
-              telefon bildirimlerini tek merkezden yönetin.
+            <p>
+              Sprint Yüzme Okulu genelindeki bilgi akışını,
+              işlem bildirimlerini ve telefon bildirimlerini
+              tek merkezden yönetin.
             </p>
           </div>
 
-          <div style={styles.headerActions}>
-            <Link href="/" style={styles.secondaryButton}>
-              ← Ana Sayfa
+          <div className="header-actions">
+            <Link
+              href="/"
+              className="header-button secondary"
+            >
+              <span>←</span>
+              <span>Ana Sayfa</span>
             </Link>
 
-            <Link href="/uyarilar" style={styles.secondaryButton}>
-              Uyarılar
+            <Link
+              href="/uyarilar"
+              className="header-button warning"
+            >
+              <span>⚠</span>
+              <span>Uyarılar</span>
             </Link>
 
-            <Link href="/onay-merkezi" style={styles.primaryButton}>
-              Onay Merkezi
+            <Link
+              href="/onay-merkezi"
+              className="header-button primary"
+            >
+              <span>✓</span>
+              <span>Onay Merkezi</span>
             </Link>
           </div>
         </header>
 
         {notificationsResult.error ? (
-          <div style={styles.warningBox}>
+          <div className="warning-message">
             <strong>Bildirimler okunamadı.</strong>
             <span>
               {" "}
@@ -240,237 +274,140 @@ export default async function BildirimlerPage() {
           </div>
         ) : null}
 
-        <section style={styles.statsGrid}>
-          <article style={styles.statCard}>
-            <div style={styles.statIcon}>🔔</div>
+        <section className="stats-grid">
+          <article className="stat-card unread-stat">
+            <div className="stat-icon">🔔</div>
 
             <div>
-              <div style={styles.statLabel}>Okunmamış</div>
-              <div style={styles.statValue}>{unreadCount}</div>
-              <div style={styles.statDescription}>
+              <div className="stat-label">
+                Okunmamış
+              </div>
+
+              <div className="stat-value">
+                {unreadCount}
+              </div>
+
+              <div className="stat-description">
                 İşlem bekleyen bildirim
               </div>
             </div>
           </article>
 
-          <article style={styles.statCard}>
-            <div style={styles.statIcon}>📥</div>
+          <article className="stat-card today-stat">
+            <div className="stat-icon">📥</div>
 
             <div>
-              <div style={styles.statLabel}>Bugün</div>
-              <div style={styles.statValue}>{todayCount}</div>
-              <div style={styles.statDescription}>
+              <div className="stat-label">
+                Bugün
+              </div>
+
+              <div className="stat-value">
+                {todayCount}
+              </div>
+
+              <div className="stat-description">
                 Bugün oluşan bildirim
               </div>
             </div>
           </article>
 
-          <article style={styles.statCard}>
-            <div style={styles.statIcon}>📱</div>
+          <article className="stat-card device-stat">
+            <div className="stat-icon">📱</div>
 
             <div>
-              <div style={styles.statLabel}>Aktif Cihaz</div>
-              <div style={styles.statValue}>{devices.length}</div>
-              <div style={styles.statDescription}>
+              <div className="stat-label">
+                Aktif Cihaz
+              </div>
+
+              <div className="stat-value">
+                {devices.length}
+              </div>
+
+              <div className="stat-description">
                 Push bildirimi alabilen cihaz
               </div>
             </div>
           </article>
 
-          <article style={styles.statCard}>
-            <div style={styles.statIcon}>✓</div>
+          <article className="stat-card push-stat">
+            <div className="stat-icon">✓</div>
 
             <div>
-              <div style={styles.statLabel}>Push Gönderildi</div>
-              <div style={styles.statValue}>{pushSentCount}</div>
-              <div style={styles.statDescription}>
-                Kayıtlı gönderim
+              <div className="stat-label">
+                Push Gönderildi
+              </div>
+
+              <div className="stat-value">
+                {pushSentCount}
+              </div>
+
+              <div className="stat-description">
+                Kayıtlı push gönderimi
               </div>
             </div>
           </article>
         </section>
 
-        <section style={styles.layout}>
-          <div style={styles.mainColumn}>
-            <section style={styles.panel}>
-              <div style={styles.panelHeader}>
-                <div>
-                  <h2 style={styles.panelTitle}>
-                    Tüm Bildirimler
-                  </h2>
-
-                  <p style={styles.panelSubtitle}>
-                    Son 100 sistem bildirimi gösteriliyor.
-                  </p>
-                </div>
-
-                <div style={styles.countBadge}>
-                  {notifications.length} kayıt
-                </div>
-              </div>
-
-              <div style={styles.filterRow}>
-                <span style={styles.filterActive}>Tümü</span>
-                <span style={styles.filter}>Okunmamış</span>
-                <span style={styles.filter}>Ön Kayıt</span>
-                <span style={styles.filter}>Yoklama</span>
-                <span style={styles.filter}>Finans</span>
-                <span style={styles.filter}>Onaylar</span>
-                <span style={styles.filter}>Sistem</span>
-              </div>
-
-              {notifications.length === 0 ? (
-                <div style={styles.emptyState}>
-                  <div style={styles.emptyIcon}>🔔</div>
-
-                  <h3 style={styles.emptyTitle}>
-                    Henüz bildirim bulunmuyor
-                  </h3>
-
-                  <p style={styles.emptyText}>
-                    Modülleri merkezi bildirim motoruna bağladığımızda
-                    ön kayıt, yoklama, ödeme, kasa, onay ve sistem
-                    bildirimleri burada görüntülenecek.
-                  </p>
-                </div>
-              ) : (
-                <div style={styles.notificationList}>
-                  {notifications.map((notification) => {
-                    const content =
-                      notification.body ||
-                      notification.message ||
-                      "Bildirim ayrıntısı bulunmuyor.";
-
-                    const item = (
-                      <article
-                        style={{
-                          ...styles.notificationCard,
-                          ...(!notification.is_read
-                            ? styles.notificationUnread
-                            : {}),
-                        }}
-                      >
-                        <div style={styles.notificationIcon}>
-                          {notification.is_read ? "✓" : "🔔"}
-                        </div>
-
-                        <div style={styles.notificationContent}>
-                          <div style={styles.notificationTop}>
-                            <div style={styles.badges}>
-                              <span style={styles.categoryBadge}>
-                                {categoryLabel(
-                                  notification.category
-                                )}
-                              </span>
-
-                              <span style={styles.severityBadge}>
-                                {severityLabel(
-                                  notification.severity
-                                )}
-                              </span>
-
-                              {!notification.is_read ? (
-                                <span style={styles.unreadBadge}>
-                                  Yeni
-                                </span>
-                              ) : null}
-
-                              {notification.push_sent ? (
-                                <span style={styles.pushBadge}>
-                                  Push ✓
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <time style={styles.dateText}>
-                              {formatDate(
-                                notification.created_at
-                              )}
-                            </time>
-                          </div>
-
-                          <h3 style={styles.notificationTitle}>
-                            {notification.title}
-                          </h3>
-
-                          <p style={styles.notificationBody}>
-                            {content}
-                          </p>
-
-                          {notification.target_path ? (
-                            <div style={styles.openText}>
-                              İlgili kaydı aç →
-                            </div>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-
-                    if (notification.target_path) {
-                      return (
-                        <Link
-                          href={notification.target_path}
-                          key={notification.id}
-                          style={styles.notificationLink}
-                        >
-                          {item}
-                        </Link>
-                      );
-                    }
-
-                    return (
-                      <div key={notification.id}>
-                        {item}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+        <section className="content-grid">
+          <div className="main-column">
+            <BildirimMerkeziClient
+              notifications={notifications}
+            />
           </div>
 
-          <aside style={styles.sideColumn}>
-            <section style={styles.panel}>
-              <div style={styles.sideHeader}>
-                <div style={styles.sideIcon}>📱</div>
+          <aside className="side-column">
+            <section className="side-panel">
+              <div className="side-panel-heading">
+                <div className="side-icon">
+                  📱
+                </div>
 
                 <div>
-                  <h2 style={styles.sideTitle}>
-                    Push Cihazları
-                  </h2>
-
-                  <p style={styles.sideSubtitle}>
+                  <h2>Push Cihazları</h2>
+                  <p>
                     Bildirim alabilen cihazlar
                   </p>
                 </div>
               </div>
 
               {subscriptionsResult.error ? (
-                <div style={styles.smallWarning}>
+                <div className="device-error">
                   Cihaz bilgileri okunamadı.
                 </div>
               ) : devices.length === 0 ? (
-                <div style={styles.deviceEmpty}>
-                  Bu hesapta aktif push cihazı bulunmuyor.
+                <div className="device-empty">
+                  Bu hesapta aktif push cihazı
+                  bulunmuyor.
                 </div>
               ) : (
-                <div style={styles.deviceList}>
+                <div className="device-list">
                   {devices.map((device) => (
                     <div
                       key={device.id}
-                      style={styles.deviceCard}
+                      className="device-card"
                     >
-                      <div style={styles.deviceDot} />
+                      <div className="device-status-dot" />
 
-                      <div style={{ minWidth: 0 }}>
-                        <div style={styles.deviceName}>
+                      <div className="device-copy">
+                        <strong>
                           {device.device_name ||
                             "Bilinmeyen cihaz"}
-                        </div>
+                        </strong>
 
-                        <div style={styles.deviceStatus}>
+                        <span>
                           Bildirimler aktif
-                        </div>
+                        </span>
+
+                        <small>
+                          Son güncelleme:{" "}
+                          {formatDate(
+                            device.updated_at
+                          )}
+                        </small>
+                      </div>
+
+                      <div className="active-badge">
+                        Aktif
                       </div>
                     </div>
                   ))}
@@ -478,34 +415,74 @@ export default async function BildirimlerPage() {
               )}
             </section>
 
-            <section style={styles.panel}>
-              <h2 style={styles.sideTitle}>
-                Bildirim Kaynakları
-              </h2>
+            <section className="side-panel">
+              <div className="source-heading">
+                <h2>Bildirim Kaynakları</h2>
 
-              <p style={styles.sideSubtitle}>
-                Merkezi sisteme bağlanacak modüller
-              </p>
+                <p>
+                  Merkezi sisteme bağlanacak modüller
+                </p>
+              </div>
 
-              <div style={styles.sourceList}>
+              <div className="source-list">
                 {[
-                  "Ön Kayıtlar",
-                  "Öğrenciler",
-                  "Yoklama",
-                  "Ödemeler",
-                  "Günlük Kasa",
-                  "Onay Merkezi",
-                  "Kullanıcı ve Yetkiler",
-                  "Ders Programı",
-                  "Operasyon Planı",
-                  "Sistem",
+                  {
+                    label: "Ön Kayıtlar",
+                    icon: "＋",
+                  },
+                  {
+                    label: "Öğrenciler",
+                    icon: "◉",
+                  },
+                  {
+                    label: "Yoklama",
+                    icon: "✓",
+                  },
+                  {
+                    label: "Ödemeler",
+                    icon: "₺",
+                  },
+                  {
+                    label: "Günlük Kasa",
+                    icon: "▣",
+                  },
+                  {
+                    label: "Onay Merkezi",
+                    icon: "◎",
+                  },
+                  {
+                    label:
+                      "Kullanıcı ve Yetkiler",
+                    icon: "♙",
+                  },
+                  {
+                    label: "Ders Programı",
+                    icon: "▦",
+                  },
+                  {
+                    label: "Operasyon Planı",
+                    icon: "⌘",
+                  },
+                  {
+                    label: "Sistem",
+                    icon: "⚙",
+                  },
                 ].map((source) => (
                   <div
-                    key={source}
-                    style={styles.sourceRow}
+                    key={source.label}
+                    className="source-row"
                   >
-                    <span>{source}</span>
-                    <span style={styles.sourcePending}>
+                    <div className="source-name">
+                      <span className="source-icon">
+                        {source.icon}
+                      </span>
+
+                      <span>
+                        {source.label}
+                      </span>
+                    </div>
+
+                    <span className="source-status">
                       Hazırlanıyor
                     </span>
                   </div>
@@ -513,556 +490,609 @@ export default async function BildirimlerPage() {
               </div>
             </section>
 
-            <section style={styles.infoPanel}>
-              <div style={styles.infoIcon}>ℹ️</div>
+            <section className="info-panel">
+              <div className="info-icon">
+                ℹ
+              </div>
 
               <div>
-                <strong style={styles.infoTitle}>
+                <strong>
                   Merkezi Bildirim Sistemi
                 </strong>
 
-                <p style={styles.infoText}>
-                  Bildirimler kullanıcı, yetki ve modül bazında
-                  yönlendirilecek. Telefon push bildirimleri de aynı
-                  kayıt üzerinden gönderilecek.
+                <p>
+                  Bildirimler kullanıcı, yetki ve
+                  modül bazında yönlendirilecek.
+                  Telefon push bildirimleri de aynı
+                  kayıt üzerinden yönetilecek.
                 </p>
               </div>
             </section>
           </aside>
         </section>
       </div>
+
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        .page-shell {
+          min-height: 100vh;
+          padding: 34px 22px 70px;
+          background:
+            radial-gradient(
+              circle at top right,
+              rgba(37, 109, 232, 0.05),
+              transparent 31%
+            ),
+            #f3f7fc;
+          color: #10213e;
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        }
+
+        .page-container {
+          width: 100%;
+          max-width: 1480px;
+          margin: 0 auto;
+        }
+
+        .page-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+          flex-wrap: wrap;
+          margin-bottom: 25px;
+        }
+
+        .header-copy {
+          max-width: 760px;
+        }
+
+        .eyebrow {
+          margin-bottom: 8px;
+          color: #1264df;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 1.5px;
+        }
+
+        .page-header h1 {
+          margin: 0;
+          color: #10213e;
+          font-size: 35px;
+          line-height: 1.05;
+          letter-spacing: -1px;
+          font-weight: 950;
+        }
+
+        .page-header p {
+          margin: 10px 0 0;
+          color: #687891;
+          font-size: 14px;
+          line-height: 1.65;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .header-button {
+          min-height: 45px;
+          padding: 0 15px;
+          border-radius: 13px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 900;
+          border: 1px solid;
+          transition:
+            transform 0.14s ease,
+            box-shadow 0.14s ease,
+            background 0.14s ease,
+            border-color 0.14s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .header-button.secondary {
+          color: #334861;
+          background: #ffffff;
+          border-color: #dbe4ef;
+        }
+
+        .header-button.secondary:hover {
+          background: #f6f9fd;
+          border-color: #c8d5e5;
+          transform: translateY(-2px);
+          box-shadow:
+            0 9px 20px rgba(26, 51, 86, 0.08);
+        }
+
+        .header-button.warning {
+          color: #a96109;
+          background: #fff7e8;
+          border-color: #f0d8ad;
+        }
+
+        .header-button.warning:hover {
+          background: #ffefcf;
+          border-color: #e8c78a;
+          transform: translateY(-2px);
+          box-shadow:
+            0 9px 20px rgba(176, 111, 22, 0.1);
+        }
+
+        .header-button.primary {
+          color: white;
+          background:
+            linear-gradient(
+              135deg,
+              #176de9,
+              #0753c8
+            );
+          border-color: #0753c8;
+          box-shadow:
+            0 10px 22px rgba(18, 93, 213, 0.2);
+        }
+
+        .header-button.primary:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 14px 28px rgba(18, 93, 213, 0.26);
+        }
+
+        .header-button:active {
+          transform: translateY(1px) scale(0.97);
+          box-shadow:
+            inset 0 3px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .warning-message {
+          margin-bottom: 18px;
+          padding: 14px 16px;
+          border-radius: 14px;
+          color: #955e15;
+          background: #fff6e8;
+          border: 1px solid #f1d6a7;
+          font-size: 12px;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(
+              4,
+              minmax(0, 1fr)
+            );
+          gap: 15px;
+          margin-bottom: 20px;
+        }
+
+        .stat-card {
+          position: relative;
+          min-height: 108px;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding: 20px;
+          overflow: hidden;
+          border-radius: 20px;
+          background: #ffffff;
+          border: 1px solid #dfe7f2;
+          box-shadow:
+            0 12px 34px rgba(20, 46, 82, 0.05);
+          transition:
+            transform 0.16s ease,
+            box-shadow 0.16s ease,
+            border-color 0.16s ease;
+        }
+
+        .stat-card::after {
+          content: "";
+          position: absolute;
+          width: 85px;
+          height: 85px;
+          right: -25px;
+          bottom: -36px;
+          border-radius: 50%;
+          opacity: 0.55;
+        }
+
+        .stat-card:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 17px 38px rgba(20, 46, 82, 0.075);
+        }
+
+        .unread-stat::after {
+          background: #fff0e6;
+        }
+
+        .today-stat::after {
+          background: #eaf2ff;
+        }
+
+        .device-stat::after {
+          background: #e8f8ef;
+        }
+
+        .push-stat::after {
+          background: #eeeaff;
+        }
+
+        .stat-icon {
+          width: 49px;
+          height: 49px;
+          flex: 0 0 49px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 15px;
+          background: #edf4ff;
+          font-size: 20px;
+          border: 1px solid #deebfc;
+        }
+
+        .stat-label {
+          color: #728098;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .stat-value {
+          margin-top: 2px;
+          color: #10213e;
+          font-size: 29px;
+          font-weight: 950;
+          line-height: 1;
+        }
+
+        .stat-description {
+          margin-top: 5px;
+          color: #909bae;
+          font-size: 10px;
+        }
+
+        .content-grid {
+          display: grid;
+          grid-template-columns:
+            minmax(0, 1fr)
+            330px;
+          gap: 20px;
+          align-items: start;
+        }
+
+        .main-column {
+          min-width: 0;
+        }
+
+        .side-column {
+          display: grid;
+          gap: 16px;
+        }
+
+        .side-panel {
+          padding: 20px;
+          border-radius: 21px;
+          background:
+            linear-gradient(
+              180deg,
+              #ffffff,
+              #fbfdff
+            );
+          border: 1px solid #dfe7f2;
+          box-shadow:
+            0 12px 34px rgba(20, 46, 82, 0.045);
+        }
+
+        .side-panel-heading {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin-bottom: 15px;
+        }
+
+        .side-icon {
+          width: 43px;
+          height: 43px;
+          flex: 0 0 43px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 13px;
+          background: #edf4ff;
+          border: 1px solid #deebfc;
+          font-size: 18px;
+        }
+
+        .side-panel h2 {
+          margin: 0;
+          color: #172b47;
+          font-size: 15px;
+          font-weight: 950;
+        }
+
+        .side-panel p {
+          margin: 4px 0 0;
+          color: #8a96a9;
+          font-size: 10px;
+          line-height: 1.5;
+        }
+
+        .device-list {
+          display: grid;
+          gap: 9px;
+        }
+
+        .device-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px;
+          border-radius: 14px;
+          background: #f8fafc;
+          border: 1px solid #ebeff4;
+          transition:
+            transform 0.14s ease,
+            border-color 0.14s ease,
+            background 0.14s ease;
+        }
+
+        .device-card:hover {
+          transform: translateY(-1px);
+          background: #f4f8fd;
+          border-color: #d9e4f2;
+        }
+
+        .device-status-dot {
+          width: 9px;
+          height: 9px;
+          flex: 0 0 9px;
+          border-radius: 50%;
+          background: #25a464;
+          box-shadow:
+            0 0 0 4px rgba(37, 164, 100, 0.12);
+        }
+
+        .device-copy {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .device-copy strong {
+          display: block;
+          color: #263a57;
+          font-size: 11px;
+          font-weight: 950;
+        }
+
+        .device-copy span {
+          display: block;
+          margin-top: 2px;
+          color: #24915d;
+          font-size: 9px;
+          font-weight: 800;
+        }
+
+        .device-copy small {
+          display: block;
+          margin-top: 4px;
+          color: #96a1b2;
+          font-size: 8px;
+        }
+
+        .active-badge {
+          padding: 5px 7px;
+          border-radius: 999px;
+          color: #19784b;
+          background: #e8f8ef;
+          border: 1px solid #cbead8;
+          font-size: 8px;
+          font-weight: 950;
+        }
+
+        .device-empty,
+        .device-error {
+          padding: 12px;
+          border-radius: 12px;
+          font-size: 10px;
+          line-height: 1.55;
+        }
+
+        .device-empty {
+          color: #8190a6;
+          background: #f7f9fc;
+        }
+
+        .device-error {
+          color: #a46214;
+          background: #fff6e8;
+        }
+
+        .source-heading {
+          padding-bottom: 13px;
+          border-bottom: 1px solid #edf1f6;
+        }
+
+        .source-list {
+          display: grid;
+          margin-top: 8px;
+        }
+
+        .source-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          min-height: 43px;
+          border-bottom: 1px solid #f0f3f7;
+          color: #40516c;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .source-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .source-icon {
+          width: 24px;
+          height: 24px;
+          border-radius: 8px;
+          background: #f2f6fc;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #55729c;
+          font-size: 10px;
+        }
+
+        .source-status {
+          color: #96a1b2;
+          font-size: 8px;
+          font-weight: 850;
+        }
+
+        .info-panel {
+          display: flex;
+          align-items: flex-start;
+          gap: 11px;
+          padding: 17px;
+          border-radius: 18px;
+          background:
+            linear-gradient(
+              135deg,
+              #edf5ff,
+              #f6faff
+            );
+          border: 1px solid #d4e5fb;
+        }
+
+        .info-icon {
+          width: 29px;
+          height: 29px;
+          flex: 0 0 29px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #1264df;
+          background: #ffffff;
+          font-weight: 950;
+        }
+
+        .info-panel strong {
+          color: #194f94;
+          font-size: 11px;
+          font-weight: 950;
+        }
+
+        .info-panel p {
+          margin: 5px 0 0;
+          color: #59769c;
+          font-size: 9px;
+          line-height: 1.55;
+        }
+
+        @media (max-width: 1120px) {
+          .stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .content-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .side-column {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .info-panel {
+            grid-column: 1 / -1;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .page-shell {
+            padding: 22px 13px 55px;
+          }
+
+          .page-header h1 {
+            font-size: 29px;
+          }
+
+          .header-actions {
+            width: 100%;
+            display: grid;
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+          }
+
+          .header-button {
+            padding: 0 9px;
+            font-size: 10px;
+          }
+
+          .stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+
+          .stat-card {
+            min-height: 99px;
+            padding: 14px;
+            gap: 10px;
+          }
+
+          .stat-icon {
+            width: 42px;
+            height: 42px;
+            flex-basis: 42px;
+            border-radius: 13px;
+          }
+
+          .stat-value {
+            font-size: 25px;
+          }
+
+          .side-column {
+            grid-template-columns: 1fr;
+          }
+
+          .info-panel {
+            grid-column: auto;
+          }
+        }
+
+        @media (max-width: 430px) {
+          .header-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .page-header h1 {
+            font-size: 27px;
+          }
+        }
+      `}</style>
     </main>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f4f7fb",
-    color: "#10213e",
-    padding: "34px 22px 70px",
-  },
-
-  container: {
-    width: "100%",
-    maxWidth: "1480px",
-    margin: "0 auto",
-  },
-
-  header: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: "24px",
-    flexWrap: "wrap",
-    marginBottom: "26px",
-  },
-
-  eyebrow: {
-    color: "#1463df",
-    fontSize: "12px",
-    fontWeight: 900,
-    letterSpacing: "1.5px",
-    marginBottom: "8px",
-  },
-
-  title: {
-    margin: 0,
-    color: "#10213e",
-    fontSize: "34px",
-    lineHeight: 1.1,
-    letterSpacing: "-0.8px",
-  },
-
-  subtitle: {
-    margin: "10px 0 0",
-    maxWidth: "760px",
-    color: "#66758e",
-    fontSize: "15px",
-    lineHeight: 1.65,
-  },
-
-  headerActions: {
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-  },
-
-  primaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "44px",
-    padding: "0 17px",
-    borderRadius: "12px",
-    background: "#1264e8",
-    color: "#ffffff",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: "14px",
-    boxShadow: "0 8px 22px rgba(18,100,232,.18)",
-  },
-
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "44px",
-    padding: "0 17px",
-    borderRadius: "12px",
-    background: "#ffffff",
-    color: "#223453",
-    textDecoration: "none",
-    fontWeight: 800,
-    fontSize: "14px",
-    border: "1px solid #dfe6f1",
-  },
-
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "16px",
-    marginBottom: "20px",
-  },
-
-  statCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: "15px",
-    padding: "20px",
-    background: "#ffffff",
-    border: "1px solid #e2e8f2",
-    borderRadius: "18px",
-    boxShadow: "0 8px 28px rgba(16,33,62,.045)",
-  },
-
-  statIcon: {
-    width: "48px",
-    height: "48px",
-    flex: "0 0 48px",
-    borderRadius: "14px",
-    background: "#edf4ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "21px",
-  },
-
-  statLabel: {
-    color: "#718099",
-    fontSize: "12px",
-    fontWeight: 800,
-  },
-
-  statValue: {
-    marginTop: "2px",
-    color: "#10213e",
-    fontSize: "28px",
-    fontWeight: 900,
-  },
-
-  statDescription: {
-    marginTop: "2px",
-    color: "#8793a8",
-    fontSize: "11px",
-  },
-
-  layout: {
-    display: "grid",
-    gridTemplateColumns:
-      "minmax(0, 1fr) minmax(280px, 340px)",
-    gap: "20px",
-    alignItems: "start",
-  },
-
-  mainColumn: {
-    minWidth: 0,
-  },
-
-  sideColumn: {
-    display: "grid",
-    gap: "16px",
-  },
-
-  panel: {
-    background: "#ffffff",
-    border: "1px solid #e2e8f2",
-    borderRadius: "20px",
-    padding: "20px",
-    boxShadow: "0 8px 30px rgba(16,33,62,.04)",
-  },
-
-  panelHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "15px",
-    flexWrap: "wrap",
-    paddingBottom: "17px",
-    borderBottom: "1px solid #edf1f6",
-  },
-
-  panelTitle: {
-    margin: 0,
-    fontSize: "18px",
-    color: "#10213e",
-  },
-
-  panelSubtitle: {
-    margin: "5px 0 0",
-    color: "#8793a8",
-    fontSize: "12px",
-  },
-
-  countBadge: {
-    padding: "7px 11px",
-    background: "#f2f6fc",
-    color: "#60708b",
-    borderRadius: "999px",
-    fontSize: "11px",
-    fontWeight: 800,
-  },
-
-  filterRow: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
-    padding: "16px 0",
-  },
-
-  filter: {
-    padding: "8px 12px",
-    borderRadius: "999px",
-    border: "1px solid #e2e8f2",
-    color: "#687790",
-    fontSize: "11px",
-    fontWeight: 800,
-  },
-
-  filterActive: {
-    padding: "8px 12px",
-    borderRadius: "999px",
-    background: "#1264e8",
-    color: "#ffffff",
-    fontSize: "11px",
-    fontWeight: 800,
-  },
-
-  notificationList: {
-    display: "grid",
-    gap: "10px",
-  },
-
-  notificationLink: {
-    textDecoration: "none",
-    color: "inherit",
-  },
-
-  notificationCard: {
-    display: "flex",
-    gap: "14px",
-    padding: "16px",
-    border: "1px solid #e8edf4",
-    borderRadius: "16px",
-    background: "#ffffff",
-  },
-
-  notificationUnread: {
-    background: "#f7faff",
-    border: "1px solid #cfe0ff",
-  },
-
-  notificationIcon: {
-    width: "42px",
-    height: "42px",
-    flex: "0 0 42px",
-    borderRadius: "13px",
-    background: "#edf4ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  notificationContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  notificationTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "12px",
-    flexWrap: "wrap",
-  },
-
-  badges: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "6px",
-  },
-
-  categoryBadge: {
-    background: "#eaf2ff",
-    color: "#145dcc",
-    padding: "5px 8px",
-    borderRadius: "999px",
-    fontSize: "10px",
-    fontWeight: 900,
-  },
-
-  severityBadge: {
-    background: "#f1f4f8",
-    color: "#66758e",
-    padding: "5px 8px",
-    borderRadius: "999px",
-    fontSize: "10px",
-    fontWeight: 900,
-  },
-
-  unreadBadge: {
-    background: "#fff0e8",
-    color: "#c95819",
-    padding: "5px 8px",
-    borderRadius: "999px",
-    fontSize: "10px",
-    fontWeight: 900,
-  },
-
-  pushBadge: {
-    background: "#e8f8ef",
-    color: "#187347",
-    padding: "5px 8px",
-    borderRadius: "999px",
-    fontSize: "10px",
-    fontWeight: 900,
-  },
-
-  dateText: {
-    color: "#98a3b5",
-    fontSize: "10px",
-  },
-
-  notificationTitle: {
-    margin: "9px 0 5px",
-    color: "#142540",
-    fontSize: "14px",
-  },
-
-  notificationBody: {
-    margin: 0,
-    color: "#6d7a90",
-    fontSize: "12px",
-    lineHeight: 1.55,
-  },
-
-  openText: {
-    marginTop: "9px",
-    color: "#1264e8",
-    fontSize: "11px",
-    fontWeight: 900,
-  },
-
-  emptyState: {
-    textAlign: "center",
-    padding: "70px 20px",
-  },
-
-  emptyIcon: {
-    fontSize: "35px",
-    marginBottom: "12px",
-  },
-
-  emptyTitle: {
-    margin: 0,
-    fontSize: "17px",
-  },
-
-  emptyText: {
-    maxWidth: "520px",
-    margin: "9px auto 0",
-    color: "#7d899e",
-    fontSize: "12px",
-    lineHeight: 1.65,
-  },
-
-  sideHeader: {
-    display: "flex",
-    gap: "12px",
-    alignItems: "center",
-    marginBottom: "15px",
-  },
-
-  sideIcon: {
-    width: "42px",
-    height: "42px",
-    borderRadius: "13px",
-    background: "#edf4ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  sideTitle: {
-    margin: 0,
-    color: "#142540",
-    fontSize: "15px",
-  },
-
-  sideSubtitle: {
-    margin: "4px 0 0",
-    color: "#8a96aa",
-    fontSize: "11px",
-  },
-
-  deviceList: {
-    display: "grid",
-    gap: "9px",
-  },
-
-  deviceCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "12px",
-    background: "#f8fafc",
-    borderRadius: "13px",
-    border: "1px solid #edf1f5",
-  },
-
-  deviceDot: {
-    width: "9px",
-    height: "9px",
-    flex: "0 0 9px",
-    borderRadius: "50%",
-    background: "#20a363",
-    boxShadow: "0 0 0 4px rgba(32,163,99,.1)",
-  },
-
-  deviceName: {
-    color: "#233652",
-    fontSize: "12px",
-    fontWeight: 900,
-  },
-
-  deviceStatus: {
-    marginTop: "2px",
-    color: "#20a363",
-    fontSize: "10px",
-    fontWeight: 700,
-  },
-
-  deviceEmpty: {
-    color: "#8490a3",
-    fontSize: "12px",
-    lineHeight: 1.6,
-  },
-
-  sourceList: {
-    display: "grid",
-    gap: "4px",
-    marginTop: "14px",
-  },
-
-  sourceRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "10px",
-    padding: "10px 0",
-    borderBottom: "1px solid #f0f2f6",
-    color: "#42516a",
-    fontSize: "11px",
-    fontWeight: 700,
-  },
-
-  sourcePending: {
-    color: "#9aa4b4",
-    fontSize: "9px",
-    fontWeight: 800,
-  },
-
-  infoPanel: {
-    display: "flex",
-    gap: "12px",
-    padding: "17px",
-    borderRadius: "18px",
-    background: "#edf5ff",
-    border: "1px solid #d5e5fb",
-  },
-
-  infoIcon: {
-    fontSize: "17px",
-  },
-
-  infoTitle: {
-    color: "#174d94",
-    fontSize: "12px",
-  },
-
-  infoText: {
-    margin: "5px 0 0",
-    color: "#55749c",
-    fontSize: "10px",
-    lineHeight: 1.55,
-  },
-
-  warningBox: {
-    marginBottom: "18px",
-    padding: "14px 16px",
-    background: "#fff6e8",
-    border: "1px solid #f5d8aa",
-    color: "#8c5b17",
-    borderRadius: "13px",
-    fontSize: "12px",
-  },
-
-  smallWarning: {
-    color: "#a56a1b",
-    fontSize: "11px",
-  },
-
-  errorPage: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "#f4f7fb",
-    padding: "24px",
-  },
-
-  errorCard: {
-    width: "100%",
-    maxWidth: "500px",
-    textAlign: "center",
-    background: "#ffffff",
-    padding: "35px",
-    borderRadius: "22px",
-    border: "1px solid #e2e8f2",
-  },
-
-  errorIcon: {
-    width: "52px",
-    height: "52px",
-    margin: "0 auto 14px",
-    borderRadius: "16px",
-    background: "#fff0ee",
-    color: "#d44235",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 900,
-    fontSize: "22px",
-  },
-
-  errorTitle: {
-    margin: 0,
-    fontSize: "21px",
-  },
-
-  errorText: {
-    color: "#748199",
-    fontSize: "13px",
-    margin: "9px 0 20px",
-  },
-};
