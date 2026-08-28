@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notifications/create-notification";
 
 type CustomResponseInput = {
   field_id?: unknown;
@@ -1497,6 +1498,164 @@ export async function POST(
         performed_at:
           acceptedAt,
       });
+
+    /*
+     * =====================================================
+     * MERKEZİ BİLDİRİM + WEB PUSH
+     * =====================================================
+     *
+     * Ön kayıt ana işleminin bir parçası değildir.
+     * Bildirim/push geçici olarak başarısız olsa bile
+     * başarılı öğrenci ön kaydı geri alınmaz.
+     */
+
+    try {
+      const notificationTitle =
+        registrationFor === "adult"
+          ? "Yeni Yetişkin Ön Kaydı"
+          : "Yeni Çocuk Ön Kaydı";
+
+      const notificationBody =
+        `${firstName} ${lastName} yeni ön kayıt oluşturdu. ` +
+        `${branchText} / ${groupText} / ${packageText}.` +
+        requestText +
+        healthText;
+
+      const notificationResult =
+        await createNotification({
+          organizationId:
+            organization.id,
+
+          category:
+            "preregistration",
+
+          eventKey:
+            "new_pre_registration",
+
+          notificationType:
+            "new_pre_registration",
+
+          title:
+            notificationTitle,
+
+          body:
+            notificationBody,
+
+          message:
+            notificationBody,
+
+          severity:
+            healthNote
+              ? "warning"
+              : "info",
+
+          priority:
+            healthNote ||
+            contactRequest ===
+              "ready_to_start"
+              ? "high"
+              : "normal",
+
+          studentId:
+            student.id,
+
+          sourceType:
+            "web_pre_registration",
+
+          sourceId:
+            student.id,
+
+          entityType:
+            "student",
+
+          entityId:
+            student.id,
+
+          targetPath:
+            `/kayit-tamamlama/${student.id}`,
+
+          push:
+            true,
+
+          metadata: {
+            registration_for:
+              registrationFor,
+
+            student_name:
+              `${firstName} ${lastName}`,
+
+            phone:
+              phone || null,
+
+            guardian_name:
+              guardianName || null,
+
+            branch_id:
+              branch?.id || null,
+
+            branch_name:
+              branch?.name || null,
+
+            group_id:
+              group?.id || null,
+
+            group_name:
+              group?.name || null,
+
+            package_id:
+              coursePackage?.id || null,
+
+            package_name:
+              coursePackage?.name || null,
+
+            course_type:
+              courseType ||
+              group?.course_type ||
+              null,
+
+            swimming_level:
+              swimmingLevel,
+
+            contact_request:
+              contactRequest,
+
+            health_note_provided:
+              Boolean(healthNote),
+
+            registration_source:
+              "web_form",
+          },
+        });
+
+      console.log(
+        "SprintOS pre-registration notification:",
+        {
+          studentId:
+            student.id,
+
+          notificationIds:
+            notificationResult.notificationIds,
+
+          recipients:
+            notificationResult.recipientCount,
+
+          pushSent:
+            notificationResult.push.sent,
+
+          pushFailed:
+            notificationResult.push.failed,
+        }
+      );
+    } catch (notificationError) {
+      /*
+       * Bildirim sistemi hiçbir koşulda başarılı
+       * ön kaydı başarısız hale getirmeyecek.
+       */
+      console.error(
+        "SprintOS pre-registration notification error:",
+        notificationError
+      );
+    }
 
     return NextResponse.json({
       ok: true,
