@@ -321,6 +321,495 @@ export default function PreRegistrationForm() {
     }
   }
 
+  if (status === "success") {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          overflowY: "auto",
+          background:
+            "linear-gradient(135deg, #021a3d 0%, #073f91 42%, #edf5ff 42%, #ffffff 100%)",
+        }}
+      >
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            gridTemplateColumns: "minmax(310px, 0.9fr) minmax(520px, 2.1fr)",
+          }}
+          className="sprintSuccessShell"
+        >
+          <aside
+            style={{
+              position: "relative",
+              overflow: "hidden",
+              minHeight: "100vh",
+              padding: "54px 42px",
+              color: "#ffffff",
+              background:
+                "radial-gradient(circle at 48% 33%, rgba(35,140,255,.36), transparent 28%), linear-gradient(180deg,#031f49 0%,#073f91 58%,#032454 100%)",
+            }}
+          >
+            <div className="spark spark1" />
+            <div className="spark spark2" />
+            <div className="spark spark3" />
+
+            <div
+              style={{
+                width: 92,
+                height: 92,
+                borderRadius: 22,
+                background: "#ffffff",
+                display: "grid",
+                placeItems: "center",
+                boxShadow: "0 16px 45px rgba(0,0,0,.22)",
+                marginBottom: 34,
+              }}
+            >
+              <div
+                style={{
+                  color: "#0b4e9c",
+                  fontSize: 15,
+                  lineHeight: 1.05,
+                  fontWeight: 1000,
+                  textAlign: "center",
+                  letterSpacing: ".03em",
+                }}
+              >
+                SPRINT
+                <br />
+                <span style={{ fontSize: 9 }}>YÜZME OKULU</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 900,
+                letterSpacing: ".22em",
+                opacity: .88,
+                marginBottom: 18,
+              }}
+            >
+              SPRINT YÜZME OKULU
+            </div>
+
+            <h2
+              style={{
+                margin: 0,
+                maxWidth: 420,
+                fontSize: "clamp(38px, 4.5vw, 64px)",
+                lineHeight: 1.07,
+                fontWeight: 1000,
+                letterSpacing: "-.045em",
+              }}
+            >
+              Yüzmeye ilk
+              <br />
+              adımınız
+              <br />
+              <span
+                style={{
+                  color: "#ff9a1f",
+                  textDecoration: "underline",
+                  textUnderlineOffset: 7,
+                }}
+              >
+                burada başlıyor.
+              </span>
+            </h2>
+
+            <div
+              className="successPulseText"
+              style={{
+                marginTop: 28,
+                maxWidth: 410,
+                padding: "18px 20px",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.10)",
+                border: "1px solid rgba(255,255,255,.20)",
+                boxShadow: "0 0 34px rgba(39,137,255,.28)",
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: 19,
+                  marginBottom: 7,
+                }}
+              >
+                🎉 Ön Kaydınız Başarıyla Alındı!
+              </strong>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  opacity: .92,
+                }}
+              >
+                Başvurunuz kayıt ekibimize ulaştı. En kısa sürede
+                sizinle iletişime geçeceğiz.
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                marginTop: 28,
+                maxWidth: 410,
+              }}
+            >
+              {[
+                ["👥", "Butik gruplar", "Kontenjan sınırılı eğitim"],
+                ["🏅", "Uzman antrenörler", "Deneyimli ve sertifikalı kadro"],
+                ["⚡", "Hızlı dönüş", "Başvurunuz kayıtsız kalmaz"],
+              ].map(([icon, title, desc]) => (
+                <div
+                  key={title}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "44px 1fr",
+                    gap: 14,
+                    alignItems: "center",
+                    padding: "14px 16px",
+                    borderRadius: 16,
+                    background: "rgba(37,127,225,.22)",
+                    border: "1px solid rgba(255,255,255,.12)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 13,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "#0b6ff4",
+                      fontSize: 20,
+                    }}
+                  >
+                    {icon}
+                  </div>
+                  <div>
+                    <strong style={{ display: "block", fontSize: 15 }}>
+                      {title}
+                    </strong>
+                    <span style={{ fontSize: 12, opacity: .8 }}>
+                      {desc}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: -155,
+                width: 540,
+                height: 540,
+                transform: "translateX(-50%)",
+                borderRadius: "50%",
+                border: "3px solid rgba(54,156,255,.72)",
+                boxShadow:
+                  "0 0 20px rgba(38,146,255,.9), inset 0 0 34px rgba(38,146,255,.35)",
+                opacity: .72,
+              }}
+            />
+          </aside>
+
+          <main
+            style={{
+              position: "relative",
+              minHeight: "100vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "46px 34px",
+              background:
+                "radial-gradient(circle at 50% 28%, rgba(103,232,162,.16), transparent 24%), linear-gradient(180deg,#f9fbff 0%,#ffffff 100%)",
+            }}
+          >
+            <div className="confetti confettiA" />
+            <div className="confetti confettiB" />
+            <div className="confetti confettiC" />
+            <div className="confetti confettiD" />
+            <div className="confetti confettiE" />
+            <div className="confetti confettiF" />
+            <div className="confetti confettiG" />
+            <div className="confetti confettiH" />
+
+            <section
+              style={{
+                width: "min(100%, 720px)",
+                textAlign: "center",
+                padding: "28px 16px",
+              }}
+            >
+              <div
+                className="successCheck"
+                style={{
+                  width: 132,
+                  height: 132,
+                  margin: "0 auto 34px",
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "#ffffff",
+                  border: "10px solid #dffbe8",
+                  color: "#22c55e",
+                  fontSize: 72,
+                  fontWeight: 1000,
+                  boxShadow:
+                    "0 0 0 14px rgba(34,197,94,.09), 0 18px 50px rgba(34,197,94,.22)",
+                }}
+              >
+                ✓
+              </div>
+
+              <h1
+                style={{
+                  margin: 0,
+                  color: "#07356f",
+                  fontSize: "clamp(38px, 6vw, 64px)",
+                  lineHeight: 1.06,
+                  letterSpacing: "-.04em",
+                  fontWeight: 1000,
+                }}
+              >
+                Ön Kaydınız Alındı! 🎉
+              </h1>
+
+              <p
+                style={{
+                  margin: "22px auto 0",
+                  maxWidth: 620,
+                  color: "#64748b",
+                  fontSize: 17,
+                  lineHeight: 1.75,
+                }}
+              >
+                Başvurunuz başarıyla{" "}
+                <strong style={{ color: "#0b6ff4" }}>
+                  Sprint Yüzme Okulu
+                </strong>{" "}
+                kayıt sistemine iletilmiştir.
+              </p>
+
+              <div
+                style={{
+                  margin: "28px auto 0",
+                  maxWidth: 640,
+                  padding: "18px 22px",
+                  borderRadius: 18,
+                  background: "#ffffff",
+                  border: "1px solid #dfe7f1",
+                  boxShadow: "0 12px 36px rgba(15,23,42,.08)",
+                  display: "grid",
+                  gridTemplateColumns: "48px 1fr",
+                  gap: 14,
+                  textAlign: "left",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 14,
+                    display: "grid",
+                    placeItems: "center",
+                    background: "#e9fbef",
+                    fontSize: 22,
+                  }}
+                >
+                  🕒
+                </div>
+                <div
+                  style={{
+                    color: "#334155",
+                    fontSize: 15,
+                    lineHeight: 1.55,
+                    fontWeight: 700,
+                  }}
+                >
+                  Kayıt ekibimiz başvurunuzu inceleyecek ve en kısa
+                  sürede sizinle iletişime geçecektir.
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 30,
+                  color: "#f59e0b",
+                  fontSize: "clamp(22px, 3vw, 34px)",
+                  fontWeight: 800,
+                  fontStyle: "italic",
+                }}
+              >
+                Başvurunuz için teşekkür ederiz. 💙
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  color: "#173a6a",
+                  fontSize: 20,
+                  fontWeight: 900,
+                }}
+              >
+                Sprint Yüzme Okulu
+              </div>
+
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setStatus("idle");
+                  setMessage("");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                style={{
+                  width: "min(100%, 640px)",
+                  minHeight: 58,
+                  marginTop: 30,
+                  border: 0,
+                  borderRadius: 14,
+                  background:
+                    "linear-gradient(90deg,#075ee9 0%,#1878ff 100%)",
+                  color: "#ffffff",
+                  fontSize: 16,
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  boxShadow: "0 14px 30px rgba(11,111,244,.28)",
+                }}
+              >
+                ↻ &nbsp; Yeni Kayıt Oluştur
+              </button>
+
+              <div
+                className="welcomePulse"
+                style={{
+                  margin: "34px auto 0",
+                  maxWidth: 640,
+                  padding: "15px 20px",
+                  borderRadius: 16,
+                  color: "#0756c6",
+                  background: "#eef6ff",
+                  border: "1px solid #cfe2ff",
+                  fontWeight: 800,
+                  fontSize: 14,
+                }}
+              >
+                🎁 Sizi en kısa sürede aramızda görmek için sabırsızlanıyoruz! 🏊
+              </div>
+            </section>
+          </main>
+        </div>
+
+        <style jsx>{`
+          .successCheck {
+            animation: successPop 700ms cubic-bezier(.2,.9,.3,1.3) both,
+              successGlow 1.8s ease-in-out infinite 800ms;
+          }
+
+          .successPulseText {
+            animation: pulseCard 1.65s ease-in-out infinite;
+          }
+
+          .welcomePulse {
+            animation: softBlink 1.7s ease-in-out infinite;
+          }
+
+          .spark {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8dccff;
+            box-shadow: 0 0 18px 5px rgba(80,170,255,.75);
+            animation: sparkle 1.7s ease-in-out infinite;
+          }
+
+          .spark1 { left: 24%; top: 18%; }
+          .spark2 { right: 18%; top: 29%; animation-delay: .45s; }
+          .spark3 { left: 52%; top: 52%; animation-delay: .9s; }
+
+          .confetti {
+            position: absolute;
+            width: 9px;
+            height: 18px;
+            border-radius: 3px;
+            animation: confettiFall 3.3s linear infinite;
+            opacity: .8;
+          }
+
+          .confettiA { left: 12%; top: 5%; background: #ff9f43; }
+          .confettiB { left: 24%; top: 10%; background: #4f8cff; animation-delay: .5s; }
+          .confettiC { left: 38%; top: 4%; background: #8e5bea; animation-delay: 1s; }
+          .confettiD { left: 55%; top: 8%; background: #2fc590; animation-delay: 1.5s; }
+          .confettiE { left: 70%; top: 5%; background: #ff6b6b; animation-delay: .3s; }
+          .confettiF { left: 84%; top: 12%; background: #5da9ff; animation-delay: 1.2s; }
+          .confettiG { left: 18%; top: 34%; background: #b56bed; animation-delay: 1.8s; }
+          .confettiH { right: 8%; top: 38%; background: #ffb43c; animation-delay: .75s; }
+
+          @keyframes successPop {
+            from { opacity: 0; transform: scale(.65) rotate(-7deg); }
+            to { opacity: 1; transform: scale(1) rotate(0); }
+          }
+
+          @keyframes successGlow {
+            0%, 100% { box-shadow: 0 0 0 14px rgba(34,197,94,.08), 0 18px 50px rgba(34,197,94,.18); }
+            50% { box-shadow: 0 0 0 22px rgba(34,197,94,.13), 0 20px 60px rgba(34,197,94,.32); }
+          }
+
+          @keyframes pulseCard {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 34px rgba(39,137,255,.22); }
+            50% { transform: scale(1.025); box-shadow: 0 0 48px rgba(39,137,255,.52); }
+          }
+
+          @keyframes softBlink {
+            0%, 100% { opacity: 1; transform: translateY(0); }
+            50% { opacity: .62; transform: translateY(-2px); }
+          }
+
+          @keyframes sparkle {
+            0%, 100% { opacity: .35; transform: scale(.7); }
+            50% { opacity: 1; transform: scale(1.6); }
+          }
+
+          @keyframes confettiFall {
+            0% { transform: translateY(-12px) rotate(0deg); opacity: 0; }
+            15% { opacity: .9; }
+            100% { transform: translateY(82vh) rotate(430deg); opacity: 0; }
+          }
+
+          @media (max-width: 900px) {
+            .sprintSuccessShell {
+              grid-template-columns: 1fr !important;
+            }
+
+            .sprintSuccessShell aside {
+              min-height: auto !important;
+              padding: 34px 24px !important;
+            }
+
+            .sprintSuccessShell main {
+              min-height: auto !important;
+              padding: 38px 20px 54px !important;
+            }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <form
       className="registrationForm"
@@ -1112,168 +1601,6 @@ export default function PreRegistrationForm() {
         <p className="formMessage error" role="alert">
           {message}
         </p>
-      )}
-
-      {status === "success" && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pre-registration-success-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-            background: "rgba(15, 23, 42, 0.64)",
-            backdropFilter: "blur(5px)",
-          }}
-        >
-          <div
-            style={{
-              width: "min(100%, 520px)",
-              borderRadius: 24,
-              background: "#ffffff",
-              boxShadow: "0 28px 80px rgba(15, 23, 42, 0.28)",
-              border: "1px solid rgba(226, 232, 240, 0.95)",
-              padding: "34px 28px 28px",
-              textAlign: "center",
-              animation: "sprintSuccessIn 220ms ease-out",
-            }}
-          >
-            <div
-              aria-hidden="true"
-              style={{
-                width: 76,
-                height: 76,
-                margin: "0 auto 20px",
-                borderRadius: "999px",
-                display: "grid",
-                placeItems: "center",
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                color: "#047857",
-                fontSize: 38,
-                fontWeight: 900,
-                lineHeight: 1,
-              }}
-            >
-              ✓
-            </div>
-
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 28,
-                padding: "6px 12px",
-                marginBottom: 14,
-                borderRadius: 999,
-                background: "#eff6ff",
-                color: "#1d4ed8",
-                fontSize: 12,
-                fontWeight: 800,
-                letterSpacing: ".04em",
-              }}
-            >
-              SPRINT YÜZME OKULU
-            </div>
-
-            <h2
-              id="pre-registration-success-title"
-              style={{
-                margin: 0,
-                color: "#0f172a",
-                fontSize: "clamp(25px, 5vw, 32px)",
-                lineHeight: 1.15,
-                fontWeight: 900,
-              }}
-            >
-              Ön Kaydınız Alındı!
-            </h2>
-
-            <p
-              style={{
-                margin: "16px auto 0",
-                maxWidth: 430,
-                color: "#475569",
-                fontSize: 15,
-                lineHeight: 1.7,
-              }}
-            >
-              Başvurunuz başarıyla Sprint Yüzme Okulu kayıt
-              sistemine iletilmiştir.
-            </p>
-
-            <div
-              style={{
-                marginTop: 20,
-                padding: "16px 18px",
-                borderRadius: 16,
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                color: "#334155",
-                fontSize: 14,
-                lineHeight: 1.65,
-              }}
-            >
-              Kayıt ekibimiz başvurunuzu inceleyecek ve
-              <strong> en kısa sürede sizinle iletişime geçecektir.</strong>
-            </div>
-
-            <p
-              style={{
-                margin: "18px 0 0",
-                color: "#0f172a",
-                fontSize: 14,
-                lineHeight: 1.6,
-                fontWeight: 700,
-              }}
-            >
-              Başvurunuz için teşekkür ederiz. 🏊‍♂️
-            </p>
-
-            <button
-              type="button"
-              autoFocus
-              onClick={() => {
-                setStatus("idle");
-                setMessage("");
-              }}
-              style={{
-                width: "100%",
-                minHeight: 50,
-                marginTop: 24,
-                border: 0,
-                borderRadius: 14,
-                background: "#0b6ff4",
-                color: "#ffffff",
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: "pointer",
-                boxShadow: "0 10px 24px rgba(11, 111, 244, 0.22)",
-              }}
-            >
-              Tamam
-            </button>
-
-            <style jsx>{`
-              @keyframes sprintSuccessIn {
-                from {
-                  opacity: 0;
-                  transform: translateY(10px) scale(0.98);
-                }
-                to {
-                  opacity: 1;
-                  transform: translateY(0) scale(1);
-                }
-              }
-            `}</style>
-          </div>
-        </div>
       )}
     </form>
   );
