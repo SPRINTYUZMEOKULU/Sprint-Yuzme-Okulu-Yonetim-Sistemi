@@ -1008,6 +1008,12 @@ export default function RegistrationWizard({
   ] =
     useState(false);
 
+  const [
+    finalSubmitting,
+    setFinalSubmitting,
+  ] =
+    useState(false);
+
   const initialWhatsappOpened =
     draftUsesCurrentRegistrationTemplate &&
     draftData.whatsapp_opened === true;
@@ -3312,6 +3318,26 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           </div>
         </div>
 
+        {finalSubmitting ? (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              margin: "14px 0 4px",
+              padding: "14px 16px",
+              borderRadius: 14,
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              color: "#1e3a8a",
+              fontWeight: 800,
+              lineHeight: 1.5,
+            }}
+          >
+            Kayıt işleniyor... Öğrenci aktif kayda alınıyor, grup üyeliği ve ders planı oluşturuluyor.
+            Lütfen bu işlem tamamlanana kadar sayfayı kapatmayın.
+          </div>
+        ) : null}
+
         <div className="finalButtons">
 
           <button
@@ -3320,6 +3346,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               saveRegistrationDraft
             }
             className="outlineSave"
+            disabled={finalSubmitting}
           >
 
             <Icon
@@ -3339,11 +3366,25 @@ _Antalya'nın En Köklü Yüzme Okulu_`
                 : completeRegistration
             }
             className="completeButton"
+            aria-busy={finalSubmitting}
             disabled={
-              requiresManagerApproval && !customApprovalApproved
+              finalSubmitting ||
+              (requiresManagerApproval && !customApprovalApproved
                 ? customApprovalPending
-                : !consent?.rules_accepted || !messageSent
+                : !consent?.rules_accepted || !messageSent)
             }
+            onClick={() => {
+              const isFinalRegistration =
+                !requiresManagerApproval || customApprovalApproved;
+
+              if (
+                isFinalRegistration &&
+                Boolean(consent?.rules_accepted) &&
+                messageSent
+              ) {
+                setFinalSubmitting(true);
+              }
+            }}
           >
 
             <Icon
@@ -3351,15 +3392,17 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               size={19}
             />
 
-            {requiresManagerApproval && customApprovalPending
-              ? "Yönetici Onayı Bekleniyor"
-              : requiresManagerApproval && !customApprovalApproved
-                ? customApprovalRejected
-                  ? "Yeniden Yönetici Onayına Gönder"
-                  : "Yönetici Onayına Gönder"
-                : !messageSent
-                  ? "Önce WhatsApp Mesajını Gönderin"
-                  : "Kaydı Tamamla ve Öğrenciye Aktar"}
+            {finalSubmitting
+              ? "Kayıt İşleniyor..."
+              : requiresManagerApproval && customApprovalPending
+                ? "Yönetici Onayı Bekleniyor"
+                : requiresManagerApproval && !customApprovalApproved
+                  ? customApprovalRejected
+                    ? "Yeniden Yönetici Onayına Gönder"
+                    : "Yönetici Onayına Gönder"
+                  : !messageSent
+                    ? "Önce WhatsApp Mesajını Gönderin"
+                    : "Kaydı Tamamla ve Öğrenciye Aktar"}
 
           </button>
 
