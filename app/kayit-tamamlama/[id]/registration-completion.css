@@ -1,1 +1,1772 @@
-.completionPage{min-height:100vh;background:linear-gradient(180deg,#f5f8fd,#eef4fb);padding:38px;color:#12223d}.completionHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.completionHeader p,.eyebrow{margin:0 0 7px;color:#1769e8;font-size:12px;font-weight:900;letter-spacing:.14em}.completionHeader h1{margin:0;font-size:36px;letter-spacing:-.04em}.completionHeader span{display:block;margin-top:8px;color:#697a94;max-width:760px}.completionHeader>a{padding:12px 17px;background:white;border:1px solid #dce5f1;border-radius:13px;color:#173354;text-decoration:none;font-weight:800}.wizardGrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(330px,.75fr);gap:20px}.wizardCard{background:rgba(255,255,255,.94);border:1px solid #dfe7f2;border-radius:23px;padding:24px;box-shadow:0 18px 55px rgba(31,67,124,.08)}.wizardCard h2{margin:0 0 17px;font-size:22px}.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.formGrid label{display:grid;gap:7px;color:#344966;font-size:13px;font-weight:800}.formGrid select,.formGrid input,.messageCard textarea{width:100%;box-sizing:border-box;border:1px solid #d9e3f0;border-radius:13px;padding:12px;background:#fbfdff;font:inherit;color:#172944}.dayPicker{margin-top:18px}.dayPicker>span{display:block;margin-bottom:10px;font-size:13px;font-weight:900;color:#344966}.dayPicker>div{display:flex;flex-wrap:wrap;gap:9px}.dayPicker label{border:1px solid #d9e4f1;background:#f8fbff;border-radius:999px;padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer}.dayPicker label.selected{background:#eaf3ff;border-color:#82b7ff;color:#0d5cc8}.dayPicker input{margin-right:6px}.dateSummary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:18px}.dateSummary span{padding:13px;background:#f5f8fd;border-radius:14px;color:#728098;font-size:12px}.dateSummary strong{display:block;color:#17304f;margin-top:5px;font-size:14px}.checklist{display:grid;gap:10px}.checklist label{display:flex;gap:9px;align-items:center;border:1px solid #e0e8f3;border-radius:13px;padding:12px;background:#fafcff;font-size:13px;font-weight:700}.messageCard{grid-column:1/-1}.messageHeader{display:flex;justify-content:space-between;align-items:center;gap:12px}.messageHeader button,.messageActions button,.messageActions a{border:0;border-radius:11px;padding:10px 14px;font-weight:800;cursor:pointer;text-decoration:none}.messageHeader button{background:#eef5ff;color:#1769e8}.messageCard textarea{resize:vertical;line-height:1.55}.messageActions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:13px}.messageActions button{background:#17304f;color:white}.messageActions a{background:#1aa75b;color:white}.sentCheck{display:flex;gap:8px;align-items:center;margin-left:auto;font-size:12px;font-weight:800;color:#53647d}.finalActions{grid-column:1/-1;display:flex;justify-content:flex-end}.finalActions button{border:0;background:linear-gradient(135deg,#1769e8,#0a54c3);color:white;padding:16px 24px;border-radius:14px;font-weight:900;font-size:15px;box-shadow:0 14px 30px rgba(23,105,232,.24);cursor:pointer}.errorBanner{margin-bottom:16px;padding:13px 16px;background:#fff0f0;color:#a52d2d;border-radius:13px;font-weight:800}@media(max-width:900px){.completionPage{padding:20px}.completionHeader{flex-direction:column}.completionHeader h1{font-size:29px}.wizardGrid{grid-template-columns:1fr}.formGrid{grid-template-columns:1fr}.messageCard,.finalActions{grid-column:auto}.dateSummary{grid-template-columns:1fr}.sentCheck{margin-left:0}.finalActions button{width:100%}}
+.completionPage {
+  min-height: 100vh;
+  padding: 32px;
+
+  color: #11243d;
+
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(27, 111, 245, 0.09),
+      transparent 34rem
+    ),
+    linear-gradient(
+      180deg,
+      #f7f9fd 0%,
+      #eef3f9 100%
+    );
+}
+
+/* =========================================================
+   ÜST BAŞLIK
+   ========================================================= */
+
+.completionHeader {
+  max-width: 1480px;
+  margin: 0 auto 20px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 24px;
+}
+
+.headerIdentity {
+  min-width: 0;
+}
+
+.headerKicker,
+.sectionHeading p {
+  margin: 0 0 6px;
+
+  color: #1769e8;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  letter-spacing: 0.14em;
+}
+
+.completionHeader h1 {
+  margin: 0;
+
+  color: #10243e;
+
+  font-size: 38px;
+  font-weight: 900;
+
+  line-height: 1.05;
+
+  letter-spacing: -0.045em;
+}
+
+.completionHeader p {
+  margin: 10px 0 0;
+
+  color: #687991;
+
+  font-size: 14px;
+}
+
+.completionHeader p strong {
+  color: #243d5d;
+}
+
+/* =========================================================
+   ÜST LİNKLER
+   ========================================================= */
+
+.headerLinks {
+  display: flex;
+  flex-wrap: wrap;
+
+  justify-content: flex-end;
+
+  gap: 9px;
+}
+
+.headerLinks a {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 14px;
+
+  border: 1px solid #dce5f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+
+  color: #213a5a;
+
+  text-decoration: none;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  box-shadow:
+    0 6px 18px
+    rgba(28, 54, 91, 0.04);
+
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.headerLinks a:hover {
+  transform: translateY(-1px);
+
+  border-color: #b9d0ef;
+
+  box-shadow:
+    0 9px 22px
+    rgba(28, 54, 91, 0.07);
+}
+
+.headerLinks a:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   BANNER
+   ========================================================= */
+
+.errorBanner,
+.successBanner {
+  max-width: 1480px;
+
+  margin: 0 auto 14px;
+
+  padding: 13px 16px;
+
+  border-radius: 14px;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.errorBanner {
+  border: 1px solid #f1c8cc;
+
+  background: #fff0f0;
+
+  color: #a42f36;
+}
+
+.successBanner {
+  border: 1px solid #c5ead4;
+
+  background: #edf9f2;
+
+  color: #167442;
+}
+
+/* =========================================================
+   ANA GRID
+   ========================================================= */
+
+.registrationShell {
+  max-width: 1480px;
+
+  margin: 0 auto;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(360px, 0.52fr);
+
+  gap: 18px;
+}
+
+/* =========================================================
+   SABİT KOMUTA ÇUBUĞU
+   ========================================================= */
+
+.stickyCommandBar {
+  grid-column: 1 / -1;
+
+  position: sticky;
+
+  top: 10px;
+
+  z-index: 30;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  padding: 10px;
+
+  border:
+    1px solid
+    rgba(209, 220, 235, 0.92);
+
+  border-radius: 17px;
+
+  background:
+    rgba(255, 255, 255, 0.94);
+
+  backdrop-filter:
+    blur(14px);
+
+  -webkit-backdrop-filter:
+    blur(14px);
+
+  box-shadow:
+    0 16px 38px
+    rgba(31, 57, 92, 0.10);
+}
+
+.commandTabs {
+  min-width: 0;
+
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 7px;
+}
+
+.commandTabs button {
+  min-height: 38px;
+
+  padding: 8px 12px;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 11px;
+
+  background: #f5f8fc;
+
+  color: #455b77;
+
+  font: inherit;
+
+  font-size: 12px;
+  font-weight: 850;
+
+  cursor: pointer;
+
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.commandTabs button:hover {
+  border-color: #cae0ff;
+
+  background: #eaf3ff;
+
+  color: #0f5dc8;
+}
+
+.commandTabs button:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   KAYDET
+   ========================================================= */
+
+.saveDraftButton,
+.secondaryAction,
+.outlineSave,
+.completeButton {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  border-radius: 12px;
+
+  font: inherit;
+  font-weight: 900;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.saveDraftButton {
+  flex: 0 0 auto;
+
+  min-height: 42px;
+
+  padding: 0 17px;
+
+  border: 0;
+
+  background: #1769e8;
+
+  color: #ffffff;
+
+  box-shadow:
+    0 9px 22px
+    rgba(23, 105, 232, 0.22);
+}
+
+.saveDraftButton:hover {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 12px 26px
+    rgba(23, 105, 232, 0.28);
+}
+
+.saveDraftButton:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   KARTLAR
+   ========================================================= */
+
+.wizardCard {
+  min-width: 0;
+
+  padding: 23px;
+
+  scroll-margin-top: 92px;
+
+  border: 1px solid #dce5f0;
+
+  border-radius: 22px;
+
+  background:
+    rgba(255, 255, 255, 0.97);
+
+  box-shadow:
+    0 16px 48px
+    rgba(28, 55, 94, 0.065);
+}
+
+.planCard,
+.messageCard,
+.notesCard,
+.finalPanel {
+  grid-column: 1 / -1;
+}
+
+/* =========================================================
+   BÖLÜM BAŞLIKLARI
+   ========================================================= */
+
+.sectionHeading {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 13px;
+
+  margin-bottom: 20px;
+}
+
+.sectionIcon {
+  width: 43px;
+  height: 43px;
+
+  flex: 0 0 43px;
+
+  display: grid;
+
+  place-items: center;
+
+  border-radius: 13px;
+
+  background: #edf5ff;
+
+  color: #1769e8;
+}
+
+.whatsappIcon {
+  background: #eaf9f0;
+
+  color: #17854a;
+}
+
+.sectionHeading > div:nth-child(2) {
+  min-width: 0;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+
+  color: #142a46;
+
+  font-size: 21px;
+  font-weight: 900;
+
+  line-height: 1.18;
+
+  letter-spacing: -0.025em;
+}
+
+.sectionHeading span {
+  display: block;
+
+  margin-top: 5px;
+
+  max-width: 760px;
+
+  color: #74849a;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+.sectionLink {
+  margin-left: auto;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 4px;
+
+  color: #1769e8;
+
+  text-decoration: none;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.buttonLink {
+  padding: 9px 11px;
+
+  border: 0;
+
+  border-radius: 10px;
+
+  background: #eef5ff;
+
+  font: inherit;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   FORM
+   ========================================================= */
+
+.formGrid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 13px;
+}
+
+.formGrid label,
+.wideField,
+.noteComposer label,
+.dueDateField {
+  display: grid;
+
+  gap: 7px;
+}
+
+.formGrid label > span,
+.wideField > span,
+.noteComposer label > span,
+.dueDateField > span {
+  color: #405570;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.formGrid select,
+.formGrid input,
+.wideField textarea,
+.noteComposer textarea,
+.noteComposer input,
+.dueDateField input,
+.messageTextarea {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  border: 1px solid #d9e3ef;
+
+  border-radius: 12px;
+
+  background: #fbfdff;
+
+  color: #172b46;
+
+  padding: 11px 12px;
+
+  font: inherit;
+
+  outline: none;
+
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.formGrid select:focus,
+.formGrid input:focus,
+.wideField textarea:focus,
+.noteComposer textarea:focus,
+.noteComposer input:focus,
+.dueDateField input:focus,
+.messageTextarea:focus {
+  border-color: #72aaf8;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(23, 105, 232, 0.09);
+}
+
+.formGrid input[readonly] {
+  background: #f4f7fb;
+
+  color: #687a92;
+}
+
+.formGrid select {
+  cursor: pointer;
+}
+
+/* =========================================================
+   GÜN SEÇİMİ
+   ========================================================= */
+
+.dayPicker {
+  margin-top: 18px;
+}
+
+.dayPicker > span {
+  display: block;
+
+  margin-bottom: 10px;
+
+  color: #405570;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dayPicker > div {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 8px;
+}
+
+.dayPicker label {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  padding: 8px 11px;
+
+  border: 1px solid #dbe5f0;
+
+  border-radius: 999px;
+
+  background: #f8fafc;
+
+  color: #52647c;
+
+  font-size: 12px;
+  font-weight: 850;
+
+  cursor: pointer;
+
+  user-select: none;
+
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.dayPicker label:hover {
+  border-color: #a9cafa;
+}
+
+.dayPicker label.selected {
+  border-color: #79adf7;
+
+  background: #eaf3ff;
+
+  color: #0f5fcf;
+
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(23, 105, 232, 0.04);
+}
+
+.dayPicker label:active {
+  transform: scale(0.98);
+}
+
+.dayPicker input {
+  accent-color: #1769e8;
+}
+
+/* =========================================================
+   KAYIT ÖZETİ
+   ========================================================= */
+
+.summaryStrip {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.summaryStrip > div {
+  padding: 12px;
+
+  border: 1px solid #edf1f6;
+
+  border-radius: 13px;
+
+  background: #f4f7fb;
+}
+
+.summaryStrip small {
+  display: block;
+
+  color: #7a899e;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  letter-spacing: 0.06em;
+
+  text-transform: uppercase;
+}
+
+.summaryStrip strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #17304f;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* =========================================================
+   ÖDEME
+   ========================================================= */
+
+.paymentOverview {
+  display: grid;
+
+  grid-template-columns:
+    1fr
+    1fr;
+
+  gap: 13px;
+}
+
+.statusPanel,
+.dueDateField {
+  min-height: 122px;
+
+  box-sizing: border-box;
+
+  padding: 16px;
+
+  border: 1px solid #dde6f1;
+
+  border-radius: 16px;
+}
+
+.statusPanel {
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+}
+
+.statusPanel small {
+  font-size: 10px;
+  font-weight: 900;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+.statusPanel strong {
+  margin-top: 4px;
+
+  font-size: 22px;
+  font-weight: 900;
+
+  letter-spacing: -0.025em;
+}
+
+.statusPanel span {
+  margin-top: 5px;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+}
+
+.statusPanel.pending {
+  border-color: #f0dfa8;
+
+  background: #fff8e8;
+
+  color: #8b620b;
+}
+
+.statusPanel.paid {
+  border-color: #c6ead5;
+
+  background: #edf9f2;
+
+  color: #136d3e;
+}
+
+.statusPanel.late {
+  border-color: #efc8ca;
+
+  background: #fff0f0;
+
+  color: #a0393d;
+}
+
+.dueDateField {
+  background: #f9fbfe;
+}
+
+.dueDateField small,
+.noteComposer small {
+  color: #78899f;
+
+  font-size: 11px;
+
+  line-height: 1.4;
+}
+
+.hiddenCheckbox {
+  display: none;
+}
+
+.wideField {
+  margin-top: 13px;
+}
+
+.wideField textarea {
+  resize: vertical;
+
+  line-height: 1.55;
+}
+
+/* =========================================================
+   ÖDEME UYARISI
+   ========================================================= */
+
+.warningInline {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  margin-top: 13px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #f0cecf;
+
+  border-radius: 13px;
+
+  background: #fff2f2;
+
+  color: #a33b41;
+}
+
+.warningInline div {
+  display: grid;
+
+  gap: 2px;
+}
+
+.warningInline strong {
+  font-size: 12px;
+}
+
+.warningInline span {
+  font-size: 11px;
+}
+
+/* =========================================================
+   SAĞLIK & KURALLAR
+   ========================================================= */
+
+.statusCardGrid {
+  display: grid;
+
+  grid-template-columns:
+    1fr
+    1fr;
+
+  gap: 12px;
+}
+
+.statusCard {
+  min-height: 120px;
+
+  position: relative;
+
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 12px;
+
+  padding: 15px;
+
+  border: 1px solid #dfe7f1;
+
+  border-radius: 16px;
+
+  background: #fafcff;
+}
+
+.statusCard.ok {
+  border-color: #cce9d8;
+
+  background: #f3fbf6;
+}
+
+.statusCard.danger {
+  border-color: #efd0d2;
+
+  background: #fff7f7;
+}
+
+.statusIcon {
+  width: 38px;
+  height: 38px;
+
+  flex: 0 0 38px;
+
+  display: grid;
+
+  place-items: center;
+
+  border-radius: 11px;
+
+  background: #ffffff;
+
+  color: #1769e8;
+
+  box-shadow:
+    0 4px 10px
+    rgba(23, 45, 74, 0.05);
+}
+
+.statusCard.ok .statusIcon {
+  color: #13834a;
+}
+
+.statusCard.danger .statusIcon {
+  color: #b54248;
+}
+
+.statusCard > div {
+  min-width: 0;
+}
+
+.statusCard small {
+  display: block;
+
+  color: #7a899e;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.statusCard strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #17304f;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.statusCard p {
+  margin: 5px 0 0;
+
+  color: #687991;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+.statusCard button {
+  margin-left: auto;
+
+  padding: 7px 9px;
+
+  border: 0;
+
+  border-radius: 9px;
+
+  background: #edf4ff;
+
+  color: #1769e8;
+
+  font: inherit;
+
+  font-size: 11px;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   SAĞLIK DETAYI
+   ========================================================= */
+
+.healthDetail {
+  display: flex;
+
+  gap: 12px;
+
+  margin-top: 12px;
+
+  padding: 14px;
+
+  border: 1px solid #f0d9b2;
+
+  border-radius: 14px;
+
+  background: #fff5e8;
+
+  color: #714d12;
+}
+
+.healthDetail > div:first-child {
+  padding-top: 2px;
+}
+
+.healthDetail > div:last-child {
+  display: grid;
+
+  gap: 4px;
+}
+
+.healthDetail small {
+  font-size: 10px;
+  font-weight: 900;
+
+  letter-spacing: 0.06em;
+}
+
+.healthDetail strong {
+  font-size: 13px;
+  font-weight: 850;
+
+  line-height: 1.5;
+}
+
+.healthDetail span {
+  font-size: 11px;
+}
+
+/* =========================================================
+   MALZEMELER
+   ========================================================= */
+
+.materialsCard {
+  align-self: start;
+}
+
+.physicalCheck {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 14px;
+
+  border: 1px solid #e0e7f0;
+
+  border-radius: 14px;
+
+  background: #f7f9fc;
+
+  cursor: pointer;
+}
+
+.physicalCheck input {
+  accent-color: #1769e8;
+}
+
+.physicalCheck > span {
+  display: grid;
+
+  gap: 3px;
+}
+
+.physicalCheck strong {
+  color: #1a324f;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.physicalCheck small {
+  color: #75869c;
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   NOT OLUŞTURUCU
+   ========================================================= */
+
+.noteComposer {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(240px, 0.6fr)
+    auto;
+
+  gap: 12px;
+
+  align-items: end;
+
+  padding: 15px;
+
+  border: 1px solid #e2e9f2;
+
+  border-radius: 16px;
+
+  background: #f7f9fc;
+}
+
+.secondaryAction {
+  min-height: 43px;
+
+  padding: 0 15px;
+
+  border: 0;
+
+  background: #173a63;
+
+  color: #ffffff;
+
+  white-space: nowrap;
+}
+
+.secondaryAction:hover {
+  transform: translateY(-1px);
+}
+
+.secondaryAction:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   NOT ZAMAN ÇİZELGESİ
+   ========================================================= */
+
+.noteTimeline {
+  margin-top: 16px;
+
+  display: grid;
+
+  gap: 0;
+}
+
+.noteTimeline article {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    16px
+    1fr;
+
+  gap: 10px;
+
+  padding: 0 0 17px;
+}
+
+.noteTimeline article:not(:last-child)::before {
+  content: "";
+
+  position: absolute;
+
+  left: 5px;
+
+  top: 14px;
+
+  bottom: 0;
+
+  width: 1px;
+
+  background: #dce5ef;
+}
+
+.timelineDot {
+  width: 11px;
+  height: 11px;
+
+  margin-top: 5px;
+
+  border-radius: 50%;
+
+  background: #1769e8;
+
+  box-shadow:
+    0 0 0 4px
+    #eaf3ff;
+}
+
+.noteTimeline article.done .timelineDot {
+  background: #1b9658;
+
+  box-shadow:
+    0 0 0 4px
+    #e7f8ef;
+}
+
+.noteMeta {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.noteMeta strong {
+  color: #1d3554;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.noteMeta span {
+  color: #8593a6;
+
+  font-size: 10px;
+}
+
+.noteTimeline p {
+  margin: 5px 0 7px;
+
+  color: #596d87;
+
+  font-size: 12px;
+
+  line-height: 1.55;
+}
+
+.reminderBadge {
+  width: max-content;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding: 5px 8px;
+
+  border-radius: 999px;
+
+  background: #fff2dc;
+
+  color: #88600f;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.emptyState {
+  padding: 16px;
+
+  text-align: center;
+
+  color: #7a899e;
+
+  font-size: 12px;
+}
+
+/* =========================================================
+   KONUM
+   ========================================================= */
+
+.locationPreview {
+  display: flex;
+
+  align-items: center;
+
+  gap: 11px;
+
+  margin-bottom: 13px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #d9e8df;
+
+  border-radius: 14px;
+
+  background: #f5fbf7;
+
+  color: #177744;
+}
+
+.locationPreview > div {
+  min-width: 0;
+
+  display: grid;
+
+  gap: 2px;
+}
+
+.locationPreview small {
+  font-size: 10px;
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.locationPreview strong {
+  color: #21442f;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.locationPreview a {
+  color: #177744;
+
+  text-decoration: none;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   WHATSAPP
+   ========================================================= */
+
+.messageTextarea {
+  min-height: 310px;
+
+  resize: vertical;
+
+  background: #fbfdff;
+
+  line-height: 1.65;
+}
+
+.messageActions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 9px;
+
+  margin-top: 12px;
+}
+
+.messageActions button,
+.messageActions a {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 10px 13px;
+
+  border: 0;
+
+  border-radius: 11px;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+
+  text-decoration: none;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.messageActions button {
+  background: #173a63;
+
+  color: #ffffff;
+}
+
+.messageActions a {
+  background: #1c9b58;
+
+  color: #ffffff;
+
+  box-shadow:
+    0 7px 18px
+    rgba(28, 155, 88, 0.16);
+}
+
+.messageActions button:hover,
+.messageActions a:hover {
+  transform: translateY(-1px);
+}
+
+.messageActions button:active,
+.messageActions a:active {
+  transform: translateY(1px);
+}
+
+.sentCheck {
+  margin-left: auto;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 9px 11px;
+
+  border-radius: 11px;
+
+  background: #f5f7fa;
+
+  color: #566981;
+
+  font-size: 11px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.sentCheck input {
+  accent-color: #1c9b58;
+}
+
+/* =========================================================
+   FINAL PANEL
+   ========================================================= */
+
+.finalPanel {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 20px 22px;
+
+  border: 1px solid #cbdcf2;
+
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #f5f9ff,
+      #edf5ff
+    );
+}
+
+.finalPanel small {
+  color: #1769e8;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  letter-spacing: 0.1em;
+}
+
+.finalPanel h3 {
+  margin: 4px 0 5px;
+
+  color: #17304f;
+
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.finalPanel p {
+  max-width: 650px;
+
+  margin: 0;
+
+  color: #6a7d96;
+
+  font-size: 12px;
+
+  line-height: 1.5;
+}
+
+.finalButtons {
+  display: flex;
+  flex-wrap: wrap;
+
+  justify-content: flex-end;
+
+  gap: 9px;
+}
+
+.outlineSave {
+  min-height: 44px;
+
+  padding: 0 15px;
+
+  border: 1px solid #cfdceb;
+
+  background: #ffffff;
+
+  color: #294563;
+}
+
+.completeButton {
+  min-height: 44px;
+
+  padding: 0 18px;
+
+  border: 0;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1769e8,
+      #0a55c6
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 12px 28px
+    rgba(23, 105, 232, 0.22);
+}
+
+.outlineSave:hover,
+.completeButton:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.outlineSave:active,
+.completeButton:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.completeButton:disabled {
+  opacity: 0.45;
+
+  cursor: not-allowed;
+
+  box-shadow: none;
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 1120px) {
+
+  .formGrid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .registrationShell {
+    grid-template-columns: 1fr;
+  }
+
+  .planCard,
+  .paymentCard,
+  .materialsCard,
+  .messageCard,
+  .notesCard,
+  .finalPanel {
+    grid-column: 1;
+  }
+
+}
+
+/* =========================================================
+   MOBİL
+   ========================================================= */
+
+@media (max-width: 820px) {
+
+  .completionPage {
+    padding: 18px;
+  }
+
+  .completionHeader {
+    flex-direction: column;
+  }
+
+  .completionHeader h1 {
+    font-size: 30px;
+  }
+
+  .headerLinks {
+    justify-content: flex-start;
+  }
+
+  .stickyCommandBar {
+    top: 7px;
+
+    align-items: stretch;
+  }
+
+  .commandTabs {
+    overflow-x: auto;
+
+    flex-wrap: nowrap;
+
+    padding-bottom: 2px;
+
+    scrollbar-width: thin;
+  }
+
+  .commandTabs button {
+    white-space: nowrap;
+  }
+
+  .saveDraftButton {
+    flex: 0 0 auto;
+  }
+
+  .paymentOverview,
+  .statusCardGrid,
+  .summaryStrip {
+    grid-template-columns:
+      1fr
+      1fr;
+  }
+
+  .noteComposer {
+    grid-template-columns: 1fr;
+  }
+
+  .secondaryAction {
+    width: 100%;
+  }
+
+  .finalPanel {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .finalButtons {
+    width: 100%;
+
+    justify-content: stretch;
+  }
+
+  .finalButtons button {
+    flex: 1;
+  }
+
+}
+
+/* =========================================================
+   TELEFON
+   ========================================================= */
+
+@media (max-width: 560px) {
+
+  .completionPage {
+    padding: 12px;
+  }
+
+  .completionHeader {
+    margin-bottom: 14px;
+  }
+
+  .completionHeader h1 {
+    font-size: 27px;
+  }
+
+  .completionHeader p {
+    font-size: 12px;
+
+    line-height: 1.5;
+  }
+
+  .headerLinks {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns:
+      1fr
+      1fr;
+  }
+
+  .headerLinks a {
+    justify-content: center;
+
+    padding: 0 9px;
+
+    font-size: 11px;
+  }
+
+  .headerLinks a:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .stickyCommandBar {
+    border-radius: 14px;
+  }
+
+  .commandTabs button {
+    padding: 8px 10px;
+
+    font-size: 11px;
+  }
+
+  .saveDraftButton {
+    padding: 10px 12px;
+
+    font-size: 12px;
+  }
+
+  .wizardCard {
+    padding: 17px;
+
+    border-radius: 18px;
+  }
+
+  .sectionHeading {
+    flex-wrap: wrap;
+  }
+
+  .sectionHeading h2 {
+    font-size: 18px;
+  }
+
+  .sectionLink {
+    margin-left: 56px;
+  }
+
+  .formGrid,
+  .paymentOverview,
+  .statusCardGrid,
+  .summaryStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .statusPanel,
+  .dueDateField {
+    min-height: auto;
+  }
+
+  .noteMeta {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 2px;
+  }
+
+  .messageTextarea {
+    min-height: 360px;
+
+    font-size: 13px;
+  }
+
+  .messageActions {
+    align-items: stretch;
+  }
+
+  .messageActions button,
+  .messageActions a,
+  .sentCheck {
+    width: 100%;
+
+    box-sizing: border-box;
+
+    justify-content: center;
+
+    margin-left: 0;
+  }
+
+  .finalButtons {
+    display: grid;
+
+    grid-template-columns: 1fr;
+  }
+
+  .finalButtons button {
+    width: 100%;
+  }
+
+}
