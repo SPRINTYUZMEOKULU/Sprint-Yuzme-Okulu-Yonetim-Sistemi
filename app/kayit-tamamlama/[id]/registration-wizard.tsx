@@ -1753,6 +1753,14 @@ _Antalya'nın En Köklü Yüzme Okulu_`
         completeRegistration
       }
       className="registrationShell"
+      onSubmit={(event) => {
+        const nativeEvent = event.nativeEvent as SubmitEvent;
+        const submitter = nativeEvent.submitter as HTMLButtonElement | null;
+
+        if (submitter?.dataset.finalRegistration === "true") {
+          setFinalSubmitting(true);
+        }
+      }}
     >
 
       {/*
@@ -3373,18 +3381,11 @@ _Antalya'nın En Köklü Yüzme Okulu_`
                 ? customApprovalPending
                 : !consent?.rules_accepted || !messageSent)
             }
-            onClick={() => {
-              const isFinalRegistration =
-                !requiresManagerApproval || customApprovalApproved;
-
-              if (
-                isFinalRegistration &&
-                Boolean(consent?.rules_accepted) &&
-                messageSent
-              ) {
-                setFinalSubmitting(true);
-              }
-            }}
+            data-final-registration={
+              !requiresManagerApproval || customApprovalApproved
+                ? "true"
+                : "false"
+            }
           >
 
             <Icon
