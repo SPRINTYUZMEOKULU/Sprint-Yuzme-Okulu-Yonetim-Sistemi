@@ -13,6 +13,8 @@ type SearchParams = Promise<{
   student?: string;
   updated?: string;
   status?: string;
+  view?: string;
+  filter?: string;
 }>;
 
 type PreStudent = {
@@ -77,6 +79,13 @@ export default async function PreRegistrationsPage({
   const supabase = await createClient();
   const params = searchParams ? await searchParams : {};
   const initialSelectedId = params.student || null;
+  const initialMainTab = params.view === "archive" ? "archive" : "pending";
+  const initialFilter =
+    params.filter === "today"
+      ? "today"
+      : params.filter === "health"
+      ? "health"
+      : "all";
 
   const [
     { data: students },
@@ -175,24 +184,51 @@ export default async function PreRegistrationsPage({
       </header>
 
       <section className="operationStats preRegistrationStats">
-        <article>
+        <Link
+          href="/on-kayitlar?view=pending&filter=all#pre-registration-center"
+          className={`preStatCard ${
+            initialMainTab === "pending" && initialFilter === "all" ? "active" : ""
+          }`}
+        >
           <span>Bekleyen Başvuru</span>
           <strong>{list.length}</strong>
-        </article>
-        <article>
+          <small>Tüm bekleyenleri göster →</small>
+        </Link>
+
+        <Link
+          href="/on-kayitlar?view=pending&filter=today#pre-registration-center"
+          className={`preStatCard ${
+            initialMainTab === "pending" && initialFilter === "today" ? "active" : ""
+          }`}
+        >
           <span>Bugün Gelen</span>
           <strong>{todayCount}</strong>
-        </article>
-        <article>
+          <small>Bugünkü başvuruları göster →</small>
+        </Link>
+
+        <Link
+          href="/on-kayitlar?view=archive#pre-registration-center"
+          className={`preStatCard ${
+            initialMainTab === "archive" ? "active" : ""
+          }`}
+        >
           <span>Form Arşivi</span>
           <strong>{consentList.length}</strong>
-        </article>
-        <article>
+          <small>Arşivi aç →</small>
+        </Link>
+
+        <Link
+          href="/on-kayitlar?view=pending&filter=health#pre-registration-center"
+          className={`preStatCard health ${
+            initialMainTab === "pending" && initialFilter === "health" ? "active" : ""
+          }`}
+        >
           <span>Sağlık Notu</span>
           <strong className={healthNoteCount ? "preStatAttention" : "preStatOk"}>
             {healthNoteCount}
           </strong>
-        </article>
+          <small>Sağlık notu olanları göster →</small>
+        </Link>
       </section>
 
       {params.updated === "1" && (
@@ -224,6 +260,8 @@ export default async function PreRegistrationsPage({
         consents={consentList}
         activities={activityList}
         initialSelectedId={initialSelectedId}
+        initialMainTab={initialMainTab}
+        initialFilter={initialFilter}
       />
     </main>
   );
