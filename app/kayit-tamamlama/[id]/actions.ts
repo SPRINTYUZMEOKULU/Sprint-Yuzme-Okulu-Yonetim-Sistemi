@@ -933,7 +933,7 @@ export async function requestCustomLessonCountApproval(
 
       await createNotification({
         organizationId: profile.organization_id,
-        category: "approval",
+        category: "approvals",
         eventKey: "registration_custom_lesson_count_requested",
         notificationType: "registration_custom_lesson_count_requested",
         title: "Yönetici Onayı Bekliyor",
