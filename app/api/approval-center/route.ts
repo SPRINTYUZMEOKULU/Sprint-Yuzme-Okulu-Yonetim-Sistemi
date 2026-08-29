@@ -315,6 +315,7 @@ function centralRequestLabel(
     package_change: "Paket Değişikliği",
     staff_role_change: "Personel Yetki / Rol Değişikliği",
     staff_delete: "Personel Silme / Pasife Alma",
+    registration_custom_lesson_count: "Kesin Kayıt · Standart Dışı Ders Sayısı",
   };
 
   return labels[requestType] || requestType || "Onay Talebi";
@@ -784,6 +785,52 @@ export async function POST(request: NextRequest) {
             { status: 500 }
           );
         }
+      } else if (requestType === "registration_custom_lesson_count") {
+        const lessonCount = Number(newValues.total_lessons ?? 0);
+
+        if (
+          !studentId ||
+          !Number.isInteger(lessonCount) ||
+          lessonCount < 1 ||
+          lessonCount > 100 ||
+          lessonCount === 8 ||
+          lessonCount === 12
+        ) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Standart dışı kesin kayıt onay verisi eksik veya geçersiz.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const { data: targetStudent, error: targetStudentError } = await supabase
+          .from("students")
+          .select("id")
+          .eq("id", studentId)
+          .eq("organization_id", organizationId)
+          .maybeSingle();
+
+        if (targetStudentError || !targetStudent) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "Onaylanacak kesin kayıt öğrencisi bulunamadı.",
+              details: targetStudentError?.message,
+            },
+            { status: 404 }
+          );
+        }
+
+        /*
+         * Bu onayın uygulama adımı yeni enrollment oluşturmak değildir.
+         * Yönetici burada yalnız standart dışı ders sayısına izin verir.
+         * Kesin kayıt, kayıt ekranında WhatsApp + kurallar + güncel form
+         * kontrolleri yeniden doğrulandıktan sonra completeRegistration ile yapılır.
+         */
+        appliedEntityType = "student";
+        appliedEntityId = studentId;
       } else {
         /*
          * Güvenlik:
