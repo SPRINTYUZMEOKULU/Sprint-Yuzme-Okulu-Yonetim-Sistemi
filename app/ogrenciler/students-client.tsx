@@ -179,17 +179,13 @@ function scheduleLabel(student: StudentListItem) {
     .trim();
 }
 
-function whatsappPhone(value?: string | null) {
-  let digits = (value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("0")) digits = `90${digits.slice(1)}`;
-  if (digits.length === 10) digits = `90${digits}`;
-  return digits;
-}
-
 function openWhatsAppMessage(phone: string | null, message: string) {
+  if (!phone) return;
+
   const normalized = whatsappPhone(phone);
+
   if (!normalized) return;
+
   window.open(
     `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`,
     "_blank",
