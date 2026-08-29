@@ -1247,3 +1247,189 @@
     flex-direction: column;
   }
 }
+
+
+/* ===== Ön Kayıt · Modüle Özel A4 Çıktı ===== */
+.printPreAction {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 17px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+}
+.printPreAction:hover {
+  transform: translateY(-1px);
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  box-shadow: 0 8px 20px rgba(15,23,42,.08);
+}
+.printPreAction:active { transform: translateY(1px) scale(.985); }
+.prePrintSheet { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .prePrintSheet, .prePrintSheet * { visibility: visible !important; }
+
+  .prePrintSheet {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    color: #111827;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.35;
+  }
+
+  .prePrintHeader {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-start;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0b5ed7;
+  }
+  .prePrintHeader > div:first-child > span {
+    display: block;
+    margin-bottom: 3px;
+    color: #0b5ed7;
+    font-size: 8.5pt;
+    font-weight: 800;
+    letter-spacing: .08em;
+  }
+  .prePrintHeader h1 {
+    margin: 0;
+    color: #10284d;
+    font-size: 19pt;
+    line-height: 1.15;
+  }
+  .prePrintMeta {
+    display: grid;
+    gap: 3px;
+    min-width: 190px;
+    text-align: right;
+  }
+  .prePrintMeta strong { color: #10284d; font-size: 11pt; }
+  .prePrintMeta span { color: #64748b; font-size: 8.5pt; }
+
+  .prePrintSection { margin-top: 12px; break-inside: avoid; }
+  .prePrintSection h2 {
+    margin: 0 0 7px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #dbe4ef;
+    color: #18395f;
+    font-size: 11pt;
+  }
+  .prePrintGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .prePrintInfo {
+    min-height: 42px;
+    padding: 6px 7px;
+    border: 1px solid #dfe7ef;
+    border-radius: 5px;
+    break-inside: avoid;
+  }
+  .prePrintInfo span {
+    display: block;
+    margin-bottom: 2px;
+    color: #64748b;
+    font-size: 7.5pt;
+    font-weight: 700;
+  }
+  .prePrintInfo strong {
+    display: block;
+    color: #172b4d;
+    font-size: 9pt;
+    overflow-wrap: anywhere;
+  }
+
+  .prePrintHealth {
+    margin-top: 12px;
+    padding: 9px 10px;
+    border: 1px solid #b7dfc8;
+    border-radius: 6px;
+    background: #f2fbf6;
+    break-inside: avoid;
+  }
+  .prePrintHealth.attention {
+    border-color: #efb3b3;
+    background: #fff3f3;
+  }
+  .prePrintHealth > span {
+    display: block;
+    margin-bottom: 2px;
+    color: #64748b;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: .05em;
+  }
+  .prePrintHealth strong { display: block; color: #087443; font-size: 10pt; }
+  .prePrintHealth.attention strong { color: #b42318; }
+  .prePrintHealth p {
+    margin: 4px 0 0;
+    color: #334155;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .prePrintNote {
+    min-height: 42px;
+    padding: 8px;
+    border: 1px solid #dfe7ef;
+    border-radius: 5px;
+    color: #334155;
+    white-space: pre-wrap;
+  }
+  .prePrintConsent {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .prePrintConsent > div {
+    padding: 7px;
+    border: 1px solid #cde8d8;
+    border-radius: 5px;
+    background: #f3fbf6;
+  }
+  .prePrintConsent span {
+    display: block;
+    color: #64748b;
+    font-size: 7.5pt;
+    font-weight: 700;
+  }
+  .prePrintConsent strong {
+    display: block;
+    margin-top: 2px;
+    color: #087443;
+    font-size: 9pt;
+  }
+  .prePrintFooter {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 7px;
+    border-top: 1px solid #dbe4ef;
+    color: #7b8798;
+    font-size: 7.5pt;
+  }
+}
+
+@media (max-width: 640px) {
+  .printPreAction { width: 100%; box-sizing: border-box; }
+}
