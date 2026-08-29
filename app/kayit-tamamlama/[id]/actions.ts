@@ -764,17 +764,9 @@ export async function requestCustomLessonCountApproval(
     );
   }
 
-  if (!messageSent) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Yönetici onayına göndermeden önce veli bilgilendirme mesajını WhatsApp üzerinden gönderiniz ve Gönderildi olarak işaretleyiniz."
-      )}#whatsapp`
-    );
-  }
-
   const { data: student } = await supabase
     .from("students")
-    .select("id,first_name,last_name")
+    .select("id,first_name,last_name,status")
     .eq("id", studentId)
     .eq("organization_id", profile.organization_id)
     .maybeSingle();
@@ -787,6 +779,21 @@ export async function requestCustomLessonCountApproval(
 
   const now = new Date().toISOString();
   const draftData = getDraftData(formData);
+
+  /*
+   * Standart dışı ders sayısı onay beklerken öğrenci pasife alınmaz.
+   * Aktif öğrenci ise aktif kalır; pasif ise yeniden ön kayıt statüsüne taşınır.
+   */
+  if (student.status === "passive") {
+    await supabase
+      .from("students")
+      .update({
+        status: "pre_registration",
+        updated_at: now,
+      })
+      .eq("id", studentId)
+      .eq("organization_id", profile.organization_id);
+  }
 
   await supabase
     .from("registration_completion_checklists")
@@ -801,14 +808,51 @@ export async function requestCustomLessonCountApproval(
         payment_note: paymentNote,
         message_draft: messageBody || null,
         message_prepared: Boolean(messageBody),
-        message_sent: true,
-        location_sent: true,
+        message_sent: messageSent,
+        location_sent: messageSent,
         swim_cap_delivered: bool(formData, "swim_cap_delivered"),
         updated_by: profile.id,
         updated_at: now,
       },
       { onConflict: "student_id" }
     );
+
+  const { data: approvedExisting } = await supabase
+    .from("approval_requests")
+    .select("id,reviewed_at")
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("request_type", "registration_custom_lesson_count")
+    .eq("status", "approved")
+    .contains("new_values", { total_lessons: totalLessons })
+    .order("reviewed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (approvedExisting) {
+    const currentDraft = {
+      ...draftData,
+      custom_lesson_approval: {
+        status: "approved",
+        lesson_count: totalLessons,
+        request_id: approvedExisting.id,
+        reviewed_at: approvedExisting.reviewed_at,
+      },
+    };
+
+    await supabase
+      .from("registration_completion_checklists")
+      .update({
+        draft_data: currentDraft,
+        draft_saved_at: now,
+        updated_by: profile.id,
+        updated_at: now,
+      })
+      .eq("student_id", studentId)
+      .eq("organization_id", profile.organization_id);
+
+    redirect(`/kayit-tamamlama/${studentId}?approval=approved#whatsapp`);
+  }
 
   const { data: existing } = await supabase
     .from("approval_requests")
@@ -820,18 +864,25 @@ export async function requestCustomLessonCountApproval(
     .contains("new_values", { total_lessons: totalLessons })
     .maybeSingle();
 
+  let approvalRequestId = existing?.id || null;
+
   if (!existing) {
     const { data: request, error: requestError } = await supabase
       .from("approval_requests")
       .insert({
         organization_id: profile.organization_id,
         request_type: "registration_custom_lesson_count",
+        request_label: "Kesin Kayıt · Standart Dışı Ders Sayısı",
         module: "enrollment",
+        priority: "high",
         entity_type: "student",
         entity_id: studentId,
         student_id: studentId,
+        branch_id: branchId,
+        group_id: groupId,
         requested_by: profile.id,
         reason: `Standart paket dışı ${totalLessons} ders ile kesin kayıt talebi.`,
+        description: `${student.first_name} ${student.last_name} için ${totalLessons} derslik kayıt planı yönetici onayı bekliyor. Öğrenci onay süresince pasife alınmaz.`,
         old_values: {
           standard_lesson_counts: [8, 12],
         },
@@ -846,7 +897,7 @@ export async function requestCustomLessonCountApproval(
           planned_end_date: plannedEndDate,
           payment_due_date: paymentDueDate,
           payment_note: paymentNote,
-          message_sent: true,
+          message_sent: messageSent,
         },
         status: "pending",
       })
@@ -860,6 +911,8 @@ export async function requestCustomLessonCountApproval(
         )}`
       );
     }
+
+    approvalRequestId = request.id;
 
     await supabase.from("system_notifications").insert({
       organization_id: profile.organization_id,
@@ -875,6 +928,25 @@ export async function requestCustomLessonCountApproval(
       push_required: true,
     });
   }
+
+  await supabase
+    .from("registration_completion_checklists")
+    .update({
+      draft_data: {
+        ...draftData,
+        custom_lesson_approval: {
+          status: "pending",
+          lesson_count: totalLessons,
+          request_id: approvalRequestId,
+          requested_at: now,
+        },
+      },
+      draft_saved_at: now,
+      updated_by: profile.id,
+      updated_at: now,
+    })
+    .eq("student_id", studentId)
+    .eq("organization_id", profile.organization_id);
 
   revalidatePath("/onay-merkezi");
   revalidatePath(`/kayit-tamamlama/${studentId}`);
