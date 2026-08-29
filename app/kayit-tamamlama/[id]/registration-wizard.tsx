@@ -12,6 +12,7 @@ import {
 import {
   addRegistrationNote,
   completeRegistration,
+  requestCustomLessonCountApproval,
   saveRegistrationDraft,
 } from "./actions";
 
@@ -436,29 +437,26 @@ function calculateEndDate(
  * ============================================================
  */
 
+function normalizeTemplateText(value: string) {
+  return value
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function fillTemplate(
   template: string,
-  variables: Record<
-    string,
-    string
-  >
+  variables: Record<string, string>
 ) {
-  return Object.entries(
-    variables
-  ).reduce(
-    (
-      result,
-      [
-        key,
-        value,
-      ]
-    ) =>
-      result.replaceAll(
-        `{{${key}}}`,
-        value || "—"
-      ),
+  const normalized = normalizeTemplateText(template);
 
-    template
+  return Object.entries(variables).reduce(
+    (result, [key, value]) =>
+      result.replaceAll(`{{${key}}}`, value || "—"),
+    normalized
   );
 }
 
@@ -987,6 +985,16 @@ export default function RegistrationWizard({
       )
     );
 
+  const [
+    whatsappOpening,
+    setWhatsappOpening,
+  ] = useState(false);
+
+  const [
+    whatsappOpened,
+    setWhatsappOpened,
+  ] = useState(false);
+
   /*
    * ==========================================================
    * SAĞLIK DETAY
@@ -1215,6 +1223,12 @@ export default function RegistrationWizard({
 
         : "Ödendi";
 
+  const isStandardLessonCount =
+    lessonCount === 8 || lessonCount === 12;
+
+  const requiresManagerApproval =
+    !isStandardLessonCount;
+
   /*
    * ==========================================================
    * ŞUBE KONUMU
@@ -1340,11 +1354,48 @@ export default function RegistrationWizard({
    * ==========================================================
    */
 
-  const generatedMessage =
-    fillTemplate(
-      template,
-      variables
-    );
+  const professionalTemplate = `*Değerli Velimiz,*
+
+*{{ogrenci_adi}}* adına Sprint Yüzme Okulu kayıt işleminiz hazırlanmıştır. Aramıza hoş geldiniz. 🏊
+
+*📋 KURS BİLGİLERİ*
+• Öğrenci No: {{ogrenci_no}}
+• Şube: {{sube}}
+• Kurs: {{kurs_turu}}
+• Grup: {{grup}}
+• Günler: {{gunler}}
+• Saat: {{saat}}
+• Paket: {{paket}}
+• Ders Sayısı: {{ders_sayisi}}
+• Başlangıç: {{baslangic}}
+• Planlanan Bitiş: {{bitis}}
+
+*💳 ÖDEME BİLGİSİ*
+• Ödeme Vade Tarihi: *{{vade_tarihi}}*
+
+*🎒 DERS İÇİN GEREKLİ MALZEMELER*
+🧢 *Sprint Yüzme Bonesi:* Yüzme okulumuz tarafından öğrencimize *hediye edilmektedir.*
+🥽 *Yüzücü Gözlüğü:* Dilerseniz kendi gözlüğünüzü kullanabilir veya *yüzme okulumuzdan temin edebilirsiniz.*
+🩱 *Yüzme Kıyafeti:* Mayo, bikini, yüzme şortu veya haşema kullanılabilir.
+🩴 *Terlik:* Havuz alanında kullanılmak üzere kaymaz tabanlı terlik getirilmesini öneriyoruz.
+🧴 *Havlu ve Kişisel Malzemeler:* Havlu ile ihtiyaç duyulan duş ve kişisel bakım malzemeleri getirilebilir.
+
+*⏰ ÖNEMLİ HATIRLATMA*
+Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır olunmasını rica ederiz. Böylece öğrencimizin hazırlanma ve havuza giriş süreci ders saatini etkilemeden tamamlanabilir.
+
+*📍 KONUM*
+{{konum}}
+
+*☎️ İLETİŞİM*
+{{telefon}}
+
+Derslerinizin keyifli ve verimli geçmesini dileriz.
+*Sprint Yüzme Okulu*`;
+
+  const generatedMessage = fillTemplate(
+    professionalTemplate || template,
+    variables
+  );
 
   /*
    * ==========================================================
@@ -1977,6 +2028,12 @@ export default function RegistrationWizard({
               }
               required
             />
+
+            {requiresManagerApproval ? (
+              <small style={{ color: "#b45309", fontWeight: 700 }}>
+                Yönetici onayı gerekir. Standart ders sayıları 8 ve 12'dir.
+              </small>
+            ) : null}
 
           </label>
 
@@ -3029,22 +3086,27 @@ export default function RegistrationWizard({
             target="_blank"
             rel="noreferrer"
             onClick={() => {
-              if (
-                !message
-              ) {
-                setMessage(
-                  generatedMessage
-                );
+              if (!message) {
+                setMessage(generatedMessage);
               }
+              setWhatsappOpening(true);
+              window.setTimeout(() => {
+                setWhatsappOpening(false);
+                setWhatsappOpened(true);
+              }, 700);
             }}
           >
 
             <Icon
-              name="whatsapp"
+              name={whatsappOpened ? "check" : "whatsapp"}
               size={18}
             />
 
-            WhatsApp&apos;ta Aç
+            {whatsappOpening
+              ? "WhatsApp Açılıyor..."
+              : whatsappOpened
+                ? "WhatsApp Açıldı ✓"
+                : "WhatsApp'ta Aç"}
 
           </a>
 
@@ -3103,6 +3165,19 @@ export default function RegistrationWizard({
 
         </div>
 
+        <div style={{ display: "grid", gap: 8, margin: "14px 0" }}>
+          <div className={messageSent ? "requirementOk" : "requirementMissing"}>
+            <strong>{messageSent ? "✓ WhatsApp bilgilendirmesi gönderildi" : "WhatsApp bilgilendirmesi bekleniyor"}</strong>
+          </div>
+          <div className={requiresManagerApproval ? "requirementApproval" : "requirementOk"}>
+            <strong>
+              {requiresManagerApproval
+                ? `${lessonCount} ders standart paket dışıdır · Yönetici onayı gerekir`
+                : `✓ ${lessonCount} ders standart kayıt paketidir`}
+            </strong>
+          </div>
+        </div>
+
         <div className="finalButtons">
 
           <button
@@ -3124,9 +3199,15 @@ export default function RegistrationWizard({
 
           <button
             type="submit"
+            formAction={
+              requiresManagerApproval
+                ? requestCustomLessonCountApproval
+                : completeRegistration
+            }
             className="completeButton"
             disabled={
-              !consent?.rules_accepted
+              !consent?.rules_accepted ||
+              !messageSent
             }
           >
 
@@ -3135,7 +3216,11 @@ export default function RegistrationWizard({
               size={19}
             />
 
-            Kaydı Tamamla ve Öğrenciye Aktar
+            {requiresManagerApproval
+              ? "Yönetici Onayına Gönder"
+              : !messageSent
+                ? "Önce WhatsApp Mesajını Gönderin"
+                : "Kaydı Tamamla ve Öğrenciye Aktar"}
 
           </button>
 
