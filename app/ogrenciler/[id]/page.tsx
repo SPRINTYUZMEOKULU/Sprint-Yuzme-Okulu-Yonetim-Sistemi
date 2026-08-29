@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { addStudentNote, updateStudentProfile } from "./actions";
+import { addStudentNote, deleteStudentNote, updateStudentProfile } from "./actions";
+import StudentFileOperations from "./student-file-operations";
 import "./student-detail.css";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +91,10 @@ export default async function StudentFile({
   const query = await searchParams;
 
   const supabase = await createClient();
+
+  const canManageDestructiveActions = ["owner", "admin"].includes(
+    String((profile as any).role || "")
+  );
 
   /*
    * =========================================================
@@ -262,6 +267,38 @@ export default async function StudentFile({
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
+
+  const [
+    operationBranchesResult,
+    operationGroupsResult,
+    operationSchedulesResult,
+  ] = await Promise.all([
+    supabase
+      .from("branches")
+      .select("id,name")
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
+      .order("name"),
+
+    supabase
+      .from("training_groups")
+      .select("id,branch_id,name,course_type")
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
+      .order("name"),
+
+    supabase
+      .from("lesson_schedules")
+      .select("id,group_id,weekday,start_time,end_time")
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
+      .order("weekday")
+      .order("start_time"),
+  ]);
+
+  const operationBranches = operationBranchesResult.data ?? [];
+  const operationGroups = operationGroupsResult.data ?? [];
+  const operationSchedules = operationSchedulesResult.data ?? [];
 
   /*
    * =========================================================
@@ -646,6 +683,21 @@ export default async function StudentFile({
         </Link>
       </header>
 
+      <StudentFileOperations
+        student={{
+          id: student.id,
+          first_name: student.first_name,
+          last_name: student.last_name,
+          phone: student.phone,
+          guardian_phone: student.guardian_phone,
+          status: student.status,
+          branch_id: branchInfo?.id ?? student.branch_id ?? null,
+        }}
+        branches={operationBranches}
+        groups={operationGroups}
+        schedules={operationSchedules}
+      />
+
       {query.saved === "registration" ? (
         <div className="notice successNotice" role="status" aria-live="polite">
           <strong>✓ Kayıt kesinleşti.</strong>{" "}
@@ -715,7 +767,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn">
-        <section className="panel">
+        <section className="panel" id="duzenle">
           <div className="panelHead">
             <div>
               <p>GENEL BİLGİLER</p>
@@ -924,7 +976,7 @@ export default async function StudentFile({
           SAĞLIK
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" id="saglik">
         <div className="panelHead">
           <div>
             <p>SAĞLIK BİLGİLERİ</p>
@@ -1055,7 +1107,7 @@ export default async function StudentFile({
           YOKLAMA / KATILDIĞI DERSLER
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" id="yoklama">
         <div className="panelHead">
           <div>
             <p>YOKLAMA GEÇMİŞİ</p>
@@ -1145,7 +1197,7 @@ export default async function StudentFile({
           TELAFİ / DERS HAREKETLERİ
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" id="ders-hareketleri">
         <div className="panelHead">
           <div>
             <p>DERS HAREKETLERİ</p>
@@ -1346,7 +1398,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn">
-        <section className="panel">
+        <section className="panel" id="notlar">
           <div className="panelHead">
             <div>
               <p>NOTLAR</p>
@@ -1424,9 +1476,33 @@ export default async function StudentFile({
                   <p>{note.body}</p>
                 </div>
 
-                <span>
-                  {fmt(note.created_at)}
-                </span>
+                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                  <span>
+                    {fmt(note.created_at)}
+                  </span>
+
+                  {canManageDestructiveActions && (
+                    <form action={deleteStudentNote}>
+                      <input type="hidden" name="student_id" value={student.id} />
+                      <input type="hidden" name="note_id" value={note.id} />
+                      <button
+                        type="submit"
+                        style={{
+                          border: "1px solid #efcaca",
+                          borderRadius: 8,
+                          padding: "6px 8px",
+                          background: "#fff3f3",
+                          color: "#a52c2c",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Notu Sil
+                      </button>
+                    </form>
+                  )}
+                </div>
               </article>
             ))}
 
@@ -1516,7 +1592,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn">
-        <section className="panel">
+        <section className="panel" id="mesajlar">
           <div className="panelHead">
             <div>
               <p>MESAJ GEÇMİŞİ</p>
