@@ -990,13 +990,17 @@ export default function RegistrationWizard({
   ] =
     useState(false);
 
+  const initialWhatsappOpened =
+    draftData.whatsapp_opened === true;
+
   const [
     messageSent,
     setMessageSent,
   ] =
     useState(
       Boolean(
-        draft?.message_sent
+        draft?.message_sent &&
+        initialWhatsappOpened
       )
     );
 
@@ -1008,7 +1012,7 @@ export default function RegistrationWizard({
   const [
     whatsappOpened,
     setWhatsappOpened,
-  ] = useState(false);
+  ] = useState(initialWhatsappOpened);
 
   /*
    * ==========================================================
@@ -1758,6 +1762,12 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
           student.phone ||
           ""
         }
+      />
+
+      <input
+        type="hidden"
+        name="whatsapp_opened"
+        value={whatsappOpened ? "on" : ""}
       />
 
       {/*
@@ -3146,10 +3156,19 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
               if (!message) {
                 setMessage(generatedMessage);
               }
+
+              /*
+               * WhatsApp bağlantısına gerçekten basılmadan
+               * "Gönderildi" onayı açılamaz.
+               * Tarayıcı WhatsApp içindeki Send tuşunu teknik olarak
+               * göremez; bu yüzden açılış + personel teyidi birlikte kullanılır.
+               */
+              setMessageSent(false);
               setWhatsappOpening(true);
+              setWhatsappOpened(true);
+
               window.setTimeout(() => {
                 setWhatsappOpening(false);
-                setWhatsappOpened(true);
               }, 700);
             }}
           >
@@ -3175,11 +3194,13 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
               checked={
                 messageSent
               }
+              disabled={!whatsappOpened}
               onChange={(
                 event
               ) =>
                 setMessageSent(
-                  event.target.checked
+                  whatsappOpened &&
+                    event.target.checked
                 )
               }
             />
@@ -3188,7 +3209,9 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
 
               {messageSent
                 ? "Gönderildi ✓"
-                : "Gönderildi olarak işaretle"}
+                : whatsappOpened
+                  ? "WhatsApp'ta gönderdiğimi onaylıyorum"
+                  : "Önce WhatsApp'ta Aç butonuna basın"}
 
             </span>
 
