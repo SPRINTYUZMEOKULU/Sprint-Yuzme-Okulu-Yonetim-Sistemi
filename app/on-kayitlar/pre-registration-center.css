@@ -851,7 +851,7 @@
   }
 }
 
-/* ===== SprintOS Ã–n KayÄ±t Merkezi Â· Profesyonel etkileÅŸim revizyonu ===== */
+/* ===== SprintOS Ön Kayıt Merkezi · Profesyonel etkileşim revizyonu ===== */
 
 .preTopActions a,
 .preTopActions button,
@@ -1249,7 +1249,7 @@
 }
 
 
-/* ===== Ã–n KayÄ±t Â· ModÃ¼le Ã–zel A4 Ã‡Ä±ktÄ± ===== */
+/* ===== Ön Kayıt · Modüle Özel A4 Çıktı ===== */
 .printPreAction {
   display: inline-flex;
   min-height: 46px;
@@ -1467,4 +1467,129 @@
 
 @media (max-width: 640px) {
   .printPreAction { width: 100%; box-sizing: border-box; }
+}
+
+
+/* ===== Ön Kayıt · Tıklanabilir İstatistik Kartları ===== */
+.preRegistrationStats .preStatCard {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 108px;
+  padding: 18px 20px;
+  border: 1px solid #e3eaf3;
+  border-radius: 18px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(15, 39, 71, 0.045);
+  cursor: pointer;
+  transition: transform .16s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.preRegistrationStats .preStatCard:hover {
+  transform: translateY(-2px);
+  border-color: #9fc6f6;
+  background: linear-gradient(180deg, #fff 0%, #f5f9ff 100%);
+  box-shadow: 0 14px 32px rgba(15, 76, 160, 0.11);
+}
+.preRegistrationStats .preStatCard:active { transform: translateY(1px) scale(.988); }
+.preRegistrationStats .preStatCard.active {
+  border-color: #0b6ef3;
+  background: linear-gradient(135deg, #eef6ff 0%, #fff 100%);
+  box-shadow: 0 0 0 3px rgba(11,110,243,.09), 0 14px 32px rgba(15,76,160,.12);
+}
+.preRegistrationStats .preStatCard > span {
+  color: #748399;
+  font-size: 12px;
+  font-weight: 850;
+}
+.preRegistrationStats .preStatCard > strong {
+  margin-top: 6px;
+  color: #10284d;
+  font-size: 27px;
+  line-height: 1;
+}
+.preRegistrationStats .preStatCard > small {
+  margin-top: 10px;
+  color: #0b6ef3;
+  font-size: 11px;
+  font-weight: 850;
+}
+.preRegistrationStats .preStatCard.health.active {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fff8e8 0%, #fff 100%);
+  box-shadow: 0 0 0 3px rgba(245,158,11,.09), 0 14px 32px rgba(180,113,8,.10);
+}
+.preQuickFilters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -4px 0 2px;
+}
+.preQuickFilters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #dce5ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #53657b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+}
+.preQuickFilters button:hover {
+  transform: translateY(-1px);
+  border-color: #a7c8f1;
+  background: #f5f9ff;
+  color: #0b63d7;
+}
+.preQuickFilters button:active { transform: translateY(1px) scale(.985); }
+.preQuickFilters button.active {
+  border-color: #0b6ef3;
+  background: #0b6ef3;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(11,110,243,.18);
+}
+.preQuickFilters button.health.active {
+  border-color: #f59e0b;
+  background: #f59e0b;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(180,113,8,.16);
+}
+.preQuickFilters button span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #0b63d7;
+  font-size: 10px;
+}
+.preQuickFilters button.active span {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .preRegistrationStats .preStatCard {
+    min-height: 96px;
+    padding: 15px 16px;
+  }
+  .preQuickFilters {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .preQuickFilters button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+@media print {
+  .preQuickFilters { display: none !important; }
 }
