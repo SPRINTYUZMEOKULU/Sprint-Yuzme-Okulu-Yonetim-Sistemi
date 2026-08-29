@@ -77,7 +77,7 @@ export default async function StudentFile({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireProfile([
+  const profile = await requireProfile([
     "owner",
     "admin",
     "branch_manager",
@@ -112,6 +112,8 @@ export default async function StudentFile({
     paymentSummaryResult,
     paymentsResult,
     coachReportsResult,
+    enrollmentHistoryResult,
+    attendanceResult,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -217,6 +219,25 @@ export default async function StudentFile({
       .eq("student_id", id)
       .order("submitted_at", { ascending: false })
       .limit(30),
+
+    supabase
+      .from("student_enrollments")
+      .select("*")
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+
+    supabase
+      .from("attendance_records")
+      .select(
+        "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at"
+      )
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .order("lesson_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const student = studentResult.data;
@@ -239,6 +260,136 @@ export default async function StudentFile({
   const paymentSummary = paymentSummaryResult.data;
   const payments = paymentsResult.data ?? [];
   const coachReports = coachReportsResult.data ?? [];
+  const enrollmentHistory = enrollmentHistoryResult.data ?? [];
+  const attendanceRecords = attendanceResult.data ?? [];
+
+  /*
+   * =========================================================
+   * GEÇMİŞ KAYIT / YOKLAMA REFERANSLARI
+   * =========================================================
+   *
+   * İlişkisel select isimlerine güvenmek yerine ID'leri ayrı
+   * sorguluyoruz. Böylece mevcut veritabanı yapısını bozmadan
+   * geçmiş kayıtlar için grup, şube, paket ve eğitmen adlarını
+   * ekranda gösterebiliyoruz.
+   */
+
+  const historyGroupIds = Array.from(
+    new Set(
+      [
+        ...enrollmentHistory.map((item: any) => item.group_id),
+        ...attendanceRecords.map((item: any) => item.group_id),
+      ].filter(Boolean)
+    )
+  ) as string[];
+
+  const historyBranchIds = Array.from(
+    new Set(
+      [
+        ...enrollmentHistory.map((item: any) => item.branch_id),
+        ...attendanceRecords.map((item: any) => item.branch_id),
+      ].filter(Boolean)
+    )
+  ) as string[];
+
+  const historyPackageIds = Array.from(
+    new Set(
+      enrollmentHistory
+        .map((item: any) => item.package_id)
+        .filter(Boolean)
+    )
+  ) as string[];
+
+  const historyCoachIds = Array.from(
+    new Set(
+      [
+        ...enrollmentHistory.map((item: any) => item.coach_id),
+        ...attendanceRecords.map((item: any) => item.coach_id),
+      ].filter(Boolean)
+    )
+  ) as string[];
+
+  const [
+    historyGroupsResult,
+    historyBranchesResult,
+    historyPackagesResult,
+    historyCoachesResult,
+  ] = await Promise.all([
+    historyGroupIds.length
+      ? supabase
+          .from("training_groups")
+          .select("id,name,course_type,branch_id")
+          .in("id", historyGroupIds)
+      : Promise.resolve({ data: [] as any[] }),
+
+    historyBranchIds.length
+      ? supabase
+          .from("branches")
+          .select("id,name")
+          .in("id", historyBranchIds)
+      : Promise.resolve({ data: [] as any[] }),
+
+    historyPackageIds.length
+      ? supabase
+          .from("course_packages")
+          .select("id,name,lesson_count")
+          .in("id", historyPackageIds)
+      : Promise.resolve({ data: [] as any[] }),
+
+    historyCoachIds.length
+      ? supabase
+          .from("profiles")
+          .select("id,full_name")
+          .in("id", historyCoachIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const historyGroupMap = new Map(
+    (historyGroupsResult.data ?? []).map((item: any) => [
+      item.id,
+      item,
+    ])
+  );
+
+  const allBranchIds = Array.from(
+    new Set(
+      [
+        ...historyBranchIds,
+        ...(historyGroupsResult.data ?? [])
+          .map((item: any) => item.branch_id)
+          .filter(Boolean),
+      ]
+    )
+  ) as string[];
+
+  let allHistoryBranches = historyBranchesResult.data ?? [];
+
+  if (allBranchIds.length > historyBranchIds.length) {
+    const { data } = await supabase
+      .from("branches")
+      .select("id,name")
+      .in("id", allBranchIds);
+
+    allHistoryBranches = data ?? allHistoryBranches;
+  }
+
+  const historyBranchMap = new Map(
+    allHistoryBranches.map((item: any) => [item.id, item])
+  );
+
+  const historyPackageMap = new Map(
+    (historyPackagesResult.data ?? []).map((item: any) => [
+      item.id,
+      item,
+    ])
+  );
+
+  const historyCoachMap = new Map(
+    (historyCoachesResult.data ?? []).map((item: any) => [
+      item.id,
+      item,
+    ])
+  );
 
   /*
    * =========================================================
@@ -901,6 +1052,96 @@ export default async function StudentFile({
       </section>
 
       {/* =====================================================
+          YOKLAMA / KATILDIĞI DERSLER
+          ===================================================== */}
+
+      <section className="panel">
+        <div className="panelHead">
+          <div>
+            <p>YOKLAMA GEÇMİŞİ</p>
+            <h2>Katıldığı ve işlenen dersler</h2>
+          </div>
+
+          <strong>
+            Toplam Kayıt: {attendanceRecords.length}
+          </strong>
+        </div>
+
+        <div className="list">
+          {attendanceRecords.map((record: any) => {
+            const statusLabel =
+              record.status === "present"
+                ? "✓ Geldi"
+                : record.status === "absent"
+                ? "✕ Gelmedi"
+                : record.status === "excused"
+                ? "○ İzinli"
+                : record.status === "compensation"
+                ? "+ Telafi"
+                : record.status || "—";
+
+            const group = record.group_id
+              ? historyGroupMap.get(record.group_id)
+              : null;
+
+            const branchIdForRecord =
+              record.branch_id ?? group?.branch_id ?? null;
+
+            const branch = branchIdForRecord
+              ? historyBranchMap.get(branchIdForRecord)
+              : null;
+
+            const coach = record.coach_id
+              ? historyCoachMap.get(record.coach_id)
+              : null;
+
+            const consumesPackage =
+              record.status === "present" ||
+              record.status === "absent" ||
+              record.status === "excused";
+
+            return (
+              <article key={record.id}>
+                <div>
+                  <strong>{statusLabel}</strong>
+
+                  <p>
+                    {fmtDate(record.lesson_date)}
+                    {branch?.name
+                      ? ` • ${branch.name}`
+                      : ""}
+                    {group?.name
+                      ? ` • ${group.name}`
+                      : ""}
+                    {coach?.full_name
+                      ? ` • ${coach.full_name}`
+                      : ""}
+                    {record.coach_note
+                      ? ` • Not: ${record.coach_note}`
+                      : ""}
+                  </p>
+                </div>
+
+                <span>
+                  {consumesPackage
+                    ? "Paket ders hakkından düşer"
+                    : record.status === "compensation"
+                    ? "Normal paket hakkından düşmez"
+                    : "—"}
+                </span>
+              </article>
+            );
+          })}
+
+          {!attendanceRecords.length && (
+            <p className="empty">
+              Henüz yoklama kaydı bulunmuyor.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* =====================================================
           TELAFİ / DERS HAREKETLERİ
           ===================================================== */}
 
@@ -997,6 +1238,104 @@ export default async function StudentFile({
           {!coachReports.length && (
             <p className="empty">
               Henüz antrenör raporu yok.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* =====================================================
+          KAYIT / YENİLEME GEÇMİŞİ
+          ===================================================== */}
+
+      <section className="panel">
+        <div className="panelHead">
+          <div>
+            <p>KAYIT GEÇMİŞİ</p>
+            <h2>Paketler ve kayıt yenilemeleri</h2>
+          </div>
+
+          <strong>
+            Toplam Kayıt: {enrollmentHistory.length}
+          </strong>
+        </div>
+
+        <div className="list">
+          {enrollmentHistory.map((item: any) => {
+            const group = item.group_id
+              ? historyGroupMap.get(item.group_id)
+              : null;
+
+            const branchIdForEnrollment =
+              item.branch_id ?? group?.branch_id ?? null;
+
+            const branch = branchIdForEnrollment
+              ? historyBranchMap.get(branchIdForEnrollment)
+              : null;
+
+            const packageItem = item.package_id
+              ? historyPackageMap.get(item.package_id)
+              : null;
+
+            const coach = item.coach_id
+              ? historyCoachMap.get(item.coach_id)
+              : null;
+
+            const total = Number(
+              item.total_lessons ??
+                packageItem?.lesson_count ??
+                0
+            );
+
+            const used = Number(item.used_lessons ?? 0);
+            const remaining = Math.max(0, total - used);
+
+            const statusLabel =
+              item.status === "active"
+                ? "AKTİF"
+                : item.status === "completed"
+                ? "TAMAMLANDI"
+                : item.status === "cancelled"
+                ? "İPTAL"
+                : item.status
+                ? String(item.status).toUpperCase()
+                : "—";
+
+            return (
+              <article key={item.id}>
+                <div>
+                  <strong>
+                    {packageItem?.name ||
+                      (total ? `${total} Derslik Paket` : "Kayıt")}
+                    {" • "}
+                    {statusLabel}
+                  </strong>
+
+                  <p>
+                    {branch?.name || "Şube bilgisi yok"}
+                    {" • "}
+                    {group?.name || "Grup bilgisi yok"}
+                    {coach?.full_name
+                      ? ` • ${coach.full_name}`
+                      : ""}
+                  </p>
+
+                  <p>
+                    Başlangıç: {fmtDate(item.start_date)}
+                    {" • "}
+                    Planlanan Bitiş: {fmtDate(item.planned_end_date)}
+                  </p>
+                </div>
+
+                <span>
+                  {used} kullanıldı • {remaining} kaldı
+                </span>
+              </article>
+            );
+          })}
+
+          {!enrollmentHistory.length && (
+            <p className="empty">
+              Henüz kayıt geçmişi bulunmuyor.
             </p>
           )}
         </div>
