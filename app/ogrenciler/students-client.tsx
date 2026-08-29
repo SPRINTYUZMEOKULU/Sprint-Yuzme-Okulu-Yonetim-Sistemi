@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  bulkTransferStudents,
+  prepareBulkStudentMessage,
+} from "./bulk-actions";
+
 export type StudentListItem = {
   id: string;
   student_number?: string | null;
@@ -57,12 +62,42 @@ export type StudentListItem = {
   next_compensation_end_time?: string | null;
 
   schedule_text?: string | null;
+  schedule_weekdays?: number[];
+  schedule_slots?: Array<{
+    id: string;
+    weekday: number;
+    start_time?: string | null;
+    end_time?: string | null;
+  }>;
 
   created_at?: string | null;
 };
 
+export type BranchOption = {
+  id: string;
+  name: string;
+};
+
+export type GroupOption = {
+  id: string;
+  branch_id: string | null;
+  name: string;
+  course_type: string | null;
+};
+
+export type ScheduleOption = {
+  id: string;
+  group_id: string | null;
+  weekday: number | null;
+  start_time: string | null;
+  end_time: string | null;
+};
+
 type Props = {
   students: StudentListItem[];
+  branches?: BranchOption[];
+  groups?: GroupOption[];
+  schedules?: ScheduleOption[];
 };
 
 type StatusFilter =
@@ -92,6 +127,12 @@ type MessageType =
   | "lesson_finished"
   | "program"
   | "registration"
+  | "pool_closed"
+  | "hygiene"
+  | "technical"
+  | "group_transfer"
+  | "time_change"
+  | "coach_change"
   | "general";
 
 const statusLabels: Record<string, string> = {
@@ -105,6 +146,38 @@ const statusLabels: Record<string, string> = {
   frozen: "Dondurulmuş",
   cancelled: "İptal",
 };
+
+const DAY_NAMES: Record<number, string> = {
+  1: "Pazartesi",
+  2: "Salı",
+  3: "Çarşamba",
+  4: "Perşembe",
+  5: "Cuma",
+  6: "Cumartesi",
+  7: "Pazar",
+};
+
+function shortTime(value?: string | null) {
+  return value ? value.slice(0, 5) : "";
+}
+
+function scheduleLabel(student: StudentListItem) {
+  if (student.schedule_slots?.length) {
+    return student.schedule_slots
+      .map(
+        (slot) =>
+          `${DAY_NAMES[slot.weekday] || "Ders"} ${shortTime(
+            slot.start_time
+          )}-${shortTime(slot.end_time)}`
+      )
+      .join(" • ");
+  }
+
+  return (student.schedule_text || "")
+    .replaceAll("•", "")
+    .replaceAll("\n", " • ")
+    .trim();
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -540,7 +613,12 @@ function buildMessage(
   );
 }
 
-export default function StudentsClient({ students }: Props) {
+export default function StudentsClient({
+  students,
+  branches: branchOptions = [],
+  groups: groupOptions = [],
+  schedules: scheduleOptions = [],
+}: Props) {
   const router = useRouter();
 
   const [search, setSearch] = useState("");
@@ -548,7 +626,42 @@ export default function StudentsClient({ students }: Props) {
   const [branch, setBranch] = useState("all");
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
-  const [sort, setSort] = useState<SortType>("name_asc"); 
+  const [sort, setSort] = useState<SortType>("name_asc");
+
+  const [dayFilter, setDayFilter] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [bulkMode, setBulkMode] = useState<
+    "transfer" | "message" | null
+  >(null);
+
+  const [targetBranchId, setTargetBranchId] = useState("");
+  const [targetGroupId, setTargetGroupId] = useState("");
+  const [targetScheduleIds, setTargetScheduleIds] = useState<string[]>([]);
+  const [effectiveDate, setEffectiveDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [prepareTransferMessages, setPrepareTransferMessages] =
+    useState(true);
+  const [updateAttendancePlans, setUpdateAttendancePlans] =
+    useState(true);
+  const [logTransferHistory, setLogTransferHistory] = useState(true);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkResult, setBulkResult] = useState("");
+
+  const [bulkMessageType, setBulkMessageType] = useState<
+    | "pool_closed"
+    | "hygiene"
+    | "technical"
+    | "group_transfer"
+    | "time_change"
+    | "coach_change"
+    | "renewal"
+    | "payment"
+    | "general"
+  >("general");
+  const [bulkMessageText, setBulkMessageText] = useState("");
+ 
   const [actionStudent, setActionStudent] =
   useState<StudentListItem | null>(null);
 
@@ -883,6 +996,76 @@ function closeLessonAction() {
     ).sort((a, b) => a.localeCompare(b, "tr"));
   }, [students]);
 
+  const availableDays = useMemo(() => {
+    return Array.from(
+      new Set(
+        students.flatMap((student) =>
+          student.schedule_weekdays || []
+        )
+      )
+    )
+      .filter((day) => day >= 1 && day <= 7)
+      .sort((a, b) => a - b);
+  }, [students]);
+
+  const availableTimes = useMemo(() => {
+    const rows = students
+      .filter((student) => {
+        if (dayFilter === "all") return true;
+        return (student.schedule_weekdays || []).includes(
+          Number(dayFilter)
+        );
+      })
+      .flatMap((student) => student.schedule_slots || [])
+      .filter((slot) => {
+        if (dayFilter === "all") return true;
+        return slot.weekday === Number(dayFilter);
+      })
+      .map(
+        (slot) =>
+          `${shortTime(slot.start_time)}-${shortTime(slot.end_time)}`
+      )
+      .filter(Boolean);
+
+    return Array.from(new Set(rows)).sort();
+  }, [students, dayFilter]);
+
+  const targetGroups = useMemo(
+    () =>
+      groupOptions.filter(
+        (item) =>
+          !targetBranchId || item.branch_id === targetBranchId
+      ),
+    [groupOptions, targetBranchId]
+  );
+
+  const targetSchedules = useMemo(
+    () =>
+      scheduleOptions
+        .filter(
+          (item) =>
+            item.group_id === targetGroupId &&
+            item.weekday != null
+        )
+        .sort((a, b) => {
+          const dayDiff =
+            Number(a.weekday || 0) - Number(b.weekday || 0);
+          if (dayDiff !== 0) return dayDiff;
+          return String(a.start_time || "").localeCompare(
+            String(b.start_time || "")
+          );
+        }),
+    [scheduleOptions, targetGroupId]
+  );
+
+  const selectedStudents = useMemo(
+    () =>
+      students.filter((student) =>
+        selectedStudentIds.includes(student.id)
+      ),
+    [students, selectedStudentIds]
+  );
+
   const counts = useMemo(() => {
     return {
       total: students.length,
@@ -944,6 +1127,23 @@ function closeLessonAction() {
       const levelMatch =
         level === "all" || student.swimming_level === level;
 
+      const dayMatch =
+        dayFilter === "all" ||
+        (student.schedule_weekdays || []).includes(
+          Number(dayFilter)
+        );
+
+      const timeMatch =
+        timeFilter === "all" ||
+        (student.schedule_slots || []).some(
+          (slot) =>
+            `${shortTime(slot.start_time)}-${shortTime(
+              slot.end_time
+            )}` === timeFilter &&
+            (dayFilter === "all" ||
+              slot.weekday === Number(dayFilter))
+        );
+
       let statusMatch = true;
 
       if (status === "active") {
@@ -968,6 +1168,8 @@ function closeLessonAction() {
         branchMatch &&
         groupMatch &&
         levelMatch &&
+        dayMatch &&
+        timeMatch &&
         statusMatch
       );
     });
@@ -1026,7 +1228,207 @@ function closeLessonAction() {
 
       return 0;
     });
-  }, [students, search, status, branch, group, level, sort]);
+  }, [
+    students,
+    search,
+    status,
+    branch,
+    group,
+    level,
+    dayFilter,
+    timeFilter,
+    sort,
+  ]);
+
+
+  function toggleStudentSelection(studentId: string) {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId]
+    );
+  }
+
+  function selectAllFiltered() {
+    const ids = filteredStudents.map((student) => student.id);
+
+    setSelectedStudentIds((current) => {
+      const allSelected =
+        ids.length > 0 && ids.every((id) => current.includes(id));
+
+      if (allSelected) {
+        return current.filter((id) => !ids.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...ids]));
+    });
+  }
+
+  function clearSelection() {
+    setSelectedStudentIds([]);
+    setBulkMode(null);
+    setBulkResult("");
+  }
+
+  function openBulkTransfer() {
+    if (!selectedStudentIds.length) return;
+    setBulkMode("transfer");
+    setBulkResult("");
+  }
+
+  function openBulkMessage() {
+    if (!selectedStudentIds.length) return;
+    setBulkMode("message");
+    setBulkResult("");
+    if (!bulkMessageText.trim()) {
+      setBulkMessageText(buildBulkTemplate(bulkMessageType));
+    }
+  }
+
+  function closeBulkPanel() {
+    setBulkMode(null);
+    setBulkResult("");
+  }
+
+  async function submitBulkTransfer() {
+    if (
+      !selectedStudentIds.length ||
+      !targetBranchId ||
+      !targetGroupId ||
+      !targetScheduleIds.length
+    ) {
+      setBulkResult(
+        "Yeni şube, grup ve en az bir ders seansı seçilmelidir."
+      );
+      return;
+    }
+
+    try {
+      setBulkSubmitting(true);
+      setBulkResult("");
+
+      const result = await bulkTransferStudents({
+        studentIds: selectedStudentIds,
+        targetBranchId,
+        targetGroupId,
+        targetScheduleIds,
+        effectiveDate,
+        prepareMessages: prepareTransferMessages,
+        updateAttendancePlans,
+        logHistory: logTransferHistory,
+      });
+
+      setBulkResult(result.message);
+
+      if (result.transferredCount && result.transferredCount > 0) {
+        setSelectedStudentIds([]);
+        router.refresh();
+      }
+    } catch (error) {
+      console.error(error);
+      setBulkResult("Toplu aktarım sırasında bağlantı hatası oluştu.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+
+  function buildBulkTemplate(
+    type: typeof bulkMessageType
+  ) {
+    const selectedCount = selectedStudentIds.length;
+    const commonHeader = `*SPRİNT YÜZME OKULU*\n\nSayın Velimiz,\n\n`;
+
+    if (type === "pool_closed") {
+      return (
+        commonHeader +
+        `Tesis yönetimi tarafından alınan karar doğrultusunda ilgili yüzme dersimiz bugün gerçekleştirilemeyecektir.\n\n` +
+        `Ders programıyla ilgili gerekli bilgilendirme ayrıca yapılacaktır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "hygiene") {
+      return (
+        commonHeader +
+        `Tesis yönetimi tarafından alınan hijyen tedbirleri kapsamında ilgili yüzme dersimiz bugün gerçekleştirilemeyecektir.\n\n` +
+        `Bu durum yüzme okulumuzdan bağımsız olarak tesis yönetimi tarafından alınmıştır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "technical") {
+      return (
+        commonHeader +
+        `Tesiste oluşan teknik durum nedeniyle ilgili ders programımız bugün gerçekleştirilemeyecektir.\n\n` +
+        `Programla ilgili gelişmeler tarafınıza bildirilecektir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "time_change") {
+      return (
+        commonHeader +
+        `Ders saatinizde program güncellemesi yapılmıştır. Yeni gün ve saat bilgileri tarafınıza iletilmiştir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "coach_change") {
+      return (
+        commonHeader +
+        `Ders programınızda antrenör görevlendirmesiyle ilgili güncelleme yapılmıştır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "renewal") {
+      return (
+        commonHeader +
+        `Kayıt yenileme süreciniz başlamıştır. Ders planlamanızın kesintiye uğramaması için bizimle iletişime geçebilirsiniz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "payment") {
+      return (
+        commonHeader +
+        `Aktif kayıt döneminizle ilgili ödeme bilgilendirmesi için iletişime geçiyoruz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    if (type === "group_transfer") {
+      return (
+        commonHeader +
+        `Ders grubunuz / programınız güncellenmiştir. Yeni şube, grup, gün ve saat bilgileri tarafınıza ayrıca iletilmiştir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      );
+    }
+
+    return (
+      commonHeader +
+      `${selectedCount} kişilik seçili öğrenci grubuna yönelik genel bilgilendirme metnini buradan düzenleyebilirsiniz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+    );
+  }
+
+  async function submitBulkMessage() {
+    if (!selectedStudentIds.length || !bulkMessageText.trim()) {
+      setBulkResult("Mesaj metni boş olamaz.");
+      return;
+    }
+
+    try {
+      setBulkSubmitting(true);
+      setBulkResult("");
+
+      const result = await prepareBulkStudentMessage({
+        studentIds: selectedStudentIds,
+        templateKey: bulkMessageType,
+        messageBody: bulkMessageText.trim(),
+        subject: "Sprint Yüzme Okulu Bilgilendirmesi",
+      });
+
+      setBulkResult(result.message);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      setBulkResult("Mesaj hazırlanırken bağlantı hatası oluştu.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
 
   function callStudent(student: StudentListItem) {
     const phone = contactPhone(student);
@@ -1218,6 +1620,55 @@ function closeLessonAction() {
     ⌂ Ana Sayfa
   </button>
 </div>
+      <section className="studentCommandHeader">
+        <div>
+          <span className="commandEyebrow">
+            SPRİNTOS · ÖĞRENCİ OPERASYON MERKEZİ
+          </span>
+          <h2>Öğrenci, program ve iletişim yönetimi</h2>
+          <p>
+            Filtrele, seç, aktar, mesaj hazırla ve öğrenci geçmişine
+            kaydet.
+          </p>
+        </div>
+
+        <div className="commandActions">
+          <button
+            type="button"
+            className="commandButton ghost"
+            onClick={() => router.push("/")}
+          >
+            ⌂ Ana Sayfa
+          </button>
+
+          <button
+            type="button"
+            className="commandButton"
+            onClick={() => router.push("/kayit")}
+          >
+            + Yeni Kayıt
+          </button>
+
+          <button
+            type="button"
+            className="commandButton orange"
+            onClick={openBulkMessage}
+            disabled={!selectedStudentIds.length}
+          >
+            ✉ Mesaj Merkezi
+          </button>
+
+          <button
+            type="button"
+            className="commandButton"
+            onClick={openBulkTransfer}
+            disabled={!selectedStudentIds.length}
+          >
+            ⇄ Toplu İşlem
+          </button>
+        </div>
+      </section>
+
       <section className="summaryGrid">
         <button
           className={`summaryCard ${status === "all" ? "selected" : ""}`}
@@ -1331,6 +1782,33 @@ function closeLessonAction() {
         </select>
 
         <select
+          value={dayFilter}
+          onChange={(event) => {
+            setDayFilter(event.target.value);
+            setTimeFilter("all");
+          }}
+        >
+          <option value="all">Tüm Günler</option>
+          {availableDays.map((day) => (
+            <option key={day} value={String(day)}>
+              {DAY_NAMES[day]}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={timeFilter}
+          onChange={(event) => setTimeFilter(event.target.value)}
+        >
+          <option value="all">Tüm Saatler</option>
+          {availableTimes.map((time) => (
+            <option key={time} value={time}>
+              {time}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={sort}
           onChange={(event) => setSort(event.target.value as SortType)}
         >
@@ -1346,6 +1824,40 @@ function closeLessonAction() {
         <button className="exportButton" onClick={exportCSV}>
           Excel&apos;e Aktar
         </button>
+      </section>
+
+      <section className="selectionToolbar">
+        <label className="selectAllLabel">
+          <input
+            type="checkbox"
+            checked={
+              filteredStudents.length > 0 &&
+              filteredStudents.every((student) =>
+                selectedStudentIds.includes(student.id)
+              )
+            }
+            onChange={selectAllFiltered}
+          />
+          <span>Görünenlerin tümünü seç</span>
+        </label>
+
+        <div>
+          <strong>{selectedStudentIds.length}</strong> öğrenci seçili
+        </div>
+
+        {selectedStudentIds.length > 0 && (
+          <div className="selectionActions">
+            <button type="button" onClick={openBulkTransfer}>
+              ⇄ Grup / Şube Aktar
+            </button>
+            <button type="button" onClick={openBulkMessage}>
+              ✉ Toplu Mesaj
+            </button>
+            <button type="button" onClick={clearSelection}>
+              Seçimi Temizle
+            </button>
+          </div>
+        )}
       </section>
 
       <div className="resultInfo">
@@ -1392,7 +1904,11 @@ function closeLessonAction() {
           return (
             <article
               key={student.id}
-              className="studentCard"
+              className={`studentCard ${
+                selectedStudentIds.includes(student.id)
+                  ? "selectedStudentCard"
+                  : ""
+              }`}
               role="button"
               tabIndex={0}
               onClick={() => router.push(`/ogrenciler/${student.id}`)}
@@ -1403,6 +1919,18 @@ function closeLessonAction() {
               }}
             >
               <header className="cardHeader">
+                <label
+                  className="studentSelect"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedStudentIds.includes(student.id)}
+                    onChange={() => toggleStudentSelection(student.id)}
+                    aria-label={`${student.first_name} ${student.last_name} seç`}
+                  />
+                </label>
+
                 <div>
                   <span className="eyebrow">
                     #{index + 1} · {student.student_number || "ÖĞRENCİ NO YOK"}
@@ -1427,6 +1955,14 @@ function closeLessonAction() {
                     "Durum Yok"}
                 </span>
               </header>
+
+              <div className="studentProgramLine">
+                <span>📍 {student.branch_name || "Şube yok"}</span>
+                <span>👥 {student.group_name || "Grup yok"}</span>
+                <strong>
+                  🗓 {scheduleLabel(student) || "Program tanımlı değil"}
+                </strong>
+              </div>
 
               {lessonEnded && (
                 <div className="studentWarning dangerWarning">
@@ -1678,6 +2214,296 @@ function closeLessonAction() {
             Seçtiğiniz filtrelere uygun öğrenci bulunamadı.
           </div>
         )}
+        {bulkMode === "transfer" && (
+          <div className="bulkOverlay" onClick={closeBulkPanel}>
+            <aside
+              className="bulkPanel"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="bulkPanelHeader">
+                <div>
+                  <span>TOPLU GRUP / ŞUBE AKTARIMI</span>
+                  <h3>{selectedStudents.length} öğrenci aktarılacak</h3>
+                  <p>
+                    Geçmiş yoklamalar korunur. Kullanılan dersler
+                    değişmez; yalnız kalan haklar yeni programa taşınır.
+                  </p>
+                </div>
+                <button type="button" onClick={closeBulkPanel}>×</button>
+              </div>
+
+              <div className="bulkPanelBody">
+                <div className="bulkPreview">
+                  <div>
+                    <span>Mevcut Program</span>
+                    <strong>
+                      {selectedStudents.length === 1
+                        ? `${selectedStudents[0].branch_name || "—"} · ${
+                            selectedStudents[0].group_name || "—"
+                          }`
+                        : `${selectedStudents.length} seçili öğrenci`}
+                    </strong>
+                    <small>
+                      {selectedStudents.length === 1
+                        ? scheduleLabel(selectedStudents[0]) || "—"
+                        : "Her öğrencinin mevcut programı geçmişte korunacaktır."}
+                    </small>
+                  </div>
+                </div>
+
+                <label>
+                  <span>Yeni Şube</span>
+                  <select
+                    value={targetBranchId}
+                    onChange={(event) => {
+                      setTargetBranchId(event.target.value);
+                      setTargetGroupId("");
+                      setTargetScheduleIds([]);
+                    }}
+                  >
+                    <option value="">Şube seçin</option>
+                    {branchOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>Yeni Grup</span>
+                  <select
+                    value={targetGroupId}
+                    onChange={(event) => {
+                      setTargetGroupId(event.target.value);
+                      setTargetScheduleIds([]);
+                    }}
+                    disabled={!targetBranchId}
+                  >
+                    <option value="">Grup seçin</option>
+                    {targetGroups.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="schedulePicker">
+                  <span>Yeni Gün / Seans</span>
+                  {!targetGroupId ? (
+                    <p>Önce grup seçin.</p>
+                  ) : targetSchedules.length ? (
+                    targetSchedules.map((item) => {
+                      const checked = targetScheduleIds.includes(item.id);
+                      return (
+                        <label key={item.id} className="scheduleChoice">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setTargetScheduleIds((current) =>
+                                checked
+                                  ? current.filter((id) => id !== item.id)
+                                  : [...current, item.id]
+                              )
+                            }
+                          />
+                          <strong>
+                            {DAY_NAMES[Number(item.weekday)] || "Ders"}
+                          </strong>
+                          <span>
+                            {shortTime(item.start_time)}–
+                            {shortTime(item.end_time)}
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p>Bu gruba ait aktif seans bulunamadı.</p>
+                  )}
+                </div>
+
+                <label>
+                  <span>Aktarım Başlangıç Tarihi</span>
+                  <input
+                    type="date"
+                    value={effectiveDate}
+                    onChange={(event) =>
+                      setEffectiveDate(event.target.value)
+                    }
+                  />
+                </label>
+
+                <div className="bulkChecks">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={updateAttendancePlans}
+                      onChange={(event) =>
+                        setUpdateAttendancePlans(event.target.checked)
+                      }
+                    />
+                    <span>Katılım planlarını güncelle</span>
+                  </label>
+
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={logTransferHistory}
+                      onChange={(event) =>
+                        setLogTransferHistory(event.target.checked)
+                      }
+                    />
+                    <span>Öğrenci işlem geçmişine kaydet</span>
+                  </label>
+
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={prepareTransferMessages}
+                      onChange={(event) =>
+                        setPrepareTransferMessages(event.target.checked)
+                      }
+                    />
+                    <span>Velilere bilgilendirme mesajı hazırla</span>
+                  </label>
+                </div>
+
+                <div className="bulkInfoBox">
+                  <strong>Aktarım kuralı</strong>
+                  <p>
+                    Geldi / Gelmedi / İzinli ile düşmüş eski dersler
+                    değişmez. Kalan normal ders hakkı yeni programdan
+                    itibaren devam eder. Yeni bitiş tarihi seçilen
+                    günlere göre otomatik hesaplanır.
+                  </p>
+                </div>
+
+                {bulkResult && (
+                  <div className="bulkResult">{bulkResult}</div>
+                )}
+              </div>
+
+              <div className="bulkPanelFooter">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={closeBulkPanel}
+                  disabled={bulkSubmitting}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={submitBulkTransfer}
+                  disabled={bulkSubmitting}
+                >
+                  {bulkSubmitting
+                    ? "Aktarılıyor..."
+                    : `✓ ${selectedStudents.length} Öğrenciyi Aktar`}
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {bulkMode === "message" && (
+          <div className="bulkOverlay" onClick={closeBulkPanel}>
+            <aside
+              className="bulkPanel messagePanel"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="bulkPanelHeader">
+                <div>
+                  <span>TOPLU MESAJ MERKEZİ</span>
+                  <h3>{selectedStudents.length} öğrenci / veli</h3>
+                  <p>
+                    Mesajlar öğrenci dosyasındaki iletişim geçmişine
+                    “hazırlandı” olarak kaydedilir.
+                  </p>
+                </div>
+                <button type="button" onClick={closeBulkPanel}>×</button>
+              </div>
+
+              <div className="bulkPanelBody">
+                <label>
+                  <span>Hazır Mesaj</span>
+                  <select
+                    value={bulkMessageType}
+                    onChange={(event) => {
+                      const type = event.target.value as typeof bulkMessageType;
+                      setBulkMessageType(type);
+                      setBulkMessageText(buildBulkTemplate(type));
+                    }}
+                  >
+                    <option value="general">💬 Genel Duyuru</option>
+                    <option value="pool_closed">🏊 Havuz Kapalı</option>
+                    <option value="hygiene">🧼 Hijyen Tedbiri</option>
+                    <option value="technical">🛠 Teknik Arıza</option>
+                    <option value="group_transfer">⇄ Grup Aktarımı</option>
+                    <option value="time_change">⏰ Saat Değişikliği</option>
+                    <option value="coach_change">👤 Antrenör Değişikliği</option>
+                    <option value="renewal">🔄 Kayıt Yenileme</option>
+                    <option value="payment">💳 Ödeme Hatırlatma</option>
+                  </select>
+                </label>
+
+                <div className="messageModeChoice">
+                  <strong>Çalışma modu</strong>
+                  <div>
+                    <span className="activeMode">
+                      ✓ Sadece mesaj hazırla
+                    </span>
+                    <span>
+                      Operasyon gerektiren işlemler “Toplu İşlem”
+                      ekranından yapılır.
+                    </span>
+                  </div>
+                </div>
+
+                <label>
+                  <span>Mesaj Metni</span>
+                  <textarea
+                    rows={14}
+                    value={bulkMessageText}
+                    onChange={(event) =>
+                      setBulkMessageText(event.target.value)
+                    }
+                    placeholder="Mesaj metnini yazın..."
+                  />
+                </label>
+
+                {bulkResult && (
+                  <div className="bulkResult">{bulkResult}</div>
+                )}
+              </div>
+
+              <div className="bulkPanelFooter">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={closeBulkPanel}
+                  disabled={bulkSubmitting}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="primary orange"
+                  onClick={submitBulkMessage}
+                  disabled={bulkSubmitting}
+                >
+                  {bulkSubmitting
+                    ? "Hazırlanıyor..."
+                    : `✉ ${selectedStudents.length} Mesajı Hazırla`}
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
         {actionType && (
   <div
     className="lessonActionOverlay"
@@ -2334,6 +3160,433 @@ function closeLessonAction() {
       </section>
 
       <style jsx>{`
+      .studentCommandHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 18px;
+        padding: 22px 24px;
+        border-radius: 22px;
+        background:
+          linear-gradient(135deg, #061f3d 0%, #0a4f8c 55%, #0b69b8 100%);
+        color: #fff;
+        box-shadow: 0 18px 45px rgba(15, 58, 107, 0.18);
+      }
+
+      .commandEyebrow {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        color: #ffad2f;
+      }
+
+      .studentCommandHeader h2 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .studentCommandHeader p {
+        margin: 6px 0 0;
+        opacity: .82;
+        font-size: 13px;
+      }
+
+      .commandActions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .commandButton {
+        border: 1px solid rgba(255,255,255,.22);
+        border-radius: 12px;
+        padding: 10px 13px;
+        background: rgba(255,255,255,.12);
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .commandButton.orange {
+        background: #ff9418;
+        border-color: #ff9418;
+      }
+
+      .commandButton.ghost {
+        background: rgba(255,255,255,.08);
+      }
+
+      .commandButton:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+      }
+
+      .selectionToolbar {
+        position: sticky;
+        top: 8px;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 14px 0;
+        padding: 12px 14px;
+        border: 1px solid #d7e2ef;
+        border-radius: 14px;
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 10px 28px rgba(25, 57, 94, .08);
+        backdrop-filter: blur(12px);
+      }
+
+      .selectAllLabel {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .selectAllLabel input,
+      .studentSelect input {
+        width: 18px;
+        height: 18px;
+        accent-color: #1268d6;
+      }
+
+      .selectionActions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      .selectionActions button {
+        border: 1px solid #cbd9e9;
+        border-radius: 10px;
+        padding: 8px 11px;
+        background: #fff;
+        color: #12345a;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .selectedStudentCard {
+        border-color: #2e7bea !important;
+        box-shadow: 0 0 0 2px rgba(46,123,234,.12),
+          0 14px 30px rgba(27,84,150,.12) !important;
+      }
+
+      .studentSelect {
+        display: grid;
+        place-items: center;
+        padding: 3px;
+        cursor: pointer;
+      }
+
+      .studentProgramLine {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 9px;
+        margin: 10px 0 12px;
+        padding: 9px 11px;
+        border: 1px solid #dce8f5;
+        border-radius: 12px;
+        background: linear-gradient(180deg,#f9fbfe,#f2f7fc);
+        color: #49627f;
+        font-size: 12px;
+      }
+
+      .studentProgramLine strong {
+        color: #0b3d70;
+      }
+
+      .bulkOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        justify-content: flex-end;
+        background: rgba(4, 20, 40, .58);
+        backdrop-filter: blur(5px);
+      }
+
+      .bulkPanel {
+        width: min(620px, 94vw);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: #f7f9fc;
+        box-shadow: -24px 0 60px rgba(0,0,0,.22);
+        overflow: hidden;
+      }
+
+      .bulkPanelHeader {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 24px;
+        background:
+          linear-gradient(135deg,#061f3d,#0a4f8c);
+        color: #fff;
+      }
+
+      .bulkPanelHeader > button {
+        width: 38px;
+        height: 38px;
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 12px;
+        background: rgba(255,255,255,.1);
+        color: #fff;
+        font-size: 24px;
+        cursor: pointer;
+      }
+
+      .bulkPanelHeader span {
+        color: #ffad2f;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .12em;
+      }
+
+      .bulkPanelHeader h3 {
+        margin: 6px 0;
+        font-size: 23px;
+      }
+
+      .bulkPanelHeader p {
+        margin: 0;
+        max-width: 470px;
+        color: rgba(255,255,255,.78);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .bulkPanelBody {
+        flex: 1;
+        overflow-y: auto;
+        padding: 22px 24px 36px;
+      }
+
+      .bulkPanelBody > label,
+      .schedulePicker {
+        display: grid;
+        gap: 7px;
+        margin-bottom: 16px;
+      }
+
+      .bulkPanelBody > label > span,
+      .schedulePicker > span {
+        color: #4e6682;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .bulkPanelBody select,
+      .bulkPanelBody input[type="date"],
+      .bulkPanelBody textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cfdbeb;
+        border-radius: 12px;
+        padding: 11px 12px;
+        background: #fff;
+        color: #102f54;
+        font: inherit;
+        outline: none;
+      }
+
+      .bulkPreview,
+      .bulkInfoBox,
+      .messageModeChoice {
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid #d6e2ef;
+        border-radius: 14px;
+        background: #fff;
+      }
+
+      .bulkPreview span,
+      .bulkPreview small {
+        display: block;
+        color: #6b7f96;
+      }
+
+      .bulkPreview strong {
+        display: block;
+        margin: 4px 0;
+        color: #0c355f;
+      }
+
+      .schedulePicker p {
+        margin: 0;
+        padding: 12px;
+        border-radius: 10px;
+        background: #eef3f8;
+        color: #667a91;
+      }
+
+      .scheduleChoice {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border: 1px solid #d8e3ef;
+        border-radius: 11px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      .scheduleChoice input {
+        width: 17px;
+        height: 17px;
+        accent-color: #1268d6;
+      }
+
+      .scheduleChoice strong {
+        color: #123d69;
+      }
+
+      .scheduleChoice span {
+        color: #526b85;
+        font-size: 12px;
+      }
+
+      .bulkChecks {
+        display: grid;
+        gap: 9px;
+        margin-bottom: 16px;
+      }
+
+      .bulkChecks label {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 12px;
+        border-radius: 11px;
+        background: #fff;
+        border: 1px solid #dbe5ef;
+        color: #294866;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .bulkChecks input {
+        width: 17px;
+        height: 17px;
+        accent-color: #1268d6;
+      }
+
+      .bulkInfoBox {
+        background: #eef7ff;
+        border-color: #c9e4fb;
+      }
+
+      .bulkInfoBox strong {
+        color: #0e4e87;
+      }
+
+      .bulkInfoBox p {
+        margin: 5px 0 0;
+        color: #496986;
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .bulkResult {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 11px;
+        background: #eaf7ef;
+        border: 1px solid #bde4cc;
+        color: #17623b;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .bulkPanelFooter {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 20px;
+        border-top: 1px solid #dce4ee;
+        background: #fff;
+      }
+
+      .bulkPanelFooter button {
+        border: 0;
+        border-radius: 11px;
+        padding: 11px 15px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .bulkPanelFooter .ghost {
+        border: 1px solid #ccd8e6;
+        background: #fff;
+        color: #294765;
+      }
+
+      .bulkPanelFooter .primary {
+        background: #1268d6;
+        color: #fff;
+      }
+
+      .bulkPanelFooter .primary.orange {
+        background: #ff9418;
+      }
+
+      .messageModeChoice strong {
+        display: block;
+        margin-bottom: 7px;
+        color: #1e4166;
+      }
+
+      .messageModeChoice div {
+        display: grid;
+        gap: 5px;
+        color: #60758c;
+        font-size: 12px;
+      }
+
+      .messageModeChoice .activeMode {
+        color: #116c48;
+        font-weight: 900;
+      }
+
+      @media (max-width: 780px) {
+        .studentCommandHeader {
+          align-items: stretch;
+          flex-direction: column;
+          padding: 18px;
+        }
+
+        .commandActions {
+          justify-content: flex-start;
+        }
+
+        .selectionToolbar {
+          position: static;
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .selectionActions {
+          margin-left: 0;
+        }
+
+        .bulkPanel {
+          width: 100%;
+        }
+      }
+
+
       .studentActions {
   display: flex;
   flex-wrap: wrap;
