@@ -1400,9 +1400,13 @@ export default function RegistrationWizard({
    * ==========================================================
    */
 
-  const professionalTemplate = `*Değerli Velimiz,*
+  const professionalTemplate = `*SPRİNT YÜZME OKULU | KAYIT BİLGİLENDİRMESİ*
 
-*{{ogrenci_adi}}* adına Sprint Yüzme Okulu kayıt işleminiz hazırlanmıştır. Aramıza hoş geldiniz.
+Değerli Velimiz,
+
+*{{ogrenci_adi}}* adına yüzme okulumuzdaki kayıt işlemleri *başarıyla tamamlanmıştır.* Aramıza hoş geldiniz.
+
+_Kurs başlangıcınız ve kayıt bilgileriniz aşağıda yer almaktadır._
 
 *KURS BİLGİLERİ*
 • Öğrenci No: *{{ogrenci_no}}*
@@ -1413,21 +1417,25 @@ export default function RegistrationWizard({
 • Saat: *{{saat}}*
 • Paket: *{{paket}}*
 • Ders Sayısı: *{{ders_sayisi}}*
-• Başlangıç: *{{baslangic}}*
-• Planlanan Bitiş: *{{bitis}}*
+
+*EĞİTİM TARİHLERİ*
+• Başlangıç Tarihi: *{{baslangic}}*
+• Planlanan Bitiş Tarihi: *{{bitis}}*
 
 *ÖDEME BİLGİSİ*
 • Ödeme Vade Tarihi: *{{vade_tarihi}}*
 
 *DERS İÇİN GEREKLİ MALZEMELER*
-• *Sprint Yüzme Bonesi:* Yüzme okulumuz tarafından öğrencimize *hediye edilmektedir.*
-• *Yüzücü Gözlüğü:* Dilerseniz kendi gözlüğünüzü kullanabilir veya *yüzme okulumuzdan temin edebilirsiniz.*
-• *Yüzme Kıyafeti:* Mayo, bikini, yüzme şortu veya haşema kullanılabilir.
-• *Terlik:* Havuz alanında kullanılmak üzere kaymaz tabanlı terlik getirilmesini öneriyoruz.
-• *Havlu ve Kişisel Malzemeler:* Havlu ile ihtiyaç duyulan duş ve kişisel bakım malzemeleri getirilebilir.
+• *Sprint Yüzme Bonesi* — Öğrencimize yüzme okulumuz tarafından _hediye edilmektedir._
+• *Yüzücü Gözlüğü* — Kendi gözlüğünüzü kullanabilir veya yüzme okulumuzdan temin edebilirsiniz.
+• *Yüzme Kıyafeti* — Mayo, bikini, yüzme şortu veya haşema kullanılabilir.
+• *Terlik* — Havuz alanında kullanılmak üzere kaymaz tabanlı terlik önerilmektedir.
+• *Havlu ve Kişisel Malzemeler* — Havlu ve ihtiyaç duyulan kişisel bakım malzemeleri getirilebilir.
 
 *ÖNEMLİ HATIRLATMA*
-Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır olunmasını rica ederiz. Böylece öğrencimizin hazırlanma ve havuza giriş süreci ders saatini etkilemeden tamamlanabilir.
+Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır bulunmanızı rica ederiz.
+
+_Bu sayede öğrencimizin hazırlanma ve havuza giriş süreci ders süresini etkilemeden tamamlanabilir._
 
 *İLETİŞİM*
 *{{telefon}}*
@@ -1435,11 +1443,24 @@ Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır olunmasını 
 *KONUM*
 {{konum}}
 
-Derslerinizin keyifli ve verimli geçmesini dileriz.
-*Sprint Yüzme Okulu*`
+Yeni eğitim dönemimizin öğrencimiz için keyifli, verimli ve başarılı geçmesini dileriz.
+
+*SPRİNT YÜZME OKULU*
+_Antalya'nın En Köklü Yüzme Okulu_`
+
+  /*
+   * message_templates içindeki registration_completed kaydı varsa
+   * ana kaynak odur. Böylece ileride Hazır Mesajlar / Ayarlar modülünden
+   * metni değiştirdiğimizde bu ekrana yeniden kod yazmak gerekmez.
+   * Kayıt yoksa yukarıdaki güvenli varsayılan şablon kullanılır.
+   */
+  const activeMessageTemplate =
+    template?.trim()
+      ? template
+      : professionalTemplate;
 
   const generatedMessage = fillTemplate(
-    professionalTemplate || template,
+    activeMessageTemplate,
     variables
   );
 
