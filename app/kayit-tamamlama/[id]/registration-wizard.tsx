@@ -751,12 +751,27 @@ export default function RegistrationWizard({
     student.preferred_package_id ||
     "";
 
-  const initialPackage =
+  const initialPackageCandidate =
     packages.find(
       (item) =>
         item.id ===
         initialPackageId
     );
+
+  /*
+   * Ön kayıttan gelen paket seçili kurs türüyle uyuşmuyorsa
+   * yanlış çocuk/yetişkin paketini taşımıyoruz.
+   */
+  const initialPackage =
+    initialPackageCandidate &&
+    initialGroup?.course_type &&
+    initialPackageCandidate.course_type &&
+    initialPackageCandidate.course_type !== initialGroup.course_type
+      ? undefined
+      : initialPackageCandidate;
+
+  const safeInitialPackageId =
+    initialPackage?.id || "";
 
   /*
    * ----------------------------------------------------------
@@ -860,7 +875,7 @@ export default function RegistrationWizard({
     setPackageId,
   ] =
     useState(
-      initialPackageId
+      safeInitialPackageId
     );
 
   const [
@@ -1229,6 +1244,33 @@ export default function RegistrationWizard({
   const requiresManagerApproval =
     !isStandardLessonCount;
 
+  const customApproval =
+    draftData.custom_lesson_approval &&
+    typeof draftData.custom_lesson_approval === "object"
+      ? (draftData.custom_lesson_approval as Record<string, unknown>)
+      : null;
+
+  const customApprovalLessonCount =
+    Number(customApproval?.lesson_count || 0);
+
+  const customApprovalMatches =
+    requiresManagerApproval &&
+    customApprovalLessonCount === lessonCount;
+
+  const customApprovalStatus =
+    customApprovalMatches
+      ? String(customApproval?.status || "")
+      : "";
+
+  const customApprovalPending =
+    customApprovalStatus === "pending";
+
+  const customApprovalApproved =
+    customApprovalStatus === "approved";
+
+  const customApprovalRejected =
+    customApprovalStatus === "rejected";
+
   /*
    * ==========================================================
    * ŞUBE KONUMU
@@ -1356,41 +1398,41 @@ export default function RegistrationWizard({
 
   const professionalTemplate = `*Değerli Velimiz,*
 
-*{{ogrenci_adi}}* adına Sprint Yüzme Okulu kayıt işleminiz hazırlanmıştır. Aramıza hoş geldiniz. 🏊
+*{{ogrenci_adi}}* adına Sprint Yüzme Okulu kayıt işleminiz hazırlanmıştır. Aramıza hoş geldiniz.
 
-*📋 KURS BİLGİLERİ*
-• Öğrenci No: {{ogrenci_no}}
-• Şube: {{sube}}
-• Kurs: {{kurs_turu}}
-• Grup: {{grup}}
-• Günler: {{gunler}}
-• Saat: {{saat}}
-• Paket: {{paket}}
-• Ders Sayısı: {{ders_sayisi}}
-• Başlangıç: {{baslangic}}
-• Planlanan Bitiş: {{bitis}}
+*KURS BİLGİLERİ*
+• Öğrenci No: *{{ogrenci_no}}*
+• Şube: *{{sube}}*
+• Kurs: *{{kurs_turu}}*
+• Grup: *{{grup}}*
+• Günler: *{{gunler}}*
+• Saat: *{{saat}}*
+• Paket: *{{paket}}*
+• Ders Sayısı: *{{ders_sayisi}}*
+• Başlangıç: *{{baslangic}}*
+• Planlanan Bitiş: *{{bitis}}*
 
-*💳 ÖDEME BİLGİSİ*
+*ÖDEME BİLGİSİ*
 • Ödeme Vade Tarihi: *{{vade_tarihi}}*
 
-*🎒 DERS İÇİN GEREKLİ MALZEMELER*
-🧢 *Sprint Yüzme Bonesi:* Yüzme okulumuz tarafından öğrencimize *hediye edilmektedir.*
-🥽 *Yüzücü Gözlüğü:* Dilerseniz kendi gözlüğünüzü kullanabilir veya *yüzme okulumuzdan temin edebilirsiniz.*
-🩱 *Yüzme Kıyafeti:* Mayo, bikini, yüzme şortu veya haşema kullanılabilir.
-🩴 *Terlik:* Havuz alanında kullanılmak üzere kaymaz tabanlı terlik getirilmesini öneriyoruz.
-🧴 *Havlu ve Kişisel Malzemeler:* Havlu ile ihtiyaç duyulan duş ve kişisel bakım malzemeleri getirilebilir.
+*DERS İÇİN GEREKLİ MALZEMELER*
+• *Sprint Yüzme Bonesi:* Yüzme okulumuz tarafından öğrencimize *hediye edilmektedir.*
+• *Yüzücü Gözlüğü:* Dilerseniz kendi gözlüğünüzü kullanabilir veya *yüzme okulumuzdan temin edebilirsiniz.*
+• *Yüzme Kıyafeti:* Mayo, bikini, yüzme şortu veya haşema kullanılabilir.
+• *Terlik:* Havuz alanında kullanılmak üzere kaymaz tabanlı terlik getirilmesini öneriyoruz.
+• *Havlu ve Kişisel Malzemeler:* Havlu ile ihtiyaç duyulan duş ve kişisel bakım malzemeleri getirilebilir.
 
-*⏰ ÖNEMLİ HATIRLATMA*
+*ÖNEMLİ HATIRLATMA*
 Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır olunmasını rica ederiz. Böylece öğrencimizin hazırlanma ve havuza giriş süreci ders saatini etkilemeden tamamlanabilir.
 
-*📍 KONUM*
+*İLETİŞİM*
+*{{telefon}}*
+
+*KONUM*
 {{konum}}
 
-*☎️ İLETİŞİM*
-{{telefon}}
-
 Derslerinizin keyifli ve verimli geçmesini dileriz.
-*Sprint Yüzme Okulu*`;
+*Sprint Yüzme Okulu*`
 
   const generatedMessage = fillTemplate(
     professionalTemplate || template,
@@ -2030,8 +2072,23 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
             />
 
             {requiresManagerApproval ? (
-              <small style={{ color: "#b45309", fontWeight: 700 }}>
-                Yönetici onayı gerekir. Standart ders sayıları 8 ve 12'dir.
+              <small
+                style={{
+                  color: customApprovalApproved
+                    ? "#15803d"
+                    : customApprovalRejected
+                      ? "#b91c1c"
+                      : "#b45309",
+                  fontWeight: 800,
+                }}
+              >
+                {customApprovalApproved
+                  ? `Yönetici onayı alındı ✓ · ${lessonCount} ders`
+                  : customApprovalPending
+                    ? `Yönetici onayı bekleniyor · ${lessonCount} ders`
+                    : customApprovalRejected
+                      ? `${lessonCount} ders talebi reddedildi. Düzenleyip yeniden gönderebilirsiniz.`
+                      : `Yönetici onayı gerekir. Standart ders sayıları 8 ve 12'dir.`}
               </small>
             ) : null}
 
@@ -3169,11 +3226,25 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
           <div className={messageSent ? "requirementOk" : "requirementMissing"}>
             <strong>{messageSent ? "✓ WhatsApp bilgilendirmesi gönderildi" : "WhatsApp bilgilendirmesi bekleniyor"}</strong>
           </div>
-          <div className={requiresManagerApproval ? "requirementApproval" : "requirementOk"}>
+          <div
+            className={
+              !requiresManagerApproval || customApprovalApproved
+                ? "requirementOk"
+                : customApprovalRejected
+                  ? "requirementMissing"
+                  : "requirementApproval"
+            }
+          >
             <strong>
-              {requiresManagerApproval
-                ? `${lessonCount} ders standart paket dışıdır · Yönetici onayı gerekir`
-                : `✓ ${lessonCount} ders standart kayıt paketidir`}
+              {!requiresManagerApproval
+                ? `✓ ${lessonCount} ders standart kayıt paketidir`
+                : customApprovalApproved
+                  ? `✓ Yönetici onayı alındı · ${lessonCount} ders`
+                  : customApprovalPending
+                    ? `Yönetici onayı bekleniyor · ${lessonCount} ders`
+                    : customApprovalRejected
+                      ? `${lessonCount} ders talebi reddedildi · Düzenleyip yeniden gönderebilirsiniz`
+                      : `${lessonCount} ders standart paket dışıdır · Yönetici onayı gerekir`}
             </strong>
           </div>
         </div>
@@ -3200,14 +3271,15 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
           <button
             type="submit"
             formAction={
-              requiresManagerApproval
+              requiresManagerApproval && !customApprovalApproved
                 ? requestCustomLessonCountApproval
                 : completeRegistration
             }
             className="completeButton"
             disabled={
               !consent?.rules_accepted ||
-              !messageSent
+              customApprovalPending ||
+              ((!requiresManagerApproval || customApprovalApproved) && !messageSent)
             }
           >
 
@@ -3216,11 +3288,15 @@ Derslerinizin keyifli ve verimli geçmesini dileriz.
               size={19}
             />
 
-            {requiresManagerApproval
-              ? "Yönetici Onayına Gönder"
-              : !messageSent
-                ? "Önce WhatsApp Mesajını Gönderin"
-                : "Kaydı Tamamla ve Öğrenciye Aktar"}
+            {requiresManagerApproval && customApprovalPending
+              ? "Yönetici Onayı Bekleniyor"
+              : requiresManagerApproval && !customApprovalApproved
+                ? customApprovalRejected
+                  ? "Yeniden Yönetici Onayına Gönder"
+                  : "Yönetici Onayına Gönder"
+                : !messageSent
+                  ? "Önce WhatsApp Mesajını Gönderin"
+                  : "Kaydı Tamamla ve Öğrenciye Aktar"}
 
           </button>
 
