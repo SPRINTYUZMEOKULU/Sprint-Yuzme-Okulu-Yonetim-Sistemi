@@ -77,6 +77,7 @@ type Activity = {
 
 type DetailTab = "current" | "original" | "edit" | "history";
 type MainTab = "pending" | "archive";
+type ListFilter = "all" | "today" | "health";
 
 function fmtDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -185,6 +186,8 @@ export default function PreRegistrationCenter({
   consents,
   activities,
   initialSelectedId,
+  initialMainTab,
+  initialFilter,
 }: {
   students: Student[];
   branches: Branch[];
@@ -193,8 +196,11 @@ export default function PreRegistrationCenter({
   consents: Consent[];
   activities: Activity[];
   initialSelectedId: string | null;
+  initialMainTab: MainTab;
+  initialFilter: ListFilter;
 }) {
-  const [mainTab, setMainTab] = useState<MainTab>("pending");
+  const [mainTab, setMainTab] = useState<MainTab>(initialMainTab);
+  const [listFilter, setListFilter] = useState<ListFilter>(initialFilter);
   const [detailTab, setDetailTab] = useState<DetailTab>("current");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -242,10 +248,24 @@ export default function PreRegistrationCenter({
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
-    if (!q) return students;
+    const todayKey = new Date().toISOString().slice(0, 10);
 
     return students.filter((student) => {
       const consent = consentByStudent.get(student.id);
+
+      if (
+        listFilter === "today" &&
+        student.created_at?.slice(0, 10) !== todayKey
+      ) {
+        return false;
+      }
+
+      if (listFilter === "health" && !consent?.health_note?.trim()) {
+        return false;
+      }
+
+      if (!q) return true;
+
       const haystack = [
         student.student_number,
         student.first_name,
@@ -271,6 +291,7 @@ export default function PreRegistrationCenter({
   }, [
     students,
     search,
+    listFilter,
     branchMap,
     groupMap,
     packageMap,
@@ -334,12 +355,15 @@ export default function PreRegistrationCenter({
   }
 
   return (
-    <section className="preRegistrationCenter">
+    <section id="pre-registration-center" className="preRegistrationCenter">
       <div className="preRegistrationTabs" role="tablist">
         <button
           type="button"
           className={mainTab === "pending" ? "active" : ""}
-          onClick={() => setMainTab("pending")}
+          onClick={() => {
+            setMainTab("pending");
+            setListFilter("all");
+          }}
         >
           Bekleyen Ön Kayıtlar
           <span>{students.length}</span>
@@ -384,6 +408,30 @@ export default function PreRegistrationCenter({
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="preQuickFilters" aria-label="Ön kayıt hızlı filtreleri">
+            <button
+              type="button"
+              className={listFilter === "all" ? "active" : ""}
+              onClick={() => setListFilter("all")}
+            >
+              Tümü <span>{students.length}</span>
+            </button>
+            <button
+              type="button"
+              className={listFilter === "today" ? "active" : ""}
+              onClick={() => setListFilter("today")}
+            >
+              Bugün Gelen
+            </button>
+            <button
+              type="button"
+              className={listFilter === "health" ? "active health" : "health"}
+              onClick={() => setListFilter("health")}
+            >
+              Sağlık Notu
+            </button>
           </div>
 
           <div className="preRegistrationGrid">
@@ -466,9 +514,17 @@ export default function PreRegistrationCenter({
 
             {!filteredStudents.length && (
               <div className="preRegistrationEmpty">
-                <strong>Bekleyen ön kayıt bulunamadı.</strong>
+                <strong>
+                  {listFilter === "today"
+                    ? "Bugün gelen ön kayıt bulunamadı."
+                    : listFilter === "health"
+                    ? "Sağlık notu bulunan ön kayıt bulunamadı."
+                    : "Bekleyen ön kayıt bulunamadı."}
+                </strong>
                 <span>
-                  Arama kriterini değiştirin veya yeni başvuruyu bekleyin.
+                  {search
+                    ? "Arama kriterini değiştirin."
+                    : "Farklı bir filtre seçebilir veya yeni başvuruyu bekleyebilirsiniz."}
                 </span>
               </div>
             )}
