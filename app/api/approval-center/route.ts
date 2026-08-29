@@ -574,9 +574,40 @@ export async function POST(request: NextRequest) {
           console.error("central approval reject audit error:", auditError);
         }
 
+        if (requestType === "registration_custom_lesson_count" && studentId) {
+          const lessonCount = Number(newValues.total_lessons ?? 0);
+          const { data: checklist } = await supabase
+            .from("registration_completion_checklists")
+            .select("draft_data")
+            .eq("organization_id", organizationId)
+            .eq("student_id", studentId)
+            .maybeSingle();
+
+          await supabase
+            .from("registration_completion_checklists")
+            .update({
+              draft_data: {
+                ...asObject(checklist?.draft_data),
+                custom_lesson_approval: {
+                  status: "rejected",
+                  lesson_count: lessonCount,
+                  request_id: id,
+                  reviewed_at: decidedAt,
+                  reviewed_by_name: actorName,
+                  review_note: reviewNote,
+                },
+              },
+              updated_at: decidedAt,
+            })
+            .eq("organization_id", organizationId)
+            .eq("student_id", studentId);
+        }
+
         await supabase.from("system_notifications").insert({
           organization_id: organizationId,
-          recipient_profile_id: null,
+          recipient_profile_id: requestType === "registration_custom_lesson_count"
+            ? approvalRequest.requested_by ?? null
+            : null,
           notification_type: "approval_rejected",
           title: `${centralRequestLabel(
             requestType,
@@ -589,8 +620,11 @@ export async function POST(request: NextRequest) {
           student_id: studentId,
           source_type: "approval_request",
           source_id: id,
-          target_path: "/onay-merkezi",
-          push_required: false,
+          target_path:
+            requestType === "registration_custom_lesson_count" && studentId
+              ? `/kayit-tamamlama/${studentId}?approval=rejected`
+              : "/onay-merkezi",
+          push_required: requestType === "registration_custom_lesson_count",
         });
 
         return NextResponse.json({
@@ -824,11 +858,46 @@ export async function POST(request: NextRequest) {
         }
 
         /*
-         * Bu onayın uygulama adımı yeni enrollment oluşturmak değildir.
-         * Yönetici burada yalnız standart dışı ders sayısına izin verir.
-         * Kesin kayıt, kayıt ekranında WhatsApp + kurallar + güncel form
-         * kontrolleri yeniden doğrulandıktan sonra completeRegistration ile yapılır.
+         * Bu onay öğrenciyi pasife almaz ve doğrudan enrollment oluşturmaz.
+         * Pasif bir ön kayıt yanlışlıkla bu akışa girdiyse tekrar
+         * pre_registration statüsüne alınır. Kesin kayıt; onay sonrası
+         * WhatsApp + kurallar + güncel form kontrolleriyle tamamlanır.
          */
+        await supabase
+          .from("students")
+          .update({
+            status: "pre_registration",
+            updated_at: decidedAt,
+          })
+          .eq("id", studentId)
+          .eq("organization_id", organizationId)
+          .eq("status", "passive");
+
+        const { data: checklist } = await supabase
+          .from("registration_completion_checklists")
+          .select("draft_data")
+          .eq("organization_id", organizationId)
+          .eq("student_id", studentId)
+          .maybeSingle();
+
+        await supabase
+          .from("registration_completion_checklists")
+          .update({
+            draft_data: {
+              ...asObject(checklist?.draft_data),
+              custom_lesson_approval: {
+                status: "approved",
+                lesson_count: lessonCount,
+                request_id: id,
+                reviewed_at: decidedAt,
+                reviewed_by_name: actorName,
+              },
+            },
+            updated_at: decidedAt,
+          })
+          .eq("organization_id", organizationId)
+          .eq("student_id", studentId);
+
         appliedEntityType = "student";
         appliedEntityId = studentId;
       } else {
@@ -939,23 +1008,33 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const isRegistrationLessonApproval =
+        requestType === "registration_custom_lesson_count";
+
       const { error: notificationError } = await supabase
         .from("system_notifications")
         .insert({
           organization_id: organizationId,
-          recipient_profile_id: null,
+          recipient_profile_id: isRegistrationLessonApproval
+            ? approvalRequest.requested_by ?? null
+            : null,
           notification_type: "approval_approved",
           title: `${centralRequestLabel(
             requestType,
             approvalRequest.request_label
           )} onaylandı`,
-          body: `${actorName} tarafından onaylandı ve uygulandı.`,
-          priority: "normal",
+          body: isRegistrationLessonApproval
+            ? `${actorName} tarafından onaylandı. Kesin kayıt işlemine devam edebilirsiniz.`
+            : `${actorName} tarafından onaylandı ve uygulandı.`,
+          priority: isRegistrationLessonApproval ? "high" : "normal",
           student_id: studentId,
           source_type: "approval_request",
           source_id: id,
-          target_path: "/onay-merkezi",
-          push_required: false,
+          target_path:
+            isRegistrationLessonApproval && studentId
+              ? `/kayit-tamamlama/${studentId}?approval=approved`
+              : "/onay-merkezi",
+          push_required: isRegistrationLessonApproval,
         });
 
       if (notificationError) {
