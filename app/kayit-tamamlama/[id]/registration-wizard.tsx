@@ -975,13 +975,31 @@ export default function RegistrationWizard({
    * ==========================================================
    */
 
+  /*
+   * Mesaj şablonu Ayarlar / Hazır Mesajlar merkezinden değiştiğinde
+   * eski taslak metin yeni şablonun önüne geçmesin.
+   * Eski kayıt mesajı başlığını taşımayan taslaklar güvenli biçimde
+   * yeniden merkezi şablondan üretilir.
+   */
+  const savedMessageDraft =
+    String(
+      draft?.message_draft ||
+        ""
+    ).trim();
+
+  const draftUsesCurrentRegistrationTemplate =
+    savedMessageDraft.includes(
+      "SPRİNT YÜZME OKULU | KAYIT BİLGİLENDİRMESİ"
+    );
+
   const [
     message,
     setMessage,
   ] =
     useState(
-      draft?.message_draft ||
-        ""
+      draftUsesCurrentRegistrationTemplate
+        ? savedMessageDraft
+        : ""
     );
 
   const [
@@ -991,6 +1009,7 @@ export default function RegistrationWizard({
     useState(false);
 
   const initialWhatsappOpened =
+    draftUsesCurrentRegistrationTemplate &&
     draftData.whatsapp_opened === true;
 
   const [
@@ -3321,9 +3340,9 @@ _Antalya'nın En Köklü Yüzme Okulu_`
             }
             className="completeButton"
             disabled={
-              !consent?.rules_accepted ||
-              customApprovalPending ||
-              ((!requiresManagerApproval || customApprovalApproved) && !messageSent)
+              requiresManagerApproval && !customApprovalApproved
+                ? customApprovalPending
+                : !consent?.rules_accepted || !messageSent
             }
           >
 
