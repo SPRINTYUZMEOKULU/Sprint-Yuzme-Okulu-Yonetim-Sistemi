@@ -667,6 +667,14 @@ export default function PreRegistrationCenter({
                     <div className="prePrimaryActions">
                       <button
                         type="button"
+                        className="printPreAction"
+                        onClick={() => window.print()}
+                      >
+                        🖨 Çıktı Al
+                      </button>
+
+                      <button
+                        type="button"
                         className="secondaryPreAction"
                         onClick={openEdit}
                       >
@@ -988,6 +996,68 @@ export default function PreRegistrationCenter({
                   </div>
                 </div>
               )}
+
+              <section className="prePrintSheet" aria-hidden="true">
+                <div className="prePrintHeader">
+                  <div>
+                    <span>SPRİNT YÜZME OKULU · SPRİNTOS</span>
+                    <h1>Ön Kayıt Bilgi Formu</h1>
+                  </div>
+                  <div className="prePrintMeta">
+                    <strong>{selected.student_number || "Ön Kayıt"}</strong>
+                    <span>Başvuru: {fmtDate(selectedConsent?.accepted_at || selected.created_at)}</span>
+                  </div>
+                </div>
+
+                <div className="prePrintSection">
+                  <h2>Öğrenci / Katılımcı Bilgileri</h2>
+                  <div className="prePrintGrid">
+                    <PrintInfo label="Ad Soyad">{selected.first_name} {selected.last_name}</PrintInfo>
+                    <PrintInfo label="Doğum Tarihi">{fmtBirthDate(selected.birth_date)}</PrintInfo>
+                    <PrintInfo label="Telefon">{selected.phone || "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Veli">{selected.guardian_name || "Yetişkin kayıt"}</PrintInfo>
+                    <PrintInfo label="Veli Telefonu">{selected.guardian_phone || "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="İletişim Tercihi">{contactLabel(selectedConsent?.contact_request)}</PrintInfo>
+                  </div>
+                </div>
+
+                <div className="prePrintSection">
+                  <h2>Kurs Planı</h2>
+                  <div className="prePrintGrid">
+                    <PrintInfo label="Şube">{selected.branch_id ? branchMap.get(selected.branch_id) || "Belirtilmedi" : "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Grup">{selected.preferred_group_id ? groupMap.get(selected.preferred_group_id) || "Belirtilmedi" : "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Paket">{selected.preferred_package_id ? packageMap.get(selected.preferred_package_id) || "Belirtilmedi" : "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Seviye">{selected.swimming_level || "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Tercih Günleri">{selected.preferred_days || "Belirtilmedi"}</PrintInfo>
+                    <PrintInfo label="Tercih Saati">{selected.preferred_time || "Belirtilmedi"}</PrintInfo>
+                  </div>
+                </div>
+
+                <div className={`prePrintHealth ${selectedConsent?.health_note?.trim() ? "attention" : ""}`}>
+                  <span>SAĞLIK / ANTRENÖR BİLGİLENDİRMESİ</span>
+                  <strong>{selectedConsent?.health_note?.trim() ? "Sağlıkla ilgili açıklama var" : "Ek sağlık açıklaması bulunmuyor"}</strong>
+                  <p>{selectedConsent?.health_note?.trim() || (selectedConsent?.health_declaration ? "Sağlık beyanı onaylandı; ayrıca bir sağlık notu yazılmadı." : "Sağlıkla ilgili ek açıklama bildirilmedi.")}</p>
+                </div>
+
+                <div className="prePrintSection">
+                  <h2>Kayıt Notu</h2>
+                  <div className="prePrintNote">{selected.registration_note || "Not bulunmuyor."}</div>
+                </div>
+
+                <div className="prePrintSection">
+                  <h2>Onaylar</h2>
+                  <div className="prePrintConsent">
+                    <div><span>Kurallar</span><strong>{yesNo(selectedConsent?.rules_accepted)}</strong></div>
+                    <div><span>Sağlık Beyanı</span><strong>{yesNo(selectedConsent?.health_declaration)}</strong></div>
+                    <div><span>WhatsApp</span><strong>{yesNo(selectedConsent?.whatsapp_permission)}</strong></div>
+                  </div>
+                </div>
+
+                <div className="prePrintFooter">
+                  <span>Bu çıktı SprintOS Ön Kayıt Merkezi üzerinden oluşturulmuştur.</span>
+                  <span>Yazdırma tarihi: {fmtDate(new Date().toISOString())}</span>
+                </div>
+              </section>
             </article>
           )}
         </>
@@ -1013,6 +1083,21 @@ function Info({
 }) {
   return (
     <div className="preInfo">
+      <span>{label}</span>
+      <strong>{children}</strong>
+    </div>
+  );
+}
+
+function PrintInfo({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="prePrintInfo">
       <span>{label}</span>
       <strong>{children}</strong>
     </div>
