@@ -495,11 +495,18 @@ export default async function StudentFile({
         </Link>
       </header>
 
-      {query.saved && (
+      {query.saved === "registration" ? (
+        <div className="notice successNotice" role="status" aria-live="polite">
+          <strong>✓ Kayıt kesinleşti.</strong>{" "}
+          {student.first_name} {student.last_name} aktif öğrenci kaydına alındı
+          {groupInfo?.name ? ` ve ${groupInfo.name} grubuna aktarıldı` : ""}.
+          Ders planı ve kayıt bilgileri başarıyla oluşturuldu.
+        </div>
+      ) : query.saved ? (
         <div className="notice successNotice">
           İşlem başarıyla kaydedildi.
         </div>
-      )}
+      ) : null}
 
       {query.error && (
         <div className="notice errorNotice">
