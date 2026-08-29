@@ -851,7 +851,7 @@
   }
 }
 
-/* ===== SprintOS Ön Kayıt Merkezi · Profesyonel etkileşim revizyonu ===== */
+/* ===== SprintOS Ã–n KayÄ±t Merkezi Â· Profesyonel etkileÅŸim revizyonu ===== */
 
 .preTopActions a,
 .preTopActions button,
@@ -1249,7 +1249,7 @@
 }
 
 
-/* ===== Ön Kayıt · Modüle Özel A4 Çıktı ===== */
+/* ===== Ã–n KayÄ±t Â· ModÃ¼le Ã–zel A4 Ã‡Ä±ktÄ± ===== */
 .printPreAction {
   display: inline-flex;
   min-height: 46px;
@@ -1277,14 +1277,49 @@
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
   html, body { background: #fff !important; }
-  body * { visibility: hidden !important; }
-  .prePrintSheet, .prePrintSheet * { visibility: visible !important; }
+  html,
+  body,
+  main,
+  .preRegistrationPage,
+  .preRegistrationCenter,
+  .preRegistrationDetail {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  body > * {
+    display: none !important;
+  }
+
+  body > main,
+  body main,
+  .preRegistrationPage,
+  .preRegistrationCenter,
+  .preRegistrationDetail {
+    display: block !important;
+  }
+
+  .preRegistrationPage > *:not(.preRegistrationCenter),
+  .preRegistrationCenter > *:not(:has(.preRegistrationDetail)),
+  .preRegistrationDetail > *:not(.prePrintSheet) {
+    display: none !important;
+  }
 
   .prePrintSheet {
     display: block !important;
-    position: absolute;
-    inset: 0 auto auto 0;
+    position: static !important;
     width: 100%;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     box-sizing: border-box;
     background: #fff;
     color: #111827;
