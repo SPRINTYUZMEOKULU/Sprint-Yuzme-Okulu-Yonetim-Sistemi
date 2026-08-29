@@ -179,6 +179,24 @@ function scheduleLabel(student: StudentListItem) {
     .trim();
 }
 
+function whatsappPhone(value?: string | null) {
+  let digits = (value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0")) digits = `90${digits.slice(1)}`;
+  if (digits.length === 10) digits = `90${digits}`;
+  return digits;
+}
+
+function openWhatsAppMessage(phone: string | null, message: string) {
+  const normalized = whatsappPhone(phone);
+  if (!normalized) return;
+  window.open(
+    `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—";
 
@@ -622,7 +640,7 @@ export default function StudentsClient({
   const router = useRouter();
 
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("active");
   const [branch, setBranch] = useState("all");
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
@@ -661,6 +679,16 @@ export default function StudentsClient({
     | "general"
   >("general");
   const [bulkMessageText, setBulkMessageText] = useState("");
+
+  const [bulkPreparedMessages, setBulkPreparedMessages] = useState<
+    Array<{
+      studentId: string;
+      studentName: string;
+      recipient: string | null;
+      message: string;
+    }>
+  >([]);
+
  
   const [actionStudent, setActionStudent] =
   useState<StudentListItem | null>(null);
@@ -1336,70 +1364,162 @@ function closeLessonAction() {
     type: typeof bulkMessageType
   ) {
     const selectedCount = selectedStudentIds.length;
-    const commonHeader = `*SPRİNT YÜZME OKULU*\n\nSayın Velimiz,\n\n`;
+
+    const commonBranch = Array.from(
+      new Set(
+        selectedStudents
+          .map((student) => student.branch_name)
+          .filter(Boolean)
+      )
+    );
+
+    const commonGroup = Array.from(
+      new Set(
+        selectedStudents
+          .map((student) => student.group_name)
+          .filter(Boolean)
+      )
+    );
+
+    const commonSchedule = Array.from(
+      new Set(
+        selectedStudents
+          .map((student) => scheduleLabel(student))
+          .filter(Boolean)
+      )
+    );
+
+    const branchLine =
+      commonBranch.length === 1
+        ? `\n🏢 *Şube:* ${commonBranch[0]}`
+        : "";
+
+    const groupLine =
+      commonGroup.length === 1
+        ? `\n👥 *Grup:* ${commonGroup[0]}`
+        : "";
+
+    const scheduleLine =
+      commonSchedule.length === 1
+        ? `\n🕒 *Program:* ${commonSchedule[0]}`
+        : "";
+
+    const header = `*SPRİNT YÜZME OKULU*\n\nSayın Velimiz,`;
+
+    const footer =
+      `\n\nBilginize sunar, anlayışınız için teşekkür ederiz.` +
+      `\n\n*Sprint Yüzme Okulu Yönetimi*`;
 
     if (type === "pool_closed") {
       return (
-        commonHeader +
-        `Tesis yönetimi tarafından alınan karar doğrultusunda ilgili yüzme dersimiz bugün gerçekleştirilemeyecektir.\n\n` +
-        `Ders programıyla ilgili gerekli bilgilendirme ayrıca yapılacaktır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `🏊 *DERS PROGRAMI BİLGİLENDİRMESİ*\n\n` +
+        `Tesis yönetimi tarafından alınan karar doğrultusunda ilgili yüzme dersimiz bugün gerçekleştirilemeyecektir.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nKurum kaynaklı ders iptallerinde gerekli ders hakkı / telafi planlaması yönetim tarafından kontrol edilerek ayrıca tarafınıza bildirilecektir.` +
+        footer
       );
     }
 
     if (type === "hygiene") {
       return (
-        commonHeader +
-        `Tesis yönetimi tarafından alınan hijyen tedbirleri kapsamında ilgili yüzme dersimiz bugün gerçekleştirilemeyecektir.\n\n` +
-        `Bu durum yüzme okulumuzdan bağımsız olarak tesis yönetimi tarafından alınmıştır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `🧼 *HİJYEN TEDBİRİ BİLGİLENDİRMESİ*\n\n` +
+        `Tesis yönetimi tarafından alınan hijyen tedbirleri kapsamında ilgili dersimiz bugün gerçekleştirilemeyecektir.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nBu karar yüzme okulumuzdan bağımsız olarak tesis yönetimi tarafından alınmıştır. Sonraki ders programınız planlandığı şekilde devam edecektir.` +
+        footer
       );
     }
 
     if (type === "technical") {
       return (
-        commonHeader +
-        `Tesiste oluşan teknik durum nedeniyle ilgili ders programımız bugün gerçekleştirilemeyecektir.\n\n` +
-        `Programla ilgili gelişmeler tarafınıza bildirilecektir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `🛠 *TEKNİK DURUM BİLGİLENDİRMESİ*\n\n` +
+        `Tesiste oluşan teknik durum nedeniyle ilgili dersimiz bugün gerçekleştirilemeyecektir.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nProgram ve varsa ders hakkı düzenlemesi yönetim tarafından kontrol edilerek tarafınıza bildirilecektir.` +
+        footer
       );
     }
 
     if (type === "time_change") {
       return (
-        commonHeader +
-        `Ders saatinizde program güncellemesi yapılmıştır. Yeni gün ve saat bilgileri tarafınıza iletilmiştir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `⏰ *DERS SAATİ GÜNCELLEMESİ*\n\n` +
+        `Ders programınızda saat güncellemesi yapılmıştır.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nYeni ders saatinize göre tesiste ders başlangıcından en az 15 dakika önce hazır bulunmanızı rica ederiz.` +
+        footer
       );
     }
 
     if (type === "coach_change") {
       return (
-        commonHeader +
-        `Ders programınızda antrenör görevlendirmesiyle ilgili güncelleme yapılmıştır.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `👤 *ANTRENÖR GÖREVLENDİRME BİLGİLENDİRMESİ*\n\n` +
+        `Ders programınızda antrenör görevlendirmesiyle ilgili düzenleme yapılmıştır.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nDers planınız aynı program doğrultusunda devam edecektir.` +
+        footer
       );
     }
 
     if (type === "renewal") {
       return (
-        commonHeader +
-        `Kayıt yenileme süreciniz başlamıştır. Ders planlamanızın kesintiye uğramaması için bizimle iletişime geçebilirsiniz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `🔄 *KAYIT YENİLEME HATIRLATMASI*\n\n` +
+        `Mevcut ders paketinizin yenileme süreci yaklaşmıştır.` +
+        branchLine +
+        groupLine +
+        `\n\nDers planlamanızın kesintiye uğramaması ve mevcut grup kontenjanınızın korunabilmesi için kayıt birimimizle iletişime geçebilirsiniz.` +
+        footer
       );
     }
 
     if (type === "payment") {
       return (
-        commonHeader +
-        `Aktif kayıt döneminizle ilgili ödeme bilgilendirmesi için iletişime geçiyoruz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `💳 *ÖDEME BİLGİLENDİRMESİ*\n\n` +
+        `Aktif kayıt döneminizle ilgili ödeme kaydınızın kontrolü için bilgilendirme sağlıyoruz.` +
+        branchLine +
+        groupLine +
+        `\n\nÖdeme yaptıysanız bu mesajı dikkate almayabilirsiniz. Detaylı bilgi için kayıt birimimizle iletişime geçebilirsiniz.` +
+        footer
       );
     }
 
     if (type === "group_transfer") {
       return (
-        commonHeader +
-        `Ders grubunuz / programınız güncellenmiştir. Yeni şube, grup, gün ve saat bilgileri tarafınıza ayrıca iletilmiştir.\n\n*Sprint Yüzme Okulu Yönetimi*`
+        `${header}\n\n` +
+        `🔁 *GRUP / PROGRAM GÜNCELLEMESİ*\n\n` +
+        `Ders programınızda grup veya seans değişikliği yapılmıştır.` +
+        branchLine +
+        groupLine +
+        scheduleLine +
+        `\n\nKalan ders haklarınız korunarak eğitiminiz yeni programınızda kaldığı yerden devam edecektir.` +
+        footer
       );
     }
 
     return (
-      commonHeader +
-      `${selectedCount} kişilik seçili öğrenci grubuna yönelik genel bilgilendirme metnini buradan düzenleyebilirsiniz.\n\n*Sprint Yüzme Okulu Yönetimi*`
+      `${header}\n\n` +
+      `📢 *GENEL BİLGİLENDİRME*\n\n` +
+      `${selectedCount} öğrencilik seçili grubumuza yönelik bilgilendirme metnini bu alandan düzenleyebilirsiniz.` +
+      branchLine +
+      groupLine +
+      scheduleLine +
+      footer
     );
   }
 
@@ -1412,6 +1532,7 @@ function closeLessonAction() {
     try {
       setBulkSubmitting(true);
       setBulkResult("");
+      setBulkPreparedMessages([]);
 
       const result = await prepareBulkStudentMessage({
         studentIds: selectedStudentIds,
@@ -1421,6 +1542,11 @@ function closeLessonAction() {
       });
 
       setBulkResult(result.message);
+
+      if ("preparedMessages" in result && result.preparedMessages) {
+        setBulkPreparedMessages(result.preparedMessages);
+      }
+
       router.refresh();
     } catch (error) {
       console.error(error);
@@ -1429,6 +1555,7 @@ function closeLessonAction() {
       setBulkSubmitting(false);
     }
   }
+
 
   function callStudent(student: StudentListItem) {
     const phone = contactPhone(student);
@@ -1644,7 +1771,7 @@ function closeLessonAction() {
           <button
             type="button"
             className="commandButton"
-            onClick={() => router.push("/kayit")}
+            onClick={() => router.push("/on-kayit")}
           >
             + Yeni Kayıt
           </button>
@@ -1696,13 +1823,14 @@ function closeLessonAction() {
           <strong>{counts.preRegistration}</strong>
         </button>
 
-        <button
-          className={`summaryCard ${status === "passive" ? "selected" : ""}`}
-          onClick={() => setStatus("passive")}
+        <div
+          className="summaryCard passiveSummaryCard"
+          title="Pasif öğrenciler günlük operasyon ekranında varsayılan olarak gösterilmez."
         >
-          <span>Pasif</span>
+          <span>Pasif Arşiv</span>
           <strong>{counts.passive}</strong>
-        </button>
+          <small>Günlük kullanım dışı</small>
+        </div>
 
         <button
           className={`summaryCard ${
@@ -2120,7 +2248,7 @@ function closeLessonAction() {
         router.push(`/ogrenciler/${student.id}`);
       }}
     >
-      Öğrenci Dosyası
+      ◫ Dijital Kurs Dosyası
     </button>
 
     <button
@@ -2147,24 +2275,6 @@ function closeLessonAction() {
       }}
     >
       Ders / Paket Yönet
-    </button>
-
-    <button
-      type="button"
-      className="studentActionButton compensation"
-      onClick={(event) => {
-        event.stopPropagation();
-
-        setActionStudent(student);
-        setActionType("individual_compensation");
-
-        setLessonCount("1");
-        setReason("");
-        setDescription("");
-        setActionMessage("");
-      }}
-    >
-      + Bireysel Telafi
     </button>
     {student.status === "active" && (
   <button
@@ -2477,6 +2587,55 @@ function closeLessonAction() {
 
                 {bulkResult && (
                   <div className="bulkResult">{bulkResult}</div>
+                )}
+
+                {bulkPreparedMessages.length > 0 && (
+                  <div className="whatsappQueue">
+                    <div className="whatsappQueueHead">
+                      <div>
+                        <strong>WhatsApp Gönderim Kuyruğu</strong>
+                        <span>
+                          Mesajlar kaydedildi. Her veli için WhatsApp gönderimini
+                          kontrollü olarak açabilirsiniz.
+                        </span>
+                      </div>
+
+                      {bulkPreparedMessages[0]?.recipient && (
+                        <button
+                          type="button"
+                          className="sendFirstWhatsapp"
+                          onClick={() =>
+                            openWhatsAppMessage(
+                              bulkPreparedMessages[0].recipient,
+                              bulkPreparedMessages[0].message
+                            )
+                          }
+                        >
+                          WhatsApp'ta İlk Mesajı Aç ↗
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="whatsappQueueList">
+                      {bulkPreparedMessages.map((item, index) => (
+                        <div key={`${item.studentId}-${index}`}>
+                          <div>
+                            <strong>{item.studentName}</strong>
+                            <span>{item.recipient || "Telefon bilgisi yok"}</span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!item.recipient}
+                            onClick={() =>
+                              openWhatsAppMessage(item.recipient, item.message)
+                            }
+                          >
+                            WhatsApp'ta Gönder
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -3558,6 +3717,110 @@ function closeLessonAction() {
       .messageModeChoice .activeMode {
         color: #116c48;
         font-weight: 900;
+      }
+
+
+      .passiveSummaryCard {
+        opacity: .62;
+        cursor: default !important;
+        background: #f5f7fa !important;
+        border-style: dashed !important;
+      }
+
+      .passiveSummaryCard:hover {
+        transform: none !important;
+        box-shadow: none !important;
+      }
+
+      .passiveSummaryCard small {
+        display: block;
+        margin-top: 4px;
+        color: #8a99aa;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .studentActionButton.edit {
+        border-color: #b9d3f4;
+        background: #eff6ff;
+        color: #0b5ab3;
+      }
+
+      .whatsappQueue {
+        margin-top: 16px;
+        border: 1px solid #b7dfc8;
+        border-radius: 16px;
+        background: #f2fbf6;
+        overflow: hidden;
+      }
+
+      .whatsappQueueHead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px;
+        border-bottom: 1px solid #cde9d7;
+      }
+
+      .whatsappQueueHead strong,
+      .whatsappQueueHead span {
+        display: block;
+      }
+
+      .whatsappQueueHead strong {
+        color: #12633b;
+      }
+
+      .whatsappQueueHead span {
+        margin-top: 3px;
+        color: #51705f;
+        font-size: 11px;
+      }
+
+      .sendFirstWhatsapp,
+      .whatsappQueueList button {
+        border: 0;
+        border-radius: 10px;
+        background: #1fa463;
+        color: #fff;
+        padding: 9px 11px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .whatsappQueueList {
+        max-height: 240px;
+        overflow-y: auto;
+      }
+
+      .whatsappQueueList > div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 14px;
+        border-bottom: 1px solid #dcefe4;
+      }
+
+      .whatsappQueueList > div:last-child {
+        border-bottom: 0;
+      }
+
+      .whatsappQueueList strong,
+      .whatsappQueueList span {
+        display: block;
+      }
+
+      .whatsappQueueList span {
+        margin-top: 2px;
+        color: #668071;
+        font-size: 11px;
+      }
+
+      .whatsappQueueList button:disabled {
+        opacity: .4;
+        cursor: not-allowed;
       }
 
       @media (max-width: 780px) {
