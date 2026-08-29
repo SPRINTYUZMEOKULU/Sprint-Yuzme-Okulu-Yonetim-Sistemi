@@ -1305,3 +1305,77 @@ export async function restoreStudent(
     "restored"
   );
 }
+
+/* =========================================================
+   NOT SİL - SADECE OWNER / ADMIN
+   ========================================================= */
+export async function deleteStudentNote(formData: FormData) {
+  const profile = await requireProfile([
+    ...approvalRoles,
+  ]);
+
+  const studentId = getText(
+    formData.get("student_id"),
+    100
+  );
+
+  const noteId = getText(
+    formData.get("note_id"),
+    100
+  );
+
+  if (
+    !studentId ||
+    !noteId ||
+    !profile.organization_id
+  ) {
+    goError(
+      studentId,
+      "Silinecek not bulunamadı."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const { data: note, error: noteError } =
+    await supabase
+      .from("student_notes")
+      .select("id,note_type,body")
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", studentId)
+      .eq("id", noteId)
+      .single();
+
+  if (noteError || !note) {
+    goError(
+      studentId,
+      "Not bulunamadı veya silme yetkiniz yok."
+    );
+  }
+
+  const { error } = await supabase
+    .from("student_notes")
+    .delete()
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("id", noteId);
+
+  if (error) {
+    goError(studentId, error.message);
+  }
+
+  await supabase
+    .from("student_timeline_events")
+    .insert({
+      organization_id: profile.organization_id,
+      student_id: studentId,
+      event_type: "note_deleted",
+      title: "Öğrenci notu yönetici tarafından silindi",
+      description: `${String(note.note_type || "general").toUpperCase()}: ${String(note.body || "").slice(0, 500)}`,
+      created_by: profile.id,
+    });
+
+  revalidatePath(`/ogrenciler/${studentId}`);
+
+  goSaved(studentId, "note-deleted");
+}
