@@ -25,7 +25,7 @@ type PackageRow = {
   lesson_count: number | null;
 };
 
-type ScheduleRow = {
+export type ScheduleRow = {
   id: string;
   group_id: string | null;
   weekday: number | null;
@@ -508,6 +508,15 @@ export default async function StudentsPage() {
         remaining_lessons: totalRemaining,
 
         schedule_text: scheduleText || null,
+        schedule_weekdays: studentSchedules
+          .map((schedule) => Number(schedule.weekday))
+          .filter((day) => Number.isInteger(day)),
+        schedule_slots: studentSchedules.map((schedule) => ({
+          id: schedule.id,
+          weekday: Number(schedule.weekday),
+          start_time: schedule.start_time || null,
+          end_time: schedule.end_time || null,
+        })),
 
         start_date: startDate,
         normal_end_date: normalEndDate,
@@ -571,7 +580,12 @@ export default async function StudentsPage() {
           </div>
         </section>
       ) : (
-        <StudentsClient students={preparedStudents} />
+        <StudentsClient
+          students={preparedStudents}
+          branches={branches}
+          groups={groups}
+          schedules={schedules}
+        />
       )}
     </main>
   );
