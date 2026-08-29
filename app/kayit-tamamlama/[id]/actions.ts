@@ -707,6 +707,185 @@ export async function addRegistrationNote(
 
 /*
  * ============================================================
+ * 3) STANDART DIŞI DERS SAYISI İÇİN YÖNETİCİ ONAYI
+ * ============================================================
+ */
+
+export async function requestCustomLessonCountApproval(
+  formData: FormData
+) {
+  const profile = await requireProfile([
+    ...allowedRoles,
+  ]);
+
+  const supabase = await createClient();
+  const studentId = text(formData, "student_id");
+  const totalLessons = Number(formData.get("total_lessons") || 0);
+  const branchId = text(formData, "branch_id");
+  const groupId = text(formData, "group_id");
+  const packageId = nullableText(formData, "package_id");
+  const coachId = nullableText(formData, "coach_id");
+  const startDate = text(formData, "start_date");
+  const plannedEndDate = text(formData, "planned_end_date");
+  const paymentDueDate = text(formData, "payment_due_date") || startDate;
+  const paymentNote = nullableText(formData, "payment_note");
+  const messageBody = text(formData, "message_body");
+  const messageSent = bool(formData, "message_sent");
+  const weekdays = getWeekdays(formData);
+
+  if (!profile.organization_id || !studentId) {
+    redirect(`/on-kayitlar?error=${encodeURIComponent("Öğrenci bilgisi bulunamadı.")}`);
+  }
+
+  if (totalLessons === 8 || totalLessons === 12) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "8 ve 12 ders standart paketlerdir; yönetici onayı gerektirmez."
+      )}`
+    );
+  }
+
+  if (
+    !Number.isInteger(totalLessons) ||
+    totalLessons < 1 ||
+    totalLessons > 100 ||
+    !branchId ||
+    !groupId ||
+    !startDate ||
+    !plannedEndDate ||
+    !weekdays.length ||
+    !paymentDueDate ||
+    !validDate(paymentDueDate)
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Yönetici onayına göndermeden önce kayıt planındaki zorunlu alanları tamamlayınız."
+      )}`
+    );
+  }
+
+  if (!messageSent) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Yönetici onayına göndermeden önce veli bilgilendirme mesajını WhatsApp üzerinden gönderiniz ve Gönderildi olarak işaretleyiniz."
+      )}#whatsapp`
+    );
+  }
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id,first_name,last_name")
+    .eq("id", studentId)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+
+  if (!student) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Öğrenci bulunamadı.")}`
+    );
+  }
+
+  const now = new Date().toISOString();
+  const draftData = getDraftData(formData);
+
+  await supabase
+    .from("registration_completion_checklists")
+    .upsert(
+      {
+        organization_id: profile.organization_id,
+        student_id: studentId,
+        draft_data: draftData,
+        draft_saved_at: now,
+        payment_due_date: paymentDueDate,
+        payment_due_date_manual: bool(formData, "payment_due_date_manual"),
+        payment_note: paymentNote,
+        message_draft: messageBody || null,
+        message_prepared: Boolean(messageBody),
+        message_sent: true,
+        location_sent: true,
+        swim_cap_delivered: bool(formData, "swim_cap_delivered"),
+        updated_by: profile.id,
+        updated_at: now,
+      },
+      { onConflict: "student_id" }
+    );
+
+  const { data: existing } = await supabase
+    .from("approval_requests")
+    .select("id")
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("request_type", "registration_custom_lesson_count")
+    .eq("status", "pending")
+    .contains("new_values", { total_lessons: totalLessons })
+    .maybeSingle();
+
+  if (!existing) {
+    const { data: request, error: requestError } = await supabase
+      .from("approval_requests")
+      .insert({
+        organization_id: profile.organization_id,
+        request_type: "registration_custom_lesson_count",
+        module: "enrollment",
+        entity_type: "student",
+        entity_id: studentId,
+        student_id: studentId,
+        requested_by: profile.id,
+        reason: `Standart paket dışı ${totalLessons} ders ile kesin kayıt talebi.`,
+        old_values: {
+          standard_lesson_counts: [8, 12],
+        },
+        new_values: {
+          ...draftData,
+          total_lessons: totalLessons,
+          branch_id: branchId,
+          group_id: groupId,
+          package_id: packageId,
+          coach_id: coachId,
+          start_date: startDate,
+          planned_end_date: plannedEndDate,
+          payment_due_date: paymentDueDate,
+          payment_note: paymentNote,
+          message_sent: true,
+        },
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (requestError || !request) {
+      redirect(
+        `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+          `Yönetici onay talebi oluşturulamadı: ${requestError?.message || "Bilinmeyen hata"}`
+        )}`
+      );
+    }
+
+    await supabase.from("system_notifications").insert({
+      organization_id: profile.organization_id,
+      recipient_profile_id: null,
+      notification_type: "registration_custom_lesson_count_requested",
+      title: "Standart dışı kesin kayıt onayı",
+      body: `${student.first_name} ${student.last_name} için ${totalLessons} derslik kesin kayıt yönetici onayı bekliyor.`,
+      priority: "high",
+      student_id: studentId,
+      source_type: "approval_request",
+      source_id: request.id,
+      target_path: "/onay-merkezi",
+      push_required: true,
+    });
+  }
+
+  revalidatePath("/onay-merkezi");
+  revalidatePath(`/kayit-tamamlama/${studentId}`);
+
+  redirect(
+    `/kayit-tamamlama/${studentId}?approval_requested=1#kayit-plani`
+  );
+}
+
+/*
+ * ============================================================
  * 3) KESİN KAYDI TAMAMLA
  * ============================================================
  */
@@ -967,6 +1146,36 @@ export async function completeRegistration(
         "Ön kayıt kuralları kabul kaydı bulunmadan kesin kayıt tamamlanamaz."
       )}`
     );
+  }
+
+  if (!messageSent) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Kayıt tamamlanmadan önce veli bilgilendirme mesajını WhatsApp üzerinden gönderiniz ve Gönderildi olarak işaretleyiniz."
+      )}#whatsapp`
+    );
+  }
+
+  if (totalLessons !== 8 && totalLessons !== 12) {
+    const { data: approvedRequest } = await supabase
+      .from("approval_requests")
+      .select("id")
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", studentId)
+      .eq("request_type", "registration_custom_lesson_count")
+      .eq("status", "approved")
+      .contains("new_values", { total_lessons: totalLessons })
+      .order("reviewed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!approvedRequest) {
+      redirect(
+        `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+          `${totalLessons} ders standart paket dışıdır. Kesin kayıt için yönetici onayı gereklidir.`
+        )}#kayit-plani`
+      );
+    }
   }
 
   /*
