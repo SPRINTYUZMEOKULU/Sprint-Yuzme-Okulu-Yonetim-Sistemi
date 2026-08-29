@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { createNotification } from "@/lib/notifications/create-notification";
 
 import {
   updatePaymentDueDate,
@@ -172,6 +173,12 @@ function getDraftData(
       nullableText(
         formData,
         "payment_due_date"
+      ),
+
+    whatsapp_opened:
+      bool(
+        formData,
+        "whatsapp_opened"
       ),
   };
 }
@@ -914,19 +921,48 @@ export async function requestCustomLessonCountApproval(
 
     approvalRequestId = request.id;
 
-    await supabase.from("system_notifications").insert({
-      organization_id: profile.organization_id,
-      recipient_profile_id: null,
-      notification_type: "registration_custom_lesson_count_requested",
-      title: "Standart dışı kesin kayıt onayı",
-      body: `${student.first_name} ${student.last_name} için ${totalLessons} derslik kesin kayıt yönetici onayı bekliyor.`,
-      priority: "high",
-      student_id: studentId,
-      source_type: "approval_request",
-      source_id: request.id,
-      target_path: "/onay-merkezi",
-      push_required: true,
-    });
+    /*
+     * MERKEZİ BİLDİRİM + GERÇEK WEB PUSH
+     * Sadece system_notifications satırı eklemek telefona push göndermez.
+     * Ön kayıtta çalışan merkezi motor burada da kullanılır.
+     */
+    try {
+      const notificationBody =
+        `${student.first_name} ${student.last_name} için ${totalLessons} derslik ` +
+        `kesin kayıt yönetici onayı bekliyor.`;
+
+      await createNotification({
+        organizationId: profile.organization_id,
+        category: "approval",
+        eventKey: "registration_custom_lesson_count_requested",
+        notificationType: "registration_custom_lesson_count_requested",
+        title: "Yönetici Onayı Bekliyor",
+        body: notificationBody,
+        message: notificationBody,
+        severity: "warning",
+        priority: "high",
+        studentId,
+        sourceType: "approval_request",
+        sourceId: request.id,
+        entityType: "approval_request",
+        entityId: request.id,
+        targetPath: "/onay-merkezi",
+        push: true,
+        metadata: {
+          request_type: "registration_custom_lesson_count",
+          requested_by: profile.id,
+          total_lessons: totalLessons,
+          branch_id: branchId,
+          group_id: groupId,
+          student_name: `${student.first_name} ${student.last_name}`,
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "registration custom lesson approval push error:",
+        notificationError
+      );
+    }
   }
 
   await supabase
@@ -1082,6 +1118,12 @@ export async function completeRegistration(
       "message_sent"
     );
 
+  const whatsappOpened =
+    bool(
+      formData,
+      "whatsapp_opened"
+    );
+
   const swimCapDelivered =
     bool(
       formData,
@@ -1220,10 +1262,10 @@ export async function completeRegistration(
     );
   }
 
-  if (!messageSent) {
+  if (!whatsappOpened || !messageSent) {
     redirect(
       `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Kayıt tamamlanmadan önce veli bilgilendirme mesajını WhatsApp üzerinden gönderiniz ve Gönderildi olarak işaretleyiniz."
+        "Kayıt tamamlanmadan önce WhatsApp'ta Aç butonuyla mesajı açınız, WhatsApp üzerinden gönderiniz ve ardından gönderim teyidini işaretleyiniz."
       )}#whatsapp`
     );
   }
