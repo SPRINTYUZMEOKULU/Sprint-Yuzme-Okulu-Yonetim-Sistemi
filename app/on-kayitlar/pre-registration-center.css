@@ -1306,7 +1306,7 @@
   }
 
   .preRegistrationPage > *:not(.preRegistrationCenter),
-  .preRegistrationCenter > *:not(:has(.preRegistrationDetail)),
+  .preRegistrationCenter > *:not(.preRegistrationDetail),
   .preRegistrationDetail > *:not(.prePrintSheet) {
     display: none !important;
   }
