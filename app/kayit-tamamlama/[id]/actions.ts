@@ -6,6 +6,16 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  updatePaymentDueDate,
+} from "@/app/odemeler/actions";
+
+/*
+ * ============================================================
+ * YETKİLİ ROLLER
+ * ============================================================
+ */
+
 const allowedRoles = [
   "owner",
   "admin",
@@ -13,18 +23,693 @@ const allowedRoles = [
   "registration_staff",
 ] as const;
 
+/*
+ * ============================================================
+ * FORM YARDIMCILARI
+ * ============================================================
+ */
+
 function bool(
   formData: FormData,
   key: string
 ) {
-  return formData.get(key) === "on";
+  return (
+    formData.get(key) === "on"
+  );
+}
+
+function text(
+  formData: FormData,
+  key: string
+) {
+  return String(
+    formData.get(key) || ""
+  ).trim();
+}
+
+function nullableText(
+  formData: FormData,
+  key: string
+) {
+  const value =
+    text(
+      formData,
+      key
+    );
+
+  return (
+    value ||
+    null
+  );
+}
+
+function validDate(
+  value: string
+) {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  );
 }
 
 function jsDayToIsoDay(
   day: number
 ) {
-  return day === 0 ? 7 : day;
+  return (
+    day === 0
+      ? 7
+      : day
+  );
 }
+
+function getWeekdays(
+  formData: FormData
+) {
+  return formData
+    .getAll(
+      "lesson_weekdays"
+    )
+    .map(Number)
+    .filter(
+      (day) =>
+        Number.isInteger(day) &&
+        day >= 0 &&
+        day <= 6
+    );
+}
+
+/*
+ * ============================================================
+ * TASLAK VERİSİNİ HAZIRLA
+ * ============================================================
+ */
+
+function getDraftData(
+  formData: FormData
+) {
+  const weekdays =
+    getWeekdays(
+      formData
+    );
+
+  const totalLessons =
+    Number(
+      formData.get(
+        "total_lessons"
+      ) || 0
+    );
+
+  return {
+    branch_id:
+      nullableText(
+        formData,
+        "branch_id"
+      ),
+
+    group_id:
+      nullableText(
+        formData,
+        "group_id"
+      ),
+
+    package_id:
+      nullableText(
+        formData,
+        "package_id"
+      ),
+
+    coach_id:
+      nullableText(
+        formData,
+        "coach_id"
+      ),
+
+    start_date:
+      nullableText(
+        formData,
+        "start_date"
+      ),
+
+    planned_end_date:
+      nullableText(
+        formData,
+        "planned_end_date"
+      ),
+
+    lesson_weekdays:
+      weekdays,
+
+    total_lessons:
+      Number.isInteger(
+        totalLessons
+      ) &&
+      totalLessons > 0
+        ? totalLessons
+        : null,
+
+    payment_due_date:
+      nullableText(
+        formData,
+        "payment_due_date"
+      ),
+  };
+}
+
+/*
+ * ============================================================
+ * 1) TASLAĞI KAYDET
+ *
+ * Kesin kayıt oluşturmaz.
+ * Enrollment oluşturmaz.
+ * Öğrenciyi aktif yapmaz.
+ *
+ * Kullanıcı başka bölüme gidip tekrar geri geldiğinde
+ * kaldığı yerden devam edebilir.
+ * ============================================================
+ */
+
+export async function saveRegistrationDraft(
+  formData: FormData
+) {
+  const profile =
+    await requireProfile([
+      ...allowedRoles,
+    ]);
+
+  const supabase =
+    await createClient();
+
+  const studentId =
+    text(
+      formData,
+      "student_id"
+    );
+
+  if (
+    !profile.organization_id ||
+    !studentId
+  ) {
+    redirect(
+      `/on-kayitlar?error=${encodeURIComponent(
+        "Öğrenci bilgisi bulunamadı."
+      )}`
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * Öğrencinin bu organizasyona ait olduğunu doğrula
+   * ----------------------------------------------------------
+   */
+
+  const {
+    data: student,
+    error: studentError,
+  } =
+    await supabase
+      .from("students")
+      .select(
+        "id,status"
+      )
+      .eq(
+        "id",
+        studentId
+      )
+      .eq(
+        "organization_id",
+        profile.organization_id
+      )
+      .maybeSingle();
+
+  if (
+    studentError ||
+    !student
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Öğrenci bulunamadı."
+      )}`
+    );
+  }
+
+  const startDate =
+    text(
+      formData,
+      "start_date"
+    );
+
+  /*
+   * Normal vade başlangıç tarihidir.
+   *
+   * Kullanıcı özel bir tarih seçmişse
+   * payment_due_date_manual = true olur.
+   */
+
+  const paymentDueDate =
+    text(
+      formData,
+      "payment_due_date"
+    ) ||
+    startDate;
+
+  const paymentDueDateManual =
+    bool(
+      formData,
+      "payment_due_date_manual"
+    );
+
+  const paymentNote =
+    nullableText(
+      formData,
+      "payment_note"
+    );
+
+  const messageDraft =
+    nullableText(
+      formData,
+      "message_body"
+    );
+
+  const activeEnrollmentId =
+    nullableText(
+      formData,
+      "active_enrollment_id"
+    );
+
+  if (
+    paymentDueDate &&
+    !validDate(
+      paymentDueDate
+    )
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Geçerli bir ödeme vade tarihi seçiniz."
+      )}`
+    );
+  }
+
+  const now =
+    new Date()
+      .toISOString();
+
+  /*
+   * ----------------------------------------------------------
+   * Taslak kaydı
+   * ----------------------------------------------------------
+   */
+
+  const {
+    error:
+      draftError,
+  } =
+    await supabase
+      .from(
+        "registration_completion_checklists"
+      )
+      .upsert(
+        {
+          organization_id:
+            profile.organization_id,
+
+          student_id:
+            studentId,
+
+          draft_data:
+            getDraftData(
+              formData
+            ),
+
+          draft_saved_at:
+            now,
+
+          payment_due_date:
+            paymentDueDate ||
+            null,
+
+          payment_due_date_manual:
+            paymentDueDateManual,
+
+          payment_note:
+            paymentNote,
+
+          message_draft:
+            messageDraft,
+
+          message_prepared:
+            Boolean(
+              messageDraft
+            ),
+
+          swim_cap_delivered:
+            bool(
+              formData,
+              "swim_cap_delivered"
+            ),
+
+          updated_by:
+            profile.id,
+
+          updated_at:
+            now,
+        },
+        {
+          onConflict:
+            "student_id",
+        }
+      );
+
+  if (
+    draftError
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        `Taslak kaydedilemedi: ${draftError.message}`
+      )}`
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * ÖNEMLİ:
+   *
+   * Öğrencinin hâlihazırda aktif enrollment'ı varsa
+   * vade değişikliği Ödemeler modülünün mevcut aksiyonu
+   * üzerinden geçirilir.
+   *
+   * Böylece:
+   *
+   * - Ödemeler
+   * - Kesin Kayıt Merkezi
+   * - Onay Merkezi
+   *
+   * aynı ödeme vadesini kullanır.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    activeEnrollmentId &&
+    paymentDueDate
+  ) {
+    const result =
+      await updatePaymentDueDate(
+        activeEnrollmentId,
+        paymentDueDate,
+        paymentNote ||
+          "Kesin Kayıt Merkezi üzerinden ödeme vade tarihi güncellendi."
+      );
+
+    if (
+      !result.ok
+    ) {
+      redirect(
+        `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+          result.message
+        )}`
+      );
+    }
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * İlgili ekranları yenile
+   * ----------------------------------------------------------
+   */
+
+  revalidatePath(
+    `/kayit-tamamlama/${studentId}`
+  );
+
+  revalidatePath(
+    "/odemeler"
+  );
+
+  revalidatePath(
+    `/ogrenciler/${studentId}`
+  );
+
+  redirect(
+    `/kayit-tamamlama/${studentId}?saved=1`
+  );
+}
+
+/*
+ * ============================================================
+ * 2) NOT + HATIRLATMA EKLE
+ * ============================================================
+ */
+
+export async function addRegistrationNote(
+  formData: FormData
+) {
+  const profile =
+    await requireProfile([
+      ...allowedRoles,
+    ]);
+
+  const supabase =
+    await createClient();
+
+  const studentId =
+    text(
+      formData,
+      "student_id"
+    );
+
+  const note =
+    text(
+      formData,
+      "note_text"
+    );
+
+  const reminderLocal =
+    text(
+      formData,
+      "reminder_at"
+    );
+
+  if (
+    !studentId ||
+    !note
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Not alanını doldurunuz."
+      )}#notlar`
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * Öğrenciyi doğrula
+   * ----------------------------------------------------------
+   */
+
+  const {
+    data: student,
+  } =
+    await supabase
+      .from("students")
+      .select(
+        "id,first_name,last_name"
+      )
+      .eq(
+        "id",
+        studentId
+      )
+      .eq(
+        "organization_id",
+        profile.organization_id
+      )
+      .maybeSingle();
+
+  if (
+    !student
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Öğrenci bulunamadı."
+      )}#notlar`
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * Hatırlatma
+   * ----------------------------------------------------------
+   */
+
+  let reminderAt:
+    | string
+    | null =
+    null;
+
+  if (
+    reminderLocal
+  ) {
+    const parsed =
+      new Date(
+        reminderLocal
+      );
+
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      redirect(
+        `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+          "Hatırlatma tarihi geçersiz."
+        )}#notlar`
+      );
+    }
+
+    reminderAt =
+      parsed.toISOString();
+  }
+
+  const now =
+    new Date()
+      .toISOString();
+
+  /*
+   * ----------------------------------------------------------
+   * Not kaydı
+   * ----------------------------------------------------------
+   */
+
+  const {
+    error:
+      noteError,
+  } =
+    await supabase
+      .from(
+        "student_activity_logs"
+      )
+      .insert({
+        organization_id:
+          profile.organization_id,
+
+        student_id:
+          studentId,
+
+        activity_type:
+          "registration_note",
+
+        title:
+          reminderAt
+            ? "Kayıt notu ve hatırlatma"
+            : "Kayıt notu",
+
+        description:
+          note,
+
+        source_type:
+          "registration_completion",
+
+        source_id:
+          studentId,
+
+        performed_by:
+          profile.id,
+
+        performed_at:
+          now,
+
+        reminder_at:
+          reminderAt,
+
+        reminder_completed:
+          false,
+      });
+
+  if (
+    noteError
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        `Not kaydedilemedi: ${noteError.message}`
+      )}#notlar`
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * Hatırlatma varsa merkezi bildirim kaydı
+   *
+   * Bu kayıt gelecekte hatırlatma işleyicisinin
+   * takip edeceği metadata'yı taşır.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    reminderAt
+  ) {
+    await supabase
+      .from(
+        "system_notifications"
+      )
+      .insert({
+        organization_id:
+          profile.organization_id,
+
+        recipient_profile_id:
+          profile.id,
+
+        notification_type:
+          "registration_note_reminder",
+
+        title:
+          "Öğrenci notu hatırlatması",
+
+        body:
+          `${student.first_name} ${student.last_name}: ${note}`,
+
+        priority:
+          "normal",
+
+        student_id:
+          studentId,
+
+        source_type:
+          "registration_note",
+
+        source_id:
+          studentId,
+
+        target_path:
+          `/kayit-tamamlama/${studentId}#notlar`,
+
+        push_required:
+          false,
+
+        /*
+         * Bildirimi burada hemen okunmamış şekilde tutuyoruz.
+         * Zaman bazlı otomatik görünürlük/uyarı motorunu
+         * Bildirim-Uyarı Merkezi entegrasyonunda tamamlayacağız.
+         */
+      });
+  }
+
+  revalidatePath(
+    `/kayit-tamamlama/${studentId}`
+  );
+
+  revalidatePath(
+    `/ogrenciler/${studentId}`
+  );
+
+  redirect(
+    `/kayit-tamamlama/${studentId}?note_saved=1#notlar`
+  );
+}
+
+/*
+ * ============================================================
+ * 3) KESİN KAYDI TAMAMLA
+ * ============================================================
+ */
 
 export async function completeRegistration(
   formData: FormData
@@ -37,68 +722,126 @@ export async function completeRegistration(
   const supabase =
     await createClient();
 
-  const studentId = String(
-    formData.get("student_id") || ""
-  );
+  /*
+   * ==========================================================
+   * FORM VERİLERİ
+   * ==========================================================
+   */
 
-  const branchId = String(
-    formData.get("branch_id") || ""
-  );
+  const studentId =
+    text(
+      formData,
+      "student_id"
+    );
 
-  const groupId = String(
-    formData.get("group_id") || ""
-  );
+  const branchId =
+    text(
+      formData,
+      "branch_id"
+    );
 
-  const packageId = String(
-    formData.get("package_id") || ""
-  );
+  const groupId =
+    text(
+      formData,
+      "group_id"
+    );
+
+  const packageId =
+    text(
+      formData,
+      "package_id"
+    );
 
   const coachId =
-    String(
-      formData.get("coach_id") || ""
-    ) || null;
+    nullableText(
+      formData,
+      "coach_id"
+    );
 
-  const startDate = String(
-    formData.get("start_date") || ""
-  );
+  const startDate =
+    text(
+      formData,
+      "start_date"
+    );
 
-  const plannedEndDate = String(
-    formData.get(
+  const plannedEndDate =
+    text(
+      formData,
       "planned_end_date"
-    ) || ""
-  );
-
-  const weekdays = formData
-    .getAll("lesson_weekdays")
-    .map(Number)
-    .filter(
-      (day) =>
-        Number.isInteger(day) &&
-        day >= 0 &&
-        day <= 6
     );
 
-  const isoWeekdays = weekdays
-    .map(jsDayToIsoDay)
-    .sort(
-      (a, b) => a - b
+  const weekdays =
+    getWeekdays(
+      formData
     );
 
-  const totalLessons = Number(
-    formData.get(
-      "total_lessons"
-    ) || 0
-  );
+  const isoWeekdays =
+    weekdays
+      .map(
+        jsDayToIsoDay
+      )
+      .sort(
+        (a, b) =>
+          a - b
+      );
 
-  const messageBody = String(
-    formData.get(
+  const totalLessons =
+    Number(
+      formData.get(
+        "total_lessons"
+      ) || 0
+    );
+
+  const messageBody =
+    text(
+      formData,
       "message_body"
-    ) || ""
-  ).trim();
+    );
 
-  const recipient = String(
-    formData.get("recipient") || ""
-  ).trim();
+  const recipient =
+    text(
+      formData,
+      "recipient"
+    );
+
+  /*
+   * ----------------------------------------------------------
+   * ÖDEME VADESİ
+   *
+   * Varsayılan = başlangıç tarihi.
+   * ----------------------------------------------------------
+   */
+
+  const paymentDueDate =
+    text(
+      formData,
+      "payment_due_date"
+    ) ||
+    startDate;
+
+  const paymentNote =
+    nullableText(
+      formData,
+      "payment_note"
+    );
+
+  const messageSent =
+    bool(
+      formData,
+      "message_sent"
+    );
+
+  const swimCapDelivered =
+    bool(
+      formData,
+      "swim_cap_delivered"
+    );
+
+  /*
+   * ==========================================================
+   * ZORUNLU ALAN KONTROLÜ
+   * ==========================================================
+   */
 
   if (
     !profile.organization_id ||
@@ -108,42 +851,95 @@ export async function completeRegistration(
     !startDate ||
     !plannedEndDate ||
     !weekdays.length ||
-    !Number.isInteger(totalLessons) ||
+    !Number.isInteger(
+      totalLessons
+    ) ||
     totalLessons < 1 ||
-    totalLessons > 100
+    totalLessons > 100 ||
+    !paymentDueDate ||
+    !validDate(
+      paymentDueDate
+    )
   ) {
     redirect(
       `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Şube, grup, başlangıç tarihi, katılım günleri ve 1-100 arası ders sayısı zorunludur."
+        "Şube, grup, başlangıç tarihi, katılım günleri, ödeme vadesi ve 1-100 arası ders sayısı zorunludur."
       )}`
     );
   }
 
   /*
-   * ---------------------------------------------------------
-   * Önce öğrenciyi kontrol et
-   * ---------------------------------------------------------
+   * ==========================================================
+   * ÖĞRENCİ + ELEKTRONİK ONAY
+   * ==========================================================
    */
 
-  const {
-    data: studentBefore,
-    error: studentLookupError,
-  } = await supabase
-    .from("students")
-    .select(`
-      id,
-      first_name,
-      last_name,
-      student_number,
-      status,
-      branch_id
-    `)
-    .eq("id", studentId)
-    .eq(
-      "organization_id",
-      profile.organization_id
-    )
-    .single();
+  const [
+    {
+      data:
+        studentBefore,
+
+      error:
+        studentLookupError,
+    },
+
+    {
+      data:
+        consent,
+    },
+  ] =
+    await Promise.all([
+      supabase
+        .from(
+          "students"
+        )
+        .select(`
+          id,
+          first_name,
+          last_name,
+          student_number,
+          status,
+          branch_id
+        `)
+        .eq(
+          "id",
+          studentId
+        )
+        .eq(
+          "organization_id",
+          profile.organization_id
+        )
+        .single(),
+
+      supabase
+        .from(
+          "registration_consents"
+        )
+        .select(`
+          health_declaration,
+          health_note,
+          rules_accepted,
+          accepted_at,
+          rules_version
+        `)
+        .eq(
+          "organization_id",
+          profile.organization_id
+        )
+        .eq(
+          "student_id",
+          studentId
+        )
+        .order(
+          "accepted_at",
+          {
+            ascending:
+              false,
+          }
+        )
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
   if (
     studentLookupError ||
@@ -158,66 +954,107 @@ export async function completeRegistration(
   }
 
   /*
-   * ---------------------------------------------------------
-   * Eski aktif enrollment varsa kapat.
-   * Yenilemede iki aktif kayıt kalmasın.
-   * ---------------------------------------------------------
+   * ----------------------------------------------------------
+   * Kurallar kabul kaydı zorunlu
+   * ----------------------------------------------------------
+   */
+
+  if (
+    !consent?.rules_accepted
+  ) {
+    redirect(
+      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
+        "Ön kayıt kuralları kabul kaydı bulunmadan kesin kayıt tamamlanamaz."
+      )}`
+    );
+  }
+
+  /*
+   * ==========================================================
+   * ÖNCEKİ AKTİF ENROLLMENT'I KAPAT
+   * ==========================================================
    */
 
   await supabase
-    .from("student_enrollments")
+    .from(
+      "student_enrollments"
+    )
     .update({
-      status: "completed",
+      status:
+        "completed",
     })
-    .eq("student_id", studentId)
-    .eq("status", "active");
+    .eq(
+      "student_id",
+      studentId
+    )
+    .eq(
+      "status",
+      "active"
+    );
 
   /*
-   * ---------------------------------------------------------
-   * Yeni aktif kayıt
-   * ---------------------------------------------------------
+   * ==========================================================
+   * YENİ AKTİF ENROLLMENT
+   *
+   * Vade burada gerçek finans sistemine yazılır.
+   * ==========================================================
    */
 
   const {
-    data: enrollment,
-    error: enrollmentError,
-  } = await supabase
-    .from("student_enrollments")
-    .insert({
-      organization_id:
-        profile.organization_id,
+    data:
+      enrollment,
 
-      student_id:
-        studentId,
+    error:
+      enrollmentError,
+  } =
+    await supabase
+      .from(
+        "student_enrollments"
+      )
+      .insert({
+        organization_id:
+          profile.organization_id,
 
-      package_id:
-        packageId || null,
+        student_id:
+          studentId,
 
-      group_id:
-        groupId,
+        package_id:
+          packageId ||
+          null,
 
-      start_date:
-        startDate,
+        group_id:
+          groupId,
 
-      planned_end_date:
-        plannedEndDate,
+        start_date:
+          startDate,
 
-      lesson_weekdays:
-        weekdays,
+        planned_end_date:
+          plannedEndDate,
 
-      total_lessons:
-        totalLessons,
+        lesson_weekdays:
+          weekdays,
 
-      used_lessons:
-        0,
+        total_lessons:
+          totalLessons,
 
-      status:
-        "active",
-    })
-    .select(
-      "id,planned_end_date"
-    )
-    .single();
+        used_lessons:
+          0,
+
+        /*
+         * ÖDEMELER MODÜLÜYLE AYNI VADE
+         */
+        payment_due_date:
+          paymentDueDate,
+
+        status:
+          "active",
+      })
+      .select(`
+        id,
+        planned_end_date,
+        payment_due_date
+      `)
+      .single();
 
   if (
     enrollmentError ||
@@ -232,9 +1069,9 @@ export async function completeRegistration(
   }
 
   /*
-   * ---------------------------------------------------------
-   * Grup üyeliği
-   * ---------------------------------------------------------
+   * ==========================================================
+   * GRUP ÜYELİĞİ
+   * ==========================================================
    */
 
   await supabase
@@ -242,7 +1079,9 @@ export async function completeRegistration(
       "student_group_memberships"
     )
     .update({
-      is_active: false,
+      is_active:
+        false,
+
       ended_at:
         startDate,
     })
@@ -256,29 +1095,37 @@ export async function completeRegistration(
     );
 
   const {
-    error: membershipError,
-  } = await supabase
-    .from(
-      "student_group_memberships"
-    )
-    .insert({
-      organization_id:
-        profile.organization_id,
+    error:
+      membershipError,
+  } =
+    await supabase
+      .from(
+        "student_group_memberships"
+      )
+      .insert({
+        organization_id:
+          profile.organization_id,
 
-      student_id:
-        studentId,
+        student_id:
+          studentId,
 
-      group_id:
-        groupId,
+        group_id:
+          groupId,
 
-      started_at:
-        startDate,
+        started_at:
+          startDate,
 
-      is_active:
-        true,
-    });
+        is_active:
+          true,
+      });
 
-  if (membershipError) {
+  if (
+    membershipError
+  ) {
+    /*
+     * Yeni enrollment yarım kalmasın.
+     */
+
     await supabase
       .from(
         "student_enrollments"
@@ -297,9 +1144,9 @@ export async function completeRegistration(
   }
 
   /*
-   * ---------------------------------------------------------
-   * Önceki aktif katılım planını kapat
-   * ---------------------------------------------------------
+   * ==========================================================
+   * ESKİ KATILIM PLANINI KAPAT
+   * ==========================================================
    */
 
   await supabase
@@ -307,10 +1154,15 @@ export async function completeRegistration(
       "student_attendance_plans"
     )
     .update({
-      is_active: false,
-      updated_by: profile.id,
+      is_active:
+        false,
+
+      updated_by:
+        profile.id,
+
       updated_at:
-        new Date().toISOString(),
+        new Date()
+          .toISOString(),
     })
     .eq(
       "student_id",
@@ -322,75 +1174,63 @@ export async function completeRegistration(
     );
 
   /*
-   * ---------------------------------------------------------
-   * Öğrencinin GERÇEK katılım planı
-   *
-   * Örneğin grup:
-   * Pzt / Çar / Cum
-   *
-   * öğrenci:
-   * Pzt / Çar
-   *
-   * ise burada yalnız [1,3] tutulur.
-   * ---------------------------------------------------------
+   * ==========================================================
+   * GERÇEK KATILIM PLANI
+   * ==========================================================
    */
 
   const {
     error:
       attendancePlanError,
-  } = await supabase
-    .from(
-      "student_attendance_plans"
-    )
-    .insert({
-      organization_id:
-        profile.organization_id,
+  } =
+    await supabase
+      .from(
+        "student_attendance_plans"
+      )
+      .insert({
+        organization_id:
+          profile.organization_id,
 
-      student_id:
-        studentId,
+        student_id:
+          studentId,
 
-      enrollment_id:
-        enrollment.id,
+        enrollment_id:
+          enrollment.id,
 
-      group_id:
-        groupId,
+        group_id:
+          groupId,
 
-      selected_weekdays:
-        isoWeekdays,
+        selected_weekdays:
+          isoWeekdays,
 
-      weekly_frequency:
-        isoWeekdays.length,
+        weekly_frequency:
+          isoWeekdays.length,
 
-      package_lesson_count:
-        totalLessons,
+        package_lesson_count:
+          totalLessons,
 
-      start_date:
-        startDate,
+        start_date:
+          startDate,
 
-      normal_planned_end_date:
-        plannedEndDate,
+        normal_planned_end_date:
+          plannedEndDate,
 
-      compensation_planned_end_date:
-        plannedEndDate,
+        compensation_planned_end_date:
+          plannedEndDate,
 
-      is_active:
-        true,
+        is_active:
+          true,
 
-      created_by:
-        profile.id,
+        created_by:
+          profile.id,
 
-      updated_by:
-        profile.id,
-    });
+        updated_by:
+          profile.id,
+      });
 
   if (
     attendancePlanError
   ) {
-    console.error(
-      "student attendance plan error:",
-      attendancePlanError
-    );
-
     redirect(
       `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
         `Katılım planı oluşturulamadı: ${attendancePlanError.message}`
@@ -399,53 +1239,58 @@ export async function completeRegistration(
   }
 
   /*
-   * ---------------------------------------------------------
-   * Öğrenciyi aktif yap
-   *
-   * Burada Supabase trigger öğrenci numarasını
-   * otomatik oluşturacak.
-   * ---------------------------------------------------------
+   * ==========================================================
+   * ÖĞRENCİYİ AKTİF YAP
+   * ==========================================================
    */
 
   const {
-    data: updatedStudent,
-    error: studentError,
-  } = await supabase
-    .from("students")
-    .update({
-      status:
-        "active",
+    data:
+      updatedStudent,
 
-      branch_id:
-        branchId,
+    error:
+      studentError,
+  } =
+    await supabase
+      .from(
+        "students"
+      )
+      .update({
+        status:
+          "active",
 
-      preferred_group_id:
-        groupId,
+        branch_id:
+          branchId,
 
-      preferred_package_id:
-        packageId || null,
+        preferred_group_id:
+          groupId,
 
-      preferred_days:
-        weekdays.join(","),
+        preferred_package_id:
+          packageId ||
+          null,
 
-      updated_at:
-        new Date().toISOString(),
-    })
-    .eq(
-      "id",
-      studentId
-    )
-    .eq(
-      "organization_id",
-      profile.organization_id
-    )
-    .select(`
-      id,
-      student_number,
-      first_name,
-      last_name
-    `)
-    .single();
+        preferred_days:
+          weekdays.join(","),
+
+        updated_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        studentId
+      )
+      .eq(
+        "organization_id",
+        profile.organization_id
+      )
+      .select(`
+        id,
+        student_number,
+        first_name,
+        last_name
+      `)
+      .single();
 
   if (
     studentError ||
@@ -459,10 +1304,14 @@ export async function completeRegistration(
     );
   }
 
+  const now =
+    new Date()
+      .toISOString();
+
   /*
-   * ---------------------------------------------------------
-   * Öğrenci işlem geçmişi
-   * ---------------------------------------------------------
+   * ==========================================================
+   * ÖĞRENCİ İŞLEM GEÇMİŞİ
+   * ==========================================================
    */
 
   await supabase
@@ -484,7 +1333,8 @@ export async function completeRegistration(
 
       description:
         `${totalLessons} derslik kayıt tamamlandı. ` +
-        `${weekdays.length} gün/hafta katılım planlandı.`,
+        `${weekdays.length} gün/hafta katılım planlandı. ` +
+        `Ödeme vadesi: ${paymentDueDate}.`,
 
       old_value: {
         status:
@@ -508,7 +1358,8 @@ export async function completeRegistration(
           groupId,
 
         package_id:
-          packageId || null,
+          packageId ||
+          null,
 
         total_lessons:
           totalLessons,
@@ -521,6 +1372,12 @@ export async function completeRegistration(
 
         planned_end_date:
           plannedEndDate,
+
+        payment_due_date:
+          paymentDueDate,
+
+        payment_note:
+          paymentNote,
 
         coach_id:
           coachId,
@@ -539,95 +1396,172 @@ export async function completeRegistration(
         profile.id,
 
       performed_at:
-        new Date().toISOString(),
+        now,
 
       approved_at:
-        new Date().toISOString(),
+        now,
     });
 
   /*
-   * ---------------------------------------------------------
-   * Kontrol listesi
-   * ---------------------------------------------------------
+   * ==========================================================
+   * GERÇEK ÖDEME DURUMUNU HESAPLA
+   *
+   * Manuel ödeme checkboxı yok.
+   * student_payments kaynak.
+   * ==========================================================
    */
 
-  const checklist = {
-    organization_id:
-      profile.organization_id,
+  const {
+    data:
+      currentPayments,
+  } =
+    await supabase
+      .from(
+        "student_payments"
+      )
+      .select(`
+        id,
+        payment_status,
+        cancelled_at
+      `)
+      .eq(
+        "organization_id",
+        profile.organization_id
+      )
+      .eq(
+        "student_id",
+        studentId
+      )
+      .eq(
+        "enrollment_id",
+        enrollment.id
+      );
 
-    student_id:
-      studentId,
+  const paymentReceived =
+    (
+      currentPayments ||
+      []
+    ).some(
+      (item) =>
+        item.payment_status ===
+          "received" &&
+        !item.cancelled_at
+    );
 
-    enrollment_id:
-      enrollment.id,
-
-    payment_received:
-      bool(
-        formData,
-        "payment_received"
-      ),
-
-    group_selected:
-      true,
-
-    attendance_days_selected:
-      weekdays.length > 0,
-
-    health_declaration_received:
-      bool(
-        formData,
-        "health_declaration_received"
-      ),
-
-    rules_accepted:
-      bool(
-        formData,
-        "rules_accepted"
-      ),
-
-    message_prepared:
-      Boolean(messageBody),
-
-    message_sent:
-      bool(
-        formData,
-        "message_sent"
-      ),
-
-    location_sent:
-      bool(
-        formData,
-        "location_sent"
-      ),
-
-    swim_cap_delivered:
-      bool(
-        formData,
-        "swim_cap_delivered"
-      ),
-
-    receipt_created:
-      bool(
-        formData,
-        "receipt_created"
-      ),
-
-    completed_by:
-      profile.id,
-
-    completed_at:
-      new Date().toISOString(),
-
-    updated_at:
-      new Date().toISOString(),
-  };
+  /*
+   * ==========================================================
+   * KONTROL / TASLAK KAYDI
+   * ==========================================================
+   */
 
   await supabase
     .from(
       "registration_completion_checklists"
     )
     .upsert(
-      checklist,
+      {
+        organization_id:
+          profile.organization_id,
+
+        student_id:
+          studentId,
+
+        enrollment_id:
+          enrollment.id,
+
+        /*
+         * Otomatik
+         */
+        payment_received:
+          paymentReceived,
+
+        group_selected:
+          true,
+
+        attendance_days_selected:
+          weekdays.length > 0,
+
+        /*
+         * Ön kayıttan otomatik
+         */
+        health_declaration_received:
+          Boolean(
+            consent
+          ),
+
+        rules_accepted:
+          Boolean(
+            consent?.rules_accepted
+          ),
+
+        /*
+         * Mesaj
+         */
+        message_prepared:
+          Boolean(
+            messageBody
+          ),
+
+        message_sent:
+          messageSent,
+
+        /*
+         * WhatsApp mesajında konum otomatik olduğu için,
+         * mesaj gönderildi olarak işaretlenmişse konum da
+         * gönderilmiş kabul edilir.
+         */
+        location_sent:
+          messageSent,
+
+        /*
+         * Fiziksel teslim
+         */
+        swim_cap_delivered:
+          swimCapDelivered,
+
+        /*
+         * Şimdilik mevcut ödeme ile ilişkilendiriyoruz.
+         * İleride makbuz modülü gerçek makbuz kaynağı olacak.
+         */
+        receipt_created:
+          paymentReceived,
+
+        payment_due_date:
+          paymentDueDate,
+
+        payment_due_date_manual:
+          bool(
+            formData,
+            "payment_due_date_manual"
+          ),
+
+        payment_note:
+          paymentNote,
+
+        message_draft:
+          messageBody ||
+          null,
+
+        draft_data:
+          getDraftData(
+            formData
+          ),
+
+        draft_saved_at:
+          now,
+
+        completed_by:
+          profile.id,
+
+        completed_at:
+          now,
+
+        updated_by:
+          profile.id,
+
+        updated_at:
+          now,
+      },
       {
         onConflict:
           "student_id",
@@ -635,14 +1569,18 @@ export async function completeRegistration(
     );
 
   /*
-   * ---------------------------------------------------------
-   * Mesaj geçmişi
-   * ---------------------------------------------------------
+   * ==========================================================
+   * WHATSAPP MESAJ GEÇMİŞİ
+   * ==========================================================
    */
 
-  if (messageBody) {
+  if (
+    messageBody
+  ) {
     await supabase
-      .from("message_logs")
+      .from(
+        "message_logs"
+      )
       .insert({
         organization_id:
           profile.organization_id,
@@ -657,7 +1595,8 @@ export async function completeRegistration(
           "whatsapp",
 
         recipient:
-          recipient || null,
+          recipient ||
+          null,
 
         subject:
           "Kayıt Tamamlandı",
@@ -666,10 +1605,7 @@ export async function completeRegistration(
           messageBody,
 
         status:
-          bool(
-            formData,
-            "message_sent"
-          )
+          messageSent
             ? "opened"
             : "prepared",
 
@@ -677,19 +1613,13 @@ export async function completeRegistration(
           profile.id,
 
         sent_by:
-          bool(
-            formData,
-            "message_sent"
-          )
+          messageSent
             ? profile.id
             : null,
 
         sent_at:
-          bool(
-            formData,
-            "message_sent"
-          )
-            ? new Date().toISOString()
+          messageSent
+            ? now
             : null,
 
         metadata: {
@@ -705,6 +1635,9 @@ export async function completeRegistration(
           planned_end_date:
             enrollment.planned_end_date,
 
+          payment_due_date:
+            enrollment.payment_due_date,
+
           total_lessons:
             totalLessons,
 
@@ -712,6 +1645,12 @@ export async function completeRegistration(
             weekdays,
         },
       });
+
+    /*
+     * --------------------------------------------------------
+     * İletişim geçmişi
+     * --------------------------------------------------------
+     */
 
     await supabase
       .from(
@@ -731,16 +1670,14 @@ export async function completeRegistration(
           "whatsapp",
 
         recipient_phone:
-          recipient || null,
+          recipient ||
+          null,
 
         message_text:
           messageBody,
 
         status:
-          bool(
-            formData,
-            "message_sent"
-          )
+          messageSent
             ? "sent"
             : "prepared",
 
@@ -748,22 +1685,19 @@ export async function completeRegistration(
           profile.id,
 
         prepared_at:
-          new Date().toISOString(),
+          now,
 
         sent_at:
-          bool(
-            formData,
-            "message_sent"
-          )
-            ? new Date().toISOString()
+          messageSent
+            ? now
             : null,
       });
   }
 
   /*
-   * ---------------------------------------------------------
-   * Bildirim
-   * ---------------------------------------------------------
+   * ==========================================================
+   * KAYIT TAMAMLANDI BİLDİRİMİ
+   * ==========================================================
    */
 
   await supabase
@@ -806,8 +1740,22 @@ export async function completeRegistration(
         true,
     });
 
+  /*
+   * ==========================================================
+   * TÜM BAĞLI MODÜLLERİ YENİLE
+   * ==========================================================
+   */
+
   revalidatePath(
     "/on-kayitlar"
+  );
+
+  revalidatePath(
+    "/odemeler"
+  );
+
+  revalidatePath(
+    "/kasa"
   );
 
   revalidatePath(
@@ -817,6 +1765,16 @@ export async function completeRegistration(
   revalidatePath(
     `/ogrenciler/${studentId}`
   );
+
+  revalidatePath(
+    `/kayit-tamamlama/${studentId}`
+  );
+
+  /*
+   * ==========================================================
+   * ÖĞRENCİ MERKEZİNE GİT
+   * ==========================================================
+   */
 
   redirect(
     `/ogrenciler/${studentId}?saved=registration`
