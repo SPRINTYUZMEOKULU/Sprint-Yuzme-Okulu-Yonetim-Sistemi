@@ -5,7 +5,6 @@ import type {
 
 import "./globals.css";
 
-import GlobalPrintButton from "./components/global-print-button";
 import PWARegister from "./components/pwa-register";
 
 export const metadata: Metadata = {
@@ -70,12 +69,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-     <body>
-  {children}
+      <body>
+        {children}
 
-  <GlobalPrintButton />
-  <PWARegister />
-</body>
+        <PWARegister />
+      </body>
     </html>
   );
 }
