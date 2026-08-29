@@ -1,0 +1,942 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { bulkTransferStudents } from "../bulk-actions";
+
+type BranchOption = {
+  id: string;
+  name: string;
+};
+
+type GroupOption = {
+  id: string;
+  branch_id: string | null;
+  name: string;
+  course_type?: string | null;
+};
+
+type ScheduleOption = {
+  id: string;
+  group_id: string | null;
+  weekday: number | null;
+  start_time: string | null;
+  end_time: string | null;
+};
+
+type Props = {
+  student: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    phone?: string | null;
+    guardian_phone?: string | null;
+    status?: string | null;
+    branch_id?: string | null;
+  };
+  branches: BranchOption[];
+  groups: GroupOption[];
+  schedules: ScheduleOption[];
+};
+
+const DAYS: Record<number, string> = {
+  1: "Pazartesi",
+  2: "Salı",
+  3: "Çarşamba",
+  4: "Perşembe",
+  5: "Cuma",
+  6: "Cumartesi",
+  7: "Pazar",
+};
+
+function shortTime(value?: string | null) {
+  return value ? value.slice(0, 5) : "";
+}
+
+function normalizePhone(value?: string | null) {
+  let digits = (value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0")) digits = `90${digits.slice(1)}`;
+  if (digits.length === 10) digits = `90${digits}`;
+  return digits;
+}
+
+export default function StudentFileOperations({
+  student,
+  branches,
+  groups,
+  schedules,
+}: Props) {
+  const router = useRouter();
+
+  const [panel, setPanel] = useState<
+    "transfer" | "compensation" | "message" | "delete" | null
+  >(null);
+
+  const [targetBranchId, setTargetBranchId] = useState("");
+  const [targetGroupId, setTargetGroupId] = useState("");
+  const [targetScheduleIds, setTargetScheduleIds] = useState<string[]>([]);
+  const [effectiveDate, setEffectiveDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+
+  const [lessonCount, setLessonCount] = useState("1");
+  const [reason, setReason] = useState("");
+  const [description, setDescription] = useState("");
+
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [deleteReason, setDeleteReason] = useState("");
+
+  const targetGroups = useMemo(
+    () =>
+      groups.filter(
+        (group) =>
+          !targetBranchId || group.branch_id === targetBranchId
+      ),
+    [groups, targetBranchId]
+  );
+
+  const targetSchedules = useMemo(
+    () =>
+      schedules
+        .filter((schedule) => schedule.group_id === targetGroupId)
+        .sort((a, b) => {
+          const day =
+            Number(a.weekday || 0) - Number(b.weekday || 0);
+          if (day !== 0) return day;
+          return String(a.start_time || "").localeCompare(
+            String(b.start_time || "")
+          );
+        }),
+    [schedules, targetGroupId]
+  );
+
+  const fullName =
+    `${student.first_name || ""} ${student.last_name || ""}`.trim();
+
+  const phone =
+    normalizePhone(student.guardian_phone) ||
+    normalizePhone(student.phone);
+
+  function jumpTo(id: string) {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function openMessage() {
+    setResult("");
+    setMessage(
+      `*SPRİNT YÜZME OKULU*\n\nSayın Velimiz,\n\n` +
+        `${fullName} isimli öğrencimizin aktif kurs kaydıyla ilgili bilgilendirme için iletişime geçiyoruz.\n\n` +
+        `Detaylı bilgi ve program desteği için bize ulaşabilirsiniz.\n\n` +
+        `*Sprint Yüzme Okulu Yönetimi*`
+    );
+    setPanel("message");
+  }
+
+  async function submitTransfer() {
+    if (
+      !targetBranchId ||
+      !targetGroupId ||
+      !targetScheduleIds.length
+    ) {
+      setResult("Yeni şube, grup ve ders seansı seçilmelidir.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setResult("");
+
+      const response = await bulkTransferStudents({
+        studentIds: [student.id],
+        targetBranchId,
+        targetGroupId,
+        targetScheduleIds,
+        effectiveDate,
+        prepareMessages: true,
+        updateAttendancePlans: true,
+        logHistory: true,
+      });
+
+      setResult(response.message);
+
+      if (response.transferredCount) {
+        router.refresh();
+      }
+    } catch (error) {
+      console.error(error);
+      setResult("Aktarım işlemi sırasında hata oluştu.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitCompensation() {
+    const count = Number(lessonCount);
+
+    if (!Number.isInteger(count) || count < 1 || count > 20) {
+      setResult("Telafi ders sayısı 1-20 arasında olmalıdır.");
+      return;
+    }
+
+    if (!reason.trim()) {
+      setResult("Telafi gerekçesi yazılmalıdır.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setResult("");
+
+      const response = await fetch("/api/lesson-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_type: "individual_compensation",
+          student_id: student.id,
+          branch_id: student.branch_id || null,
+          group_id: null,
+          lesson_count: count,
+          reason: reason.trim(),
+          description: description.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setResult(
+          data.error ||
+            data.details ||
+            "Telafi talebi oluşturulamadı."
+        );
+        return;
+      }
+
+      setResult(
+        data.message ||
+          "Bireysel telafi talebi yönetici onayına gönderildi."
+      );
+
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      setResult("Telafi işlemi sırasında bağlantı hatası oluştu.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitDeleteRequest() {
+    if (deleteReason.trim().length < 5) {
+      setResult("Silme / arşivleme gerekçesi yazılmalıdır.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setResult("");
+
+      const response = await fetch("/api/student-status-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_type: "delete",
+          student_id: student.id,
+          branch_id: student.branch_id || null,
+          group_id: null,
+          reason: deleteReason.trim(),
+          description:
+            "Dijital Kursiyer Dosyası üzerinden yönetici onayına gönderildi.",
+          old_status: student.status || "active",
+          new_status: "deleted",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setResult(
+          data.error ||
+            data.details ||
+            "Silme talebi oluşturulamadı."
+        );
+        return;
+      }
+
+      setResult(
+        data.message ||
+          "Silme talebi yönetici onayına gönderildi."
+      );
+    } catch (error) {
+      console.error(error);
+      setResult("Silme talebi sırasında bağlantı hatası oluştu.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openWhatsApp() {
+    if (!phone || !message.trim()) return;
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  return (
+    <>
+      <section className="fileCommandBar">
+        <div className="fileCommandIntro">
+          <span>KURSİYER İŞLEM MERKEZİ</span>
+          <strong>Dosya üzerinde hızlı işlem</strong>
+          <small>
+            Bilgileri düzenleyin, programı aktarın, telafi oluşturun,
+            mesaj gönderin veya yönetici onaylı arşivleme başlatın.
+          </small>
+        </div>
+
+        <div className="fileCommandActions">
+          <button type="button" onClick={() => jumpTo("duzenle")}>
+            ✎ Bilgileri Düzenle
+          </button>
+
+          <button
+            type="button"
+            className="blue"
+            onClick={() => {
+              setResult("");
+              setPanel("transfer");
+            }}
+          >
+            ⇄ Grup / Şube Değiştir
+          </button>
+
+          <button
+            type="button"
+            className="green"
+            onClick={() => {
+              setResult("");
+              setPanel("compensation");
+            }}
+          >
+            + Bireysel Telafi
+          </button>
+
+          <button type="button" className="orange" onClick={openMessage}>
+            ✉ Mesaj / WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push(`/odemeler?student=${student.id}`)}
+          >
+            ₺ Ödeme Geçmişi
+          </button>
+
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setResult("");
+              setPanel("delete");
+            }}
+          >
+            ⛔ Sil / Arşivle
+          </button>
+        </div>
+      </section>
+
+      {panel && (
+        <div
+          className="fileOpsOverlay"
+          onClick={() => setPanel(null)}
+        >
+          <aside
+            className="fileOpsPanel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>
+                  {panel === "transfer"
+                    ? "PROGRAM DÜZENLEME"
+                    : panel === "compensation"
+                    ? "BİREYSEL TELAFİ"
+                    : panel === "message"
+                    ? "İLETİŞİM MERKEZİ"
+                    : "YÖNETİCİ ONAYLI ARŞİVLEME"}
+                </span>
+                <h3>{fullName}</h3>
+              </div>
+              <button type="button" onClick={() => setPanel(null)}>
+                ×
+              </button>
+            </header>
+
+            <div className="fileOpsBody">
+              {panel === "transfer" && (
+                <>
+                  <div className="proInfo">
+                    <strong>Program değişikliği güvenli aktarım</strong>
+                    <p>
+                      Geçmiş yoklamalar ve kullanılan dersler korunur.
+                      Yalnız kalan dersler yeni programa taşınır ve yeni
+                      bitiş tarihi seçilen günlere göre hesaplanır.
+                    </p>
+                  </div>
+
+                  <label>
+                    <span>Yeni Şube</span>
+                    <select
+                      value={targetBranchId}
+                      onChange={(event) => {
+                        setTargetBranchId(event.target.value);
+                        setTargetGroupId("");
+                        setTargetScheduleIds([]);
+                      }}
+                    >
+                      <option value="">Şube seçin</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Yeni Grup</span>
+                    <select
+                      value={targetGroupId}
+                      onChange={(event) => {
+                        setTargetGroupId(event.target.value);
+                        setTargetScheduleIds([]);
+                      }}
+                    >
+                      <option value="">Grup seçin</option>
+                      {targetGroups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="scheduleChoices">
+                    <span>Yeni Gün / Saat</span>
+                    {targetSchedules.map((schedule) => {
+                      const checked = targetScheduleIds.includes(
+                        schedule.id
+                      );
+                      return (
+                        <label key={schedule.id}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setTargetScheduleIds((current) =>
+                                checked
+                                  ? current.filter(
+                                      (id) => id !== schedule.id
+                                    )
+                                  : [...current, schedule.id]
+                              )
+                            }
+                          />
+                          <strong>
+                            {DAYS[Number(schedule.weekday)] || "Ders"}
+                          </strong>
+                          <span>
+                            {shortTime(schedule.start_time)}–
+                            {shortTime(schedule.end_time)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <label>
+                    <span>Başlangıç Tarihi</span>
+                    <input
+                      type="date"
+                      value={effectiveDate}
+                      onChange={(event) =>
+                        setEffectiveDate(event.target.value)
+                      }
+                    />
+                  </label>
+                </>
+              )}
+
+              {panel === "compensation" && (
+                <>
+                  <div className="proInfo">
+                    <strong>Bireysel telafi yönetimi</strong>
+                    <p>
+                      Talep öğrenci dosyasına kaydedilir ve mevcut onay
+                      sürecinden geçer.
+                    </p>
+                  </div>
+
+                  <label>
+                    <span>Telafi Ders Sayısı</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={lessonCount}
+                      onChange={(event) =>
+                        setLessonCount(event.target.value)
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    <span>Gerekçe</span>
+                    <input
+                      value={reason}
+                      onChange={(event) => setReason(event.target.value)}
+                      placeholder="Örn. tesis kaynaklı ders iptali"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Açıklama</span>
+                    <textarea
+                      rows={5}
+                      value={description}
+                      onChange={(event) =>
+                        setDescription(event.target.value)
+                      }
+                      placeholder="Yönetici notu / açıklama"
+                    />
+                  </label>
+                </>
+              )}
+
+              {panel === "message" && (
+                <>
+                  <div className="proInfo whatsappInfo">
+                    <strong>WhatsApp'a hazır mesaj</strong>
+                    <p>
+                      Metni düzenleyin. Gönder butonu WhatsApp'ı alıcı
+                      ve mesaj hazır şekilde açar.
+                    </p>
+                  </div>
+
+                  <label>
+                    <span>Alıcı</span>
+                    <input
+                      value={phone || "Telefon bilgisi yok"}
+                      readOnly
+                    />
+                  </label>
+
+                  <label>
+                    <span>Mesaj Metni</span>
+                    <textarea
+                      rows={14}
+                      value={message}
+                      onChange={(event) => setMessage(event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+
+              {panel === "delete" && (
+                <>
+                  <div className="proInfo dangerInfo">
+                    <strong>Kalıcı veri silinmez</strong>
+                    <p>
+                      İşlem önce yönetici onayına gönderilir. Onay sonrası
+                      öğrenci arşivlenir; geçmiş kayıt, ödeme ve yoklama
+                      denetim için korunur.
+                    </p>
+                  </div>
+
+                  <label>
+                    <span>Silme / Arşivleme Gerekçesi</span>
+                    <textarea
+                      rows={6}
+                      value={deleteReason}
+                      onChange={(event) =>
+                        setDeleteReason(event.target.value)
+                      }
+                      placeholder="Gerekçeyi ayrıntılı yazın..."
+                    />
+                  </label>
+                </>
+              )}
+
+              {result && <div className="fileOpsResult">{result}</div>}
+            </div>
+
+            <footer>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setPanel(null)}
+              >
+                Vazgeç
+              </button>
+
+              {panel === "transfer" && (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={submitting}
+                  onClick={submitTransfer}
+                >
+                  {submitting ? "Kaydediliyor..." : "✓ Değişikliği Uygula"}
+                </button>
+              )}
+
+              {panel === "compensation" && (
+                <button
+                  type="button"
+                  className="primary green"
+                  disabled={submitting}
+                  onClick={submitCompensation}
+                >
+                  {submitting
+                    ? "Gönderiliyor..."
+                    : "Yönetici Onayına Gönder"}
+                </button>
+              )}
+
+              {panel === "message" && (
+                <button
+                  type="button"
+                  className="primary whatsapp"
+                  disabled={!phone || !message.trim()}
+                  onClick={openWhatsApp}
+                >
+                  WhatsApp'ta Gönder ↗
+                </button>
+              )}
+
+              {panel === "delete" && (
+                <button
+                  type="button"
+                  className="primary danger"
+                  disabled={submitting}
+                  onClick={submitDeleteRequest}
+                >
+                  {submitting
+                    ? "Gönderiliyor..."
+                    : "Yönetici Onayına Gönder"}
+                </button>
+              )}
+            </footer>
+          </aside>
+        </div>
+      )}
+
+      <style jsx>{`
+        .fileCommandBar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 22px;
+          margin: 18px 0;
+          padding: 18px 20px;
+          border: 1px solid #d6e2ef;
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 12px 32px rgba(20, 56, 92, .08);
+        }
+
+        .fileCommandIntro {
+          min-width: 250px;
+        }
+
+        .fileCommandIntro span,
+        .fileCommandIntro strong,
+        .fileCommandIntro small {
+          display: block;
+        }
+
+        .fileCommandIntro span {
+          color: #f28c18;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .12em;
+        }
+
+        .fileCommandIntro strong {
+          margin-top: 4px;
+          color: #0c3159;
+          font-size: 17px;
+        }
+
+        .fileCommandIntro small {
+          margin-top: 4px;
+          color: #6f8094;
+          line-height: 1.45;
+        }
+
+        .fileCommandActions {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+        .fileCommandActions button {
+          border: 1px solid #cfdbea;
+          border-radius: 11px;
+          padding: 9px 11px;
+          background: #fff;
+          color: #1d4369;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .fileCommandActions .blue {
+          background: #eef6ff;
+          border-color: #bcd7f7;
+          color: #0b60bd;
+        }
+
+        .fileCommandActions .green {
+          background: #eefaf4;
+          border-color: #bfe6d2;
+          color: #157147;
+        }
+
+        .fileCommandActions .orange {
+          background: #fff6e9;
+          border-color: #f8d4a5;
+          color: #a85a08;
+        }
+
+        .fileCommandActions .danger {
+          background: #fff1f1;
+          border-color: #f2c3c3;
+          color: #a92c2c;
+        }
+
+        .fileOpsOverlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1200;
+          display: flex;
+          justify-content: flex-end;
+          background: rgba(5, 22, 42, .62);
+          backdrop-filter: blur(6px);
+        }
+
+        .fileOpsPanel {
+          width: min(620px, 96vw);
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          background: #f7f9fc;
+          box-shadow: -20px 0 55px rgba(0,0,0,.25);
+        }
+
+        .fileOpsPanel > header {
+          display: flex;
+          justify-content: space-between;
+          gap: 15px;
+          padding: 23px;
+          background: linear-gradient(135deg,#082442,#0d5792);
+          color: #fff;
+        }
+
+        .fileOpsPanel > header span {
+          color: #ffab32;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .12em;
+        }
+
+        .fileOpsPanel > header h3 {
+          margin: 6px 0 0;
+          font-size: 24px;
+        }
+
+        .fileOpsPanel > header button {
+          width: 38px;
+          height: 38px;
+          border: 1px solid rgba(255,255,255,.25);
+          border-radius: 11px;
+          background: rgba(255,255,255,.1);
+          color: #fff;
+          font-size: 24px;
+          cursor: pointer;
+        }
+
+        .fileOpsBody {
+          flex: 1;
+          overflow-y: auto;
+          padding: 22px;
+        }
+
+        .fileOpsBody > label {
+          display: grid;
+          gap: 6px;
+          margin-bottom: 15px;
+        }
+
+        .fileOpsBody > label > span,
+        .scheduleChoices > span {
+          color: #50667f;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .fileOpsBody input,
+        .fileOpsBody select,
+        .fileOpsBody textarea {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid #ccd9e8;
+          border-radius: 11px;
+          padding: 11px 12px;
+          background: #fff;
+          color: #143759;
+          font: inherit;
+        }
+
+        .proInfo {
+          margin-bottom: 16px;
+          padding: 13px 14px;
+          border: 1px solid #cfe0f2;
+          border-radius: 13px;
+          background: #edf6ff;
+        }
+
+        .proInfo strong {
+          color: #0c548e;
+        }
+
+        .proInfo p {
+          margin: 5px 0 0;
+          color: #58718a;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .whatsappInfo {
+          background: #eefaf4;
+          border-color: #c4e7d3;
+        }
+
+        .whatsappInfo strong {
+          color: #157148;
+        }
+
+        .dangerInfo {
+          background: #fff3f3;
+          border-color: #efcaca;
+        }
+
+        .dangerInfo strong {
+          color: #a52c2c;
+        }
+
+        .scheduleChoices {
+          display: grid;
+          gap: 8px;
+          margin-bottom: 16px;
+        }
+
+        .scheduleChoices label {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 10px;
+          align-items: center;
+          padding: 10px 12px;
+          border: 1px solid #d7e2ed;
+          border-radius: 10px;
+          background: #fff;
+        }
+
+        .scheduleChoices label input {
+          width: 17px;
+          height: 17px;
+        }
+
+        .scheduleChoices label span {
+          color: #60758b;
+          font-size: 11px;
+        }
+
+        .fileOpsResult {
+          padding: 12px;
+          border: 1px solid #c8e3d3;
+          border-radius: 11px;
+          background: #edf9f2;
+          color: #17643d;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .fileOpsPanel > footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 9px;
+          padding: 15px 18px;
+          border-top: 1px solid #d9e3ed;
+          background: #fff;
+        }
+
+        .fileOpsPanel > footer button {
+          border: 0;
+          border-radius: 10px;
+          padding: 10px 14px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .fileOpsPanel > footer .ghost {
+          border: 1px solid #cbd7e4;
+          background: #fff;
+          color: #294968;
+        }
+
+        .fileOpsPanel > footer .primary {
+          background: #1268d6;
+          color: #fff;
+        }
+
+        .fileOpsPanel > footer .green {
+          background: #178b59;
+        }
+
+        .fileOpsPanel > footer .whatsapp {
+          background: #1fa463;
+        }
+
+        .fileOpsPanel > footer .danger {
+          background: #c63b3b;
+        }
+
+        @media (max-width: 850px) {
+          .fileCommandBar {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .fileCommandActions {
+            justify-content: flex-start;
+          }
+
+          .fileOpsPanel {
+            width: 100%;
+          }
+        }
+      `}</style>
+    </>
+  );
+}
