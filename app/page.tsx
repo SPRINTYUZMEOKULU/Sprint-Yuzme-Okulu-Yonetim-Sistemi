@@ -797,19 +797,25 @@ export default async function HomePage() {
         aria-hidden="true"
       />
       {/* MOBİL GÜVENLİ ÇIKIŞ - SADECE TELEFON/TABLETTE GÖRÜNÜR */}
-      <a
-        href="/auth/signout"
-        className="mobileSecureLogout"
-        title="Güvenli Çıkış"
-        aria-label="Güvenli Çıkış"
-      >
-        <Icons.logout />
-        <span>Çıkış</span>
-      </a>
+      <form action="/auth/signout" method="get" className="mobileLogoutForm">
+        <button
+          type="submit"
+          className="mobileSecureLogout"
+          title="Güvenli Çıkış"
+          aria-label="Güvenli Çıkış"
+        >
+          <Icons.logout />
+          <span>Çıkış</span>
+        </button>
+      </form>
 
       <style>{`
         .mobileSecureLogout {
           display: none;
+        }
+
+        .mobileLogoutForm {
+          margin: 0;
         }
 
         @media (max-width: 768px) {
@@ -835,6 +841,8 @@ export default async function HomePage() {
             background: #dc2626;
             color: #ffffff;
             text-decoration: none;
+            font-family: inherit;
+            cursor: pointer;
 
             box-shadow: 0 10px 28px rgba(220,38,38,0.32);
           }
