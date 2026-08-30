@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -237,6 +237,81 @@ function openBulkWhatsAppMessages(
         `Tarayıcı kalan pencereleri engelledi. Bu site için açılır pencere izni verirseniz tek tuşla tüm alıcıları hazırlayabilirsiniz.`
     );
   }
+}
+
+
+type IconName =
+  | "home"
+  | "plus"
+  | "message"
+  | "transfer"
+  | "phone"
+  | "file"
+  | "calendar"
+  | "archive"
+  | "trash"
+  | "print"
+  | "edit"
+  | "wallet"
+  | "more";
+
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  const paths: Record<IconName, ReactNode> = {
+    home: <><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></>,
+    plus: <><path d="M12 5v14"/><path d="M5 12h14"/></>,
+    message: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></>,
+    transfer: <><path d="M7 7h12"/><path d="m16 4 3 3-3 3"/><path d="M17 17H5"/><path d="m8 14-3 3 3 3"/></>,
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.74a16 16 0 0 0 6 6l1.28-1.28a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z"/>,
+    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></>,
+    archive: <><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></>,
+    trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 15H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></>,
+    print: <><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></>,
+    edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></>,
+    wallet: <><path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v11H5a3 3 0 0 1-3-3V6"/><path d="M16 13h4"/></>,
+    more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
+  };
+
+  return <svg {...common}>{paths[name]}</svg>;
+}
+
+function escapePrintText(value?: string | null) {
+  return (value || "—")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function printStudentCard(student: StudentListItem) {
+  const popup = window.open("", "_blank", "width=920,height=1100");
+  if (!popup) {
+    window.alert("Çıktı penceresi tarayıcı tarafından engellendi. Açılır pencere izni verip tekrar deneyin.");
+    return;
+  }
+
+  const fullName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+  const phone = student.guardian_phone || student.phone || "—";
+  const schedule = scheduleLabel(student) || "—";
+  const remaining = student.total_remaining_lessons ?? student.remaining_lessons ?? 0;
+
+  popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${escapePrintText(fullName)} - Kursiyer Bilgi Kartı</title><style>
+    @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#10233f;background:#fff}.sheet{width:100%;max-width:186mm;margin:0 auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #1268d6;padding-bottom:14px}.brand{font-size:22px;font-weight:900;color:#1268d6}.sub{font-size:11px;letter-spacing:.12em;color:#64748b;margin-top:4px}.status{border:1px solid #d7e5f7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.name{font-size:28px;margin:22px 0 5px}.number{color:#64748b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.box{border:1px solid #dce5ef;border-radius:10px;padding:11px 12px;min-height:62px}.box span{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:#7b8ca3;text-transform:uppercase;margin-bottom:6px}.box strong{font-size:13px;line-height:1.35}.wide{grid-column:1/-1}.rights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.rights .box{text-align:center}.rights strong{font-size:20px}.foot{margin-top:22px;padding-top:10px;border-top:1px solid #dce5ef;display:flex;justify-content:space-between;font-size:10px;color:#64748b}.sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:44px}.sign div{border-top:1px solid #94a3b8;padding-top:7px;text-align:center;font-size:10px;color:#64748b}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sheet{max-width:none}}
+  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
+  popup.document.close();
 }
 
 function formatDate(value?: string | null) {
@@ -1910,7 +1985,7 @@ function closeLessonAction() {
             className="commandButton ghost"
             onClick={() => router.push("/")}
           >
-            ⌂ Ana Sayfa
+            <Icon name="home" /> Ana Sayfa
           </button>
 
           <button
@@ -1918,7 +1993,7 @@ function closeLessonAction() {
             className="commandButton"
             onClick={() => router.push("/on-kayit")}
           >
-            + Yeni Kayıt
+            <Icon name="plus" /> Yeni Kayıt
           </button>
 
           <button
@@ -1927,7 +2002,7 @@ function closeLessonAction() {
             onClick={openBulkMessage}
             disabled={!selectedStudentIds.length}
           >
-            ✉ Mesaj Merkezi
+            <Icon name="message" /> Mesaj Merkezi
           </button>
 
           <button
@@ -1936,7 +2011,7 @@ function closeLessonAction() {
             onClick={openBulkTransfer}
             disabled={!selectedStudentIds.length}
           >
-            ⇄ Toplu İşlem
+            <Icon name="transfer" /> Toplu İşlem
           </button>
         </div>
       </section>
@@ -2397,7 +2472,7 @@ function closeLessonAction() {
         callStudent(student);
       }}
     >
-      📞 Ara
+      <Icon name="phone" /> Ara
     </button>
 
     <button
@@ -2409,7 +2484,7 @@ function closeLessonAction() {
         whatsappStudent(student);
       }}
     >
-      💬 WhatsApp
+      <Icon name="message" /> WhatsApp
     </button>
 
     <button
@@ -2421,7 +2496,7 @@ function closeLessonAction() {
         openMessageCenter(student);
       }}
     >
-      ✉ Hazır Mesaj
+      <Icon name="message" /> Hazır Mesaj
     </button>
     <button
       type="button"
@@ -2431,7 +2506,18 @@ function closeLessonAction() {
         router.push(`/ogrenciler/${student.id}`);
       }}
     >
-      ◫ Dijital Kurs Dosyası
+      <Icon name="file" /> Dosyayı Aç
+    </button>
+
+    <button
+      type="button"
+      className="studentActionButton print"
+      onClick={(event) => {
+        event.stopPropagation();
+        printStudentCard(student);
+      }}
+    >
+      <Icon name="print" /> A4 Çıktı
     </button>
 
     <button
@@ -2457,7 +2543,7 @@ function closeLessonAction() {
         setActionMessage("");
       }}
     >
-      Ders / Paket Yönet
+      <Icon name="calendar" /> Ders / Paket
     </button>
     {student.status === "active" && (
   <button
@@ -2475,27 +2561,28 @@ function closeLessonAction() {
   >
     {pendingStatusStudentIds.includes(student.id)
       ? "Pasif Talebi Bekliyor"
-      : "Pasife Al"}
+      : <><Icon name="archive" /> Pasife Al</>}
   </button>
 )}
 
-<button
-  type="button"
-  className="studentActionButton delete"
-  disabled={pendingDeleteStudentIds.includes(student.id)}
-  onClick={(event) => {
-    event.stopPropagation();
-
-    setDeleteActionStudent(student);
-    setDeleteReason("");
-    setDeleteDescription("");
-    setDeleteActionMessage("");
-  }}
->
-  {pendingDeleteStudentIds.includes(student.id)
-    ? "Silme Onayı Bekliyor"
-    : "Üye Sil"}
-</button>
+{student.status === "passive" && (
+  <button
+    type="button"
+    className="studentActionButton delete"
+    disabled={pendingDeleteStudentIds.includes(student.id)}
+    onClick={(event) => {
+      event.stopPropagation();
+      setDeleteActionStudent(student);
+      setDeleteReason("");
+      setDeleteDescription("");
+      setDeleteActionMessage("");
+    }}
+  >
+    {pendingDeleteStudentIds.includes(student.id)
+      ? "Silme Onayı Bekliyor"
+      : <><Icon name="trash" /> Kalıcı Sil</>}
+  </button>
+)}
   </div>
 </footer>
             </article>
@@ -3398,7 +3485,7 @@ function closeLessonAction() {
                 onClick={sendMessageToWhatsApp}
                 disabled={!messageText.trim()}
               >
-                💬 WhatsApp&apos;ta Aç
+                <Icon name="message" /> WhatsApp&apos;ta Aç
               </button>
             </div>
           </div>
@@ -4997,6 +5084,64 @@ function closeLessonAction() {
             font-size: 17px;
           }
         }
+
+
+/* SprintOS READY: profesyonel ikon, mobil ve çıktı işlem standardı */
+.commandButton,
+.studentActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.commandButton svg,
+.studentActionButton svg { flex: 0 0 auto; }
+.studentActionButton.print {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+.studentActionButton.delete {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+@media (max-width: 760px) {
+  .studentCommandHeader { padding: 18px 16px !important; border-radius: 18px !important; }
+  .studentCommandHeader h2 { font-size: 22px !important; line-height: 1.15; }
+  .studentCommandHeader p { font-size: 12px !important; margin-top: 7px !important; }
+  .commandActions { display:grid !important; grid-template-columns:1fr 1fr !important; width:100%; gap:8px !important; }
+  .commandButton { min-height:42px !important; padding:8px 10px !important; font-size:12px !important; }
+
+  .summaryGrid {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    overflow:visible !important;
+    gap:8px !important;
+  }
+  .summaryCard { min-width:0 !important; padding:12px !important; border-radius:13px !important; }
+  .summaryCard strong { font-size:22px !important; }
+  .summaryCard small { font-size:9px !important; }
+
+  .studentCard { padding:12px !important; border-radius:15px !important; }
+  .cardHeader { margin-bottom:10px !important; }
+  .mainDetails { gap:7px !important; margin-bottom:9px !important; }
+  .mainDetails div,.dateRow div { padding:8px 9px !important; }
+  .lessonStrip { grid-template-columns:repeat(3,minmax(0,1fr)) !important; overflow:visible !important; gap:6px !important; padding:8px !important; margin-bottom:9px !important; }
+  .lessonStrip div { border-right:0 !important; border-bottom:1px solid #e3e8f0; padding:5px 2px; }
+  .dateRow { gap:7px !important; }
+  .cardFooter { gap:9px !important; margin-top:10px !important; padding-top:10px !important; }
+  .studentActions { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px !important; width:100%; }
+  .studentActionButton { width:100%; min-height:40px !important; padding:8px 8px !important; font-size:11px !important; border-radius:10px !important; }
+  .studentActionButton.call,.studentActionButton.whatsapp { font-weight:800; }
+}
+
+@media (max-width: 420px) {
+  .studentActions { grid-template-columns:1fr 1fr !important; }
+  .mainDetails,.dateRow { grid-template-columns:1fr 1fr !important; }
+}
+
       `}</style>
     </div>
   );
