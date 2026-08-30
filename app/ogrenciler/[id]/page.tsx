@@ -690,8 +690,15 @@ export default async function StudentFile({
           last_name: student.last_name,
           phone: student.phone,
           guardian_phone: student.guardian_phone,
+          email: student.email,
+          guardian_name: student.guardian_name,
+          guardian_email: student.guardian_email,
+          general_note: student.general_note,
           status: student.status,
           branch_id: branchInfo?.id ?? student.branch_id ?? null,
+          branch_name: branchInfo?.name ?? null,
+          group_id: groupInfo?.id ?? null,
+          group_name: groupInfo?.name ?? null,
         }}
         branches={operationBranches}
         groups={operationGroups}
