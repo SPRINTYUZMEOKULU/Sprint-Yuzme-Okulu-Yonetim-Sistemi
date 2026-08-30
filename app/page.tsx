@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ana Sayfa | SprintOS</title>
-    <!-- Tailwind CSS (CDN üzerinden yükleme - Güvenli sürüm) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Font Awesome (İkonlar) -->
@@ -29,10 +29,8 @@
     <style>
         body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
         
-        /* Sidebar Animasyonu */
         .sidebar-transition { transition: transform 0.3s ease-in-out; }
         
-        /* Glassmorphism (Cam Efekti) Kartlar */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -41,13 +39,11 @@
             border-radius: 1rem;
         }
 
-        /* Özel Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Aktif Menü Öğesi */
         .nav-item-active {
             background-color: rgba(14, 165, 233, 0.1);
             color: #0ea5e9;
@@ -68,12 +64,8 @@
 
 <body class="text-slate-800 antialiased h-screen flex overflow-hidden">
 
-    <!-- Mobil Menü Arka Planı (Koyu Overlay) -->
     <div id="mobile-overlay" class="fixed inset-0 bg-navy-900/50 z-40 hidden lg:hidden transition-opacity duration-300 opacity-0" onclick="toggleMenu()"></div>
 
-    <!-- ==========================================
-         SOL MENÜ (SIDEBAR) 
-    =========================================== -->
     <aside id="sidebar" class="sidebar-transition fixed lg:static inset-y-0 left-0 z-50 w-72 bg-navy-900 text-white flex flex-col h-full overflow-y-auto transform -translate-x-full lg:translate-x-0">
         
         <!-- Logo -->
@@ -114,7 +106,6 @@
                 </div>
             </div>
 
-            <!-- Grup: EĞİTİM -->
             <div>
                 <p class="px-3 text-[11px] font-bold text-white/40 uppercase tracking-wider mb-3">Eğitim</p>
                 <div class="space-y-1">
@@ -137,7 +128,6 @@
                 </div>
             </div>
             
-             <!-- Grup: FİNANS & YÖNETİM -->
              <div>
                 <p class="px-3 text-[11px] font-bold text-white/40 uppercase tracking-wider mb-3">Finans & Yönetim</p>
                 <div class="space-y-1">
@@ -159,7 +149,6 @@
             </div>
         </nav>
 
-        <!-- Kullanıcı Profili -->
         <div class="p-4 border-t border-white/10 sticky bottom-0 bg-navy-900">
             <div class="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold shadow-inner shrink-0">
@@ -176,9 +165,6 @@
         </div>
     </aside>
 
-    <!-- ==========================================
-         ANA İÇERİK ALANI 
-    =========================================== -->
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50 relative">
         
         <!-- Üst Bar (Topbar) - Mobil -->
@@ -190,16 +176,13 @@
                 <div class="font-bold text-navy-900 text-lg">SprintOS</div>
             </div>
             
-            <!-- Mobil Güvenli Çıkış Butonu (Acil Durumlar İçin) -->
             <button class="flex items-center justify-center gap-2 bg-red-600 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-lg shadow-red-600/30">
                 <i class="fa-solid fa-arrow-right-from-bracket"></i> Çıkış
             </button>
         </header>
 
-        <!-- Kaydırılabilir İçerik Alanı -->
         <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-8">
             
-            <!-- Üst Bar (Topbar) - Masaüstü -->
             <div class="hidden lg:flex items-center justify-between mb-8">
                 <!-- Global Arama -->
                 <div class="relative w-[400px]">
@@ -210,7 +193,6 @@
                     </div>
                 </div>
 
-                <!-- Aksiyonlar ve Tarih -->
                 <div class="flex items-center gap-5">
                     <div class="flex flex-col text-right">
                         <span class="text-sm font-bold text-slate-700">30 Ağustos Pazar</span>
@@ -235,7 +217,6 @@
                 </div>
             </div>
 
-            <!-- Karşılama ve Hızlı Aksiyonlar -->
             <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-2">
                 <div>
                     <p class="text-brand-600 font-extrabold text-[11px] tracking-widest uppercase mb-2 flex items-center gap-2">
@@ -257,7 +238,6 @@
             <!-- İstatistik Kartları Grid (4'lü) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
                 
-                <!-- Kart 1 -->
                 <div class="glass-card p-5 hover:-translate-y-1 transition-all cursor-pointer group hover:shadow-lg hover:shadow-blue-500/10">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm">
@@ -271,7 +251,6 @@
                     </div>
                 </div>
 
-                <!-- Kart 2 -->
                 <div class="glass-card p-5 hover:-translate-y-1 transition-all cursor-pointer group hover:shadow-lg hover:shadow-orange-500/10">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-12 h-12 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-xl group-hover:bg-orange-500 group-hover:text-white transition-colors shadow-sm">
@@ -285,7 +264,6 @@
                     </div>
                 </div>
 
-                <!-- Kart 3 -->
                 <div class="glass-card p-5 hover:-translate-y-1 transition-all cursor-pointer group hover:shadow-lg hover:shadow-red-500/10">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center text-xl group-hover:bg-red-500 group-hover:text-white transition-colors shadow-sm">
@@ -299,7 +277,6 @@
                     </div>
                 </div>
 
-                <!-- Kart 4 -->
                 <div class="glass-card p-5 hover:-translate-y-1 transition-all cursor-pointer group hover:shadow-lg hover:shadow-purple-500/10">
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-sm">
@@ -315,10 +292,8 @@
 
             </div>
 
-            <!-- Alt Modüller Grid (Takvim, Uyarılar, Şubeler) -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 
-                <!-- Sol Kolon (Takvim & Hızlı Erişim) -->
                 <div class="lg:col-span-2 space-y-6 lg:space-y-8">
                     
                     <!-- Takvim (Günlük Operasyon) -->
@@ -341,21 +316,18 @@
                         </div>
                     </div>
 
-                    <!-- Hızlı Erişim Butonları -->
                     <div class="glass-card p-6">
                         <div class="mb-6">
                             <p class="text-[10px] font-extrabold text-slate-400 tracking-widest uppercase mb-1">Hızlı Erişim</p>
                             <h3 class="text-xl font-extrabold text-navy-900">Modüllere Tek Tıkla Ulaşın</h3>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4">
-                            <!-- Buton 1 -->
                             <a href="#" class="flex flex-col items-center p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-400 hover:shadow-md hover:shadow-brand-500/10 transition-all group text-center">
                                 <div class="w-12 h-12 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center text-xl mb-3 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
                                     <i class="fa-solid fa-plus"></i>
                                 </div>
                                 <span class="text-sm font-bold text-slate-700 group-hover:text-brand-700">Yeni Ön Kayıt</span>
                             </a>
-                            <!-- Buton 2 (Badge'li) -->
                             <a href="#" class="flex flex-col items-center p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-400 hover:shadow-md hover:shadow-brand-500/10 transition-all group text-center relative">
                                 <div class="absolute top-3 right-3 w-6 h-6 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xs font-extrabold border-2 border-white">12</div>
                                 <div class="w-12 h-12 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center text-xl mb-3 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
@@ -363,14 +335,12 @@
                                 </div>
                                 <span class="text-sm font-bold text-slate-700 group-hover:text-brand-700">Ön Kayıtlar</span>
                             </a>
-                            <!-- Buton 3 -->
                             <a href="#" class="flex flex-col items-center p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-400 hover:shadow-md hover:shadow-brand-500/10 transition-all group text-center">
                                 <div class="w-12 h-12 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center text-xl mb-3 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
                                     <i class="fa-solid fa-child-reaching"></i>
                                 </div>
                                 <span class="text-sm font-bold text-slate-700 group-hover:text-brand-700">Öğrenciler</span>
                             </a>
-                             <!-- Buton 4 -->
                              <a href="#" class="flex flex-col items-center p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-400 hover:shadow-md hover:shadow-brand-500/10 transition-all group text-center">
                                 <div class="w-12 h-12 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center text-xl mb-3 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
                                     <i class="fa-solid fa-building"></i>
@@ -381,10 +351,8 @@
                     </div>
                 </div>
 
-                <!-- Sağ Kolon (Uyarılar & Şubeler) -->
                 <div class="space-y-6 lg:space-y-8">
                     
-                    <!-- Akıllı Uyarılar -->
                     <div class="glass-card flex flex-col h-[400px]">
                         <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-white/40">
                             <div>
@@ -394,7 +362,6 @@
                         </div>
                         <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
                             
-                            <!-- Doğum Günü Uyarısı (WhatsApp Entegrasyonlu) -->
                             <div class="bg-pink-50 border border-pink-200 rounded-xl p-3 flex gap-3 items-start relative group hover:border-pink-300 transition-all cursor-pointer shadow-sm">
                                 <div class="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 shrink-0 text-lg">
                                     <i class="fa-solid fa-cake-candles"></i>
@@ -410,7 +377,6 @@
                                 </div>
                             </div>
 
-                            <!-- Acil Uyarı (Açık Uyarılara Yönlendirme) -->
                             <div class="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-3 items-start relative group hover:border-red-300 transition-all cursor-pointer shadow-sm">
                                 <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0 text-lg">
                                     <i class="fa-regular fa-bell"></i>
@@ -422,7 +388,6 @@
                                 <i class="fa-solid fa-chevron-right absolute right-4 top-1/2 -translate-y-1/2 text-red-300 text-sm group-hover:translate-x-1 transition-transform"></i>
                             </div>
 
-                             <!-- Kasa Uyarısı -->
                              <div class="bg-purple-50 border border-purple-200 rounded-xl p-3 flex gap-3 items-start relative group hover:border-purple-300 transition-all cursor-pointer shadow-sm">
                                 <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0 text-lg">
                                     <i class="fa-solid fa-wallet"></i>
@@ -437,34 +402,29 @@
                         </div>
                     </div>
 
-                    <!-- Şube Durumları Listesi -->
                     <div class="glass-card p-6">
                         <div class="mb-5">
                             <h3 class="text-lg font-extrabold text-navy-900">Aktif Lokasyonlar</h3>
                         </div>
                         <div class="space-y-4">
-                            <!-- Lokasyon 1 -->
                             <div class="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors shadow-sm">
                                 <div class="flex items-center gap-3">
                                     <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse"></span>
                                     <span class="font-bold text-sm text-slate-700">Konyaaltı Öğretmenevi</span>
                                 </div>
                             </div>
-                            <!-- Lokasyon 2 -->
                             <div class="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors shadow-sm">
                                 <div class="flex items-center gap-3">
                                     <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse"></span>
                                     <span class="font-bold text-sm text-slate-700">Meltem Yüzme Havuzu</span>
                                 </div>
                             </div>
-                             <!-- Lokasyon 3 -->
                              <div class="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors shadow-sm">
                                 <div class="flex items-center gap-3">
                                     <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse"></span>
                                     <span class="font-bold text-sm text-slate-700">Süleyman Erol Olimpik</span>
                                 </div>
                             </div>
-                             <!-- Lokasyon 4 -->
                              <div class="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors shadow-sm">
                                 <div class="flex items-center gap-3">
                                     <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse"></span>
