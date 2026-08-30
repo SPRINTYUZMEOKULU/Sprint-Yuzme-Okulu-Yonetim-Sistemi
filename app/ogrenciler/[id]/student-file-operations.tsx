@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { bulkTransferStudents } from "../bulk-actions";
+import { updateStudentOperationalDetails } from "./actions";
 
 type BranchOption = {
   id: string;
@@ -32,8 +33,15 @@ type Props = {
     last_name?: string | null;
     phone?: string | null;
     guardian_phone?: string | null;
+    email?: string | null;
+    guardian_name?: string | null;
+    guardian_email?: string | null;
+    general_note?: string | null;
     status?: string | null;
     branch_id?: string | null;
+    branch_name?: string | null;
+    group_id?: string | null;
+    group_name?: string | null;
   };
   branches: BranchOption[];
   groups: GroupOption[];
@@ -71,11 +79,15 @@ export default function StudentFileOperations({
   const router = useRouter();
 
   const [panel, setPanel] = useState<
-    "transfer" | "compensation" | "message" | "delete" | null
+    "edit" | "transfer" | "compensation" | "message" | "delete" | null
   >(null);
 
-  const [targetBranchId, setTargetBranchId] = useState("");
-  const [targetGroupId, setTargetGroupId] = useState("");
+  const [targetBranchId, setTargetBranchId] = useState(
+    student.branch_id || ""
+  );
+  const [targetGroupId, setTargetGroupId] = useState(
+    student.group_id || ""
+  );
   const [targetScheduleIds, setTargetScheduleIds] = useState<string[]>([]);
   const [effectiveDate, setEffectiveDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -90,6 +102,25 @@ export default function StudentFileOperations({
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteReason, setDeleteReason] = useState("");
+
+  const [editPhone, setEditPhone] = useState(student.phone || "");
+  const [editEmail, setEditEmail] = useState(student.email || "");
+  const [editGuardianName, setEditGuardianName] = useState(
+    student.guardian_name || ""
+  );
+  const [editGuardianPhone, setEditGuardianPhone] = useState(
+    student.guardian_phone || ""
+  );
+  const [editGuardianEmail, setEditGuardianEmail] = useState(
+    student.guardian_email || ""
+  );
+  const [editGeneralNote, setEditGeneralNote] = useState(
+    student.general_note || ""
+  );
+  const [editProgramToo, setEditProgramToo] = useState(false);
+  const [workingAction, setWorkingAction] = useState<
+    "edit" | "transfer" | "compensation" | "delete" | null
+  >(null);
 
   const targetGroups = useMemo(
     () =>
@@ -140,6 +171,69 @@ export default function StudentFileOperations({
     setPanel("message");
   }
 
+  async function submitProfessionalEdit() {
+    try {
+      setSubmitting(true);
+      setWorkingAction("edit");
+      setResult("");
+
+      const profileResult = await updateStudentOperationalDetails({
+        studentId: student.id,
+        phone: editPhone,
+        email: editEmail,
+        guardianName: editGuardianName,
+        guardianPhone: editGuardianPhone,
+        guardianEmail: editGuardianEmail,
+        generalNote: editGeneralNote,
+      });
+
+      if (!profileResult.ok) {
+        setResult(profileResult.message);
+        return;
+      }
+
+      if (editProgramToo) {
+        if (
+          !targetBranchId ||
+          !targetGroupId ||
+          !targetScheduleIds.length
+        ) {
+          setResult(
+            "İletişim bilgileri kaydedildi. Program değişikliği için şube, grup ve en az bir ders seansı seçilmelidir."
+          );
+          return;
+        }
+
+        const transferResult = await bulkTransferStudents({
+          studentIds: [student.id],
+          targetBranchId,
+          targetGroupId,
+          targetScheduleIds,
+          effectiveDate,
+          prepareMessages: true,
+          updateAttendancePlans: true,
+          logHistory: true,
+        });
+
+        setResult(
+          transferResult.transferredCount
+            ? "✓ Bilgiler ve kurs programı başarıyla güncellendi."
+            : transferResult.message
+        );
+      } else {
+        setResult("✓ Kursiyer bilgileri başarıyla güncellendi.");
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      setResult("Düzenleme işlemi sırasında hata oluştu.");
+    } finally {
+      setSubmitting(false);
+      setWorkingAction(null);
+    }
+  }
+
   async function submitTransfer() {
     if (
       !targetBranchId ||
@@ -152,6 +246,7 @@ export default function StudentFileOperations({
 
     try {
       setSubmitting(true);
+      setWorkingAction("transfer");
       setResult("");
 
       const response = await bulkTransferStudents({
@@ -175,6 +270,7 @@ export default function StudentFileOperations({
       setResult("Aktarım işlemi sırasında hata oluştu.");
     } finally {
       setSubmitting(false);
+      setWorkingAction(null);
     }
   }
 
@@ -193,6 +289,7 @@ export default function StudentFileOperations({
 
     try {
       setSubmitting(true);
+      setWorkingAction("compensation");
       setResult("");
 
       const response = await fetch("/api/lesson-adjustments", {
@@ -231,6 +328,7 @@ export default function StudentFileOperations({
       setResult("Telafi işlemi sırasında bağlantı hatası oluştu.");
     } finally {
       setSubmitting(false);
+      setWorkingAction(null);
     }
   }
 
@@ -242,6 +340,7 @@ export default function StudentFileOperations({
 
     try {
       setSubmitting(true);
+      setWorkingAction("delete");
       setResult("");
 
       const response = await fetch("/api/student-status-requests", {
@@ -280,6 +379,7 @@ export default function StudentFileOperations({
       setResult("Silme talebi sırasında bağlantı hatası oluştu.");
     } finally {
       setSubmitting(false);
+      setWorkingAction(null);
     }
   }
 
@@ -305,8 +405,15 @@ export default function StudentFileOperations({
         </div>
 
         <div className="fileCommandActions">
-          <button type="button" onClick={() => jumpTo("duzenle")}>
-            ✎ Bilgileri Düzenle
+          <button
+            type="button"
+            className="editMain"
+            onClick={() => {
+              setResult("");
+              setPanel("edit");
+            }}
+          >
+            ✎ Profesyonel Düzenle
           </button>
 
           <button
@@ -367,7 +474,9 @@ export default function StudentFileOperations({
             <header>
               <div>
                 <span>
-                  {panel === "transfer"
+                  {panel === "edit"
+                    ? "PROFESYONEL KURSİYER DÜZENLEME"
+                    : panel === "transfer"
                     ? "PROGRAM DÜZENLEME"
                     : panel === "compensation"
                     ? "BİREYSEL TELAFİ"
@@ -383,6 +492,235 @@ export default function StudentFileOperations({
             </header>
 
             <div className="fileOpsBody">
+              {panel === "edit" && (
+                <>
+                  <div className="proInfo premiumEditInfo">
+                    <strong>Tek ekrandan kursiyer düzenleme</strong>
+                    <p>
+                      İletişim ve veli bilgilerini güncelleyin. İsterseniz aynı
+                      işlemde şube, grup, gün ve saat programını da değiştirin.
+                      Program değişikliğinde geçmiş yoklamalar korunur.
+                    </p>
+                  </div>
+
+                  <div className="editSectionTitle">
+                    <span>01</span>
+                    <div>
+                      <strong>İletişim ve Veli Bilgileri</strong>
+                      <small>Güncel kursiyer iletişim kayıtları</small>
+                    </div>
+                  </div>
+
+                  <div className="editGrid">
+                    <label>
+                      <span>Öğrenci Telefonu</span>
+                      <input
+                        value={editPhone}
+                        onChange={(event) => setEditPhone(event.target.value)}
+                        placeholder="05xx xxx xx xx"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Öğrenci E-posta</span>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(event) => setEditEmail(event.target.value)}
+                        placeholder="ornek@mail.com"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Veli Adı Soyadı</span>
+                      <input
+                        value={editGuardianName}
+                        onChange={(event) =>
+                          setEditGuardianName(event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      <span>Veli Telefonu</span>
+                      <input
+                        value={editGuardianPhone}
+                        onChange={(event) =>
+                          setEditGuardianPhone(event.target.value)
+                        }
+                        placeholder="05xx xxx xx xx"
+                      />
+                    </label>
+
+                    <label className="full">
+                      <span>Veli E-posta</span>
+                      <input
+                        type="email"
+                        value={editGuardianEmail}
+                        onChange={(event) =>
+                          setEditGuardianEmail(event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="full">
+                      <span>Genel Yönetim Notu</span>
+                      <textarea
+                        rows={4}
+                        value={editGeneralNote}
+                        onChange={(event) =>
+                          setEditGeneralNote(event.target.value)
+                        }
+                        placeholder="Kursiyer hakkında yönetim notu..."
+                      />
+                    </label>
+                  </div>
+
+                  <div className="editSectionTitle programTitle">
+                    <span>02</span>
+                    <div>
+                      <strong>Kurs / Grup / Saat Düzenleme</strong>
+                      <small>
+                        Mevcut: {student.branch_name || "Şube yok"} ·{" "}
+                        {student.group_name || "Grup yok"}
+                      </small>
+                    </div>
+                  </div>
+
+                  <label className="programToggle">
+                    <input
+                      type="checkbox"
+                      checked={editProgramToo}
+                      onChange={(event) =>
+                        setEditProgramToo(event.target.checked)
+                      }
+                    />
+                    <div>
+                      <strong>Program bilgilerini de değiştir</strong>
+                      <span>
+                        Şube, grup, gün ve saat alanlarını bu işlemde güncelle.
+                      </span>
+                    </div>
+                  </label>
+
+                  {editProgramToo && (
+                    <div className="programEditBox">
+                      <label>
+                        <span>Şube</span>
+                        <select
+                          value={targetBranchId}
+                          onChange={(event) => {
+                            setTargetBranchId(event.target.value);
+                            setTargetGroupId("");
+                            setTargetScheduleIds([]);
+                          }}
+                        >
+                          <option value="">Şube seçin</option>
+                          {branches.map((branch) => (
+                            <option key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label>
+                        <span>Grup</span>
+                        <select
+                          value={targetGroupId}
+                          onChange={(event) => {
+                            setTargetGroupId(event.target.value);
+                            setTargetScheduleIds([]);
+                          }}
+                        >
+                          <option value="">Grup seçin</option>
+                          {targetGroups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                              {group.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="scheduleChoices">
+                        <span>Ders Günleri ve Saatleri</span>
+                        {!targetGroupId ? (
+                          <p className="emptySchedule">
+                            Önce şube ve grup seçin.
+                          </p>
+                        ) : targetSchedules.length ? (
+                          targetSchedules.map((schedule) => {
+                            const checked = targetScheduleIds.includes(
+                              schedule.id
+                            );
+
+                            return (
+                              <label key={schedule.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    setTargetScheduleIds((current) =>
+                                      checked
+                                        ? current.filter(
+                                            (id) => id !== schedule.id
+                                          )
+                                        : [...current, schedule.id]
+                                    )
+                                  }
+                                />
+                                <strong>
+                                  {DAYS[Number(schedule.weekday)] || "Ders"}
+                                </strong>
+                                <span>
+                                  {shortTime(schedule.start_time)}–
+                                  {shortTime(schedule.end_time)}
+                                </span>
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <p className="emptySchedule">
+                            Bu grup için aktif ders programı bulunamadı.
+                          </p>
+                        )}
+                      </div>
+
+                      <label>
+                        <span>Yeni Program Başlangıç Tarihi</span>
+                        <input
+                          type="date"
+                          value={effectiveDate}
+                          onChange={(event) =>
+                            setEffectiveDate(event.target.value)
+                          }
+                        />
+                      </label>
+
+                      <div className="proInfo">
+                        <strong>Güvenli program güncelleme</strong>
+                        <p>
+                          Kullanılmış dersler ve geçmiş yoklamalar değişmez.
+                          Kalan dersler yeni programa taşınır. Yeni planlanan
+                          bitiş tarihi seçilen günlere göre otomatik hesaplanır.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="openClassicForm"
+                    onClick={() => {
+                      setPanel(null);
+                      setTimeout(() => jumpTo("duzenle"), 80);
+                    }}
+                  >
+                    Ayrıntılı sağlık / acil durum alanlarını aç ↓
+                  </button>
+                </>
+              )}
+
               {panel === "transfer" && (
                 <>
                   <div className="proInfo">
@@ -589,26 +927,49 @@ export default function StudentFileOperations({
                 Vazgeç
               </button>
 
+              {panel === "edit" && (
+                <button
+                  type="button"
+                  className={`primary ${
+                    workingAction === "edit" ? "working" : ""
+                  }`}
+                  disabled={submitting}
+                  onClick={submitProfessionalEdit}
+                >
+                  {workingAction === "edit"
+                    ? "● Değişiklikler Kaydediliyor..."
+                    : editProgramToo
+                    ? "✓ Bilgileri ve Programı Kaydet"
+                    : "✓ Bilgileri Kaydet"}
+                </button>
+              )}
+
               {panel === "transfer" && (
                 <button
                   type="button"
-                  className="primary"
+                  className={`primary ${
+                    workingAction === "transfer" ? "working" : ""
+                  }`}
                   disabled={submitting}
                   onClick={submitTransfer}
                 >
-                  {submitting ? "Kaydediliyor..." : "✓ Değişikliği Uygula"}
+                  {workingAction === "transfer"
+                    ? "● Aktarım Yapılıyor..."
+                    : "✓ Değişikliği Uygula"}
                 </button>
               )}
 
               {panel === "compensation" && (
                 <button
                   type="button"
-                  className="primary green"
+                  className={`primary green ${
+                    workingAction === "compensation" ? "working" : ""
+                  }`}
                   disabled={submitting}
                   onClick={submitCompensation}
                 >
-                  {submitting
-                    ? "Gönderiliyor..."
+                  {workingAction === "compensation"
+                    ? "● Talep Gönderiliyor..."
                     : "Yönetici Onayına Gönder"}
                 </button>
               )}
@@ -627,12 +988,14 @@ export default function StudentFileOperations({
               {panel === "delete" && (
                 <button
                   type="button"
-                  className="primary danger"
+                  className={`primary danger ${
+                    workingAction === "delete" ? "working" : ""
+                  }`}
                   disabled={submitting}
                   onClick={submitDeleteRequest}
                 >
-                  {submitting
-                    ? "Gönderiliyor..."
+                  {workingAction === "delete"
+                    ? "● Onaya Gönderiliyor..."
                     : "Yönetici Onayına Gönder"}
                 </button>
               )}
@@ -699,6 +1062,184 @@ export default function StudentFileOperations({
           color: #1d4369;
           font-weight: 850;
           cursor: pointer;
+        }
+
+        .fileCommandActions .editMain {
+          background: linear-gradient(180deg, #0b5db2, #084c93);
+          border-color: #0b5db2;
+          color: #fff;
+          box-shadow: 0 7px 16px rgba(11, 93, 178, .18);
+        }
+
+        .editSectionTitle {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin: 20px 0 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #dce5ef;
+        }
+
+        .editSectionTitle > span {
+          display: grid;
+          place-items: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          background: #0d5da9;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .editSectionTitle strong,
+        .editSectionTitle small {
+          display: block;
+        }
+
+        .editSectionTitle strong {
+          color: #14395e;
+          font-size: 14px;
+        }
+
+        .editSectionTitle small {
+          margin-top: 2px;
+          color: #75879a;
+          font-size: 10px;
+        }
+
+        .programTitle > span {
+          background: #f29218;
+        }
+
+        .editGrid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .editGrid label {
+          display: grid;
+          gap: 6px;
+        }
+
+        .editGrid label.full {
+          grid-column: 1 / -1;
+        }
+
+        .editGrid label > span,
+        .programEditBox label > span {
+          color: #526a83;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .programToggle {
+          display: flex !important;
+          grid-template-columns: none !important;
+          align-items: flex-start;
+          gap: 10px !important;
+          margin-bottom: 14px !important;
+          padding: 13px 14px;
+          border: 1px solid #d4e0ec;
+          border-radius: 13px;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .programToggle input {
+          width: 18px !important;
+          height: 18px;
+          margin-top: 2px;
+          accent-color: #0d69c7;
+        }
+
+        .programToggle strong,
+        .programToggle span {
+          display: block;
+        }
+
+        .programToggle strong {
+          color: #163e64;
+          font-size: 13px;
+        }
+
+        .programToggle span {
+          margin-top: 3px;
+          color: #72869a;
+          font-size: 11px;
+        }
+
+        .programEditBox {
+          margin-bottom: 14px;
+          padding: 14px;
+          border: 1px solid #cfe0f1;
+          border-radius: 14px;
+          background: #f8fbfe;
+        }
+
+        .programEditBox > label {
+          display: grid;
+          gap: 6px;
+          margin-bottom: 12px;
+        }
+
+        .emptySchedule {
+          margin: 0;
+          padding: 11px 12px;
+          border-radius: 10px;
+          background: #eef3f8;
+          color: #6d8093;
+          font-size: 11px;
+        }
+
+        .openClassicForm {
+          width: 100%;
+          border: 1px dashed #aebfd0;
+          border-radius: 11px;
+          padding: 10px 12px;
+          background: #fff;
+          color: #476681;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .premiumEditInfo {
+          background:
+            linear-gradient(135deg, #edf6ff 0%, #f7fbff 100%);
+        }
+
+        .working {
+          position: relative;
+          overflow: hidden;
+          cursor: wait !important;
+          box-shadow: 0 0 0 3px rgba(18,104,214,.12),
+            0 10px 24px rgba(18,104,214,.22) !important;
+          animation: fileOperationPulse 1s ease-in-out infinite;
+        }
+
+        .working::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            100deg,
+            transparent 20%,
+            rgba(255,255,255,.32) 45%,
+            transparent 70%
+          );
+          transform: translateX(-120%);
+          animation: fileOperationSweep 1.05s linear infinite;
+          pointer-events: none;
+        }
+
+        @keyframes fileOperationPulse {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.08); }
+        }
+
+        @keyframes fileOperationSweep {
+          to { transform: translateX(120%); }
         }
 
         .fileCommandActions .blue {
@@ -930,6 +1471,14 @@ export default function StudentFileOperations({
 
           .fileCommandActions {
             justify-content: flex-start;
+          }
+
+          .editGrid {
+            grid-template-columns: 1fr;
+          }
+
+          .editGrid label.full {
+            grid-column: auto;
           }
 
           .fileOpsPanel {
