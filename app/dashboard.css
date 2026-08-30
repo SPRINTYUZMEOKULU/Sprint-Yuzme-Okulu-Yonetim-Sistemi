@@ -217,6 +217,27 @@ body {
   backdrop-filter: blur(18px);
 }
 
+/* GlobalSearch kendi iÃ§ yapÄ±sÄ± deÄŸiÅŸse bile Ã¼st barda Ã¶lÃ§Ã¼ler korunur. */
+.proTopbar > :first-child {
+  width: min(100%, 680px);
+  min-width: 0;
+}
+.proTopbar > :first-child svg,
+.proTopbar input + svg,
+.proTopbar form svg {
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  flex: 0 0 20px !important;
+  stroke-width: 1.8;
+}
+.proTopbar input {
+  width: 100%;
+  min-width: 0;
+  font-size: 14px;
+}
+
 .topActions { display: flex; align-items: center; gap: 18px; }
 .topActions > a {
   position: relative;
@@ -409,7 +430,43 @@ body {
   .dashboardMenuToggle:checked ~ .proSidebar .proUser > a { display: block; }
   .dashboardMenuToggle:checked ~ .proSidebar .proNavItem { justify-content: flex-start; padding: 0 13px; }
   .dashboardMenuToggle:checked ~ .proMain { margin-left: 0; }
-  .proTopbar { padding-left: 72px; padding-right: 18px; }
+  .proTopbar {
+    min-height: 72px;
+    padding: 13px 118px 13px 72px;
+    gap: 10px;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 8px 24px rgba(16,50,92,.08);
+  }
+  .proTopbar > :first-child {
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    display: flex !important;
+    align-items: center !important;
+    overflow: visible;
+    border: 1px solid #dbe5f2;
+    border-radius: 15px;
+    background: #f7faff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  .proTopbar > :first-child svg {
+    position: static !important;
+    margin: 0 10px 0 14px !important;
+    transform: none !important;
+  }
+  .proTopbar input {
+    height: 44px !important;
+    padding: 0 10px 0 0 !important;
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    color: var(--sprint-text);
+    font-size: 13px !important;
+  }
+  .proTopbar input::placeholder { color: #91a0b4; opacity: 1; }
+  .proTopbar kbd { display: none !important; }
+  .topActions { position: absolute; right: 118px; }
+  .topActions > a { width: 42px; height: 42px; }
   .dashboardContent { padding: 22px 18px; }
   .dashboardGrid { grid-template-columns: 1fr; }
   .quickCard { grid-column: auto; }
@@ -417,6 +474,8 @@ body {
 }
 
 @media (max-width: 640px) {
+  .proTopbar { padding-right: 116px; }
+  .topActions { display: none; }
   .heroRow { padding: 24px 20px; align-items: flex-start; flex-direction: column; }
   .heroActions, .actionPrimary, .actionSecondary { width: 100%; }
   .actionPrimary, .actionSecondary { justify-content: center; }
