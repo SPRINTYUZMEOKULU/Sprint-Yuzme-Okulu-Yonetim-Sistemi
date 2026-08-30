@@ -119,6 +119,12 @@ export const Icons = {
       <path d="M9 4c.7-.7.7-1.3 0-2M12 3c.7-.7.7-1.3 0-2M15 4c.7-.7.7-1.3 0-2" />
     </IconBase>
   ),
+  search: (props: IconProps) => (
+    <IconBase {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </IconBase>
+  ),
   arrow: (props: IconProps) => (
     <IconBase {...props}>
       <path d="M5 12h14M13 6l6 6-6 6" />
