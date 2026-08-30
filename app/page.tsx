@@ -819,13 +819,15 @@ export default async function HomePage() {
             right: 12px;
             z-index: 999999;
 
-            width: 46px;
+            width: auto;
+            min-width: 88px;
             height: 46px;
-            padding: 0;
+            padding: 0 14px;
 
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 8px;
 
             border-radius: 14px;
             border: 2px solid rgba(255,255,255,0.95);
@@ -843,7 +845,11 @@ export default async function HomePage() {
           }
 
           .mobileSecureLogout span {
-            display: none;
+            display: inline;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 850;
+            letter-spacing: 0.1px;
           }
         }
       `}</style>
