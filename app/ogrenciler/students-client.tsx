@@ -1734,9 +1734,7 @@ function closeLessonAction() {
 
       setBulkResult(result.message);
 
-      if ("preparedMessages" in result && result.preparedMessages) {
-        setBulkPreparedMessages(result.preparedMessages);
-      }
+      setBulkPreparedMessages(result.preparedMessages);
 
       router.refresh();
     } catch (error) {
