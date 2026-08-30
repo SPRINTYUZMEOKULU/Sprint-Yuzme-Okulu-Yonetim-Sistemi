@@ -193,6 +193,51 @@ function openWhatsAppMessage(phone: string | null, message: string) {
   );
 }
 
+function openBulkWhatsAppMessages(
+  messages: Array<{
+    recipient: string | null;
+    message: string;
+  }>
+) {
+  const sendable = messages
+    .map((item) => ({
+      phone: item.recipient ? whatsappPhone(item.recipient) : "",
+      message: item.message,
+    }))
+    .filter((item) => Boolean(item.phone));
+
+  if (!sendable.length) {
+    window.alert("WhatsApp gönderimi için geçerli telefon numarası bulunamadı.");
+    return;
+  }
+
+  // WhatsApp Web / wa.me güvenlik gereği mesajı sessizce otomatik göndermez.
+  // Tek tuşla tüm alıcı pencerelerini hazırlamaya çalışıyoruz.
+  // Tarayıcı çoklu pencere açmayı engellerse kullanıcı pop-up izni vermelidir.
+  const opened: Window[] = [];
+
+  for (const item of sendable) {
+    const popup = window.open("about:blank", "_blank");
+
+    if (!popup) {
+      break;
+    }
+
+    opened.push(popup);
+
+    popup.opener = null;
+    popup.location.href =
+      `https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`;
+  }
+
+  if (opened.length < sendable.length) {
+    window.alert(
+      `${opened.length}/${sendable.length} WhatsApp penceresi hazırlandı. ` +
+        `Tarayıcı kalan pencereleri engelledi. Bu site için açılır pencere izni verirseniz tek tuşla tüm alıcıları hazırlayabilirsiniz.`
+    );
+  }
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—";
 
@@ -684,6 +729,8 @@ export default function StudentsClient({
       message: string;
     }>
   >([]);
+
+  const [bulkWhatsappOpening, setBulkWhatsappOpening] = useState(false);
 
  
   const [actionStudent, setActionStudent] =
@@ -1553,6 +1600,21 @@ function closeLessonAction() {
   }
 
 
+
+  async function handleOpenAllWhatsApp() {
+    if (!bulkPreparedMessages.length || bulkWhatsappOpening) return;
+
+    setBulkWhatsappOpening(true);
+
+    try {
+      openBulkWhatsAppMessages(bulkPreparedMessages);
+
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    } finally {
+      setBulkWhatsappOpening(false);
+    }
+  }
+
   function callStudent(student: StudentListItem) {
     const phone = contactPhone(student);
 
@@ -1819,14 +1881,18 @@ function closeLessonAction() {
           <strong>{counts.preRegistration}</strong>
         </button>
 
-        <div
-          className="summaryCard passiveSummaryCard"
-          title="Pasif öğrenciler günlük operasyon ekranında varsayılan olarak gösterilmez."
+        <button
+          type="button"
+          className={`summaryCard passiveSummaryCard ${
+            status === "passive" ? "selected" : ""
+          }`}
+          onClick={() => setStatus("passive")}
+          title="Pasif öğrencileri görüntüle"
         >
-          <span>Pasif Arşiv</span>
+          <span>Pasif Öğrenci</span>
           <strong>{counts.passive}</strong>
-          <small>Günlük kullanım dışı</small>
-        </div>
+          <small>Görüntülemek için tıklayın</small>
+        </button>
 
         <button
           className={`summaryCard ${
@@ -2502,7 +2568,7 @@ function closeLessonAction() {
                 </button>
                 <button
                   type="button"
-                  className="primary"
+                  className={`primary ${bulkSubmitting ? "isWorking" : ""}`}
                   onClick={submitBulkTransfer}
                   disabled={bulkSubmitting}
                 >
@@ -2589,47 +2655,78 @@ function closeLessonAction() {
                   <div className="whatsappQueue">
                     <div className="whatsappQueueHead">
                       <div>
-                        <strong>WhatsApp Gönderim Kuyruğu</strong>
+                        <strong>WhatsApp Gönderim Kontrolü</strong>
                         <span>
-                          Mesajlar kaydedildi. Her veli için WhatsApp gönderimini
-                          kontrollü olarak açabilirsiniz.
+                          Alıcı listesini kontrol edin. Telefonu olmayanlar gönderime
+                          dahil edilmez.
                         </span>
                       </div>
 
-                      {bulkPreparedMessages[0]?.recipient && (
-                        <button
-                          type="button"
-                          className="sendFirstWhatsapp"
-                          onClick={() =>
-                            openWhatsAppMessage(
-                              bulkPreparedMessages[0].recipient,
-                              bulkPreparedMessages[0].message
-                            )
-                          }
-                        >
-                          WhatsApp'ta İlk Mesajı Aç ↗
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="sendAllWhatsapp"
+                        onClick={handleOpenAllWhatsApp}
+                        disabled={bulkWhatsappOpening}
+                        className={`sendAllWhatsapp ${
+                          bulkWhatsappOpening ? "isWorking" : ""
+                        }`}
+                      >
+                        {bulkWhatsappOpening
+                          ? "● WhatsApp Mesajları Hazırlanıyor..."
+                          : "Tüm WhatsApp Mesajlarını Aç ↗"}
+                      </button>
                     </div>
 
-                    <div className="whatsappQueueList">
+                    <div className="whatsappQueueSummary">
+                      <strong>
+                        {
+                          bulkPreparedMessages.filter((item) =>
+                            Boolean(item.recipient)
+                          ).length
+                        }
+                      </strong>
+                      <span>gönderilebilir</span>
+                      <i>•</i>
+                      <strong>
+                        {
+                          bulkPreparedMessages.filter(
+                            (item) => !item.recipient
+                          ).length
+                        }
+                      </strong>
+                      <span>telefon bilgisi eksik</span>
+                    </div>
+
+                    <div className="whatsappQueueList compact">
                       {bulkPreparedMessages.map((item, index) => (
                         <div key={`${item.studentId}-${index}`}>
                           <div>
                             <strong>{item.studentName}</strong>
-                            <span>{item.recipient || "Telefon bilgisi yok"}</span>
+                            <span>
+                              {item.recipient
+                                ? "WhatsApp gönderimine hazır"
+                                : "Telefon bilgisi yok"}
+                            </span>
                           </div>
-                          <button
-                            type="button"
-                            disabled={!item.recipient}
-                            onClick={() =>
-                              openWhatsAppMessage(item.recipient, item.message)
+
+                          <span
+                            className={
+                              item.recipient
+                                ? "recipientStatus ready"
+                                : "recipientStatus missing"
                             }
                           >
-                            WhatsApp'ta Gönder
-                          </button>
+                            {item.recipient ? "Hazır" : "Eksik"}
+                          </span>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="whatsappLegalNote">
+                      WhatsApp Web, mesajları kullanıcı onayı olmadan sessizce
+                      otomatik göndermez. Bu buton tüm alıcı mesajlarını tek
+                      seferde hazırlamaya çalışır. Tam otomatik tek tuş gönderim
+                      için WhatsApp Business Cloud API bağlantısı gerekir.
                     </div>
                   </div>
                 )}
@@ -2646,7 +2743,7 @@ function closeLessonAction() {
                 </button>
                 <button
                   type="button"
-                  className="primary orange"
+                  className={`primary orange ${bulkSubmitting ? "isWorking" : ""}`}
                   onClick={submitBulkMessage}
                   disabled={bulkSubmitting}
                 >
@@ -3717,15 +3814,20 @@ function closeLessonAction() {
 
 
       .passiveSummaryCard {
-        opacity: .62;
-        cursor: default !important;
+        opacity: .76;
         background: #f5f7fa !important;
         border-style: dashed !important;
       }
 
       .passiveSummaryCard:hover {
-        transform: none !important;
-        box-shadow: none !important;
+        opacity: 1;
+        border-color: #9bb6d6 !important;
+      }
+
+      .passiveSummaryCard.selected {
+        opacity: 1;
+        background: #eef5ff !important;
+        border-style: solid !important;
       }
 
       .passiveSummaryCard small {
@@ -3775,6 +3877,7 @@ function closeLessonAction() {
       }
 
       .sendFirstWhatsapp,
+      .sendAllWhatsapp,
       .whatsappQueueList button {
         border: 0;
         border-radius: 10px;
@@ -3783,6 +3886,62 @@ function closeLessonAction() {
         padding: 9px 11px;
         font-weight: 900;
         cursor: pointer;
+      }
+
+      .sendAllWhatsapp {
+        padding: 11px 14px;
+        box-shadow: 0 8px 18px rgba(31, 164, 99, .2);
+        white-space: nowrap;
+      }
+
+      .whatsappQueueSummary {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #dcefe4;
+        color: #567264;
+        font-size: 11px;
+      }
+
+      .whatsappQueueSummary strong {
+        color: #145d3a;
+        font-size: 13px;
+      }
+
+      .whatsappQueueSummary i {
+        color: #a5b7ad;
+        font-style: normal;
+      }
+
+      .whatsappQueueList.compact > div {
+        min-height: 42px;
+      }
+
+      .recipientStatus {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: 10px;
+        font-weight: 900;
+      }
+
+      .recipientStatus.ready {
+        background: #dff5e8;
+        color: #157044;
+      }
+
+      .recipientStatus.missing {
+        background: #f7e9e9;
+        color: #9b3b3b;
+      }
+
+      .whatsappLegalNote {
+        padding: 10px 14px;
+        border-top: 1px solid #dcefe4;
+        background: #f8fcfa;
+        color: #687d70;
+        font-size: 10px;
+        line-height: 1.5;
       }
 
       .whatsappQueueList {
@@ -3817,6 +3976,41 @@ function closeLessonAction() {
       .whatsappQueueList button:disabled {
         opacity: .4;
         cursor: not-allowed;
+      }
+
+
+      .isWorking {
+        position: relative;
+        overflow: hidden;
+        opacity: 1 !important;
+        cursor: wait !important;
+        box-shadow: 0 0 0 3px rgba(18, 104, 214, .12),
+          0 10px 24px rgba(18, 104, 214, .22) !important;
+        animation: operationPulse 1s ease-in-out infinite;
+      }
+
+      .isWorking::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          100deg,
+          transparent 20%,
+          rgba(255,255,255,.28) 45%,
+          transparent 70%
+        );
+        transform: translateX(-120%);
+        animation: operationSweep 1.1s linear infinite;
+        pointer-events: none;
+      }
+
+      @keyframes operationPulse {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(1.08); }
+      }
+
+      @keyframes operationSweep {
+        to { transform: translateX(120%); }
       }
 
       @media (max-width: 780px) {
