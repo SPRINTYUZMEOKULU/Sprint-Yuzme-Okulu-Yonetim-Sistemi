@@ -1379,3 +1379,86 @@ export async function deleteStudentNote(formData: FormData) {
 
   goSaved(studentId, "note-deleted");
 }
+
+
+/* =========================================================
+   KURSİYER İŞLEM MERKEZİ - HIZLI PROFİL GÜNCELLE
+   Client panelinden çağrılır, redirect yapmaz.
+   ========================================================= */
+export async function updateStudentOperationalDetails(input: {
+  studentId: string;
+  phone?: string | null;
+  email?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  guardianEmail?: string | null;
+  generalNote?: string | null;
+}) {
+  try {
+    const profile = await requireProfile([
+      ...staffRoles,
+    ]);
+
+    if (!profile.organization_id || !input.studentId) {
+      return {
+        ok: false as const,
+        message: "Öğrenci veya organizasyon bilgisi bulunamadı.",
+      };
+    }
+
+    const clean = (value?: string | null, max = 2000) =>
+      typeof value === "string"
+        ? value.trim().slice(0, max) || null
+        : null;
+
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("students")
+      .update({
+        phone: clean(input.phone, 30),
+        email: clean(input.email, 200),
+        guardian_name: clean(input.guardianName, 200),
+        guardian_phone: clean(input.guardianPhone, 30),
+        guardian_email: clean(input.guardianEmail, 200),
+        general_note: clean(input.generalNote, 4000),
+      })
+      .eq("organization_id", profile.organization_id)
+      .eq("id", input.studentId);
+
+    if (error) {
+      return {
+        ok: false as const,
+        message: error.message,
+      };
+    }
+
+    await supabase
+      .from("student_timeline_events")
+      .insert({
+        organization_id: profile.organization_id,
+        student_id: input.studentId,
+        event_type: "profile_updated",
+        title: "Kursiyer bilgileri işlem merkezinden güncellendi",
+        description:
+          "İletişim / veli / genel not bilgileri Dijital Kursiyer Dosyası işlem merkezinden düzenlendi.",
+        created_by: profile.id,
+      });
+
+    revalidatePath(`/ogrenciler/${input.studentId}`);
+    revalidatePath("/ogrenciler");
+
+    return {
+      ok: true as const,
+      message: "Kursiyer bilgileri başarıyla güncellendi.",
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Bilgiler güncellenirken beklenmeyen hata oluştu.",
+    };
+  }
+}
