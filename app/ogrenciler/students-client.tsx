@@ -105,7 +105,8 @@ type StatusFilter =
   | "active"
   | "passive"
   | "pre_registration"
-  | "ending_soon";
+  | "ending_soon"
+  | "information_pending";
 
 type SortType =
   | "name_asc"
@@ -353,6 +354,71 @@ function paymentLabel(student: StudentListItem) {
     text: "Ödeme Kaydı Yok",
     className: "paymentNeutral",
   };
+}
+
+function informationNeed(student: StudentListItem) {
+  if (student.status !== "active") return null;
+
+  const outstanding = numberValue(student.payment_outstanding);
+  const remaining = numberValue(student.remaining_lessons);
+  const plannedCompensation = numberValue(
+    student.planned_compensation_lessons
+  );
+
+  if (outstanding > 0) {
+    return {
+      type: "payment" as MessageType,
+      level: "important",
+      title: "Ödeme Bilgilendirmesi Bekliyor",
+      detail: "Aktif kayıtta ödeme bakiyesi bulunuyor.",
+    };
+  }
+
+  if (
+    remaining <= 3 ||
+    isEndingSoon(
+      student.compensation_end_date ||
+        student.normal_end_date ||
+        student.end_date
+    )
+  ) {
+    return {
+      type: "renewal" as MessageType,
+      level: "important",
+      title: "Kayıt Yenileme Bilgilendirmesi",
+      detail: `${Math.max(remaining, 0)} ders hakkı kaldı.`,
+    };
+  }
+
+  if (plannedCompensation > 0 || student.next_compensation_date) {
+    return {
+      type: "compensation" as MessageType,
+      level: "normal",
+      title: "Telafi Bilgilendirmesi Bekliyor",
+      detail: student.next_compensation_date
+        ? `Planlanan telafi: ${formatDate(student.next_compensation_date)}`
+        : "Planlanmış telafi dersi bulunuyor.",
+    };
+  }
+
+  if (student.last_absent_date) {
+    const absent = new Date(student.last_absent_date);
+    const now = new Date();
+    const diff = Math.floor(
+      (now.getTime() - absent.getTime()) / 86400000
+    );
+
+    if (!Number.isNaN(diff) && diff >= 0 && diff <= 7) {
+      return {
+        type: "absence" as MessageType,
+        level: "normal",
+        title: "Devamsızlık Bilgilendirmesi",
+        detail: `Son gelmedi kaydı: ${formatDate(student.last_absent_date)}`,
+      };
+    }
+  }
+
+  return null;
 }
 
 function buildMessage(
@@ -1170,6 +1236,9 @@ function closeLessonAction() {
         (student) =>
           numberValue(student.planned_compensation_lessons) > 0
       ).length,
+      informationPending: students.filter(
+        (student) => Boolean(informationNeed(student))
+      ).length,
     };
   }, [students]);
 
@@ -1232,6 +1301,10 @@ function closeLessonAction() {
       if (status === "ending_soon") {
         statusMatch =
           student.status === "active" && isEndingSoon(student.end_date);
+      }
+
+      if (status === "information_pending") {
+        statusMatch = Boolean(informationNeed(student));
       }
 
       return (
@@ -1615,6 +1688,20 @@ function closeLessonAction() {
     }
   }
 
+  function openInformationForStudent(student: StudentListItem) {
+    const need = informationNeed(student);
+
+    setMessageStudent(student);
+
+    if (need) {
+      setMessageType(need.type);
+      setMessageText(buildMessage(student, need.type));
+    } else {
+      setMessageType("smart");
+      setMessageText(buildMessage(student, "smart"));
+    }
+  }
+
   function callStudent(student: StudentListItem) {
     const phone = contactPhone(student);
 
@@ -1909,6 +1996,18 @@ function closeLessonAction() {
           <strong>{counts.lessonEnded}</strong>
         </div>
 
+        <button
+          type="button"
+          className={`summaryCard informationSummary ${
+            status === "information_pending" ? "selected" : ""
+          }`}
+          onClick={() => setStatus("information_pending")}
+        >
+          <span>Bilgilendirme Bekliyor</span>
+          <strong>{counts.informationPending}</strong>
+          <small>İşlem için tıklayın</small>
+        </button>
+
         <div className="summaryCard warningCard">
           <span>Ödeme Bekleyen</span>
           <strong>{counts.paymentWaiting}</strong>
@@ -2153,6 +2252,28 @@ function closeLessonAction() {
                   🗓 {scheduleLabel(student) || "Program tanımlı değil"}
                 </strong>
               </div>
+
+              {informationNeed(student) && (
+                <button
+                  type="button"
+                  className={`informationPendingBar ${
+                    informationNeed(student)?.level === "important"
+                      ? "important"
+                      : ""
+                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openInformationForStudent(student);
+                  }}
+                >
+                  <span className="infoDot">!</span>
+                  <div>
+                    <strong>{informationNeed(student)?.title}</strong>
+                    <small>{informationNeed(student)?.detail}</small>
+                  </div>
+                  <b>Bilgilendir →</b>
+                </button>
+              )}
 
               {lessonEnded && (
                 <div className="studentWarning dangerWarning">
@@ -2664,7 +2785,6 @@ function closeLessonAction() {
 
                       <button
                         type="button"
-                        className="sendAllWhatsapp"
                         onClick={handleOpenAllWhatsApp}
                         disabled={bulkWhatsappOpening}
                         className={`sendAllWhatsapp ${
@@ -4011,6 +4131,75 @@ function closeLessonAction() {
 
       @keyframes operationSweep {
         to { transform: translateX(120%); }
+      }
+
+
+      .informationSummary {
+        background: linear-gradient(180deg, #fff8e9, #fffdf8) !important;
+        border-color: #efcf97 !important;
+      }
+
+      .informationSummary span { color: #8a5713; }
+      .informationSummary strong { color: #b86b08; }
+      .informationSummary small {
+        display: block;
+        margin-top: 4px;
+        color: #a77837;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .informationPendingBar {
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 10px 11px;
+        border: 1px solid #d5e4f2;
+        border-radius: 12px;
+        background: #f5f9fd;
+        color: #173e63;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .informationPendingBar.important {
+        border-color: #efcf98;
+        background: #fff8ea;
+      }
+
+      .infoDot {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        background: #0d69c7;
+        color: #fff;
+        font-weight: 950;
+      }
+
+      .informationPendingBar.important .infoDot {
+        background: #e38a17;
+      }
+
+      .informationPendingBar strong,
+      .informationPendingBar small { display: block; }
+
+      .informationPendingBar strong { font-size: 12px; }
+
+      .informationPendingBar small {
+        margin-top: 2px;
+        color: #6d8195;
+        font-size: 10px;
+      }
+
+      .informationPendingBar b {
+        color: #0b5da9;
+        font-size: 11px;
+        white-space: nowrap;
       }
 
       @media (max-width: 780px) {
