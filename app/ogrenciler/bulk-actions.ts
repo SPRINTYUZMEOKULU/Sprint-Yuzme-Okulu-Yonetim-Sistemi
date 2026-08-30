@@ -190,7 +190,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       supabase
         .from("student_enrollments")
         .select(
-          "id,student_id,package_id,group_id,start_date,planned_end_date,lesson_weekdays,total_lessons,used_lessons,status"
+          "id,student_id,package_id,group_id,branch_id,start_date,planned_end_date,lesson_weekdays,total_lessons,used_lessons,status"
         )
         .eq("organization_id", organizationId)
         .eq("status", "active")
@@ -214,7 +214,6 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       supabase
         .from("student_lesson_balance")
         .select("student_id,compensation_lesson_balance")
-        .eq("organization_id", organizationId)
         .in("student_id", studentIds),
     ]);
 
@@ -320,7 +319,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
     );
 
     const oldBranchIds = uniqueStrings(
-      (studentsResult.data || []).map((row: any) => row.branch_id)
+      Array.from(enrollmentMap.values()).map((row: any) => row.branch_id)
     );
 
     const [oldGroupsResult, oldBranchesResult] = await Promise.all([
@@ -422,6 +421,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         : null;
 
       const oldBranchId =
+        enrollment.branch_id ??
         oldGroup?.branch_id ??
         student.branch_id ??
         null;
@@ -433,9 +433,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       const enrollmentUpdate = await supabase
         .from("student_enrollments")
         .update({
+          branch_id: input.targetBranchId,
           group_id: input.targetGroupId,
           planned_end_date: newNormalEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
+          updated_at: now,
         })
         .eq("id", enrollment.id)
         .eq("organization_id", organizationId);
@@ -648,6 +650,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           recipient_phone: recipient,
           message_text: message,
           status: "prepared",
+          prepared_at: now,
         });
 
         preparedMessages.push({
@@ -734,12 +737,6 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
 
     const now = new Date().toISOString();
     let count = 0;
-    const preparedMessages: Array<{
-      studentId: string;
-      studentName: string;
-      recipient: string | null;
-      message: string;
-    }> = [];
 
     for (const student of students || []) {
       const recipient =
@@ -770,13 +767,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
         recipient_phone: recipient,
         message_text: body,
         status: "prepared",
-      });
-
-      preparedMessages.push({
-        studentId: student.id,
-        studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(),
-        recipient,
-        message: body,
+        prepared_at: now,
       });
 
       count += 1;
@@ -788,8 +779,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
     return {
       ok: true as const,
       count,
-      preparedMessages,
-      message: `${count} öğrenci/veli için mesaj hazırlandı. WhatsApp gönderim kuyruğu oluşturuldu.`,
+      message: `${count} öğrenci/veli için mesaj hazırlandı.`,
     };
   } catch (error) {
     return {
