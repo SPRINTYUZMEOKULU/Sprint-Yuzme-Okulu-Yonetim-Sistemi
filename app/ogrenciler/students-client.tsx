@@ -873,6 +873,8 @@ export default function StudentsClient({
 
   const [bulkWhatsappOpening, setBulkWhatsappOpening] = useState(false);
   const [selectedWhatsappStudentIds, setSelectedWhatsappStudentIds] = useState<string[]>([]);
+  const [whatsappQueueCursor, setWhatsappQueueCursor] = useState(0);
+  const [openedWhatsappStudentIds, setOpenedWhatsappStudentIds] = useState<string[]>([]);
 
  
   const [actionStudent, setActionStudent] =
@@ -1741,6 +1743,8 @@ function closeLessonAction() {
           .filter((item) => Boolean(item.recipient))
           .map((item) => item.studentId)
       );
+      setWhatsappQueueCursor(0);
+      setOpenedWhatsappStudentIds([]);
 
       router.refresh();
     } catch (error) {
@@ -1767,12 +1771,25 @@ function closeLessonAction() {
       return;
     }
 
+    const safeCursor = Math.min(whatsappQueueCursor, selectedMessages.length - 1);
+    const current = selectedMessages[safeCursor];
+
     setBulkWhatsappOpening(true);
 
     try {
-      openBulkWhatsAppMessages(selectedMessages);
+      openWhatsAppMessage(current.recipient, current.message);
 
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      setOpenedWhatsappStudentIds((existing) =>
+        existing.includes(current.studentId)
+          ? existing
+          : [...existing, current.studentId]
+      );
+
+      setWhatsappQueueCursor((cursor) =>
+        cursor + 1 >= selectedMessages.length ? 0 : cursor + 1
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
     } finally {
       setBulkWhatsappOpening(false);
     }
@@ -2900,8 +2917,7 @@ function closeLessonAction() {
                       <div>
                         <strong>WhatsApp Gönderim Kontrolü</strong>
                         <span>
-                          Alıcı listesini kontrol edin. Telefonu olmayanlar gönderime
-                          dahil edilmez.
+                          Geçerli telefonu olan herkes otomatik seçilir. WhatsApp açıldığında mesaj hazır gelir; siz yalnızca Gönder'e basarsınız.
                         </span>
                       </div>
 
@@ -2914,8 +2930,10 @@ function closeLessonAction() {
                         }`}
                       >
                         {bulkWhatsappOpening
-                          ? "● WhatsApp Mesajları Hazırlanıyor..."
-                          : `Seçili ${selectedWhatsappStudentIds.length} Mesajı Aç ↗`}
+                          ? "● WhatsApp Açılıyor..."
+                          : openedWhatsappStudentIds.length
+                            ? `Sıradaki Mesajı WhatsApp’ta Aç (${openedWhatsappStudentIds.length}/${selectedWhatsappStudentIds.length}) ↗`
+                            : `Gönderimi Başlat · ${selectedWhatsappStudentIds.length} Kişi ↗`}
                       </button>
                     </div>
 
@@ -2978,9 +2996,11 @@ function closeLessonAction() {
                             <div>
                               <strong>{item.studentName}</strong>
                               <span>
-                                {item.recipient
-                                  ? "Gönderim için seçili"
-                                  : "Telefon bilgisi yok"}
+                                {!item.recipient
+                                  ? "Telefon bilgisi yok"
+                                  : openedWhatsappStudentIds.includes(item.studentId)
+                                    ? "WhatsApp'ta açıldı"
+                                    : "Gönderim için seçili"}
                               </span>
                             </div>
 
@@ -2991,7 +3011,11 @@ function closeLessonAction() {
                                   : "recipientStatus missing"
                               }
                             >
-                              {item.recipient ? "Seçili" : "Eksik"}
+                              {!item.recipient
+                                ? "Eksik"
+                                : openedWhatsappStudentIds.includes(item.studentId)
+                                  ? "Açıldı"
+                                  : "Seçili"}
                             </span>
                           </label>
                         );
@@ -2999,10 +3023,10 @@ function closeLessonAction() {
                     </div>
 
                     <div className="whatsappLegalNote">
-                      WhatsApp Web, mesajları kullanıcı onayı olmadan sessizce
-                      otomatik göndermez. Bu buton tüm alıcı mesajlarını tek
-                      seferde hazırlamaya çalışır. Tam otomatik tek tuş gönderim
-                      için WhatsApp Business Cloud API bağlantısı gerekir.
+                      Standart WhatsApp bağlantısı birden fazla kişiyi WhatsApp içinde otomatik seçemez.
+                      Bu nedenle SprintOS tüm alıcıları burada işaretli tutar; her açılışta sıradaki kişinin
+                      sohbetini ve hazır mesajını getirir. WhatsApp'ta yalnızca Gönder düğmesine basarsınız.
+                      Gerçek toplu otomatik gönderim için WhatsApp Business Cloud API gerekir.
                     </div>
                   </div>
                 )}
