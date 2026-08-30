@@ -872,6 +872,7 @@ export default function StudentsClient({
   >([]);
 
   const [bulkWhatsappOpening, setBulkWhatsappOpening] = useState(false);
+  const [selectedWhatsappStudentIds, setSelectedWhatsappStudentIds] = useState<string[]>([]);
 
  
   const [actionStudent, setActionStudent] =
@@ -1735,6 +1736,11 @@ function closeLessonAction() {
       setBulkResult(result.message);
 
       setBulkPreparedMessages(result.preparedMessages);
+      setSelectedWhatsappStudentIds(
+        result.preparedMessages
+          .filter((item) => Boolean(item.recipient))
+          .map((item) => item.studentId)
+      );
 
       router.refresh();
     } catch (error) {
@@ -1750,15 +1756,46 @@ function closeLessonAction() {
   async function handleOpenAllWhatsApp() {
     if (!bulkPreparedMessages.length || bulkWhatsappOpening) return;
 
+    const selectedMessages = bulkPreparedMessages.filter(
+      (item) =>
+        Boolean(item.recipient) &&
+        selectedWhatsappStudentIds.includes(item.studentId)
+    );
+
+    if (!selectedMessages.length) {
+      window.alert("WhatsApp gönderimi için en az bir alıcı seçin.");
+      return;
+    }
+
     setBulkWhatsappOpening(true);
 
     try {
-      openBulkWhatsAppMessages(bulkPreparedMessages);
+      openBulkWhatsAppMessages(selectedMessages);
 
       await new Promise((resolve) => setTimeout(resolve, 900));
     } finally {
       setBulkWhatsappOpening(false);
     }
+  }
+
+  function toggleWhatsappRecipient(studentId: string) {
+    setSelectedWhatsappStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId]
+    );
+  }
+
+  function selectAllWhatsappRecipients() {
+    setSelectedWhatsappStudentIds(
+      bulkPreparedMessages
+        .filter((item) => Boolean(item.recipient))
+        .map((item) => item.studentId)
+    );
+  }
+
+  function clearWhatsappRecipients() {
+    setSelectedWhatsappStudentIds([]);
   }
 
   function openInformationForStudent(student: StudentListItem) {
@@ -2878,11 +2915,14 @@ function closeLessonAction() {
                       >
                         {bulkWhatsappOpening
                           ? "● WhatsApp Mesajları Hazırlanıyor..."
-                          : "Tüm WhatsApp Mesajlarını Aç ↗"}
+                          : `Seçili ${selectedWhatsappStudentIds.length} Mesajı Aç ↗`}
                       </button>
                     </div>
 
                     <div className="whatsappQueueSummary">
+                      <strong>{selectedWhatsappStudentIds.length}</strong>
+                      <span>seçili</span>
+                      <i>•</i>
                       <strong>
                         {
                           bulkPreparedMessages.filter((item) =>
@@ -2900,31 +2940,62 @@ function closeLessonAction() {
                         }
                       </strong>
                       <span>telefon bilgisi eksik</span>
+
+                      <div className="whatsappSelectionActions">
+                        <button type="button" onClick={selectAllWhatsappRecipients}>
+                          Tümünü Seç
+                        </button>
+                        <button type="button" onClick={clearWhatsappRecipients}>
+                          Seçimi Temizle
+                        </button>
+                      </div>
                     </div>
 
                     <div className="whatsappQueueList compact">
-                      {bulkPreparedMessages.map((item, index) => (
-                        <div key={`${item.studentId}-${index}`}>
-                          <div>
-                            <strong>{item.studentName}</strong>
-                            <span>
-                              {item.recipient
-                                ? "WhatsApp gönderimine hazır"
-                                : "Telefon bilgisi yok"}
-                            </span>
-                          </div>
+                      {bulkPreparedMessages.map((item, index) => {
+                        const isSelected = selectedWhatsappStudentIds.includes(
+                          item.studentId
+                        );
 
-                          <span
-                            className={
-                              item.recipient
-                                ? "recipientStatus ready"
-                                : "recipientStatus missing"
-                            }
+                        return (
+                          <label
+                            key={`${item.studentId}-${index}`}
+                            className={`whatsappRecipientRow ${
+                              isSelected ? "selected" : ""
+                            } ${!item.recipient ? "disabled" : ""}`}
                           >
-                            {item.recipient ? "Hazır" : "Eksik"}
-                          </span>
-                        </div>
-                      ))}
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.recipient) && isSelected}
+                              disabled={!item.recipient}
+                              onChange={() => toggleWhatsappRecipient(item.studentId)}
+                            />
+
+                            <span className="whatsappCheckmark" aria-hidden="true">
+                              {item.recipient && isSelected ? "✓" : ""}
+                            </span>
+
+                            <div>
+                              <strong>{item.studentName}</strong>
+                              <span>
+                                {item.recipient
+                                  ? "Gönderim için seçili"
+                                  : "Telefon bilgisi yok"}
+                              </span>
+                            </div>
+
+                            <span
+                              className={
+                                item.recipient
+                                  ? "recipientStatus ready"
+                                  : "recipientStatus missing"
+                              }
+                            >
+                              {item.recipient ? "Seçili" : "Eksik"}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
 
                     <div className="whatsappLegalNote">
@@ -4119,8 +4190,69 @@ function closeLessonAction() {
         font-style: normal;
       }
 
-      .whatsappQueueList.compact > div {
+      .whatsappQueueList.compact > div,
+      .whatsappQueueList.compact > label {
         min-height: 42px;
+      }
+
+      .whatsappSelectionActions {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+      }
+
+      .whatsappSelectionActions button {
+        border: 1px solid #b7dfc8;
+        border-radius: 8px;
+        background: #fff;
+        color: #12633b;
+        padding: 6px 8px;
+        font-size: 10px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .whatsappRecipientRow {
+        display: grid;
+        grid-template-columns: 22px 24px 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #dcefe4;
+        cursor: pointer;
+      }
+
+      .whatsappRecipientRow.selected {
+        background: #edfaf3;
+      }
+
+      .whatsappRecipientRow.disabled {
+        cursor: not-allowed;
+        opacity: .62;
+      }
+
+      .whatsappRecipientRow > input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .whatsappCheckmark {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #a6d9bc;
+        background: #fff;
+        color: #fff;
+        font-weight: 1000;
+      }
+
+      .whatsappRecipientRow.selected .whatsappCheckmark {
+        background: #1fa463;
+        border-color: #1fa463;
       }
 
       .recipientStatus {
