@@ -15,6 +15,9 @@ import GlobalSearch from "@/app/components/global-search";
 import "./dashboard.css";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Ana Sayfa | SprintOS",
+};
 
 type MenuItem = {
   label: string;
@@ -42,6 +45,13 @@ type QuickItem = {
   roles: UserRole[];
   moduleKey: string;
   badge?: number;
+};
+
+type BirthdayPerson = {
+  id: string;
+  name: string;
+  phone: string | null;
+  kind: "student" | "staff";
 };
 
 const allRoles: UserRole[] = [
@@ -371,6 +381,89 @@ async function safeCount(
   }
 }
 
+function todayMonthDay() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${month}-${day}`;
+}
+
+function whatsappNumber(value: unknown) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("90")) return digits;
+  if (digits.startsWith("0")) return `90${digits.slice(1)}`;
+  return digits.length === 10 ? `90${digits}` : digits;
+}
+
+function birthdayMessage(name: string, kind: BirthdayPerson["kind"]) {
+  const greeting = kind === "student" ? `Sevgili ${name}` : `Değerli ${name}`;
+  return `${greeting},\n\nDoğum gününüzü en içten dileklerimizle kutlar; sağlık, mutluluk ve başarılarla dolu güzel bir yaş dileriz. 🎉🎂\n\nSprint Yüzme Okulu Yönetimi\nBilgilendirme Hattı: 0551 896 83 19`;
+}
+
+async function getTodayBirthdays(organizationId: string | null) {
+  if (!organizationId) return [] as BirthdayPerson[];
+
+  try {
+    const supabase = await createClient();
+    const [studentsResult, staffResult] = await Promise.all([
+      supabase
+        .from("students")
+        .select("id,first_name,last_name,birth_date,phone,guardian_phone,status,is_deleted")
+        .eq("organization_id", organizationId)
+        .eq("is_deleted", false)
+        .eq("status", "active"),
+      supabase
+        .from("staff")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true),
+    ]);
+
+    const monthDay = todayMonthDay();
+    const people: BirthdayPerson[] = [];
+
+    for (const row of studentsResult.data || []) {
+      if (String(row.birth_date || "").slice(5, 10) !== monthDay) continue;
+      people.push({
+        id: String(row.id),
+        name: `${row.first_name || ""} ${row.last_name || ""}`.trim() || "Öğrencimiz",
+        phone: row.guardian_phone || row.phone || null,
+        kind: "student",
+      });
+    }
+
+    if (!staffResult.error) {
+      for (const source of staffResult.data || []) {
+        const row = source as Record<string, unknown>;
+        if (String(row.birth_date || "").slice(5, 10) !== monthDay) continue;
+        const name = String(
+          row.full_name ||
+            row.name ||
+            `${row.first_name || ""} ${row.last_name || ""}`.trim() ||
+            "Personelimiz"
+        );
+        people.push({
+          id: String(row.id),
+          name,
+          phone: String(row.phone || row.mobile_phone || "") || null,
+          kind: "staff",
+        });
+      }
+    }
+
+    return people;
+  } catch (error) {
+    console.error("Doğum günü bilgileri alınamadı:", error);
+    return [] as BirthdayPerson[];
+  }
+}
+
 export default async function HomePage() {
   const profile = await requireProfile();
 
@@ -432,6 +525,8 @@ export default async function HomePage() {
       [["cash_status", "handoff_pending"]]
     ),
   ]);
+
+  const birthdayPeople = await getTodayBirthdays(profile.organization_id);
 
   const today =
     new Intl.DateTimeFormat(
@@ -681,6 +776,26 @@ export default async function HomePage() {
 
   return (
     <main className="proShell">
+      <input
+        id="dashboard-menu-toggle"
+        className="dashboardMenuToggle"
+        type="checkbox"
+        aria-label="Ana menüyü aç veya kapat"
+      />
+      <label
+        htmlFor="dashboard-menu-toggle"
+        className="dashboardMenuButton"
+        title="Menüyü Aç / Kapat"
+      >
+        <span />
+        <span />
+        <span />
+      </label>
+      <label
+        htmlFor="dashboard-menu-toggle"
+        className="dashboardMenuBackdrop"
+        aria-hidden="true"
+      />
       {/* MOBİL GÜVENLİ ÇIKIŞ - SADECE TELEFON/TABLETTE GÖRÜNÜR */}
       <a
         href="/auth/signout"
@@ -1013,6 +1128,7 @@ export default async function HomePage() {
                       color:
                         "inherit",
                     }}
+                    aria-label={`${stat.label}: ${stat.value}. İlgili listeyi aç`}
                   >
                     <div className="statIcon">
                       <Icon />
@@ -1036,6 +1152,10 @@ export default async function HomePage() {
                           stat.note
                         }
                       </small>
+
+                      <em>
+                        Ayrıntıları Gör <Icons.arrow />
+                      </em>
                     </div>
                   </Link>
                 );
@@ -1119,6 +1239,40 @@ export default async function HomePage() {
               </div>
 
               <div className="alertList">
+                {birthdayPeople.map((person) => {
+                  const phone = whatsappNumber(person.phone);
+                  const href = phone
+                    ? `https://wa.me/${phone}?text=${encodeURIComponent(
+                        birthdayMessage(person.name, person.kind)
+                      )}`
+                    : person.kind === "student"
+                      ? `/ogrenciler/${person.id}`
+                      : "/kullanicilar-ve-yetkiler";
+
+                  return (
+                    <div className="alertItem birthday" key={`${person.kind}-${person.id}`}>
+                      <span>
+                        <Icons.cake />
+                      </span>
+
+                      <div>
+                        <strong>{person.name} için doğum günü</strong>
+                        <small>
+                          {person.kind === "student" ? "Öğrenci" : "Personel"} mesajı hazır.
+                        </small>
+                      </div>
+
+                      <a
+                        href={href}
+                        target={phone ? "_blank" : undefined}
+                        rel={phone ? "noreferrer" : undefined}
+                      >
+                        {phone ? "Mesajı Hazırla" : "Bilgiyi Tamamla"}
+                      </a>
+                    </div>
+                  );
+                })}
+
                 {openAlerts > 0 ? (
                   <div className="alertItem urgent">
                     <span>
