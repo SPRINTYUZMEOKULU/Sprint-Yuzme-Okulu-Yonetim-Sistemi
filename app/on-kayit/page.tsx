@@ -1,6 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
+
 import PreRegistrationForm from "./pre-registration-form";
+
 import "./on-kayit.css";
 
 export default function PreRegistrationPage() {
@@ -52,9 +53,7 @@ export default function PreRegistrationPage() {
 
               <div>
                 <strong>Butik gruplar</strong>
-                <small>
-                  Kontrollü ve verimli eğitim
-                </small>
+                <small>Kontrollü ve verimli eğitim</small>
               </div>
             </div>
 
@@ -63,9 +62,7 @@ export default function PreRegistrationPage() {
 
               <div>
                 <strong>Uzman antrenörler</strong>
-                <small>
-                  Seviyeye uygun planlama
-                </small>
+                <small>Seviyeye uygun planlama</small>
               </div>
             </div>
 
@@ -94,10 +91,6 @@ export default function PreRegistrationPage() {
                 yönlendirelim.
               </span>
             </div>
-
-            <Link href="/" className="preRegBack">
-              Yönetim paneli
-            </Link>
           </header>
 
           <PreRegistrationForm />
