@@ -32,8 +32,15 @@ type Props = {
     last_name?: string | null;
     phone?: string | null;
     guardian_phone?: string | null;
+    email?: string | null;
+    guardian_name?: string | null;
+    guardian_email?: string | null;
+    general_note?: string | null;
     status?: string | null;
     branch_id?: string | null;
+    branch_name?: string | null;
+    group_id?: string | null;
+    group_name?: string | null;
   };
   branches: BranchOption[];
   groups: GroupOption[];
