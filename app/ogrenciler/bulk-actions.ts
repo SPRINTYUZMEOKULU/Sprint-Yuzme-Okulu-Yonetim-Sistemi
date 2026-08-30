@@ -39,6 +39,13 @@ type BulkMessageInput = {
   subject?: string;
 };
 
+type PreparedBulkMessage = {
+  studentId: string;
+  studentName: string;
+  recipient: string | null;
+  message: string;
+};
+
 const DAY_NAMES: Record<number, string> = {
   1: "Pazartesi",
   2: "Salı",
@@ -699,6 +706,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
 }
 
 export async function prepareBulkStudentMessage(input: BulkMessageInput) {
+  const preparedMessages: PreparedBulkMessage[] = [];
+
   try {
     const profile = await requireProfile([...ALLOWED_ROLES]);
     const organizationId = profile.organization_id;
@@ -707,6 +716,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
       return {
         ok: false as const,
         message: "Organizasyon bilgisi bulunamadı.",
+        preparedMessages,
       };
     }
 
@@ -717,6 +727,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
       return {
         ok: false as const,
         message: "Öğrenci ve mesaj metni zorunludur.",
+        preparedMessages,
       };
     }
 
@@ -732,6 +743,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
       return {
         ok: false as const,
         message: `Öğrenciler yüklenemedi: ${error.message}`,
+        preparedMessages,
       };
     }
 
@@ -743,6 +755,9 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
         cleanPhone(student.guardian_phone) ||
         cleanPhone(student.phone) ||
         null;
+
+      const studentName =
+        `${student.first_name || ""} ${student.last_name || ""}`.trim();
 
       await supabase.from("message_logs").insert({
         organization_id: organizationId,
@@ -770,6 +785,13 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
         prepared_at: now,
       });
 
+      preparedMessages.push({
+        studentId: student.id,
+        studentName,
+        recipient,
+        message: body,
+      });
+
       count += 1;
       revalidatePath(`/ogrenciler/${student.id}`);
     }
@@ -780,6 +802,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
       ok: true as const,
       count,
       message: `${count} öğrenci/veli için mesaj hazırlandı.`,
+      preparedMessages,
     };
   } catch (error) {
     return {
@@ -788,6 +811,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
         error instanceof Error
           ? `Mesajlar hazırlanamadı: ${error.message}`
           : "Mesaj hazırlama sırasında beklenmeyen hata oluştu.",
+      preparedMessages,
     };
   }
 }
