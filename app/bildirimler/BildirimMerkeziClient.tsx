@@ -649,7 +649,7 @@ export default function BildirimMerkeziClient({
   className="open-record-button"
   onClick={() => {
     if (!notification.is_read) {
-      void markAsRead(notification.id);
+     handleMarkRead(notification.id);
     }
   }}
 >
