@@ -603,16 +603,16 @@ export default function GlobalSearch() {
                       gap: "8px",
                     }}
                   >
-                    <ActionButton
-                      text="Öğrenci Dosyası"
-                      onClick={() =>
-                        router.push(
-                          `/ogrenciler?ogrenci=${encodeURIComponent(
-                            selected.id
-                          )}`
-                        )
-                      }
-                    />
+                   <ActionButton
+  text="Öğrenci Dosyası"
+  onClick={() =>
+    router.push(
+      `/ogrenciler/${encodeURIComponent(
+        selected.id
+      )}`
+    )
+  }
+/>
 
                     <ActionButton
                       text="Yoklama"
