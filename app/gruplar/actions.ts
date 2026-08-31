@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -198,7 +198,7 @@ export async function createGroup(
   }
 
   if (!courseTypes.length) {
-    throw new Error(
+    new Error(
       "En az bir grup türü seçmelisiniz."
     );
   }
@@ -546,12 +546,16 @@ export async function deleteGroup(
     (preferredStudentsResult.count ||
       0);
 
-  if (relatedRecordCount > 0) {
-    throw new Error(
-      `"${group.name}" grubuna bağlı öğrenci, kayıt veya yoklama geçmişi bulunduğu için silinemez. Önce öğrencileri başka gruba aktarın veya grubu pasife alın.`
+    if (relatedRecordCount > 0) {
+    const message =
+      `"${group.name}" grubuna bağlı öğrenci, kayıt veya yoklama geçmişi bulunduğu için silinemedi. Öğrencileri başka gruba aktarın veya grubu pasife alın.`;
+
+    redirect(
+      `/gruplar?error=${encodeURIComponent(
+        message
+      )}`
     );
   }
-
   const { error: scheduleError } =
     await supabase
       .from("lesson_schedules")
@@ -580,5 +584,11 @@ export async function deleteGroup(
     throw deleteError;
   }
 
-  refreshGroupPages();
+   refreshGroupPages();
+
+  redirect(
+    `/gruplar?success=${encodeURIComponent(
+      "Grup başarıyla silindi."
+    )}`
+  );
 }
