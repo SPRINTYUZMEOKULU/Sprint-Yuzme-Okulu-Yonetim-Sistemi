@@ -1,1 +1,698 @@
-.groupsPage{min-height:100vh;background:#f4f7fc;padding:42px 5vw;color:#10213f}.groupsHeader{max-width:1380px;margin:0 auto 24px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end}.groupsHeader p,.sectionHead p{font-size:11px;font-weight:900;letter-spacing:.16em;color:#1769e8;margin:0 0 6px}.groupsHeader h1{font-size:34px;margin:0 0 6px}.groupsHeader span,.sectionHead span{color:#6c7b95}.groupsHeader>div:last-child{display:flex;gap:10px}.groupsHeader a{padding:12px 16px;border:1px solid #d9e2f1;background:white;border-radius:12px;text-decoration:none;color:#183357;font-weight:800}.groupLayout{max-width:1380px;margin:auto;display:grid;grid-template-columns:minmax(360px,500px) 1fr;gap:22px}.groupForm,.groupListCard{background:white;border:1px solid #e2e8f2;border-radius:22px;padding:24px;box-shadow:0 16px 45px rgba(26,57,103,.07)}.sectionHead h2{font-size:24px;margin:0 0 7px}.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}.formGrid label{font-size:12px;font-weight:800;color:#42536f}.formGrid input,.formGrid select{display:block;width:100%;box-sizing:border-box;margin-top:7px;border:1px solid #d9e2ef;border-radius:12px;padding:12px;background:#fbfcff;color:#13233f}.wide{grid-column:1/-1}.weekdayField{border:0;padding:0;margin:20px 0;display:flex;flex-wrap:wrap;gap:8px}.weekdayField legend{font-size:12px;font-weight:900;margin-bottom:10px}.weekdayField label input{display:none}.weekdayField label span{display:block;padding:9px 12px;border:1px solid #dce4f0;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer}.weekdayField input:checked+span{background:#1769e8;color:white;border-color:#1769e8}.publishToggle{display:flex;gap:11px;background:#f1f7ff;border:1px solid #d8e9ff;border-radius:14px;padding:13px;margin-bottom:16px}.publishToggle span{display:flex;flex-direction:column}.publishToggle small{color:#71809a;margin-top:2px}.primaryButton{width:100%;border:0;border-radius:13px;padding:14px;background:linear-gradient(135deg,#1769e8,#0b56cc);color:white;font-weight:900;cursor:pointer}.groupCards{display:grid;gap:13px;margin-top:20px}.groupCard{border:1px solid #e1e8f2;border-radius:17px;padding:17px;background:#fff}.groupCard.passive{opacity:.6;background:#f7f8fa}.groupTop{display:flex;justify-content:space-between;gap:15px}.groupTop h3{font-size:18px;margin:7px 0 4px}.groupTop p{font-size:13px;color:#6d7d97;margin:0}.groupTop>strong{white-space:nowrap;color:#1769e8}.coursePill{font-size:10px;font-weight:900;background:#edf5ff;color:#1769e8;padding:5px 8px;border-radius:999px}.scheduleTags{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}.scheduleTags span{display:flex;gap:7px;background:#f4f7fb;padding:8px 10px;border-radius:9px;font-size:12px}.groupDesc{color:#65758e;font-size:13px}.groupActions{display:flex;gap:8px;border-top:1px solid #edf0f5;padding-top:13px}.groupActions button{border:1px solid #dbe3ef;background:white;border-radius:9px;padding:8px 11px;font-weight:800;cursor:pointer}.groupActions .publicOn{color:#12825a;background:#effbf6;border-color:#ccefe0}.groupActions .publicOff{color:#965b13;background:#fff8eb}.emptyGroups{padding:40px;text-align:center;color:#72819a;display:flex;flex-direction:column;gap:5px}@media(max-width:960px){.groupLayout{grid-template-columns:1fr}.groupsHeader{align-items:flex-start;flex-direction:column}}@media(max-width:600px){.groupsPage{padding:24px 14px}.formGrid{grid-template-columns:1fr}.wide{grid-column:auto}.groupsHeader>div:last-child{width:100%;flex-wrap:wrap}}
+.groupsPage {
+  min-height: 100vh;
+  padding: 42px 5vw 70px;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(23, 105, 232, 0.08),
+      transparent 32%
+    ),
+    #f4f7fc;
+  color: #10213f;
+}
+
+.groupsHeader {
+  max-width: 1440px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.groupsHeader p,
+.sectionHead p {
+  margin: 0 0 7px;
+  color: #1769e8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.groupsHeader h1 {
+  margin: 0 0 7px;
+  font-size: clamp(30px, 4vw, 42px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.groupsHeader span,
+.sectionHead span {
+  color: #6c7b95;
+  line-height: 1.5;
+}
+
+.groupsHeader > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.groupsHeader a {
+  padding: 12px 16px;
+  border: 1px solid #d9e2f1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #183357;
+  font-weight: 850;
+  text-decoration: none;
+  box-shadow: 0 7px 22px
+    rgba(27, 55, 96, 0.05);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.groupsHeader a:hover {
+  transform: translateY(-2px);
+  border-color: #9fc3f8;
+  box-shadow: 0 10px 26px
+    rgba(27, 55, 96, 0.1);
+}
+
+.groupLayout {
+  max-width: 1440px;
+  margin: auto;
+  display: grid;
+  grid-template-columns:
+    minmax(380px, 500px)
+    minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.groupForm,
+.groupListCard {
+  border: 1px solid #e0e7f2;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 50px
+    rgba(26, 57, 103, 0.075);
+}
+
+.groupForm {
+  position: sticky;
+  top: 20px;
+  padding: 25px;
+}
+
+.groupListCard {
+  min-width: 0;
+  padding: 25px;
+}
+
+.sectionHead h2 {
+  margin: 0 0 7px;
+  font-size: 25px;
+  letter-spacing: -0.025em;
+}
+
+.courseTypeBox {
+  margin-top: 22px;
+  padding: 17px;
+  border: 1px solid #d9e8fb;
+  border-radius: 17px;
+  background: linear-gradient(
+    145deg,
+    #f5f9ff,
+    #ffffff
+  );
+}
+
+.courseTypeBox > strong {
+  display: block;
+  font-size: 14px;
+}
+
+.courseTypeBox > span {
+  display: block;
+  margin-top: 4px;
+  color: #72819a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.courseTypeChoices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.courseTypeChoices label {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.courseTypeChoices input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.courseTypeChoices label > span {
+  min-height: 66px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px;
+  border: 1px solid #dce5f1;
+  border-radius: 13px;
+  background: #ffffff;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.courseTypeChoices label:hover > span {
+  transform: translateY(-1px);
+  border-color: #a9c9f8;
+}
+
+.courseTypeChoices input:checked + span {
+  border-color: #1769e8;
+  background: #ebf4ff;
+  box-shadow: inset 0 0 0 1px
+    #1769e8;
+}
+
+.courseTypeChoices input:checked + span::after {
+  content: "✓ SEÇİLDİ";
+  margin-top: 7px;
+  color: #1769e8;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.courseTypeChoices b {
+  color: #183357;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.courseTypeChoices small {
+  margin-top: 3px;
+  color: #74839b;
+  font-size: 10px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.formGrid label {
+  min-width: 0;
+  color: #42536f;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.formGrid input,
+.formGrid select {
+  display: block;
+  width: 100%;
+  min-height: 47px;
+  box-sizing: border-box;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #d9e2ef;
+  border-radius: 12px;
+  outline: none;
+  background: #fbfcff;
+  color: #13233f;
+  font: inherit;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.formGrid input:focus,
+.formGrid select:focus {
+  border-color: #4b96f5;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px
+    rgba(23, 105, 232, 0.1);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.weekdayField {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+  padding: 0;
+  border: 0;
+}
+
+.weekdayField legend {
+  width: 100%;
+  margin-bottom: 10px;
+  color: #42536f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.weekdayField label input {
+  display: none;
+}
+
+.weekdayField label span {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid #dce4f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #344765;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.weekdayField label span:hover {
+  transform: translateY(-1px);
+  border-color: #9fc4f8;
+}
+
+.weekdayField input:checked + span {
+  border-color: #1769e8;
+  background: #1769e8;
+  color: #ffffff;
+  box-shadow: 0 7px 16px
+    rgba(23, 105, 232, 0.2);
+}
+
+.publishToggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #d8e9ff;
+  border-radius: 14px;
+  background: #f1f7ff;
+  cursor: pointer;
+}
+
+.publishToggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #1769e8;
+}
+
+.publishToggle span {
+  display: flex;
+  flex-direction: column;
+}
+
+.publishToggle strong {
+  color: #183357;
+  font-size: 13px;
+}
+
+.publishToggle small {
+  margin-top: 3px;
+  color: #71809a;
+  line-height: 1.4;
+}
+
+.primaryButton {
+  width: 100%;
+  min-height: 50px;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    #1774f0,
+    #0754c6
+  );
+  color: #ffffff;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 12px 25px
+    rgba(17, 101, 224, 0.24);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.primaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 30px
+    rgba(17, 101, 224, 0.3);
+}
+
+.groupCards {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.sessionCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dfe7f2;
+  border-radius: 19px;
+  background: #ffffff;
+  box-shadow: 0 9px 25px
+    rgba(25, 52, 91, 0.05);
+}
+
+.sessionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 19px 15px;
+  border-bottom: 1px solid #e9eef5;
+  background: linear-gradient(
+    135deg,
+    #0a2a56,
+    #0f64bf
+  );
+  color: #ffffff;
+}
+
+.sessionLabel {
+  display: inline-flex;
+  padding: 5px 8px;
+  border: 1px solid
+    rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.sessionHeader h3 {
+  margin: 8px 0 3px;
+  font-size: 19px;
+}
+
+.sessionHeader p {
+  margin: 0;
+  color: #d9eaff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sessionHeader > strong {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.13);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sessionCard > .scheduleTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid #edf1f6;
+  background: #f7faff;
+}
+
+.scheduleTags span {
+  display: inline-flex;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid #e1e9f4;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #344765;
+  font-size: 11px;
+}
+
+.scheduleTags b {
+  color: #102c54;
+}
+
+.sessionGroups {
+  display: grid;
+  gap: 11px;
+  padding: 15px;
+}
+
+.sessionGroup {
+  padding: 15px;
+  border: 1px solid #e0e7f1;
+  border-radius: 15px;
+  background: #ffffff;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sessionGroup:hover {
+  border-color: #b9d4fa;
+  box-shadow: 0 8px 20px
+    rgba(28, 72, 133, 0.07);
+}
+
+.sessionGroup.passive {
+  border-style: dashed;
+  background: #f5f6f8;
+  opacity: 0.7;
+}
+
+.groupTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.groupTop h4 {
+  margin: 8px 0 4px;
+  color: #112747;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.groupTop p {
+  margin: 0;
+  color: #75839a;
+  font-size: 12px;
+}
+
+.groupTop > strong {
+  flex: 0 0 auto;
+  color: #1769e8;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.coursePill {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #edf5ff;
+  color: #1769e8;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+.groupDesc {
+  margin: 12px 0 0;
+  color: #65758e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.groupActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #edf0f5;
+}
+
+.groupActions form {
+  margin: 0;
+}
+
+.groupActions button {
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #253b5c;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.groupActions button:hover {
+  transform: translateY(-1px);
+  border-color: #abc9f5;
+  background: #f5f9ff;
+}
+
+.groupActions .publicOn {
+  border-color: #ccefe0;
+  background: #effbf6;
+  color: #12825a;
+}
+
+.groupActions .publicOff {
+  border-color: #f0dfbd;
+  background: #fff8eb;
+  color: #965b13;
+}
+
+.groupActions .deleteGroupButton {
+  border-color: #f1c7ca;
+  background: #fff5f5;
+  color: #c52c36;
+}
+
+.groupActions .deleteGroupButton:hover {
+  border-color: #e88f96;
+  background: #ffebec;
+}
+
+.emptyGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 55px 20px;
+  border: 1px dashed #cad7e8;
+  border-radius: 16px;
+  background: #f9fbfe;
+  color: #72819a;
+  text-align: center;
+}
+
+.emptyGroups strong {
+  color: #233b5d;
+}
+
+@media (max-width: 1050px) {
+  .groupLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .groupForm {
+    position: static;
+  }
+}
+
+@media (max-width: 700px) {
+  .groupsPage {
+    padding: 24px 13px 55px;
+  }
+
+  .groupsHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .groupsHeader > div:last-child {
+    width: 100%;
+  }
+
+  .groupsHeader a {
+    flex: 1;
+    min-width: 130px;
+    text-align: center;
+  }
+
+  .groupForm,
+  .groupListCard {
+    padding: 17px;
+    border-radius: 19px;
+  }
+
+  .courseTypeChoices,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .wide {
+    grid-column: auto;
+  }
+
+  .sessionHeader {
+    padding: 16px;
+  }
+
+  .sessionHeader h3 {
+    font-size: 17px;
+  }
+
+  .sessionHeader > strong {
+    font-size: 9px;
+  }
+
+  .sessionCard > .scheduleTags {
+    padding: 12px;
+  }
+
+  .sessionGroups {
+    padding: 11px;
+  }
+
+  .groupTop {
+    flex-direction: column;
+  }
+
+  .groupActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .groupActions form,
+  .groupActions button {
+    width: 100%;
+  }
+
+  .groupActions form:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 390px) {
+  .groupsHeader a {
+    width: 100%;
+    flex: auto;
+  }
+
+  .groupActions {
+    grid-template-columns: 1fr;
+  }
+
+  .groupActions form:last-child {
+    grid-column: auto;
+  }
+}
