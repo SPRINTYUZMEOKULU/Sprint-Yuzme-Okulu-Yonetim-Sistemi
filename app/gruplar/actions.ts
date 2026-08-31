@@ -1,67 +1,584 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
-const toTime = (value: FormDataEntryValue | null) => String(value || "").slice(0, 5);
+const DAY_SHORT_NAMES = [
+  "Pazar",
+  "Pazartesi",
+  "Salı",
+  "Çarşamba",
+  "Perşembe",
+  "Cuma",
+  "Cumartesi",
+];
 
-export async function createGroup(formData: FormData) {
-  const profile = await requireProfile(["owner", "admin", "branch_manager"]);
-  if (!profile.organization_id) throw new Error("Kurum bilgisi bulunamadı.");
-  const supabase = await createClient();
+const ALLOWED_COURSE_TYPES = [
+  "Çocuk Yüzme Kursu",
+  "Yetişkin Yüzme Kursu",
+  "Özel Ders",
+  "Takım / Performans",
+];
 
-  const branchId = String(formData.get("branch_id") || "");
-  const name = String(formData.get("name") || "").trim();
-  const courseType = String(formData.get("course_type") || "Çocuk Yüzme Kursu");
-  const levelId = String(formData.get("level_id") || "") || null;
-  const capacity = Math.max(1, Number(formData.get("capacity") || 6));
-  const weekdays = formData.getAll("weekdays").map(Number).filter((n) => n >= 0 && n <= 6);
-  const startTime = toTime(formData.get("start_time"));
-  const endTime = toTime(formData.get("end_time"));
-
-  if (!branchId || !name || !weekdays.length || !startTime || !endTime) throw new Error("Grup bilgilerini eksiksiz girin.");
-
-  const { data: group, error } = await supabase.from("training_groups").insert({
-    organization_id: profile.organization_id,
-    branch_id: branchId,
-    level_id: levelId,
-    name,
-    course_type: courseType,
-    capacity,
-    public_registration: formData.get("public_registration") === "on",
-    description: String(formData.get("description") || "").trim() || null,
-    is_active: true
-  }).select("id").single();
-  if (error || !group) throw error || new Error("Grup oluşturulamadı.");
-
-  const rows = weekdays.map((weekday) => ({
-    organization_id: profile.organization_id,
-    branch_id: branchId,
-    group_id: group.id,
-    weekday,
-    start_time: startTime,
-    end_time: endTime,
-    is_active: true
-  }));
-  const { error: scheduleError } = await supabase.from("lesson_schedules").insert(rows);
-  if (scheduleError) {
-    await supabase.from("training_groups").delete().eq("id", group.id);
-    throw scheduleError;
-  }
-  revalidatePath("/gruplar");
-  revalidatePath("/on-kayit");
+function cleanText(
+  value: FormDataEntryValue | null,
+  maxLength = 200
+) {
+  return String(value || "")
+    .trim()
+    .slice(0, maxLength);
 }
 
-export async function toggleGroup(formData: FormData) {
-  const profile = await requireProfile(["owner", "admin", "branch_manager"]);
-  const supabase = await createClient();
-  const id = String(formData.get("id") || "");
-  const field = String(formData.get("field") || "");
-  const value = String(formData.get("value") || "") === "true";
-  if (!id || !["is_active", "public_registration"].includes(field)) throw new Error("Geçersiz işlem.");
-  const { error } = await supabase.from("training_groups").update({ [field]: value }).eq("id", id).eq("organization_id", profile.organization_id);
-  if (error) throw error;
+function toTime(
+  value: FormDataEntryValue | null
+) {
+  return String(value || "")
+    .trim()
+    .slice(0, 5);
+}
+
+function createAutomaticGroupName({
+  branchName,
+  weekdays,
+  startTime,
+  courseType,
+}: {
+  branchName: string;
+  weekdays: number[];
+  startTime: string;
+  courseType: string;
+}) {
+  const dayText = weekdays
+    .sort((a, b) => a - b)
+    .map(
+      (weekday) =>
+        DAY_SHORT_NAMES[weekday] || ""
+    )
+    .filter(Boolean)
+    .join("-");
+
+  let typeText = courseType;
+
+  if (courseType === "Çocuk Yüzme Kursu") {
+    typeText = "Çocuk";
+  }
+
+  if (courseType === "Yetişkin Yüzme Kursu") {
+    typeText = "Yetişkin";
+  }
+
+  if (courseType === "Takım / Performans") {
+    typeText = "Takım";
+  }
+
+  return [
+    branchName,
+    dayText,
+    startTime,
+    typeText,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function refreshGroupPages() {
   revalidatePath("/gruplar");
   revalidatePath("/on-kayit");
+  revalidatePath("/on-kayitlar");
+  revalidatePath("/kayit-tamamlama");
+  revalidatePath("/yoklama");
+  revalidatePath("/ders-programi");
+  revalidatePath("/operasyon-plani");
+  revalidatePath("/ogrenciler");
+}
+
+export async function createGroup(
+  formData: FormData
+) {
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+  ]);
+
+  const organizationId =
+    profile.organization_id;
+
+  if (!organizationId) {
+    throw new Error(
+      "Kurum bilgisi bulunamadı."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const branchId = cleanText(
+    formData.get("branch_id"),
+    80
+  );
+
+  const levelId =
+    cleanText(
+      formData.get("level_id"),
+      80
+    ) || null;
+
+  const capacity = Math.min(
+    50,
+    Math.max(
+      1,
+      Number(
+        formData.get("capacity") || 6
+      )
+    )
+  );
+
+  const weekdays = Array.from(
+    new Set(
+      formData
+        .getAll("weekdays")
+        .map(Number)
+        .filter(
+          (weekday) =>
+            Number.isInteger(weekday) &&
+            weekday >= 0 &&
+            weekday <= 6
+        )
+    )
+  ).sort((a, b) => a - b);
+
+  const startTime = toTime(
+    formData.get("start_time")
+  );
+
+  const endTime = toTime(
+    formData.get("end_time")
+  );
+
+  const description =
+    cleanText(
+      formData.get("description"),
+      500
+    ) || null;
+
+  const publicRegistration =
+    formData.get("public_registration") ===
+    "on";
+
+  const requestedCourseTypes = formData
+    .getAll("course_types")
+    .map((value) =>
+      cleanText(value, 60)
+    )
+    .filter((value) =>
+      ALLOWED_COURSE_TYPES.includes(value)
+    );
+
+  const legacyCourseType = cleanText(
+    formData.get("course_type"),
+    60
+  );
+
+  const courseTypes = Array.from(
+    new Set(
+      requestedCourseTypes.length
+        ? requestedCourseTypes
+        : ALLOWED_COURSE_TYPES.includes(
+              legacyCourseType
+            )
+          ? [legacyCourseType]
+          : []
+    )
+  );
+
+  if (!branchId) {
+    throw new Error("Şube seçmelisiniz.");
+  }
+
+  if (!courseTypes.length) {
+    throw new Error(
+      "En az bir grup türü seçmelisiniz."
+    );
+  }
+
+  if (!weekdays.length) {
+    throw new Error(
+      "En az bir ders günü seçmelisiniz."
+    );
+  }
+
+  if (!startTime || !endTime) {
+    throw new Error(
+      "Başlangıç ve bitiş saatini girmelisiniz."
+    );
+  }
+
+  if (endTime <= startTime) {
+    throw new Error(
+      "Bitiş saati başlangıç saatinden sonra olmalıdır."
+    );
+  }
+
+  const { data: branch, error: branchError } =
+    await supabase
+      .from("branches")
+      .select("id,name")
+      .eq("id", branchId)
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .eq("is_active", true)
+      .maybeSingle();
+
+  if (branchError) {
+    throw branchError;
+  }
+
+  if (!branch) {
+    throw new Error(
+      "Seçilen şube bulunamadı veya aktif değil."
+    );
+  }
+
+  const createdGroupIds: string[] = [];
+
+  try {
+    for (const courseType of courseTypes) {
+      const automaticName =
+        createAutomaticGroupName({
+          branchName: branch.name,
+          weekdays,
+          startTime,
+          courseType,
+        });
+
+      const {
+        data: group,
+        error: groupError,
+      } = await supabase
+        .from("training_groups")
+        .insert({
+          organization_id:
+            organizationId,
+          branch_id: branchId,
+          level_id: levelId,
+          name: automaticName,
+          course_type: courseType,
+          capacity,
+          public_registration:
+            publicRegistration,
+          description,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (groupError || !group) {
+        throw (
+          groupError ||
+          new Error(
+            `${courseType} grubu oluşturulamadı.`
+          )
+        );
+      }
+
+      createdGroupIds.push(group.id);
+
+      const scheduleRows = weekdays.map(
+        (weekday) => ({
+          organization_id:
+            organizationId,
+          branch_id: branchId,
+          group_id: group.id,
+          weekday,
+          start_time: startTime,
+          end_time: endTime,
+          is_active: true,
+        })
+      );
+
+      const { error: scheduleError } =
+        await supabase
+          .from("lesson_schedules")
+          .insert(scheduleRows);
+
+      if (scheduleError) {
+        throw scheduleError;
+      }
+    }
+  } catch (error) {
+    if (createdGroupIds.length) {
+      await supabase
+        .from("lesson_schedules")
+        .delete()
+        .in(
+          "group_id",
+          createdGroupIds
+        )
+        .eq(
+          "organization_id",
+          organizationId
+        );
+
+      await supabase
+        .from("training_groups")
+        .delete()
+        .in("id", createdGroupIds)
+        .eq(
+          "organization_id",
+          organizationId
+        );
+    }
+
+    throw error;
+  }
+
+  refreshGroupPages();
+}
+
+export async function toggleGroup(
+  formData: FormData
+) {
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+  ]);
+
+  const organizationId =
+    profile.organization_id;
+
+  if (!organizationId) {
+    throw new Error(
+      "Kurum bilgisi bulunamadı."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const id = cleanText(
+    formData.get("id"),
+    80
+  );
+
+  const field = cleanText(
+    formData.get("field"),
+    40
+  );
+
+  const value =
+    String(
+      formData.get("value") || ""
+    ) === "true";
+
+  if (
+    !id ||
+    ![
+      "is_active",
+      "public_registration",
+    ].includes(field)
+  ) {
+    throw new Error("Geçersiz işlem.");
+  }
+
+  const { error } = await supabase
+    .from("training_groups")
+    .update({
+      [field]: value,
+    })
+    .eq("id", id)
+    .eq(
+      "organization_id",
+      organizationId
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  if (field === "is_active") {
+    const { error: scheduleError } =
+      await supabase
+        .from("lesson_schedules")
+        .update({
+          is_active: value,
+        })
+        .eq("group_id", id)
+        .eq(
+          "organization_id",
+          organizationId
+        );
+
+    if (scheduleError) {
+      throw scheduleError;
+    }
+  }
+
+  refreshGroupPages();
+}
+
+export async function deleteGroup(
+  formData: FormData
+) {
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+  ]);
+
+  const organizationId =
+    profile.organization_id;
+
+  if (!organizationId) {
+    throw new Error(
+      "Kurum bilgisi bulunamadı."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const id = cleanText(
+    formData.get("id"),
+    80
+  );
+
+  if (!id) {
+    throw new Error(
+      "Silinecek grup bulunamadı."
+    );
+  }
+
+  const { data: group, error: groupError } =
+    await supabase
+      .from("training_groups")
+      .select("id,name")
+      .eq("id", id)
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .maybeSingle();
+
+  if (groupError) {
+    throw groupError;
+  }
+
+  if (!group) {
+    throw new Error("Grup bulunamadı.");
+  }
+
+  const [
+    membershipsResult,
+    enrollmentsResult,
+    attendanceResult,
+    preferredStudentsResult,
+  ] = await Promise.all([
+    supabase
+      .from("student_group_memberships")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .eq("group_id", id),
+
+    supabase
+      .from("student_enrollments")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .eq("group_id", id),
+
+    supabase
+      .from("attendance_records")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .eq("group_id", id),
+
+    supabase
+      .from("students")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .eq(
+        "preferred_group_id",
+        id
+      )
+      .eq("is_deleted", false),
+  ]);
+
+  const relationError =
+    membershipsResult.error ||
+    enrollmentsResult.error ||
+    attendanceResult.error ||
+    preferredStudentsResult.error;
+
+  if (relationError) {
+    throw relationError;
+  }
+
+  const relatedRecordCount =
+    (membershipsResult.count || 0) +
+    (enrollmentsResult.count || 0) +
+    (attendanceResult.count || 0) +
+    (preferredStudentsResult.count ||
+      0);
+
+  if (relatedRecordCount > 0) {
+    throw new Error(
+      `"${group.name}" grubuna bağlı öğrenci, kayıt veya yoklama geçmişi bulunduğu için silinemez. Önce öğrencileri başka gruba aktarın veya grubu pasife alın.`
+    );
+  }
+
+  const { error: scheduleError } =
+    await supabase
+      .from("lesson_schedules")
+      .delete()
+      .eq("group_id", id)
+      .eq(
+        "organization_id",
+        organizationId
+      );
+
+  if (scheduleError) {
+    throw scheduleError;
+  }
+
+  const { error: deleteError } =
+    await supabase
+      .from("training_groups")
+      .delete()
+      .eq("id", id)
+      .eq(
+        "organization_id",
+        organizationId
+      );
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  refreshGroupPages();
 }
