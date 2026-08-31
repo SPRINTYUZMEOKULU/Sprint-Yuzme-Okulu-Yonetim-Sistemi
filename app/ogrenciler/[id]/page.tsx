@@ -1063,7 +1063,7 @@ export default async function StudentFile({
           ÖDEME
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" id="odemeler">
         <div className="panelHead">
           <div>
             <p>FİNANS</p>
