@@ -234,6 +234,7 @@ export default function YetkiPaneliClient({
     "all" | "active" | "super" | "assigned"
   >("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [createdAccount, setCreatedAccount] = useState<CreateStaffInput | null>(null);
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
@@ -352,7 +353,8 @@ export default function YetkiPaneliClient({
   function runAction(
     action: () => Promise<ActionResult>,
     onOptimistic?: () => void,
-    onRollback?: () => void
+    onRollback?: () => void,
+    onSuccess?: (result: ActionResult) => void
   ) {
     if (isPending) return;
 
@@ -368,6 +370,7 @@ export default function YetkiPaneliClient({
       showResult(result);
 
       if (result.ok) {
+        onSuccess?.(result);
         router.refresh();
       }
     });
@@ -557,17 +560,37 @@ export default function YetkiPaneliClient({
         </aside>
 
         <section className="personnelDetail" style={detailPanelStyle}>
-          {showCreate ? (
+          {createdAccount ? (
+            <CreatedStaffReceipt
+              account={createdAccount}
+              onCreateAnother={() => {
+                setCreatedAccount(null);
+                setShowCreate(true);
+              }}
+              onFinish={() => {
+                setCreatedAccount(null);
+                setShowCreate(false);
+                window.location.reload();
+              }}
+            />
+          ) : showCreate ? (
             <CreateStaffPanel
               branches={branches}
               permissionDefinitions={permissionDefinitions}
               pending={isPending}
-              onCancel={() => setShowCreate(false)}
+              onCancel={() => {
+                setShowCreate(false);
+                setCreatedAccount(null);
+              }}
               onSubmit={(input) =>
                 runAction(
                   () => createStaffAction(input),
                   undefined,
-                  undefined
+                  undefined,
+                  () => {
+                    setCreatedAccount(input);
+                    setShowCreate(false);
+                  }
                 )
               }
             />
@@ -1567,6 +1590,206 @@ function HistoryTab({ logs }: { logs: AuditLog[] }) {
         ) : null}
       </div>
     </>
+  );
+}
+
+function CreatedStaffReceipt({
+  account,
+  onCreateAnother,
+  onFinish,
+}: {
+  account: CreateStaffInput;
+  onCreateAnother: () => void;
+  onFinish: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [whatsappOpened, setWhatsappOpened] = useState(false);
+  const loginValue = account.phone.trim() || account.email.trim();
+
+  function whatsappPhone(value: string) {
+    const digits = value.replace(/\D/g, "");
+    if (digits.startsWith("90") && digits.length === 12) return digits;
+    if (digits.startsWith("0") && digits.length === 11) return `90${digits.slice(1)}`;
+    if (digits.length === 10) return `90${digits}`;
+    return digits;
+  }
+
+  const whatsappNumber = whatsappPhone(account.phone);
+
+  async function copyLogin() {
+    const text = [
+      "SPRİNT YÜZME OKULU · SprintOS",
+      `Personel: ${account.fullName}`,
+      `Görev: ${ROLE_LABELS[account.role] || account.role}`,
+      `Kullanıcı: ${loginValue}`,
+      `Geçici şifre: ${account.password}`,
+      "İlk girişten sonra şifrenizi değiştiriniz.",
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  function sendWithWhatsApp() {
+    if (!whatsappNumber) return;
+
+    const message = [
+      `Merhaba ${account.fullName},`,
+      "",
+      "SprintOS personel hesabınız oluşturulmuş ve yönetim tarafından onaylanmıştır. ✅",
+      "",
+      `Göreviniz: ${ROLE_LABELS[account.role] || account.role}`,
+      `Kullanıcı bilginiz: ${loginValue}`,
+      `Geçici şifreniz: ${account.password}`,
+      "Panel giriş adresi: https://panel.larayuzmekursu.com",
+      "",
+      "İlk girişinizden sonra geçici şifrenizi değiştirmenizi rica ederiz.",
+      "",
+      "Sprint Yüzme Okulu · SprintOS",
+    ].join("\n");
+
+    window.open(
+      `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    setWhatsappOpened(true);
+    window.setTimeout(() => setWhatsappOpened(false), 3000);
+  }
+
+  return (
+    <div data-create-panel style={{ padding: 24 }}>
+      <div
+        role="status"
+        style={{
+          padding: 22,
+          borderRadius: 20,
+          border: "1px solid #a7f3d0",
+          background: "linear-gradient(145deg,#ecfdf5 0%,#ffffff 72%)",
+          boxShadow: "0 18px 45px rgba(5,150,105,.12)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              flex: "0 0 52px",
+              display: "grid",
+              placeItems: "center",
+              borderRadius: 16,
+              background: "#059669",
+              color: "#ffffff",
+              fontSize: 28,
+              fontWeight: 950,
+            }}
+          >
+            ✓
+          </div>
+          <div>
+            <div style={{ ...eyebrowStyle, color: "#047857" }}>İŞLEM TAMAMLANDI</div>
+            <h2 style={{ margin: "5px 0 3px", color: "#064e3b" }}>
+              Personel hesabı oluşturuldu
+            </h2>
+            <p style={{ ...sectionTextStyle, margin: 0 }}>
+              Hesap aktif edildi ve verilen yetkiler kaydedildi.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        data-personnel-grid
+        style={{
+          ...infoGridStyle,
+          marginTop: 18,
+        }}
+      >
+        <Info label="Ad Soyad" value={account.fullName} />
+        <Info label="Görev / Rol" value={ROLE_LABELS[account.role] || account.role} />
+        <Info label="Kullanıcı" value={loginValue || "—"} />
+        <Info
+          label="Şube Erişimi"
+          value={account.allBranches ? "Tüm şubeler" : `${account.branchIds.length} şube`}
+        />
+      </div>
+
+      <div
+        data-password-panel
+        style={{
+          ...passwordPanelStyle,
+          marginTop: 18,
+          borderColor: "#bfdbfe",
+          background: "#eff6ff",
+        }}
+      >
+        <div>
+          <h3 style={sectionTitleStyle}>Tek Seferlik Geçici Şifre</h3>
+          <p style={sectionTextStyle}>
+            Güvenlik nedeniyle bu şifre daha sonra görüntülenemez. Şimdi personele iletin.
+          </p>
+        </div>
+
+        <div
+          style={{
+            minWidth: 210,
+            padding: "13px 16px",
+            borderRadius: 13,
+            border: "1px solid #93c5fd",
+            background: "#ffffff",
+            color: "#0f172a",
+            fontSize: 18,
+            fontWeight: 950,
+            letterSpacing: 1.2,
+            textAlign: "center",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {account.password}
+        </div>
+
+        <div style={{ display: "grid", gap: 8 }}>
+          <button type="button" onClick={copyLogin} style={secondaryButton}>
+            {copied ? "✓ Bilgiler Kopyalandı" : "Giriş Bilgilerini Kopyala"}
+          </button>
+
+          <button
+            type="button"
+            onClick={sendWithWhatsApp}
+            disabled={!whatsappNumber}
+            style={{
+              ...primaryButton,
+              background: whatsappNumber ? "#16a34a" : "#94a3b8",
+              borderColor: whatsappNumber ? "#15803d" : "#94a3b8",
+            }}
+          >
+            {whatsappOpened
+              ? "✓ WhatsApp Açıldı"
+              : whatsappNumber
+                ? "WhatsApp’tan Bilgileri Gönder"
+                : "Telefon Numarası Bulunamadı"}
+          </button>
+        </div>
+      </div>
+
+      <div
+        data-personnel-section-header
+        style={{ ...sectionHeaderStyle, marginTop: 20, justifyContent: "flex-end" }}
+      >
+        <button type="button" onClick={onCreateAnother} style={secondaryButton}>
+          + Başka Personel Ekle
+        </button>
+        <button type="button" onClick={onFinish} style={primaryButton}>
+          Personel Listesine Dön →
+        </button>
+      </div>
+    </div>
   );
 }
 
