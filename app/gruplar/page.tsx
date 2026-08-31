@@ -104,7 +104,15 @@ function courseTypeLabel(
   return courseType;
 }
 
-export default async function GroupsPage() {
+export default async function GroupsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+  }>;
+}) {
+  const pageMessages = await searchParams;
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -282,7 +290,45 @@ export default async function GroupsPage() {
           </Link>
         </div>
       </header>
+      {pageMessages.error ? (
+        <div
+          role="alert"
+          style={{
+            maxWidth: 1440,
+            margin: "0 auto 18px",
+            padding: "15px 18px",
+            border: "1px solid #f1c4c8",
+            borderRadius: 14,
+            background: "#fff1f2",
+            color: "#b4232c",
+            fontSize: 13,
+            fontWeight: 800,
+            lineHeight: 1.5,
+          }}
+        >
+          ⛔ {pageMessages.error}
+        </div>
+      ) : null}
 
+      {pageMessages.success ? (
+        <div
+          role="status"
+          style={{
+            maxWidth: 1440,
+            margin: "0 auto 18px",
+            padding: "15px 18px",
+            border: "1px solid #bfe8d5",
+            borderRadius: 14,
+            background: "#effbf5",
+            color: "#08764e",
+            fontSize: 13,
+            fontWeight: 800,
+            lineHeight: 1.5,
+          }}
+        >
+          ✅ {pageMessages.success}
+        </div>
+      ) : null}
       <section className="groupLayout">
         <form
           action={createGroup}
