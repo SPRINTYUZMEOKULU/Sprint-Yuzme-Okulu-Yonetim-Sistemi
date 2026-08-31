@@ -1604,18 +1604,20 @@ function CreatedStaffReceipt({
 }) {
   const [copied, setCopied] = useState(false);
   const [whatsappOpened, setWhatsappOpened] = useState(false);
-  const loginValue = account.phone.trim() || account.email.trim();
+  const loginValue =
+  account.phone?.trim() || account.email?.trim() || "";
 
-  function whatsappPhone(value: string) {
-    const digits = value.replace(/\D/g, "");
-    if (digits.startsWith("90") && digits.length === 12) return digits;
-    if (digits.startsWith("0") && digits.length === 11) return `90${digits.slice(1)}`;
-    if (digits.length === 10) return `90${digits}`;
-    return digits;
+function whatsappPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("90") && digits.length === 12) return digits;
+  if (digits.startsWith("0") && digits.length === 11) {
+    return `90${digits.slice(1)}`;
   }
+  if (digits.length === 10) return `90${digits}`;
+  return digits;
+}
 
-  const whatsappNumber = whatsappPhone(account.phone);
-
+const whatsappNumber = whatsappPhone(account.phone || "");
   async function copyLogin() {
     const text = [
       "SPRİNT YÜZME OKULU · SprintOS",
