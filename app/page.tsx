@@ -11,6 +11,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { Icons } from "@/app/components/dashboard-icons";
 import GlobalSearch from "@/app/components/global-search";
+import SidebarToggle from "@/app/components/sidebar-toggle";
 
 import "./dashboard.css";
 
@@ -898,15 +899,17 @@ export default async function HomePage() {
         =================================================== */}
 
         <header className="proTopbar">
-          {/*
-           * BURASI ARTIK LINK DEĞİL.
-           * GERÇEK ARAMA BİLEŞENİ.
-           */}
-          <GlobalSearch />
+  <SidebarToggle />
+
+  {/*
+   * BURASI ARTIK LINK DEĞİL.
+   * GERÇEK ARAMA BİLEŞENİ.
+   */}
+  <GlobalSearch />
 
           <div className="topActions">
             <Link
-              href="/uyarilar"
+              href="/bildirimler"
               aria-label="Bildirimler"
               title="Bildirimleri Aç"
               style={{
