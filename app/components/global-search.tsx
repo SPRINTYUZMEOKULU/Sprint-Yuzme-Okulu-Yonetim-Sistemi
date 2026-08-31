@@ -1062,43 +1062,46 @@ function ActionButton({
   text: string;
   onClick: () => void;
 }) {
+  const [isOpening, setIsOpening] = useState(false);
+
+  function handleClick() {
+    if (isOpening) return;
+
+    setIsOpening(true);
+    onClick();
+  }
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
+      disabled={isOpening}
+      aria-busy={isOpening}
       style={{
-        minHeight:
-          "42px",
-
-        border:
-          "1px solid #dce5f2",
-
-        borderRadius:
-          "11px",
-
-        background:
-          "#ffffff",
-
-        color:
-          "#1769e8",
-
-        fontSize:
-          "12px",
-
-        fontWeight:
-          750,
-
-        cursor:
-          "pointer",
-
-        padding:
-          "9px 11px",
-
-        textAlign:
-          "center",
+        minHeight: "42px",
+        border: "1px solid #dce5f2",
+        borderRadius: "11px",
+        background: isOpening
+          ? "#edf5ff"
+          : "#ffffff",
+        color: "#1769e8",
+        fontSize: "12px",
+        fontWeight: 750,
+        cursor: isOpening
+          ? "wait"
+          : "pointer",
+        opacity: isOpening
+          ? 0.72
+          : 1,
+        padding: "9px 11px",
+        textAlign: "center",
+        transition:
+          "background-color 160ms ease, opacity 160ms ease, transform 160ms ease",
       }}
     >
-      {text}
+      {isOpening
+        ? `${text} açılıyor…`
+        : text}
     </button>
   );
 }
