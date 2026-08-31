@@ -614,38 +614,38 @@ export default function GlobalSearch() {
   }
 />
 
-                    <ActionButton
-                      text="Yoklama"
-                      onClick={() =>
-                        router.push(
-                          `/yoklama?ogrenci=${encodeURIComponent(
-                            selected.id
-                          )}`
-                        )
-                      }
-                    />
+<ActionButton
+  text="Yoklama"
+  onClick={() =>
+    router.push(
+      `/ogrenciler/${encodeURIComponent(
+        selected.id
+      )}#yoklama`
+    )
+  }
+/>
 
-                    <ActionButton
-                      text="Ödemeler"
-                      onClick={() =>
-                        router.push(
-                          `/odemeler?ogrenci=${encodeURIComponent(
-                            selected.id
-                          )}`
-                        )
-                      }
-                    />
+<ActionButton
+  text="Ödemeler"
+  onClick={() =>
+    router.push(
+      `/ogrenciler/${encodeURIComponent(
+        selected.id
+      )}#odemeler`
+    )
+  }
+/>
 
-                    <ActionButton
-                      text="Mesaj Gönder"
-                      onClick={() =>
-                        router.push(
-                          `/hazir-mesajlar?ogrenci=${encodeURIComponent(
-                            selected.id
-                          )}`
-                        )
-                      }
-                    />
+<ActionButton
+  text="Mesaj Gönder"
+  onClick={() =>
+    router.push(
+      `/ogrenciler/${encodeURIComponent(
+        selected.id
+      )}#mesajlar`
+    )
+  }
+/>
                   </div>
                 </div>
               </div>
