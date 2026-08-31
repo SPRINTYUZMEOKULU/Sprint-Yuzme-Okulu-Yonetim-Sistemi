@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 const STORAGE_KEY = "sprintos-sidebar-collapsed";
 
 export default function SidebarToggle() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+
     try {
       const saved =
         window.localStorage.getItem(STORAGE_KEY) === "true";
@@ -30,19 +34,33 @@ export default function SidebarToggle() {
     };
   }, []);
 
+  function openMobileMenu() {
+    setMobileOpen(true);
+
+    document.documentElement.classList.add(
+      "sprintSidebarMobileOpen"
+    );
+  }
+
+  function closeMobileMenu() {
+    setMobileOpen(false);
+
+    document.documentElement.classList.remove(
+      "sprintSidebarMobileOpen"
+    );
+  }
+
   function handleToggle() {
-    const isMobile =
-      window.matchMedia("(max-width: 820px)").matches;
+    const isMobile = window.matchMedia(
+      "(max-width: 820px)"
+    ).matches;
 
     if (isMobile) {
-      const nextOpen = !mobileOpen;
-
-      setMobileOpen(nextOpen);
-
-      document.documentElement.classList.toggle(
-        "sprintSidebarMobileOpen",
-        nextOpen
-      );
+      if (mobileOpen) {
+        closeMobileMenu();
+      } else {
+        openMobileMenu();
+      }
 
       return;
     }
@@ -62,19 +80,9 @@ export default function SidebarToggle() {
         String(nextCollapsed)
       );
     } catch {
-      // Tarayıcı depolamayı engellese de menü çalışmaya devam eder.
+      // Depolama kapalı olsa bile menü çalışmaya devam eder.
     }
   }
-
-  function closeMobileMenu() {
-    setMobileOpen(false);
-
-    document.documentElement.classList.remove(
-      "sprintSidebarMobileOpen"
-    );
-  }
-
-  const expanded = mobileOpen || !collapsed;
 
   return (
     <>
@@ -83,15 +91,15 @@ export default function SidebarToggle() {
         className="sprintSidebarToggle"
         onClick={handleToggle}
         aria-label={
-          expanded
-            ? "Sol menüyü kapat"
-            : "Sol menüyü aç"
+          collapsed
+            ? "Sol menüyü aç"
+            : "Sol menüyü daralt"
         }
-        aria-expanded={expanded}
+        aria-expanded={!collapsed}
         title={
-          expanded
-            ? "Menüyü Daralt"
-            : "Menüyü Aç"
+          collapsed
+            ? "Menüyü Aç"
+            : "Menüyü Daralt"
         }
       >
         <span />
@@ -99,13 +107,30 @@ export default function SidebarToggle() {
         <span />
       </button>
 
-      <button
-        type="button"
-        className="sprintSidebarOverlay"
-        onClick={closeMobileMenu}
-        aria-label="Menüyü kapat"
-        tabIndex={mobileOpen ? 0 : -1}
-      />
+      {mounted &&
+        mobileOpen &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              className="sprintMobileMenuOverlay"
+              onClick={closeMobileMenu}
+              aria-label="Menüyü kapat"
+            />
+
+            <button
+              type="button"
+              className="sprintMobileMenuClose"
+              onClick={closeMobileMenu}
+              aria-label="Sol menüyü kapat"
+              title="Menüyü Kapat"
+            >
+              <span />
+              <span />
+            </button>
+          </>,
+          document.body
+        )}
 
       <style jsx global>{`
         .sprintSidebarToggle {
@@ -136,9 +161,10 @@ export default function SidebarToggle() {
           background: #f3f8ff;
         }
 
-        .sprintSidebarToggle:focus-visible {
-          outline: 3px solid rgba(23, 105, 232, 0.22);
-          outline-offset: 2px;
+        .sprintSidebarToggle:focus-visible,
+        .sprintMobileMenuClose:focus-visible {
+          outline: 3px solid rgba(23, 105, 232, 0.3);
+          outline-offset: 3px;
         }
 
         .sprintSidebarToggle span {
@@ -147,12 +173,10 @@ export default function SidebarToggle() {
           height: 2px;
           border-radius: 999px;
           background: currentColor;
-          transition:
-            transform 180ms ease,
-            opacity 180ms ease;
         }
 
-        .sprintSidebarOverlay {
+        .sprintMobileMenuOverlay,
+        .sprintMobileMenuClose {
           display: none;
         }
 
@@ -222,44 +246,13 @@ export default function SidebarToggle() {
         }
 
         @media (max-width: 820px) {
-          html.sprintSidebarMobileOpen
-            .sprintSidebarToggle {
-            position: fixed;
-            z-index: 100;
-            top: 14px;
-            left: calc(min(86vw, 310px) - 58px);
-            right: auto;
-            background: #ffffff;
-            color: #13213b;
-            border-color: #d8e2f0;
-            box-shadow: 0 10px 30px rgba(3, 15, 36, 0.22);
-          }
-
-          html.sprintSidebarMobileOpen
-            .sprintSidebarToggle
-            span:nth-child(1) {
-            transform: translateY(7px) rotate(45deg);
-          }
-
-          html.sprintSidebarMobileOpen
-            .sprintSidebarToggle
-            span:nth-child(2) {
-            opacity: 0;
-          }
-
-          html.sprintSidebarMobileOpen
-            .sprintSidebarToggle
-            span:nth-child(3) {
-            transform: translateY(-7px) rotate(-45deg);
-          }
-
           html .proShell {
             display: block;
           }
 
           html .proSidebar {
             position: fixed;
-            z-index: 80;
+            z-index: 8000;
             top: 0;
             left: 0;
             width: min(86vw, 310px);
@@ -267,12 +260,72 @@ export default function SidebarToggle() {
             min-height: 100dvh;
             padding: 20px 16px;
             overflow-y: auto;
+            overscroll-behavior: contain;
             transform: translateX(-105%);
-            box-shadow: 18px 0 50px rgba(3, 15, 36, 0.28);
+            box-shadow: 18px 0 50px rgba(3, 15, 36, 0.32);
           }
 
           html.sprintSidebarMobileOpen .proSidebar {
             transform: translateX(0);
+          }
+
+          html.sprintSidebarMobileOpen {
+            overflow: hidden;
+          }
+
+          html.sprintSidebarMobileOpen
+            .sprintSidebarToggle {
+            visibility: hidden;
+            pointer-events: none;
+          }
+
+          .sprintMobileMenuOverlay {
+            display: block;
+            position: fixed;
+            z-index: 7000;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: rgba(4, 14, 32, 0.56);
+            cursor: pointer;
+          }
+
+          .sprintMobileMenuClose {
+            display: inline-flex;
+            position: fixed;
+            z-index: 99999;
+            top: calc(env(safe-area-inset-top, 0px) + 14px);
+            left: calc(min(86vw, 310px) - 58px);
+            width: 44px;
+            height: 44px;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 2px solid rgba(255, 255, 255, 0.75);
+            border-radius: 14px;
+            background: #ffffff;
+            color: #10213a;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(3, 15, 36, 0.3);
+          }
+
+          .sprintMobileMenuClose span {
+            position: absolute;
+            width: 21px;
+            height: 2.5px;
+            border-radius: 999px;
+            background: currentColor;
+          }
+
+          .sprintMobileMenuClose span:first-child {
+            transform: rotate(45deg);
+          }
+
+          .sprintMobileMenuClose span:last-child {
+            transform: rotate(-45deg);
           }
 
           html .proNav {
@@ -298,27 +351,6 @@ export default function SidebarToggle() {
 
           html .proUser {
             display: grid;
-          }
-
-          html.sprintSidebarMobileOpen {
-            overflow: hidden;
-          }
-
-          .sprintSidebarOverlay {
-            position: fixed;
-            z-index: 70;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            padding: 0;
-            border: 0;
-            background: rgba(4, 14, 32, 0.52);
-            cursor: pointer;
-          }
-
-          html.sprintSidebarMobileOpen
-            .sprintSidebarOverlay {
-            display: block;
           }
 
           .proTopbar {
