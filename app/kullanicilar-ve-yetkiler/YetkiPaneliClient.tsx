@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-
+import PasswordField from "./password-field";
 import {
   changeStaffPasswordAction,
   createStaffAction,
@@ -34,7 +34,7 @@ type Staff = {
   auth_user_id: string | null;
   login_enabled: boolean;
   is_super_user: boolean;
-  must_change_password: boolean;
+  must_change_: boolean;
   all_branches: boolean;
 };
 
@@ -88,42 +88,42 @@ export type YetkiPaneliClientProps = {
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Sistem Sahibi",
-  admin: "Yönetici",
-  branch_manager: "Şube Yöneticisi",
-  registration_staff: "Kayıt Personeli",
+  admin: "YÃ¶netici",
+  branch_manager: "Åube YÃ¶neticisi",
+  registration_staff: "KayÄ±t Personeli",
   accounting: "Muhasebe",
-  coach: "Eğitmen",
+  coach: "EÄŸitmen",
   guardian: "Veli",
 };
 
 const STAFF_ROLES: Array<[Exclude<UserRole, "owner">, string]> = [
-  ["admin", "Yönetici"],
-  ["branch_manager", "Şube Yöneticisi"],
-  ["registration_staff", "Kayıt Personeli"],
+  ["admin", "YÃ¶netici"],
+  ["branch_manager", "Åube YÃ¶neticisi"],
+  ["registration_staff", "KayÄ±t Personeli"],
   ["accounting", "Muhasebe"],
-  ["coach", "Eğitmen"],
+  ["coach", "EÄŸitmen"],
   ["guardian", "Veli"],
 ];
 
 const MODULE_LABELS: Record<string, string> = {
   system: "Sistem",
   dashboard: "Ana Sayfa",
-  students: "Öğrenciler",
-  preregistration: "Ön Kayıt",
+  students: "Ã–ÄŸrenciler",
+  preregistration: "Ã–n KayÄ±t",
   groups: "Gruplar",
-  schedule: "Ders Programı",
-  operations: "Operasyon Planı",
+  schedule: "Ders ProgramÄ±",
+  operations: "Operasyon PlanÄ±",
   attendance: "Yoklama",
-  finance: "Muhasebe ve Ödemeler",
+  finance: "Muhasebe ve Ã–demeler",
   staff: "Personel",
-  accounts: "Giriş ve Güvenlik",
+  accounts: "GiriÅŸ ve GÃ¼venlik",
   permissions: "Yetkiler",
   reports: "Raporlar",
-  branches: "Şubeler",
+  branches: "Åubeler",
 };
 
 function formatPhone(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   let digits = value.replace(/\D/g, "");
   if (digits.startsWith("90")) digits = digits.slice(2);
 
@@ -138,7 +138,7 @@ function formatPhone(value?: string | null) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Henüz kayıt yok";
+  if (!value) return "HenÃ¼z kayÄ±t yok";
 
   return new Intl.DateTimeFormat("tr-TR", {
     timeZone: "Europe/Istanbul",
@@ -191,7 +191,7 @@ function Toast({
       }}
     >
       <span>
-        {toast.type === "success" ? "✓ " : "⚠ "}
+        {toast.type === "success" ? "âœ“ " : "âš  "}
         {toast.message}
       </span>
 
@@ -206,7 +206,7 @@ function Toast({
           fontSize: 18,
         }}
       >
-        ×
+        Ã—
       </button>
     </div>
   );
@@ -230,6 +230,9 @@ export default function YetkiPaneliClient({
   >("genel");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [summaryFilter, setSummaryFilter] = useState<
+    "all" | "active" | "super" | "assigned"
+  >("all");
   const [showCreate, setShowCreate] = useState(false);
   const [toast, setToast] = useState<{
     type: "success" | "error";
@@ -252,6 +255,26 @@ export default function YetkiPaneliClient({
 
     return localProfiles.filter((profile) => {
       if (roleFilter && profile.role !== roleFilter) return false;
+
+      const staff = localStaff.find(
+        (row) => row.auth_user_id === profile.id
+      );
+
+      if (summaryFilter === "active" && !profile.is_active) return false;
+      if (
+        summaryFilter === "super" &&
+        profile.role !== "owner" &&
+        !staff?.is_super_user
+      ) {
+        return false;
+      }
+      if (
+        summaryFilter === "assigned" &&
+        !staff?.all_branches &&
+        !localBranches.some((row) => row.staff_id === staff?.id)
+      ) {
+        return false;
+      }
       if (!q) return true;
 
       const haystack = [
@@ -266,7 +289,14 @@ export default function YetkiPaneliClient({
 
       return haystack.includes(q);
     });
-  }, [localProfiles, search, roleFilter]);
+  }, [
+    localProfiles,
+    localStaff,
+    localBranches,
+    search,
+    roleFilter,
+    summaryFilter,
+  ]);
 
   const selectedBranchIds = useMemo(() => {
     if (!selectedStaff) return [];
@@ -360,61 +390,69 @@ export default function YetkiPaneliClient({
   if (!localProfiles.length) {
     return (
       <div style={emptyPanelStyle}>
-        Henüz personel bulunmuyor.
+        HenÃ¼z personel bulunmuyor.
         <button
           type="button"
           onClick={() => setShowCreate(true)}
           style={primaryButton}
         >
-          İlk Personeli Oluştur
+          Ä°lk Personeli OluÅŸtur
         </button>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="personnelUi">
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       {isPending ? (
         <div style={pendingBarStyle}>
           <span style={spinnerStyle} />
-          İşlem yapılıyor...
+          Ä°ÅŸlem yapÄ±lÄ±yor...
         </div>
       ) : null}
 
-      <section style={statsGridStyle}>
+      <section className="personnelStats" style={statsGridStyle}>
         <Stat
           title="Toplam Personel"
           value={localProfiles.length}
-          note="Sistemde kayıtlı"
+          note="Sistemde kayÄ±tlÄ±"
+          active={summaryFilter === "all"}
+          onClick={() => setSummaryFilter("all")}
         />
         <Stat
           title="Aktif Hesap"
           value={localProfiles.filter((x) => x.is_active).length}
-          note="Kullanılabilir"
+          note="KullanÄ±labilir"
+          active={summaryFilter === "active"}
+          onClick={() => setSummaryFilter("active")}
         />
         <Stat
-          title="Süper Kullanıcı"
+          title="SÃ¼per KullanÄ±cÄ±"
           value={
             localProfiles.filter((x) => x.role === "owner").length +
             localStaff.filter((x) => x.is_super_user).length
           }
-          note="Tam erişim"
+          note="Tam eriÅŸim"
+          active={summaryFilter === "super"}
+          onClick={() => setSummaryFilter("super")}
         />
         <Stat
-          title="Aktif Şube"
+          title="Aktif Åube"
           value={branches.length}
-          note="Personel atanabilir"
+          note="Atanan personeli gÃ¶ster"
+          active={summaryFilter === "assigned"}
+          onClick={() => setSummaryFilter("assigned")}
         />
       </section>
 
-      <section style={workspaceStyle}>
-        <aside style={sidebarStyle}>
+      <section className="personnelWorkspace" style={workspaceStyle}>
+        <aside className="personnelSidebar" style={sidebarStyle}>
           <div style={sidebarHeaderStyle}>
             <div>
               <div style={eyebrowStyle}>PERSONELLER</div>
-              <strong style={{ fontSize: 17 }}>Kullanıcı Listesi</strong>
+              <strong style={{ fontSize: 17 }}>KullanÄ±cÄ± Listesi</strong>
             </div>
 
             <button
@@ -439,7 +477,7 @@ export default function YetkiPaneliClient({
               onChange={(e) => setRoleFilter(e.target.value)}
               style={inputStyle}
             >
-              <option value="">Tüm roller</option>
+              <option value="">TÃ¼m roller</option>
               {Object.entries(ROLE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -483,7 +521,7 @@ export default function YetkiPaneliClient({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={personCardTopStyle}>
                       <strong style={personNameStyle}>
-                        {profile.full_name || "İsimsiz Kullanıcı"}
+                        {profile.full_name || "Ä°simsiz KullanÄ±cÄ±"}
                       </strong>
                       <span
                         style={
@@ -503,22 +541,22 @@ export default function YetkiPaneliClient({
                     </div>
 
                     <div style={personTinyStatsStyle}>
-                      <span>🏢 {staff?.all_branches ? "Tüm" : branchCount} Şube</span>
-                      <span>🔑 {permissionCount} Yetki</span>
+                      <span>ğŸ¢ {staff?.all_branches ? "TÃ¼m" : branchCount} Åube</span>
+                      <span>ğŸ”‘ {permissionCount} Yetki</span>
                       {staff?.is_super_user || profile.role === "owner" ? (
-                        <span>★ Süper</span>
+                        <span>â˜… SÃ¼per</span>
                       ) : null}
                     </div>
                   </div>
 
-                  <span style={arrowStyle}>›</span>
+                  <span style={arrowStyle}>â€º</span>
                 </button>
               );
             })}
           </div>
         </aside>
 
-        <section style={detailPanelStyle}>
+        <section className="personnelDetail" style={detailPanelStyle}>
           {showCreate ? (
             <CreateStaffPanel
               branches={branches}
@@ -535,18 +573,18 @@ export default function YetkiPaneliClient({
             />
           ) : selectedProfile ? (
             <>
-              <header style={personHeaderStyle}>
+              <header className="personnelHeader" style={personHeaderStyle}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={bigAvatarStyle}>
                     {initials(selectedProfile.full_name)}
                   </div>
                   <div>
                     <h2 style={{ margin: 0, fontSize: 24 }}>
-                      {selectedProfile.full_name || "İsimsiz Kullanıcı"}
+                      {selectedProfile.full_name || "Ä°simsiz KullanÄ±cÄ±"}
                     </h2>
                     <div style={headerMetaStyle}>
                       {ROLE_LABELS[selectedProfile.role] || selectedProfile.role}
-                      {" · "}
+                      {" Â· "}
                       {formatPhone(selectedProfile.phone)}
                     </div>
                   </div>
@@ -555,7 +593,7 @@ export default function YetkiPaneliClient({
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {selectedStaff?.is_super_user ||
                   selectedProfile.role === "owner" ? (
-                    <span style={superBadgeStyle}>★ Süper Kullanıcı</span>
+                    <span style={superBadgeStyle}>â˜… SÃ¼per KullanÄ±cÄ±</span>
                   ) : null}
 
                   <span
@@ -565,18 +603,18 @@ export default function YetkiPaneliClient({
                         : passiveLargeBadgeStyle
                     }
                   >
-                    {selectedProfile.is_active ? "● Aktif" : "● Pasif"}
+                    {selectedProfile.is_active ? "â— Aktif" : "â— Pasif"}
                   </span>
                 </div>
               </header>
 
-              <nav style={tabsStyle}>
+              <nav className="personnelTabs" style={tabsStyle}>
                 {[
                   ["genel", "Genel Bilgiler"],
-                  ["subeler", "Şubeler"],
+                  ["subeler", "Åubeler"],
                   ["yetkiler", "Yetkiler"],
-                  ["guvenlik", "Giriş & Güvenlik"],
-                  ["gecmis", "İşlem Geçmişi"],
+                  ["guvenlik", "GiriÅŸ & GÃ¼venlik"],
+                  ["gecmis", "Ä°ÅŸlem GeÃ§miÅŸi"],
                 ].map(([key, label]) => (
                   <button
                     key={key}
@@ -592,7 +630,7 @@ export default function YetkiPaneliClient({
                 ))}
               </nav>
 
-              <div style={tabContentStyle}>
+              <div className="personnelTabContent" style={tabContentStyle}>
                 {activeTab === "genel" ? (
                   <GeneralTab
                     profile={selectedProfile}
@@ -673,7 +711,7 @@ export default function YetkiPaneliClient({
                       if (!staffId) {
                         showResult({
                           ok: false,
-                          message: "Personel kaydı bulunamadı.",
+                          message: "Personel kaydÄ± bulunamadÄ±.",
                         });
                         return;
                       }
@@ -808,11 +846,189 @@ export default function YetkiPaneliClient({
               </div>
             </>
           ) : (
-            <div style={emptyPanelStyle}>Personel seçiniz.</div>
+            <div style={emptyPanelStyle}>Personel seÃ§iniz.</div>
           )}
         </section>
       </section>
-    </>
+
+      <style jsx global>{`
+        .personnelUi,
+        .personnelUi * {
+          box-sizing: border-box;
+        }
+
+        .personnelUi {
+          width: 100%;
+          max-width: 100%;
+          overflow: hidden;
+        }
+
+        .personnelUi button,
+        .personnelUi input,
+        .personnelUi select {
+          font: inherit;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .personnelUi button {
+          cursor: pointer;
+          transition:
+            transform 150ms ease,
+            box-shadow 150ms ease,
+            filter 150ms ease,
+            opacity 150ms ease !important;
+        }
+
+        .personnelUi button:not(:disabled):hover {
+          filter: brightness(0.98);
+          box-shadow: 0 8px 22px rgba(23, 105, 232, 0.12);
+        }
+
+        .personnelUi button:not(:disabled):active {
+          transform: translateY(1px) scale(0.975) !important;
+          filter: brightness(0.94);
+        }
+
+        .personnelUi button:focus-visible,
+        .personnelUi input:focus-visible,
+        .personnelUi select:focus-visible {
+          outline: 3px solid rgba(23, 105, 232, 0.2) !important;
+          outline-offset: 2px;
+        }
+
+        .personnelUi button:disabled {
+          cursor: not-allowed;
+          opacity: 0.58 !important;
+          box-shadow: none !important;
+        }
+
+        @media (max-width: 900px) {
+          body {
+            overflow-x: hidden;
+          }
+
+          main:has(.personnelUi) {
+            padding: 16px 12px 32px !important;
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+          }
+
+          main:has(.personnelUi) > div {
+            width: 100%;
+            max-width: 100%;
+          }
+
+          .personnelStats {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 9px !important;
+          }
+
+          .personnelWorkspace {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 12px !important;
+            width: 100% !important;
+          }
+
+          .personnelSidebar,
+          .personnelDetail {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          .personnelSidebar {
+            max-height: 390px;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
+          }
+
+          .personnelHeader,
+          .personnelHeader > div:first-child {
+            align-items: flex-start !important;
+          }
+
+          .personnelHeader {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 12px !important;
+          }
+
+          .personnelTabs {
+            display: flex !important;
+            width: 100%;
+            overflow-x: auto !important;
+            overflow-y: hidden;
+            padding: 10px 12px !important;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .personnelTabs button {
+            flex: 0 0 auto;
+            min-height: 44px;
+            scroll-snap-align: start;
+          }
+
+          .personnelTabContent {
+            padding: 16px 12px !important;
+            min-width: 0 !important;
+            overflow: hidden;
+          }
+
+          .personnelUi input,
+          .personnelUi select,
+          .personnelUi button {
+            min-height: 44px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .personnelStats {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .personnelStats > article {
+            padding: 13px 12px !important;
+            min-width: 0;
+          }
+
+          .personnelStats strong {
+            font-size: 23px !important;
+          }
+
+          .personnelUi [data-personnel-form-grid],
+          .personnelUi [data-personnel-grid] {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+
+          .personnelUi [data-personnel-section-header] {
+            align-items: stretch !important;
+            flex-direction: column !important;
+          }
+
+          .personnelUi [data-personnel-section-header] > button {
+            width: 100%;
+          }
+
+          .personnelUi [data-create-panel] {
+            padding: 16px 12px 22px !important;
+          }
+
+          .personnelUi [data-password-panel] {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            align-items: stretch !important;
+          }
+
+          .personnelUi [data-password-panel] button {
+            width: 100%;
+          }
+        }
+      `}</style>
+    </div>
   );
 }
 
@@ -820,17 +1036,38 @@ function Stat({
   title,
   value,
   note,
+  active,
+  onClick,
 }: {
   title: string;
   value: number;
   note: string;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <article style={statCardStyle}>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        ...statCardStyle,
+        width: "100%",
+        textAlign: "left",
+        cursor: "pointer",
+        borderColor: active ? "#1769e8" : "#e2e8f0",
+        background: active
+          ? "linear-gradient(145deg, #eff6ff 0%, #ffffff 100%)"
+          : "#ffffff",
+        boxShadow: active
+          ? "0 12px 28px rgba(23, 105, 232, 0.13)"
+          : "0 5px 18px rgba(15, 23, 42, 0.04)",
+      }}
+    >
       <span style={statTitleStyle}>{title}</span>
       <strong style={statValueStyle}>{value}</strong>
-      <small style={statNoteStyle}>{note}</small>
-    </article>
+      <small style={statNoteStyle}>{active ? `âœ“ ${note}` : note}</small>
+    </button>
   );
 }
 
@@ -868,26 +1105,26 @@ function GeneralTab({
 
   return (
     <>
-      <div style={infoGridStyle}>
+      <div data-personnel-grid style={infoGridStyle}>
         <Info label="Hesap Durumu" value={profile.is_active ? "Aktif" : "Pasif"} />
-        <Info label="Şube Sayısı" value={String(branchCount)} />
+        <Info label="Åube SayÄ±sÄ±" value={String(branchCount)} />
         <Info label="Aktif Yetki" value={String(permissionCount)} />
         <Info
-          label="Son Giriş"
+          label="Son GiriÅŸ"
           value={formatDate(profile.last_sign_in_at)}
         />
       </div>
 
       {isOwner ? (
         <div style={warningStyle}>
-          Sistem Sahibi hesabının rolü ve temel erişimleri bu ekrandan
-          değiştirilemez.
+          Sistem Sahibi hesabÄ±nÄ±n rolÃ¼ ve temel eriÅŸimleri bu ekrandan
+          deÄŸiÅŸtirilemez.
         </div>
       ) : (
         <div style={{ marginTop: 22 }}>
           <h3 style={sectionTitleStyle}>Personel Bilgileri</h3>
 
-          <div style={formGridStyle}>
+          <div data-personnel-form-grid style={formGridStyle}>
             <Field label="Ad Soyad">
               <input
                 value={fullName}
@@ -914,7 +1151,7 @@ function GeneralTab({
               />
             </Field>
 
-            <Field label="Görev / Rol">
+            <Field label="GÃ¶rev / Rol">
               <select
                 value={role}
                 onChange={(e) =>
@@ -952,7 +1189,7 @@ function GeneralTab({
 
       {staff?.must_change_password ? (
         <div style={noticeStyle}>
-          Bu kullanıcı için ilk girişte şifre değişikliği öneriliyor.
+          Bu kullanÄ±cÄ± iÃ§in ilk giriÅŸte ÅŸifre deÄŸiÅŸikliÄŸi Ã¶neriliyor.
         </div>
       ) : null}
     </>
@@ -978,7 +1215,7 @@ function BranchesTab({
   const [allBranches, setAllBranches] = useState(Boolean(staff?.all_branches));
 
   if (profile.role === "owner") {
-    return <div style={warningStyle}>Sistem Sahibi tüm şubelere erişebilir.</div>;
+    return <div style={warningStyle}>Sistem Sahibi tÃ¼m ÅŸubelere eriÅŸebilir.</div>;
   }
 
   function toggleBranch(branchId: string) {
@@ -1000,15 +1237,15 @@ function BranchesTab({
 
   return (
     <>
-      <div style={sectionHeaderStyle}>
+      <div data-personnel-section-header style={sectionHeaderStyle}>
         <div>
-          <h3 style={sectionTitleStyle}>Çalışabileceği Şubeler</h3>
+          <h3 style={sectionTitleStyle}>Ã‡alÄ±ÅŸabileceÄŸi Åubeler</h3>
           <p style={sectionTextStyle}>
-            Bir kutuya tıkladığınız anda seçim otomatik kaydedilir.
+            Bir kutuya tÄ±kladÄ±ÄŸÄ±nÄ±z anda seÃ§im otomatik kaydedilir.
           </p>
         </div>
 
-        <span style={autoSaveBadgeStyle}>✓ Otomatik Kayıt</span>
+        <span style={autoSaveBadgeStyle}>âœ“ Otomatik KayÄ±t</span>
       </div>
 
       <button
@@ -1022,14 +1259,14 @@ function BranchesTab({
         }}
       >
         <span>
-          <strong>Tüm Şubeler</strong>
-          <small style={branchHelpStyle}>Aktif tüm şubelere erişim</small>
+          <strong>TÃ¼m Åubeler</strong>
+          <small style={branchHelpStyle}>Aktif tÃ¼m ÅŸubelere eriÅŸim</small>
         </span>
 
         <Switch active={allBranches} />
       </button>
 
-      <div style={branchGridStyle}>
+      <div data-personnel-grid style={branchGridStyle}>
         {branches.map((branch) => {
           const active = allBranches || selected.includes(branch.id);
 
@@ -1049,7 +1286,7 @@ function BranchesTab({
               <span>
                 <strong>{branch.name}</strong>
                 <small style={branchHelpStyle}>
-                  {active ? "Erişim açık" : "Erişim kapalı"}
+                  {active ? "EriÅŸim aÃ§Ä±k" : "EriÅŸim kapalÄ±"}
                 </small>
               </span>
 
@@ -1084,7 +1321,7 @@ function PermissionsTab({
   onAccounting: (allowed: boolean) => void;
 }) {
   if (profile.role === "owner") {
-    return <div style={warningStyle}>Sistem Sahibi tüm yetkilere sahiptir.</div>;
+    return <div style={warningStyle}>Sistem Sahibi tÃ¼m yetkilere sahiptir.</div>;
   }
 
   const groups = permissionDefinitions.reduce<
@@ -1102,18 +1339,18 @@ function PermissionsTab({
 
   return (
     <>
-      <div style={quickGridStyle}>
+      <div data-personnel-grid style={quickGridStyle}>
         <QuickToggle
-          title="Süper Kullanıcı"
-          description="Tüm SprintOS modüllerine tam erişim sağlar."
+          title="SÃ¼per KullanÄ±cÄ±"
+          description="TÃ¼m SprintOS modÃ¼llerine tam eriÅŸim saÄŸlar."
           active={superUser}
           pending={pending}
           onClick={() => onSuperUser(!superUser)}
         />
 
         <QuickDual
-          title="Tüm Standart Yetkiler"
-          description="Normal yetkilerin tamamını tek seferde yönet."
+          title="TÃ¼m Standart Yetkiler"
+          description="Normal yetkilerin tamamÄ±nÄ± tek seferde yÃ¶net."
           pending={pending}
           onOpen={() => onAll(true)}
           onClose={() => onAll(false)}
@@ -1121,7 +1358,7 @@ function PermissionsTab({
 
         <QuickDual
           title="Muhasebe"
-          description="Ödeme, kasa ve finansal yetkileri toplu yönet."
+          description="Ã–deme, kasa ve finansal yetkileri toplu yÃ¶net."
           pending={pending}
           onOpen={() => onAccounting(true)}
           onClose={() => onAccounting(false)}
@@ -1169,7 +1406,7 @@ function PermissionsTab({
                         fontWeight: 900,
                       }}
                     >
-                      {active ? "AÇIK" : "KAPALI"}
+                      {active ? "AÃ‡IK" : "KAPALI"}
                     </span>
                     <Switch active={active} />
                   </span>
@@ -1204,15 +1441,15 @@ function SecurityTab({
 
   return (
     <>
-      <div style={securityGridStyle}>
+      <div data-personnel-grid style={securityGridStyle}>
         <div style={securityCardStyle}>
           <div>
-            <div style={securityLabelStyle}>Sisteme Giriş</div>
+            <div style={securityLabelStyle}>Sisteme GiriÅŸ</div>
             <strong style={securityValueStyle}>
-              {loginEnabled ? "Açık" : "Kapalı"}
+              {loginEnabled ? "AÃ§Ä±k" : "KapalÄ±"}
             </strong>
             <p style={securityTextStyle}>
-              Bu kişinin SprintOS hesabına giriş yapabilmesini kontrol eder.
+              Bu kiÅŸinin SprintOS hesabÄ±na giriÅŸ yapabilmesini kontrol eder.
             </p>
           </div>
 
@@ -1233,7 +1470,7 @@ function SecurityTab({
               {profile.is_active ? "Aktif" : "Pasif"}
             </strong>
             <p style={securityTextStyle}>
-              Hesabı tamamen aktif veya pasif duruma getirir.
+              HesabÄ± tamamen aktif veya pasif duruma getirir.
             </p>
           </div>
 
@@ -1248,31 +1485,30 @@ function SecurityTab({
         </div>
       </div>
 
-      <div style={infoGridStyle}>
+      <div data-personnel-grid style={infoGridStyle}>
         <Info label="Telefon" value={formatPhone(profile.phone)} />
-        <Info label="E-posta" value={profile.email || "—"} />
-        <Info label="Son Giriş" value={formatDate(profile.last_sign_in_at)} />
+        <Info label="E-posta" value={profile.email || "â€”"} />
+        <Info label="Son GiriÅŸ" value={formatDate(profile.last_sign_in_at)} />
         <Info
-          label="İlk Girişte Şifre Değişimi"
-          value={staff?.must_change_password ? "Gerekli" : "Tamamlandı"}
+          label="Ä°lk GiriÅŸte Åifre DeÄŸiÅŸimi"
+          value={staff?.must_change_password ? "Gerekli" : "TamamlandÄ±"}
         />
       </div>
 
       {!isOwner ? (
-        <div style={passwordPanelStyle}>
+        <div data-password-panel style={passwordPanelStyle}>
           <div>
-            <h3 style={sectionTitleStyle}>Yeni / Geçici Şifre</h3>
+            <h3 style={sectionTitleStyle}>Yeni / GeÃ§ici Åifre</h3>
             <p style={sectionTextStyle}>
-              En az 8 karakterlik yeni bir geçici şifre tanımlayın.
+              En az 8 karakterlik yeni bir geÃ§ici ÅŸifre tanÄ±mlayÄ±n.
             </p>
           </div>
 
-          <input
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            placeholder="Yeni şifre"
-            style={{ ...inputStyle, maxWidth: 300 }}
+            onChange={setPassword}
+            disabled={pending}
+            placeholder="Yeni geÃ§ici ÅŸifre"
           />
 
           <button
@@ -1284,7 +1520,7 @@ function SecurityTab({
             }}
             style={primaryButton}
           >
-            {pending ? "İşleniyor..." : "Şifreyi Değiştir"}
+            {pending ? "Ä°ÅŸleniyor..." : "Åifreyi DeÄŸiÅŸtir"}
           </button>
         </div>
       ) : null}
@@ -1295,14 +1531,14 @@ function SecurityTab({
 function HistoryTab({ logs }: { logs: AuditLog[] }) {
   return (
     <>
-      <div style={sectionHeaderStyle}>
+      <div data-personnel-section-header style={sectionHeaderStyle}>
         <div>
-          <h3 style={sectionTitleStyle}>İşlem Geçmişi</h3>
+          <h3 style={sectionTitleStyle}>Ä°ÅŸlem GeÃ§miÅŸi</h3>
           <p style={sectionTextStyle}>
-            Önemli yönetim işlemleri tarih ve saat bilgisiyle kayıt altında.
+            Ã–nemli yÃ¶netim iÅŸlemleri tarih ve saat bilgisiyle kayÄ±t altÄ±nda.
           </p>
         </div>
-        <span style={autoSaveBadgeStyle}>{logs.length} kayıt</span>
+        <span style={autoSaveBadgeStyle}>{logs.length} kayÄ±t</span>
       </div>
 
       <div style={timelineStyle}>
@@ -1320,14 +1556,14 @@ function HistoryTab({ logs }: { logs: AuditLog[] }) {
               ) : null}
 
               <div style={timelineMetaStyle}>
-                {log.module_key} · {log.action_key}
+                {log.module_key} Â· {log.action_key}
               </div>
             </div>
           </div>
         ))}
 
         {!logs.length ? (
-          <div style={emptyPanelStyle}>Henüz işlem kaydı bulunmuyor.</div>
+          <div style={emptyPanelStyle}>HenÃ¼z iÅŸlem kaydÄ± bulunmuyor.</div>
         ) : null}
       </div>
     </>
@@ -1358,22 +1594,22 @@ function CreateStaffPanel({
   const [permissionKeys, setPermissionKeys] = useState<string[]>([]);
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={sectionHeaderStyle}>
+    <div data-create-panel style={{ padding: 24 }}>
+      <div data-personnel-section-header style={sectionHeaderStyle}>
         <div>
-          <div style={eyebrowStyle}>YENİ PERSONEL</div>
-          <h2 style={{ margin: "5px 0 0" }}>Personel hesabı oluştur</h2>
+          <div style={eyebrowStyle}>YENÄ° PERSONEL</div>
+          <h2 style={{ margin: "5px 0 0" }}>Personel hesabÄ± oluÅŸtur</h2>
           <p style={sectionTextStyle}>
-            Telefon alanında +90 yazmanıza gerek yoktur.
+            Telefon alanÄ±nda +90 yazmanÄ±za gerek yoktur.
           </p>
         </div>
 
         <button type="button" onClick={onCancel} style={secondaryButton}>
-          Vazgeç
+          VazgeÃ§
         </button>
       </div>
 
-      <div style={formGridStyle}>
+      <div data-personnel-form-grid style={formGridStyle}>
         <Field label="Ad Soyad">
           <input
             value={fullName}
@@ -1400,16 +1636,16 @@ function CreateStaffPanel({
           />
         </Field>
 
-        <Field label="Geçici Şifre">
-          <input
+        <Field label="GeÃ§ici Åifre">
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            style={inputStyle}
+            onChange={setPassword}
+            disabled={pending}
+            placeholder="En az 8 karakter"
           />
         </Field>
 
-        <Field label="Görev / Rol">
+        <Field label="GÃ¶rev / Rol">
           <select
             value={role}
             onChange={(e) =>
@@ -1427,7 +1663,7 @@ function CreateStaffPanel({
       </div>
 
       <div style={createSectionStyle}>
-        <h3 style={sectionTitleStyle}>Şubeler</h3>
+        <h3 style={sectionTitleStyle}>Åubeler</h3>
 
         <button
           type="button"
@@ -1441,11 +1677,11 @@ function CreateStaffPanel({
             borderColor: allBranches ? "#1769e8" : "#dfe7f1",
           }}
         >
-          <strong>Tüm Şubeler</strong>
+          <strong>TÃ¼m Åubeler</strong>
           <Switch active={allBranches} />
         </button>
 
-        <div style={branchGridStyle}>
+        <div data-personnel-grid style={branchGridStyle}>
           {branches.map((branch) => {
             const active = allBranches || branchIds.includes(branch.id);
 
@@ -1476,7 +1712,7 @@ function CreateStaffPanel({
       </div>
 
       <div style={createSectionStyle}>
-        <h3 style={sectionTitleStyle}>Başlangıç Yetkileri</h3>
+        <h3 style={sectionTitleStyle}>BaÅŸlangÄ±Ã§ Yetkileri</h3>
 
         <div style={permissionListStyle}>
           {permissionDefinitions.map((permission) => {
@@ -1531,7 +1767,7 @@ function CreateStaffPanel({
         }
         style={primaryButton}
       >
-        {pending ? "Oluşturuluyor..." : "+ Personeli Oluştur"}
+        {pending ? "OluÅŸturuluyor..." : "+ Personeli OluÅŸtur"}
       </button>
     </div>
   );
@@ -1593,7 +1829,7 @@ function QuickDual({
           onClick={onOpen}
           style={openButtonStyle}
         >
-          Aç
+          AÃ§
         </button>
 
         <button
