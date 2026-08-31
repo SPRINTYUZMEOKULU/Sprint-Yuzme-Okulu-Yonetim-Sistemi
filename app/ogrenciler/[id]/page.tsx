@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { addStudentNote, deleteStudentNote, updateStudentProfile } from "./actions";
+import {
+  addStudentNote,
+  deleteStudentNote,
+  updateStudentProfile,
+} from "./actions";
 import StudentFileOperations from "./student-file-operations";
 import "./student-detail.css";
 
@@ -93,7 +97,7 @@ export default async function StudentFile({
   const supabase = await createClient();
 
   const canManageDestructiveActions = ["owner", "admin"].includes(
-    String((profile as any).role || "")
+    String((profile as any).role || ""),
   );
 
   /*
@@ -120,11 +124,7 @@ export default async function StudentFile({
     enrollmentHistoryResult,
     attendanceResult,
   ] = await Promise.all([
-    supabase
-      .from("students")
-      .select("*")
-      .eq("id", id)
-      .single(),
+    supabase.from("students").select("*").eq("id", id).single(),
 
     supabase
       .from("student_enrollments")
@@ -161,9 +161,7 @@ export default async function StudentFile({
 
     supabase
       .from("student_notes")
-      .select(
-        "id,note_type,body,is_guardian_visible,created_at,author_id"
-      )
+      .select("id,note_type,body,is_guardian_visible,created_at,author_id")
       .eq("student_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -184,9 +182,7 @@ export default async function StudentFile({
 
     supabase
       .from("message_logs")
-      .select(
-        "id,template_key,channel,status,message_body,prepared_at,sent_at"
-      )
+      .select("id,template_key,channel,status,message_body,prepared_at,sent_at")
       .eq("student_id", id)
       .order("prepared_at", { ascending: false })
       .limit(20),
@@ -236,7 +232,7 @@ export default async function StudentFile({
     supabase
       .from("attendance_records")
       .select(
-        "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at"
+        "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at",
       )
       .eq("organization_id", profile.organization_id)
       .eq("student_id", id)
@@ -316,8 +312,8 @@ export default async function StudentFile({
       [
         ...enrollmentHistory.map((item: any) => item.group_id),
         ...attendanceRecords.map((item: any) => item.group_id),
-      ].filter(Boolean)
-    )
+      ].filter(Boolean),
+    ),
   ) as string[];
 
   const historyBranchIds = Array.from(
@@ -325,16 +321,14 @@ export default async function StudentFile({
       [
         ...enrollmentHistory.map((item: any) => item.branch_id),
         ...attendanceRecords.map((item: any) => item.branch_id),
-      ].filter(Boolean)
-    )
+      ].filter(Boolean),
+    ),
   ) as string[];
 
   const historyPackageIds = Array.from(
     new Set(
-      enrollmentHistory
-        .map((item: any) => item.package_id)
-        .filter(Boolean)
-    )
+      enrollmentHistory.map((item: any) => item.package_id).filter(Boolean),
+    ),
   ) as string[];
 
   const historyCoachIds = Array.from(
@@ -342,8 +336,8 @@ export default async function StudentFile({
       [
         ...enrollmentHistory.map((item: any) => item.coach_id),
         ...attendanceRecords.map((item: any) => item.coach_id),
-      ].filter(Boolean)
-    )
+      ].filter(Boolean),
+    ),
   ) as string[];
 
   const [
@@ -360,10 +354,7 @@ export default async function StudentFile({
       : Promise.resolve({ data: [] as any[] }),
 
     historyBranchIds.length
-      ? supabase
-          .from("branches")
-          .select("id,name")
-          .in("id", historyBranchIds)
+      ? supabase.from("branches").select("id,name").in("id", historyBranchIds)
       : Promise.resolve({ data: [] as any[] }),
 
     historyPackageIds.length
@@ -382,21 +373,16 @@ export default async function StudentFile({
   ]);
 
   const historyGroupMap = new Map(
-    (historyGroupsResult.data ?? []).map((item: any) => [
-      item.id,
-      item,
-    ])
+    (historyGroupsResult.data ?? []).map((item: any) => [item.id, item]),
   );
 
   const allBranchIds = Array.from(
-    new Set(
-      [
-        ...historyBranchIds,
-        ...(historyGroupsResult.data ?? [])
-          .map((item: any) => item.branch_id)
-          .filter(Boolean),
-      ]
-    )
+    new Set([
+      ...historyBranchIds,
+      ...(historyGroupsResult.data ?? [])
+        .map((item: any) => item.branch_id)
+        .filter(Boolean),
+    ]),
   ) as string[];
 
   let allHistoryBranches = historyBranchesResult.data ?? [];
@@ -411,21 +397,15 @@ export default async function StudentFile({
   }
 
   const historyBranchMap = new Map(
-    allHistoryBranches.map((item: any) => [item.id, item])
+    allHistoryBranches.map((item: any) => [item.id, item]),
   );
 
   const historyPackageMap = new Map(
-    (historyPackagesResult.data ?? []).map((item: any) => [
-      item.id,
-      item,
-    ])
+    (historyPackagesResult.data ?? []).map((item: any) => [item.id, item]),
   );
 
   const historyCoachMap = new Map(
-    (historyCoachesResult.data ?? []).map((item: any) => [
-      item.id,
-      item,
-    ])
+    (historyCoachesResult.data ?? []).map((item: any) => [item.id, item]),
   );
 
   /*
@@ -470,10 +450,7 @@ export default async function StudentFile({
    */
 
   const branchId =
-    groupInfo?.branch_id ??
-    student.branch_id ??
-    enrollment?.branch_id ??
-    null;
+    groupInfo?.branch_id ?? student.branch_id ?? enrollment?.branch_id ?? null;
 
   let branchInfo: any = null;
 
@@ -511,10 +488,7 @@ export default async function StudentFile({
    * =========================================================
    */
 
-  const coachId =
-    groupInfo?.primary_coach_id ??
-    enrollment?.coach_id ??
-    null;
+  const coachId = groupInfo?.primary_coach_id ?? enrollment?.coach_id ?? null;
 
   let coachName = "—";
 
@@ -535,30 +509,44 @@ export default async function StudentFile({
    */
 
   const normalTotal = Number(
-    enrollment?.total_lessons ??
-      packageInfo?.lesson_count ??
-      0
+    enrollment?.total_lessons ?? packageInfo?.lesson_count ?? 0,
   );
 
-  const usedLessons = Number(
-    enrollment?.used_lessons ?? 0
-  );
+  const usedLessons = Number(enrollment?.used_lessons ?? 0);
 
-  const normalRemaining = Math.max(
-    0,
-    normalTotal - usedLessons
-  );
+  const normalRemaining = Math.max(0, normalTotal - usedLessons);
 
   const compensationBalance = Math.max(
     0,
-    Number(
-      lessonBalance?.compensation_lesson_balance ??
-        0
-    )
+    Number(lessonBalance?.compensation_lesson_balance ?? 0),
   );
 
-  const totalRights =
-    normalRemaining + compensationBalance;
+  const totalRights = normalRemaining + compensationBalance;
+
+  const packagePrice = Number(
+    packageInfo?.price ??
+      packageInfo?.amount ??
+      packageInfo?.package_price ??
+      packageInfo?.sale_price ??
+      enrollment?.package_price ??
+      0,
+  );
+
+  const activeEnrollmentPayments = payments.filter(
+    (payment: any) =>
+      (!enrollment?.id || payment.enrollment_id === enrollment.id) &&
+      payment.payment_status !== "cancelled",
+  );
+
+  const activeEnrollmentTotalReceived = activeEnrollmentPayments.reduce(
+    (sum: number, payment: any) => sum + Number(payment.amount || 0),
+    0,
+  );
+
+  const activeEnrollmentRemainingPayment = Math.max(
+    0,
+    packagePrice - activeEnrollmentTotalReceived,
+  );
 
   /*
    * =========================================================
@@ -567,9 +555,7 @@ export default async function StudentFile({
    */
 
   const startDate =
-    attendancePlan?.start_date ??
-    enrollment?.start_date ??
-    null;
+    attendancePlan?.start_date ?? enrollment?.start_date ?? null;
 
   const normalEndDate =
     attendancePlan?.normal_planned_end_date ??
@@ -577,8 +563,7 @@ export default async function StudentFile({
     null;
 
   const compensationEndDate =
-    attendancePlan?.compensation_planned_end_date ??
-    normalEndDate;
+    attendancePlan?.compensation_planned_end_date ?? normalEndDate;
 
   /*
    * =========================================================
@@ -589,32 +574,19 @@ export default async function StudentFile({
   let attendanceDays = "—";
 
   if (
-    Array.isArray(
-      attendancePlan?.selected_weekdays
-    ) &&
-    attendancePlan.selected_weekdays.length >
-      0
+    Array.isArray(attendancePlan?.selected_weekdays) &&
+    attendancePlan.selected_weekdays.length > 0
   ) {
-    attendanceDays =
-      attendancePlan.selected_weekdays
-        .map(
-          (day: number) =>
-            isoDays[day] ??
-            String(day)
-        )
-        .join(" • ");
+    attendanceDays = attendancePlan.selected_weekdays
+      .map((day: number) => isoDays[day] ?? String(day))
+      .join(" • ");
   } else if (
     Array.isArray(enrollment?.lesson_weekdays) &&
     enrollment.lesson_weekdays.length > 0
   ) {
-    attendanceDays =
-      enrollment.lesson_weekdays
-        .map(
-          (day: number) =>
-            oldDays[day] ??
-            String(day)
-        )
-        .join(" • ");
+    attendanceDays = enrollment.lesson_weekdays
+      .map((day: number) => oldDays[day] ?? String(day))
+      .join(" • ");
   }
 
   const weeklyFrequency =
@@ -630,11 +602,72 @@ export default async function StudentFile({
    */
 
   const warningClass =
-    totalRights <= 0
-      ? "danger"
-      : normalRemaining <= 2
-      ? "warning"
-      : "success";
+    totalRights <= 0 ? "danger" : normalRemaining <= 2 ? "warning" : "success";
+
+  const paymentDueDate =
+    enrollment?.payment_due_date ?? enrollment?.start_date ?? null;
+  const paymentDueTimestamp = paymentDueDate
+    ? new Date(paymentDueDate).getTime()
+    : Number.NaN;
+  const paymentOverdue = Boolean(
+    Number.isFinite(paymentDueTimestamp) &&
+    activeEnrollmentRemainingPayment > 0 &&
+    paymentDueTimestamp < Date.now(),
+  );
+
+  const smartAlerts = [
+    paymentOverdue
+      ? {
+          tone: "danger",
+          title: "Ödeme vadesi geçti",
+          description: `${activeEnrollmentRemainingPayment.toLocaleString("tr-TR")} TL tahsilat bekliyor.`,
+          target: "odeme",
+        }
+      : null,
+    !activeEnrollmentPayments.length && packagePrice > 0
+      ? {
+          tone: "warning",
+          title: "Henüz ödeme kaydı yok",
+          description:
+            "Bu aktif kayıt dönemi için ödeme hareketi oluşturulmamış.",
+          target: "odeme",
+        }
+      : null,
+    normalRemaining <= 3
+      ? {
+          tone: normalRemaining <= 0 ? "danger" : "warning",
+          title:
+            normalRemaining <= 0
+              ? "Ders hakkı bitti"
+              : `${normalRemaining} ders kaldı`,
+          description:
+            "Kayıt yenileme ve veli bilgilendirmesi kontrol edilmelidir.",
+          target: "ders-hareketleri",
+        }
+      : null,
+    !groupInfo?.id
+      ? {
+          tone: "warning",
+          title: "Grup ataması eksik",
+          description:
+            "Öğrencinin aktif grubu ve ders programı belirlenmelidir.",
+          target: "kurs-kaydi",
+        }
+      : null,
+    !student.guardian_phone && !student.phone
+      ? {
+          tone: "danger",
+          title: "Telefon bilgisi eksik",
+          description: "Veli iletişimi ve bildirim gönderimi yapılamaz.",
+          target: "genel-bilgiler",
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    tone: string;
+    title: string;
+    description: string;
+    target: string;
+  }>;
 
   return (
     <main className="studentFilePage">
@@ -652,33 +685,21 @@ export default async function StudentFile({
           <p>DİJİTAL KURSİYER DOSYASI</p>
 
           <h1>
-            {student.first_name}{" "}
-            {student.last_name}
+            {student.first_name} {student.last_name}
           </h1>
 
           <div className="heroBadges">
-            <span
-              className={`status ${warningClass}`}
-            >
+            <span className={`status ${warningClass}`}>
               {student.status || "aktif"}
             </span>
 
-            <span>
-              {branchInfo?.name ||
-                "Şube atanmadı"}
-            </span>
+            <span>{branchInfo?.name || "Şube atanmadı"}</span>
 
-            <span>
-              {groupInfo?.name ||
-                "Grup atanmadı"}
-            </span>
+            <span>{groupInfo?.name || "Grup atanmadı"}</span>
           </div>
         </div>
 
-        <Link
-          className="backButton"
-          href="/ogrenciler"
-        >
+        <Link className="backButton" href="/ogrenciler">
           ← Öğrencilere Dön
         </Link>
       </header>
@@ -700,6 +721,12 @@ export default async function StudentFile({
           group_id: groupInfo?.id ?? null,
           group_name: groupInfo?.name ?? null,
         }}
+        enrollmentId={enrollment?.id ?? null}
+        totalReceived={activeEnrollmentTotalReceived}
+        remainingPayment={activeEnrollmentRemainingPayment}
+        paymentDueDate={fmtDate(
+          enrollment?.payment_due_date ?? enrollment?.start_date,
+        )}
         branches={operationBranches}
         groups={operationGroups}
         schedules={operationSchedules}
@@ -707,22 +734,57 @@ export default async function StudentFile({
 
       {query.saved === "registration" ? (
         <div className="notice successNotice" role="status" aria-live="polite">
-          <strong>✓ Kayıt kesinleşti.</strong>{" "}
-          {student.first_name} {student.last_name} aktif öğrenci kaydına alındı
+          <strong>✓ Kayıt kesinleşti.</strong> {student.first_name}{" "}
+          {student.last_name} aktif öğrenci kaydına alındı
           {groupInfo?.name ? ` ve ${groupInfo.name} grubuna aktarıldı` : ""}.
           Ders planı ve kayıt bilgileri başarıyla oluşturuldu.
         </div>
       ) : query.saved ? (
-        <div className="notice successNotice">
-          İşlem başarıyla kaydedildi.
-        </div>
+        <div className="notice successNotice">İşlem başarıyla kaydedildi.</div>
       ) : null}
 
-      {query.error && (
-        <div className="notice errorNotice">
-          {query.error}
+      {query.error && <div className="notice errorNotice">{query.error}</div>}
+
+      <section
+        className="smartAlertPanel"
+        aria-label="Akıllı öğrenci uyarıları"
+      >
+        <div className="smartAlertHead">
+          <div>
+            <p>AKILLI DOSYA KONTROLÜ</p>
+            <h2>Bildirimler ve yapılacak işlemler</h2>
+          </div>
+          <strong>
+            {smartAlerts.length
+              ? `${smartAlerts.length} işlem bekliyor`
+              : "✓ Her şey yolunda"}
+          </strong>
         </div>
-      )}
+
+        {smartAlerts.length ? (
+          <div className="smartAlertGrid">
+            {smartAlerts.map((alert) => (
+              <a
+                key={`${alert.title}-${alert.target}`}
+                href={`#${alert.target}`}
+                className={alert.tone}
+              >
+                <i>{alert.tone === "danger" ? "!" : "•"}</i>
+                <span>
+                  <b>{alert.title}</b>
+                  <small>{alert.description}</small>
+                </span>
+                <em>İşlemi Aç →</em>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="smartAlertEmpty">
+            Bu öğrenci için açık ödeme, program veya iletişim uyarısı
+            bulunmuyor.
+          </div>
+        )}
+      </section>
 
       {/* =====================================================
           DERS ÖZETİ
@@ -756,16 +818,12 @@ export default async function StudentFile({
 
         <article>
           <span>Normal Bitiş</span>
-          <strong>
-            {fmtDate(normalEndDate)}
-          </strong>
+          <strong>{fmtDate(normalEndDate)}</strong>
         </article>
 
         <article>
           <span>Telafili Bitiş</span>
-          <strong>
-            {fmtDate(compensationEndDate)}
-          </strong>
+          <strong>{fmtDate(compensationEndDate)}</strong>
         </article>
       </section>
 
@@ -773,35 +831,21 @@ export default async function StudentFile({
           GENEL BİLGİLER + KURS ÖZETİ
           ===================================================== */}
 
-      <div className="twoColumn">
+      <div className="twoColumn" id="genel-bilgiler">
         <section className="panel" id="duzenle">
           <div className="panelHead">
             <div>
               <p>GENEL BİLGİLER</p>
-              <h2>
-                Öğrenci ve veli bilgileri
-              </h2>
+              <h2>Öğrenci ve veli bilgileri</h2>
             </div>
           </div>
 
-          <form
-            action={updateStudentProfile}
-            className="formGrid"
-          >
-            <input
-              type="hidden"
-              name="student_id"
-              value={student.id}
-            />
+          <form action={updateStudentProfile} className="formGrid">
+            <input type="hidden" name="student_id" value={student.id} />
 
             <label>
               Telefon
-              <input
-                name="phone"
-                defaultValue={
-                  student.phone || ""
-                }
-              />
+              <input name="phone" defaultValue={student.phone || ""} />
             </label>
 
             <label>
@@ -809,9 +853,7 @@ export default async function StudentFile({
               <input
                 name="email"
                 type="email"
-                defaultValue={
-                  student.email || ""
-                }
+                defaultValue={student.email || ""}
               />
             </label>
 
@@ -819,10 +861,7 @@ export default async function StudentFile({
               Veli Adı Soyadı
               <input
                 name="guardian_name"
-                defaultValue={
-                  student.guardian_name ||
-                  ""
-                }
+                defaultValue={student.guardian_name || ""}
               />
             </label>
 
@@ -830,10 +869,7 @@ export default async function StudentFile({
               Veli Telefonu
               <input
                 name="guardian_phone"
-                defaultValue={
-                  student.guardian_phone ||
-                  ""
-                }
+                defaultValue={student.guardian_phone || ""}
               />
             </label>
 
@@ -842,10 +878,7 @@ export default async function StudentFile({
               <input
                 name="guardian_email"
                 type="email"
-                defaultValue={
-                  student.guardian_email ||
-                  ""
-                }
+                defaultValue={student.guardian_email || ""}
               />
             </label>
 
@@ -853,10 +886,7 @@ export default async function StudentFile({
               Acil Durum Kişisi
               <input
                 name="emergency_contact_name"
-                defaultValue={
-                  student.emergency_contact_name ||
-                  ""
-                }
+                defaultValue={student.emergency_contact_name || ""}
               />
             </label>
 
@@ -864,10 +894,7 @@ export default async function StudentFile({
               Acil Durum Telefonu
               <input
                 name="emergency_contact_phone"
-                defaultValue={
-                  student.emergency_contact_phone ||
-                  ""
-                }
+                defaultValue={student.emergency_contact_phone || ""}
               />
             </label>
 
@@ -876,22 +903,17 @@ export default async function StudentFile({
               <textarea
                 name="general_note"
                 rows={3}
-                defaultValue={
-                  student.general_note || ""
-                }
+                defaultValue={student.general_note || ""}
               />
             </label>
 
-            <button
-              className="primaryButton"
-              type="submit"
-            >
+            <button className="primaryButton" type="submit">
               Bilgileri Kaydet
             </button>
           </form>
         </section>
 
-        <aside className="panel courseCard">
+        <aside className="panel courseCard" id="kurs-kaydi">
           <div className="panelHead">
             <div>
               <p>KURS ÖZETİ</p>
@@ -902,33 +924,24 @@ export default async function StudentFile({
           <div className="infoRows">
             <div>
               <span>Şube</span>
-              <strong>
-                {branchInfo?.name || "—"}
-              </strong>
+              <strong>{branchInfo?.name || "—"}</strong>
             </div>
 
             <div>
               <span>Grup</span>
-              <strong>
-                {groupInfo?.name || "—"}
-              </strong>
+              <strong>{groupInfo?.name || "—"}</strong>
             </div>
 
             <div>
               <span>Kurs Türü</span>
-              <strong>
-                {groupInfo?.course_type ||
-                  "—"}
-              </strong>
+              <strong>{groupInfo?.course_type || "—"}</strong>
             </div>
 
             <div>
               <span>Paket</span>
               <strong>
                 {packageInfo?.name ||
-                  (normalTotal
-                    ? `${normalTotal} Ders`
-                    : "—")}
+                  (normalTotal ? `${normalTotal} Ders` : "—")}
               </strong>
             </div>
 
@@ -940,40 +953,28 @@ export default async function StudentFile({
             <div>
               <span>Haftalık Katılım</span>
               <strong>
-                {weeklyFrequency
-                  ? `${weeklyFrequency} gün`
-                  : "—"}
+                {weeklyFrequency ? `${weeklyFrequency} gün` : "—"}
               </strong>
             </div>
 
             <div>
               <span>Katılım Günleri</span>
-              <strong>
-                {attendanceDays}
-              </strong>
+              <strong>{attendanceDays}</strong>
             </div>
 
             <div>
               <span>Başlangıç</span>
-              <strong>
-                {fmtDate(startDate)}
-              </strong>
+              <strong>{fmtDate(startDate)}</strong>
             </div>
 
             <div>
               <span>Normal Bitiş</span>
-              <strong>
-                {fmtDate(normalEndDate)}
-              </strong>
+              <strong>{fmtDate(normalEndDate)}</strong>
             </div>
 
             <div>
               <span>Telafili Bitiş</span>
-              <strong>
-                {fmtDate(
-                  compensationEndDate
-                )}
-              </strong>
+              <strong>{fmtDate(compensationEndDate)}</strong>
             </div>
           </div>
         </aside>
@@ -987,30 +988,19 @@ export default async function StudentFile({
         <div className="panelHead">
           <div>
             <p>SAĞLIK BİLGİLERİ</p>
-            <h2>
-              Güvenlik ve sağlık notları
-            </h2>
+            <h2>Güvenlik ve sağlık notları</h2>
           </div>
         </div>
 
-        <form
-          action={updateStudentProfile}
-          className="formGrid healthGrid"
-        >
-          <input
-            type="hidden"
-            name="student_id"
-            value={student.id}
-          />
+        <form action={updateStudentProfile} className="formGrid healthGrid">
+          <input type="hidden" name="student_id" value={student.id} />
 
           <label>
             Alerji
             <textarea
               name="allergy_note"
               rows={3}
-              defaultValue={
-                student.allergy_note || ""
-              }
+              defaultValue={student.allergy_note || ""}
             />
           </label>
 
@@ -1019,10 +1009,7 @@ export default async function StudentFile({
             <textarea
               name="chronic_condition_note"
               rows={3}
-              defaultValue={
-                student.chronic_condition_note ||
-                ""
-              }
+              defaultValue={student.chronic_condition_note || ""}
             />
           </label>
 
@@ -1031,10 +1018,7 @@ export default async function StudentFile({
             <textarea
               name="medication_note"
               rows={3}
-              defaultValue={
-                student.medication_note ||
-                ""
-              }
+              defaultValue={student.medication_note || ""}
             />
           </label>
 
@@ -1043,17 +1027,11 @@ export default async function StudentFile({
             <textarea
               name="emergency_medical_note"
               rows={3}
-              defaultValue={
-                student.emergency_medical_note ||
-                ""
-              }
+              defaultValue={student.emergency_medical_note || ""}
             />
           </label>
 
-          <button
-            className="primaryButton"
-            type="submit"
-          >
+          <button className="primaryButton" type="submit">
             Sağlık Bilgilerini Kaydet
           </button>
         </form>
@@ -1063,7 +1041,7 @@ export default async function StudentFile({
           ÖDEME
           ===================================================== */}
 
-      <section className="panel" id="odemeler">
+      <section className="panel" id="odeme">
         <div className="panelHead">
           <div>
             <p>FİNANS</p>
@@ -1071,10 +1049,7 @@ export default async function StudentFile({
           </div>
 
           <strong>
-            Toplam Tahsilat:{" "}
-            {money(
-              paymentSummary?.total_received
-            )}
+            Toplam Tahsilat: {money(paymentSummary?.total_received)}
           </strong>
         </div>
 
@@ -1082,31 +1057,21 @@ export default async function StudentFile({
           {payments.map((payment: any) => (
             <article key={payment.id}>
               <div>
-                <strong>
-                  {money(payment.amount)}
-                </strong>
+                <strong>{money(payment.amount)}</strong>
 
                 <p>
-                  {payment.payment_method ||
-                    "Ödeme"}
-                  {payment.description
-                    ? ` • ${payment.description}`
-                    : ""}
+                  {payment.payment_method || "Ödeme"}
+                  {payment.description ? ` • ${payment.description}` : ""}
                 </p>
               </div>
 
               <span>
-                {payment.payment_status} •{" "}
-                {fmt(payment.received_at)}
+                {payment.payment_status} • {fmt(payment.received_at)}
               </span>
             </article>
           ))}
 
-          {!payments.length && (
-            <p className="empty">
-              Henüz ödeme kaydı yok.
-            </p>
-          )}
+          {!payments.length && <p className="empty">Henüz ödeme kaydı yok.</p>}
         </div>
       </section>
 
@@ -1121,9 +1086,7 @@ export default async function StudentFile({
             <h2>Katıldığı ve işlenen dersler</h2>
           </div>
 
-          <strong>
-            Toplam Kayıt: {attendanceRecords.length}
-          </strong>
+          <strong>Toplam Kayıt: {attendanceRecords.length}</strong>
         </div>
 
         <div className="list">
@@ -1132,12 +1095,12 @@ export default async function StudentFile({
               record.status === "present"
                 ? "✓ Geldi"
                 : record.status === "absent"
-                ? "✕ Gelmedi"
-                : record.status === "excused"
-                ? "○ İzinli"
-                : record.status === "compensation"
-                ? "+ Telafi"
-                : record.status || "—";
+                  ? "✕ Gelmedi"
+                  : record.status === "excused"
+                    ? "○ İzinli"
+                    : record.status === "compensation"
+                      ? "+ Telafi"
+                      : record.status || "—";
 
             const group = record.group_id
               ? historyGroupMap.get(record.group_id)
@@ -1166,18 +1129,10 @@ export default async function StudentFile({
 
                   <p>
                     {fmtDate(record.lesson_date)}
-                    {branch?.name
-                      ? ` • ${branch.name}`
-                      : ""}
-                    {group?.name
-                      ? ` • ${group.name}`
-                      : ""}
-                    {coach?.full_name
-                      ? ` • ${coach.full_name}`
-                      : ""}
-                    {record.coach_note
-                      ? ` • Not: ${record.coach_note}`
-                      : ""}
+                    {branch?.name ? ` • ${branch.name}` : ""}
+                    {group?.name ? ` • ${group.name}` : ""}
+                    {coach?.full_name ? ` • ${coach.full_name}` : ""}
+                    {record.coach_note ? ` • Not: ${record.coach_note}` : ""}
                   </p>
                 </div>
 
@@ -1185,17 +1140,15 @@ export default async function StudentFile({
                   {consumesPackage
                     ? "Paket ders hakkından düşer"
                     : record.status === "compensation"
-                    ? "Normal paket hakkından düşmez"
-                    : "—"}
+                      ? "Normal paket hakkından düşmez"
+                      : "—"}
                 </span>
               </article>
             );
           })}
 
           {!attendanceRecords.length && (
-            <p className="empty">
-              Henüz yoklama kaydı bulunmuyor.
-            </p>
+            <p className="empty">Henüz yoklama kaydı bulunmuyor.</p>
           )}
         </div>
       </section>
@@ -1208,51 +1161,34 @@ export default async function StudentFile({
         <div className="panelHead">
           <div>
             <p>DERS HAREKETLERİ</p>
-            <h2>
-              Normal ders ve telafi geçmişi
-            </h2>
+            <h2>Normal ders ve telafi geçmişi</h2>
           </div>
         </div>
 
         <div className="list">
-          {lessonLedger.map(
-            (item: any) => (
-              <article key={item.id}>
-                <div>
-                  <strong>
-                    {item.lesson_type ===
-                    "compensation"
-                      ? "TELAFİ"
-                      : "NORMAL DERS"}{" "}
-                    {item.direction ===
-                    "credit"
-                      ? "+"
-                      : "-"}
-                    {item.lesson_count}
-                  </strong>
+          {lessonLedger.map((item: any) => (
+            <article key={item.id}>
+              <div>
+                <strong>
+                  {item.lesson_type === "compensation"
+                    ? "TELAFİ"
+                    : "NORMAL DERS"}{" "}
+                  {item.direction === "credit" ? "+" : "-"}
+                  {item.lesson_count}
+                </strong>
 
-                  <p>
-                    {item.reason ||
-                      item.description ||
-                      "Ders hareketi"}
-                  </p>
-                </div>
+                <p>{item.reason || item.description || "Ders hareketi"}</p>
+              </div>
 
-                <span>
-                  {item.approval_status} •{" "}
-                  {fmt(
-                    item.approved_at ??
-                      item.created_at
-                  )}
-                </span>
-              </article>
-            )
-          )}
+              <span>
+                {item.approval_status} •{" "}
+                {fmt(item.approved_at ?? item.created_at)}
+              </span>
+            </article>
+          ))}
 
           {!lessonLedger.length && (
-            <p className="empty">
-              Henüz ders hareketi yok.
-            </p>
+            <p className="empty">Henüz ders hareketi yok.</p>
           )}
         </div>
       </section>
@@ -1265,39 +1201,28 @@ export default async function StudentFile({
         <div className="panelHead">
           <div>
             <p>ANTRENÖR RAPORLARI</p>
-            <h2>
-              Gelişim, seviye ve grup uyumu
-            </h2>
+            <h2>Gelişim, seviye ve grup uyumu</h2>
           </div>
         </div>
 
         <div className="list">
-          {coachReports.map(
-            (report: any) => (
-              <article key={report.id}>
-                <div>
-                  <strong>
-                    {report.title}
-                  </strong>
+          {coachReports.map((report: any) => (
+            <article key={report.id}>
+              <div>
+                <strong>{report.title}</strong>
 
-                  <p>
-                    {report.description}
-                  </p>
-                </div>
+                <p>{report.description}</p>
+              </div>
 
-                <span>
-                  {report.severity} •{" "}
-                  {report.management_status} •{" "}
-                  {fmt(report.submitted_at)}
-                </span>
-              </article>
-            )
-          )}
+              <span>
+                {report.severity} • {report.management_status} •{" "}
+                {fmt(report.submitted_at)}
+              </span>
+            </article>
+          ))}
 
           {!coachReports.length && (
-            <p className="empty">
-              Henüz antrenör raporu yok.
-            </p>
+            <p className="empty">Henüz antrenör raporu yok.</p>
           )}
         </div>
       </section>
@@ -1313,9 +1238,7 @@ export default async function StudentFile({
             <h2>Paketler ve kayıt yenilemeleri</h2>
           </div>
 
-          <strong>
-            Toplam Kayıt: {enrollmentHistory.length}
-          </strong>
+          <strong>Toplam Kayıt: {enrollmentHistory.length}</strong>
         </div>
 
         <div className="list">
@@ -1340,9 +1263,7 @@ export default async function StudentFile({
               : null;
 
             const total = Number(
-              item.total_lessons ??
-                packageItem?.lesson_count ??
-                0
+              item.total_lessons ?? packageItem?.lesson_count ?? 0,
             );
 
             const used = Number(item.used_lessons ?? 0);
@@ -1352,12 +1273,12 @@ export default async function StudentFile({
               item.status === "active"
                 ? "AKTİF"
                 : item.status === "completed"
-                ? "TAMAMLANDI"
-                : item.status === "cancelled"
-                ? "İPTAL"
-                : item.status
-                ? String(item.status).toUpperCase()
-                : "—";
+                  ? "TAMAMLANDI"
+                  : item.status === "cancelled"
+                    ? "İPTAL"
+                    : item.status
+                      ? String(item.status).toUpperCase()
+                      : "—";
 
             return (
               <article key={item.id}>
@@ -1373,9 +1294,7 @@ export default async function StudentFile({
                     {branch?.name || "Şube bilgisi yok"}
                     {" • "}
                     {group?.name || "Grup bilgisi yok"}
-                    {coach?.full_name
-                      ? ` • ${coach.full_name}`
-                      : ""}
+                    {coach?.full_name ? ` • ${coach.full_name}` : ""}
                   </p>
 
                   <p>
@@ -1393,9 +1312,7 @@ export default async function StudentFile({
           })}
 
           {!enrollmentHistory.length && (
-            <p className="empty">
-              Henüz kayıt geçmişi bulunmuyor.
-            </p>
+            <p className="empty">Henüz kayıt geçmişi bulunmuyor.</p>
           )}
         </div>
       </section>
@@ -1409,42 +1326,23 @@ export default async function StudentFile({
           <div className="panelHead">
             <div>
               <p>NOTLAR</p>
-              <h2>
-                Antrenör ve yönetim notları
-              </h2>
+              <h2>Antrenör ve yönetim notları</h2>
             </div>
           </div>
 
-          <form
-            action={addStudentNote}
-            className="noteForm"
-          >
-            <input
-              type="hidden"
-              name="student_id"
-              value={student.id}
-            />
+          <form action={addStudentNote} className="noteForm">
+            <input type="hidden" name="student_id" value={student.id} />
 
             <select name="note_type">
-              <option value="general">
-                Genel
-              </option>
+              <option value="general">Genel</option>
 
-              <option value="coach">
-                Antrenör
-              </option>
+              <option value="coach">Antrenör</option>
 
-              <option value="health">
-                Sağlık
-              </option>
+              <option value="health">Sağlık</option>
 
-              <option value="finance">
-                Finans
-              </option>
+              <option value="finance">Finans</option>
 
-              <option value="crm">
-                CRM
-              </option>
+              <option value="crm">CRM</option>
             </select>
 
             <textarea
@@ -1455,17 +1353,11 @@ export default async function StudentFile({
             />
 
             <label className="checkbox">
-              <input
-                type="checkbox"
-                name="is_guardian_visible"
-              />{" "}
-              Veli panelinde göster
+              <input type="checkbox" name="is_guardian_visible" /> Veli
+              panelinde göster
             </label>
 
-            <button
-              className="primaryButton"
-              type="submit"
-            >
+            <button className="primaryButton" type="submit">
               Notu Ekle
             </button>
           </form>
@@ -1474,23 +1366,21 @@ export default async function StudentFile({
             {notes.map((note: any) => (
               <article key={note.id}>
                 <div>
-                  <strong>
-                    {String(
-                      note.note_type
-                    ).toUpperCase()}
-                  </strong>
+                  <strong>{String(note.note_type).toUpperCase()}</strong>
 
                   <p>{note.body}</p>
                 </div>
 
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                  <span>
-                    {fmt(note.created_at)}
-                  </span>
+                  <span>{fmt(note.created_at)}</span>
 
                   {canManageDestructiveActions && (
                     <form action={deleteStudentNote}>
-                      <input type="hidden" name="student_id" value={student.id} />
+                      <input
+                        type="hidden"
+                        name="student_id"
+                        value={student.id}
+                      />
                       <input type="hidden" name="note_id" value={note.id} />
                       <button
                         type="submit"
@@ -1513,83 +1403,51 @@ export default async function StudentFile({
               </article>
             ))}
 
-            {!notes.length && (
-              <p className="empty">
-                Henüz not yok.
-              </p>
-            )}
+            {!notes.length && <p className="empty">Henüz not yok.</p>}
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="islem-gecmisi">
           <div className="panelHead">
             <div>
               <p>İŞLEM GEÇMİŞİ</p>
-              <h2>
-                Öğrenci hareketleri
-              </h2>
+              <h2>Öğrenci hareketleri</h2>
             </div>
           </div>
 
           <div className="timeline">
-            {activityLogs.map(
-              (event: any) => (
+            {activityLogs.map((event: any) => (
+              <article key={event.id}>
+                <i />
+
+                <div>
+                  <strong>{event.title}</strong>
+
+                  <p>{event.description || event.activity_type}</p>
+
+                  <span>{fmt(event.performed_at ?? event.created_at)}</span>
+                </div>
+              </article>
+            ))}
+
+            {!activityLogs.length &&
+              oldTimeline.map((event: any) => (
                 <article key={event.id}>
                   <i />
 
                   <div>
-                    <strong>
-                      {event.title}
-                    </strong>
+                    <strong>{event.title}</strong>
 
-                    <p>
-                      {event.description ||
-                        event.activity_type}
-                    </p>
+                    <p>{event.description || event.event_type}</p>
 
-                    <span>
-                      {fmt(
-                        event.performed_at ??
-                          event.created_at
-                      )}
-                    </span>
+                    <span>{fmt(event.event_date)}</span>
                   </div>
                 </article>
-              )
+              ))}
+
+            {!activityLogs.length && !oldTimeline.length && (
+              <p className="empty">Henüz işlem geçmişi yok.</p>
             )}
-
-            {!activityLogs.length &&
-              oldTimeline.map(
-                (event: any) => (
-                  <article key={event.id}>
-                    <i />
-
-                    <div>
-                      <strong>
-                        {event.title}
-                      </strong>
-
-                      <p>
-                        {event.description ||
-                          event.event_type}
-                      </p>
-
-                      <span>
-                        {fmt(
-                          event.event_date
-                        )}
-                      </span>
-                    </div>
-                  </article>
-                )
-              )}
-
-            {!activityLogs.length &&
-              !oldTimeline.length && (
-                <p className="empty">
-                  Henüz işlem geçmişi yok.
-                </p>
-              )}
           </div>
         </section>
       </div>
@@ -1608,72 +1466,47 @@ export default async function StudentFile({
           </div>
 
           <div className="list">
-            {contactLogs.map(
-              (message: any) => (
+            {contactLogs.map((message: any) => (
+              <article key={message.id}>
+                <div>
+                  <strong>{message.contact_type || "Bilgilendirme"}</strong>
+
+                  <p>{message.message_text || "Mesaj kaydı"}</p>
+                </div>
+
+                <span>
+                  {message.status} •{" "}
+                  {fmt(
+                    message.sent_at ??
+                      message.prepared_at ??
+                      message.created_at,
+                  )}
+                </span>
+              </article>
+            ))}
+
+            {!contactLogs.length &&
+              messages.map((message: any) => (
                 <article key={message.id}>
                   <div>
-                    <strong>
-                      {message.contact_type ||
-                        "Bilgilendirme"}
-                    </strong>
+                    <strong>{message.template_key || "Mesaj"}</strong>
 
                     <p>
-                      {message.message_text ||
-                        "Mesaj kaydı"}
+                      {message.message_body?.slice(0, 180)}
+                      {message.message_body?.length > 180 ? "…" : ""}
                     </p>
                   </div>
 
                   <span>
                     {message.status} •{" "}
-                    {fmt(
-                      message.sent_at ??
-                        message.prepared_at ??
-                        message.created_at
-                    )}
+                    {fmt(message.sent_at ?? message.prepared_at)}
                   </span>
                 </article>
-              )
+              ))}
+
+            {!contactLogs.length && !messages.length && (
+              <p className="empty">Henüz mesaj kaydı yok.</p>
             )}
-
-            {!contactLogs.length &&
-              messages.map(
-                (message: any) => (
-                  <article key={message.id}>
-                    <div>
-                      <strong>
-                        {message.template_key ||
-                          "Mesaj"}
-                      </strong>
-
-                      <p>
-                        {message.message_body?.slice(
-                          0,
-                          180
-                        )}
-                        {message.message_body
-                          ?.length > 180
-                          ? "…"
-                          : ""}
-                      </p>
-                    </div>
-
-                    <span>
-                      {message.status} •{" "}
-                      {fmt(
-                        message.sent_at ??
-                          message.prepared_at
-                      )}
-                    </span>
-                  </article>
-                )
-              )}
-
-            {!contactLogs.length &&
-              !messages.length && (
-                <p className="empty">
-                  Henüz mesaj kaydı yok.
-                </p>
-              )}
           </div>
         </section>
 
@@ -1681,55 +1514,39 @@ export default async function StudentFile({
           <div className="panelHead">
             <div>
               <p>KAYIT DURUMU</p>
-              <h2>
-                Ders ve yenileme özeti
-              </h2>
+              <h2>Ders ve yenileme özeti</h2>
             </div>
           </div>
 
           <div className="infoRows">
             <div>
               <span>Normal Paket</span>
-              <strong>
-                {normalTotal} ders
-              </strong>
+              <strong>{normalTotal} ders</strong>
             </div>
 
             <div>
               <span>Kullanılan</span>
-              <strong>
-                {usedLessons} ders
-              </strong>
+              <strong>{usedLessons} ders</strong>
             </div>
 
             <div>
               <span>Normal Kalan</span>
-              <strong>
-                {normalRemaining} ders
-              </strong>
+              <strong>{normalRemaining} ders</strong>
             </div>
 
             <div>
               <span>Telafi Hakkı</span>
-              <strong>
-                {compensationBalance} ders
-              </strong>
+              <strong>{compensationBalance} ders</strong>
             </div>
 
             <div>
               <span>Toplam Kullanılabilir</span>
-              <strong>
-                {totalRights} ders
-              </strong>
+              <strong>{totalRights} ders</strong>
             </div>
 
             <div>
               <span>Son Ödeme</span>
-              <strong>
-                {fmt(
-                  paymentSummary?.last_payment_at
-                )}
-              </strong>
+              <strong>{fmt(paymentSummary?.last_payment_at)}</strong>
             </div>
           </div>
         </section>
