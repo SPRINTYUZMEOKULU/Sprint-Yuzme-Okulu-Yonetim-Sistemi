@@ -222,6 +222,36 @@ export default function SidebarToggle() {
         }
 
         @media (max-width: 820px) {
+        html.sprintSidebarMobileOpen
+  .sprintSidebarToggle {
+  position: fixed;
+  z-index: 100;
+  top: 14px;
+  right: 14px;
+  left: auto;
+  background: #ffffff;
+  color: #13213b;
+  border-color: #d8e2f0;
+  box-shadow: 0 10px 30px rgba(3, 15, 36, 0.22);
+}
+
+html.sprintSidebarMobileOpen
+  .sprintSidebarToggle
+  span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+html.sprintSidebarMobileOpen
+  .sprintSidebarToggle
+  span:nth-child(2) {
+  opacity: 0;
+}
+
+html.sprintSidebarMobileOpen
+  .sprintSidebarToggle
+  span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
           html .proShell {
             display: block;
           }
