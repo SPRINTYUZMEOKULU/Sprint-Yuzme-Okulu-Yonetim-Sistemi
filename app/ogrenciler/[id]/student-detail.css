@@ -1,10 +1,308 @@
-.studentFilePage{min-height:100vh;background:linear-gradient(180deg,#f5f8fc 0%,#eef3f9 100%);padding:32px;color:#10213a}.studentHero{display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,#071f3f,#0a4f8f);color:white;border-radius:28px;padding:28px;box-shadow:0 22px 60px rgba(15,42,76,.22)}.avatar{width:78px;height:78px;border-radius:24px;display:grid;place-items:center;background:linear-gradient(135deg,#ff8a00,#ffb44a);font-size:28px;font-weight:900}.heroText{flex:1}.heroText p,.panelHead p{margin:0 0 6px;font-size:12px;font-weight:900;letter-spacing:.14em;color:#ff9b1a}.heroText h1{margin:0;font-size:34px}.heroBadges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.heroBadges span{padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.12);font-size:12px;font-weight:700}.status.success{background:#16a34a}.status.warning{background:#d97706}.status.danger{background:#dc2626}.backButton{color:white;text-decoration:none;font-weight:800;padding:11px 16px;border:1px solid rgba(255,255,255,.2);border-radius:14px}.notice{margin-top:16px;padding:14px 18px;border-radius:14px;font-weight:800}.successNotice{background:#dcfce7;color:#166534}.errorNotice{background:#fee2e2;color:#991b1b}.metricGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:22px 0}.metricGrid article,.panel{background:white;border:1px solid #dfe8f2;border-radius:22px;box-shadow:0 14px 36px rgba(15,42,76,.08)}.metricGrid article{padding:20px}.metricGrid span{display:block;color:#6b7b8f;font-size:12px;font-weight:800;text-transform:uppercase}.metricGrid strong{display:block;margin-top:8px;font-size:25px;color:#0b3f73}.twoColumn{display:grid;grid-template-columns:1.35fr .85fr;gap:18px;margin-bottom:18px}.panel{padding:24px;margin-bottom:18px}.panelHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.panelHead h2{margin:0;font-size:22px;color:#0d315b}.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.formGrid label,.noteForm{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:800;color:#405168}.formGrid input,.formGrid textarea,.noteForm textarea,.noteForm select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;background:#f9fbfd;border-radius:13px;padding:12px;font:inherit;color:#10213a}.full{grid-column:1/-1}.primaryButton{border:0;border-radius:14px;padding:13px 18px;background:linear-gradient(135deg,#ff8700,#ffad36);color:white;font-weight:900;cursor:pointer;box-shadow:0 10px 25px rgba(255,135,0,.25)}.infoRows{display:grid;gap:4px}.infoRows div{display:flex;justify-content:space-between;gap:18px;padding:13px 0;border-bottom:1px solid #edf2f7}.infoRows span{color:#748196}.infoRows strong{text-align:right;color:#163456}.noteForm{gap:12px}.checkbox{flex-direction:row!important;align-items:center}.checkbox input{width:auto}.list{display:grid;gap:10px}.list article{display:flex;justify-content:space-between;gap:14px;padding:14px;background:#f7f9fc;border-radius:14px}.list article strong{color:#0b4d88}.list article p{margin:5px 0 0;color:#58687b}.list article span{font-size:11px;color:#7d8997;white-space:nowrap}.timeline{display:grid;gap:0}.timeline article{display:grid;grid-template-columns:18px 1fr;gap:12px;position:relative;padding-bottom:18px}.timeline article:before{content:"";position:absolute;left:7px;top:14px;bottom:0;width:2px;background:#dce6f0}.timeline i{width:16px;height:16px;border-radius:50%;background:#ff8a00;z-index:1;box-shadow:0 0 0 5px #fff4e6}.timeline strong{color:#123b68}.timeline p{margin:4px 0;color:#617084}.timeline span{font-size:11px;color:#8793a1}.empty{color:#8190a3}.healthGrid{grid-template-columns:repeat(4,1fr)}
-@media(max-width:900px){.studentFilePage{padding:16px}.studentHero{align-items:flex-start;flex-wrap:wrap}.heroText h1{font-size:27px}.backButton{width:100%;text-align:center}.metricGrid{grid-template-columns:repeat(2,1fr)}.twoColumn{grid-template-columns:1fr}.healthGrid,.formGrid{grid-template-columns:1fr}.full{grid-column:auto}}
+.studentFilePage {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5f8fc 0%, #eef3f9 100%);
+  padding: 32px;
+  color: #10213a;
+}
+.studentHero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #071f3f, #0a4f8f);
+  color: white;
+  border-radius: 28px;
+  padding: 28px;
+  box-shadow: 0 22px 60px rgba(15, 42, 76, 0.22);
+}
+.avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #ff8a00, #ffb44a);
+  font-size: 28px;
+  font-weight: 900;
+}
+.heroText {
+  flex: 1;
+}
+.heroText p,
+.panelHead p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #ff9b1a;
+}
+.heroText h1 {
+  margin: 0;
+  font-size: 34px;
+}
+.heroBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.heroBadges span {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 700;
+}
+.status.success {
+  background: #16a34a;
+}
+.status.warning {
+  background: #d97706;
+}
+.status.danger {
+  background: #dc2626;
+}
+.backButton {
+  color: white;
+  text-decoration: none;
+  font-weight: 800;
+  padding: 11px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+}
+.notice {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-weight: 800;
+}
+.successNotice {
+  background: #dcfce7;
+  color: #166534;
+}
+.errorNotice {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 22px 0;
+}
+.metricGrid article,
+.panel {
+  background: white;
+  border: 1px solid #dfe8f2;
+  border-radius: 22px;
+  box-shadow: 0 14px 36px rgba(15, 42, 76, 0.08);
+}
+.metricGrid article {
+  padding: 20px;
+}
+.metricGrid span {
+  display: block;
+  color: #6b7b8f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.metricGrid strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 25px;
+  color: #0b3f73;
+}
+.twoColumn {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.panel {
+  padding: 24px;
+  margin-bottom: 18px;
+}
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.panelHead h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #0d315b;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.formGrid label,
+.noteForm {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #405168;
+}
+.formGrid input,
+.formGrid textarea,
+.noteForm textarea,
+.noteForm select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cfdbe8;
+  background: #f9fbfd;
+  border-radius: 13px;
+  padding: 12px;
+  font: inherit;
+  color: #10213a;
+}
+.full {
+  grid-column: 1/-1;
+}
+.primaryButton {
+  border: 0;
+  border-radius: 14px;
+  padding: 13px 18px;
+  background: linear-gradient(135deg, #ff8700, #ffad36);
+  color: white;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(255, 135, 0, 0.25);
+}
+.infoRows {
+  display: grid;
+  gap: 4px;
+}
+.infoRows div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  border-bottom: 1px solid #edf2f7;
+}
+.infoRows span {
+  color: #748196;
+}
+.infoRows strong {
+  text-align: right;
+  color: #163456;
+}
+.noteForm {
+  gap: 12px;
+}
+.checkbox {
+  flex-direction: row !important;
+  align-items: center;
+}
+.checkbox input {
+  width: auto;
+}
+.list {
+  display: grid;
+  gap: 10px;
+}
+.list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  background: #f7f9fc;
+  border-radius: 14px;
+}
+.list article strong {
+  color: #0b4d88;
+}
+.list article p {
+  margin: 5px 0 0;
+  color: #58687b;
+}
+.list article span {
+  font-size: 11px;
+  color: #7d8997;
+  white-space: nowrap;
+}
+.timeline {
+  display: grid;
+  gap: 0;
+}
+.timeline article {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 18px;
+}
+.timeline article:before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  background: #dce6f0;
+}
+.timeline i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff8a00;
+  z-index: 1;
+  box-shadow: 0 0 0 5px #fff4e6;
+}
+.timeline strong {
+  color: #123b68;
+}
+.timeline p {
+  margin: 4px 0;
+  color: #617084;
+}
+.timeline span {
+  font-size: 11px;
+  color: #8793a1;
+}
+.empty {
+  color: #8190a3;
+}
+.healthGrid {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 900px) {
+  .studentFilePage {
+    padding: 16px;
+  }
+  .studentHero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .heroText h1 {
+    font-size: 27px;
+  }
+  .backButton {
+    width: 100%;
+    text-align: center;
+  }
+  .metricGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+  .healthGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .full {
+    grid-column: auto;
+  }
+}
 /* =========================================================
    SPRINTOS — MASTER ÖĞRENCİ KARTI EK STİLLERİ
    Mevcut CSS'in EN ALTINA eklenecek
    ========================================================= */
-
 
 /* ---------- ÖĞRENCİ NUMARASI ---------- */
 
@@ -15,13 +313,164 @@
   margin-top: 8px;
   padding: 7px 11px;
   border-radius: 10px;
-  background: rgba(255,255,255,.12);
-  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 12px;
   font-weight: 900;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
+.studentFilePage [id] {
+  scroll-margin-top: 138px;
+}
+
+.smartAlertPanel {
+  margin: 18px 0;
+  padding: 20px;
+  border: 1px solid #d8e4ef;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(20, 56, 92, 0.07);
+}
+
+.smartAlertHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.smartAlertHead p {
+  margin: 0;
+  color: #1769e8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.smartAlertHead h2 {
+  margin: 5px 0 0;
+  color: #102f50;
+  font-size: 19px;
+}
+
+.smartAlertHead > strong {
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #0b60bd;
+  font-size: 11px;
+}
+
+.smartAlertGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.smartAlertGrid a {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid #f2d2a8;
+  border-radius: 14px;
+  background: #fff8ed;
+  color: #7c4a0d;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.smartAlertGrid a.danger {
+  border-color: #efc2c2;
+  background: #fff2f2;
+  color: #9f2828;
+}
+
+.smartAlertGrid a:active {
+  transform: scale(0.98);
+}
+
+.smartAlertGrid i {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.8);
+  font-style: normal;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.smartAlertGrid span,
+.smartAlertGrid b,
+.smartAlertGrid small {
+  min-width: 0;
+  display: block;
+}
+
+.smartAlertGrid b {
+  font-size: 13px;
+}
+
+.smartAlertGrid small {
+  margin-top: 3px;
+  color: #718096;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.smartAlertGrid em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.smartAlertEmpty {
+  padding: 14px;
+  border: 1px solid #bfe7d1;
+  border-radius: 13px;
+  background: #eefaf4;
+  color: #167047;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .smartAlertPanel {
+    padding: 15px 12px;
+  }
+
+  .smartAlertHead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .smartAlertGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .smartAlertGrid a {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .smartAlertGrid em {
+    grid-column: 2;
+  }
+}
+
+@media print {
+  .smartAlertPanel {
+    display: none !important;
+  }
+}
 
 /* ---------- HIZLI İŞLEMLER ---------- */
 
@@ -53,18 +502,18 @@
 
   cursor: pointer;
 
-  box-shadow: 0 5px 14px rgba(15,42,76,.07);
+  box-shadow: 0 5px 14px rgba(15, 42, 76, 0.07);
 
   transition:
-    transform .15s ease,
-    box-shadow .15s ease,
-    border-color .15s ease;
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .quickActionButton:hover {
   transform: translateY(-1px);
   border-color: #b8cee3;
-  box-shadow: 0 8px 20px rgba(15,42,76,.12);
+  box-shadow: 0 8px 20px rgba(15, 42, 76, 0.12);
 }
 
 .quickActionButton.call {
@@ -82,7 +531,6 @@
 .quickActionButton.danger {
   color: #b91c1c;
 }
-
 
 /* ---------- TELEFON SATIRI ---------- */
 
@@ -119,7 +567,6 @@
   cursor: pointer;
 }
 
-
 /* =========================================================
    ANA ÖZET / DURUM KARTLARI
    ========================================================= */
@@ -141,7 +588,7 @@
 
   padding: 17px;
 
-  box-shadow: 0 10px 28px rgba(15,42,76,.07);
+  box-shadow: 0 10px 28px rgba(15, 42, 76, 0.07);
 }
 
 .masterSummaryCard span {
@@ -152,7 +599,7 @@
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: 0.05em;
 }
 
 .masterSummaryCard strong {
@@ -167,7 +614,6 @@
   color: #8190a3;
   font-size: 11px;
 }
-
 
 /* =========================================================
    YOKLAMA / DERS HAKKI UYARILARI
@@ -244,7 +690,6 @@
   color: #991b1b;
 }
 
-
 /* =========================================================
    AİDAT / FİNANS
    ========================================================= */
@@ -296,7 +741,6 @@
   color: #15803d;
 }
 
-
 /* =========================================================
    TEKNİK / ELEKTRONİK ONAY
    ========================================================= */
@@ -325,7 +769,7 @@
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: 0.05em;
 }
 
 .auditItem strong {
@@ -352,7 +796,6 @@
   font-weight: 900;
 }
 
-
 /* =========================================================
    PROFESYONEL MASTER KART
    ========================================================= */
@@ -364,7 +807,7 @@
 
   overflow: hidden;
 
-  box-shadow: 0 14px 36px rgba(15,42,76,.08);
+  box-shadow: 0 14px 36px rgba(15, 42, 76, 0.08);
 }
 
 .masterStudentHeader {
@@ -375,7 +818,7 @@
 
   padding: 20px 22px;
 
-  background: linear-gradient(135deg,#071f3f,#0a4f8f);
+  background: linear-gradient(135deg, #071f3f, #0a4f8f);
   color: #fff;
 }
 
@@ -386,7 +829,7 @@
 
 .masterStudentHeader p {
   margin: 5px 0 0;
-  color: rgba(255,255,255,.75);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 12px;
 }
 
@@ -425,15 +868,13 @@
   font-size: 12px;
 }
 
-
 /* =========================================================
    MOBİL / ANDROID
    ========================================================= */
 
-@media(max-width:900px) {
-
+@media (max-width: 900px) {
   .masterSummaryGrid {
-    grid-template-columns: repeat(2,1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .financeOverview {
@@ -445,12 +886,12 @@
   }
 
   .masterInfoGrid {
-    grid-template-columns: repeat(2,1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .quickActions {
     display: grid;
-    grid-template-columns: repeat(2,1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .quickActionButton {
@@ -458,8 +899,7 @@
   }
 }
 
-@media(max-width:520px) {
-
+@media (max-width: 520px) {
   .masterSummaryGrid {
     grid-template-columns: 1fr 1fr;
     gap: 9px;
@@ -486,7 +926,6 @@
   }
 }
 
-
 /* =========================================================
    TEK SAYFALIK PROFESYONEL ÖĞRENCİ BİLGİ KARTI
    ========================================================= */
@@ -496,7 +935,6 @@
 }
 
 @media print {
-
   /*
    Normal detay ekranını baskıda kaldır.
    Sadece özel öğrenci bilgi kartını göster.
@@ -520,10 +958,7 @@
     background: #fff;
     color: #10213a;
 
-    font-family:
-      Arial,
-      Helvetica,
-      sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
   }
 
   .printHeader {
@@ -550,7 +985,7 @@
   .printHeader p {
     margin: 3px 0 0;
     font-size: 9px;
-    opacity: .85;
+    opacity: 0.85;
   }
 
   .printStudentIdentity {
@@ -596,7 +1031,7 @@
 
   .printGrid {
     display: grid;
-    grid-template-columns: repeat(4,1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
   .printItem {
@@ -629,7 +1064,7 @@
 
   .printLessonSummary {
     display: grid;
-    grid-template-columns: repeat(5,1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 
   .printLessonSummary div {
@@ -659,7 +1094,7 @@
 
   .printFinance {
     display: grid;
-    grid-template-columns: repeat(4,1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
   .printFinance div {
@@ -683,7 +1118,7 @@
 
   .printApprovalRow {
     display: grid;
-    grid-template-columns: repeat(3,1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .printApprovalRow div {
