@@ -592,3 +592,247 @@ export async function deleteGroup(
     )}`
   );
 }
+export async function updateGroup(
+  formData: FormData
+) {
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+  ]);
+
+  const organizationId =
+    profile.organization_id;
+
+  if (!organizationId) {
+    throw new Error(
+      "Kurum bilgisi bulunamadı."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const groupId = cleanText(
+    formData.get("group_id"),
+    80
+  );
+
+  const branchId = cleanText(
+    formData.get("branch_id"),
+    80
+  );
+
+  const groupName = cleanText(
+    formData.get("name"),
+    160
+  );
+
+  const courseType = cleanText(
+    formData.get("course_type"),
+    60
+  );
+
+  const levelId =
+    cleanText(
+      formData.get("level_id"),
+      80
+    ) || null;
+
+  const coachId =
+    cleanText(
+      formData.get("primary_coach_id"),
+      80
+    ) || null;
+
+  const capacity = Math.min(
+    50,
+    Math.max(
+      1,
+      Number(
+        formData.get("capacity") || 6
+      )
+    )
+  );
+
+  const description =
+    cleanText(
+      formData.get("description"),
+      500
+    ) || null;
+
+  const startTime = toTime(
+    formData.get("start_time")
+  );
+
+  const endTime = toTime(
+    formData.get("end_time")
+  );
+
+  const weekdays = Array.from(
+    new Set(
+      formData
+        .getAll("weekdays")
+        .map(Number)
+        .filter(
+          (weekday) =>
+            Number.isInteger(weekday) &&
+            weekday >= 0 &&
+            weekday <= 6
+        )
+    )
+  ).sort((a, b) => a - b);
+
+  const publicRegistration =
+    formData.get("public_registration") ===
+    "on";
+
+  if (!groupId) {
+    throw new Error(
+      "Düzenlenecek grup bulunamadı."
+    );
+  }
+
+  if (!branchId) {
+    throw new Error("Şube seçmelisiniz.");
+  }
+
+  if (!groupName) {
+    throw new Error(
+      "Eğitim grubu adı girmelisiniz."
+    );
+  }
+
+  if (
+    !ALLOWED_COURSE_TYPES.includes(
+      courseType
+    )
+  ) {
+    throw new Error(
+      "Geçerli bir kurs programı seçmelisiniz."
+    );
+  }
+
+  if (!weekdays.length) {
+    throw new Error(
+      "En az bir ders günü seçmelisiniz."
+    );
+  }
+
+  if (!startTime || !endTime) {
+    throw new Error(
+      "Başlangıç ve bitiş saatini girmelisiniz."
+    );
+  }
+
+  if (endTime <= startTime) {
+    throw new Error(
+      "Bitiş saati başlangıç saatinden sonra olmalıdır."
+    );
+  }
+
+  const { data: existingGroup } =
+    await supabase
+      .from("training_groups")
+      .select("id")
+      .eq("id", groupId)
+      .eq(
+        "organization_id",
+        organizationId
+      )
+      .maybeSingle();
+
+  if (!existingGroup) {
+    throw new Error(
+      "Düzenlenecek grup bulunamadı."
+    );
+  }
+
+  if (coachId) {
+    const { data: coach } =
+      await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", coachId)
+        .eq(
+          "organization_id",
+          organizationId
+        )
+        .eq("role", "coach")
+        .eq("is_active", true)
+        .maybeSingle();
+
+    if (!coach) {
+      throw new Error(
+        "Seçilen eğitmen bulunamadı veya aktif değil."
+      );
+    }
+  }
+
+  const { error: groupError } =
+    await supabase
+      .from("training_groups")
+      .update({
+        branch_id: branchId,
+        level_id: levelId,
+        primary_coach_id: coachId,
+        name: groupName,
+        course_type: courseType,
+        capacity,
+        description,
+        public_registration:
+          publicRegistration,
+      })
+      .eq("id", groupId)
+      .eq(
+        "organization_id",
+        organizationId
+      );
+
+  if (groupError) {
+    throw groupError;
+  }
+
+  const { error: removeScheduleError } =
+    await supabase
+      .from("lesson_schedules")
+      .delete()
+      .eq("group_id", groupId)
+      .eq(
+        "organization_id",
+        organizationId
+      );
+
+  if (removeScheduleError) {
+    throw removeScheduleError;
+  }
+
+  const scheduleRows = weekdays.map(
+    (weekday) => ({
+      organization_id: organizationId,
+      branch_id: branchId,
+      group_id: groupId,
+      coach_id: coachId,
+      weekday,
+      start_time: startTime,
+      end_time: endTime,
+      is_active: true,
+    })
+  );
+
+  const { error: scheduleError } =
+    await supabase
+      .from("lesson_schedules")
+      .insert(scheduleRows);
+
+  if (scheduleError) {
+    throw scheduleError;
+  }
+
+  refreshGroupPages();
+
+  redirect(
+    `/gruplar?success=${encodeURIComponent(
+      `${groupName} grubu başarıyla güncellendi.`
+    )}`
+  );
+}
