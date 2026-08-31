@@ -34,7 +34,7 @@ type Staff = {
   auth_user_id: string | null;
   login_enabled: boolean;
   is_super_user: boolean;
-  must_change_: boolean;
+  must_change_password: boolean;
   all_branches: boolean;
 };
 
