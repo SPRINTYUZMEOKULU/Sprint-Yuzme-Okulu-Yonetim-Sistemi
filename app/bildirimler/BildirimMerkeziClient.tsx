@@ -645,18 +645,22 @@ export default function BildirimMerkeziClient({
                       <div className="notification-actions">
                         {notification.target_path ? (
                           <Link
-                            href={
-                              notification.target_path
-                            }
-                            className="open-record-button"
-                          >
-                            <span>
-                              İlgili Kaydı Aç
-                            </span>
-                            <span>
-                              →
-                            </span>
-                          </Link>
+  href={notification.target_path}
+  className="open-record-button"
+  onClick={() => {
+    if (!notification.is_read) {
+      void markAsRead(notification.id);
+    }
+  }}
+>
+  <span>
+    İlgili Kaydı Aç
+  </span>
+
+  <span aria-hidden="true">
+    →
+  </span>
+</Link>
                         ) : null}
 
                         {!notification.is_read ? (
