@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         swimming_level: clean(valueOf(row, "Seviye", "swimming_level"), 100),
         registration_note: clean(valueOf(row, "Not", "Açıklama", "registration_note"), 1000),
         registration_source: "excel_import",
-        status: "active",
+        status: "pre_registration",
       }];
     });
 
