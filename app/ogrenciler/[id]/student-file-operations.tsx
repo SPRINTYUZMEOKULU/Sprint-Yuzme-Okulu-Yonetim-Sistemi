@@ -47,12 +47,6 @@ type Props = {
   remainingPayment?: number;
   totalReceived?: number;
   paymentDueDate?: string | null;
-  renewalDefaults?: {
-    package_id?: string | null;
-    group_id?: string | null;
-    branch_id?: string | null;
-    lesson_count?: number | null;
-  };
   branches: BranchOption[];
   groups: GroupOption[];
   schedules: ScheduleOption[];
@@ -152,7 +146,6 @@ export default function StudentFileOperations({
   remainingPayment = 0,
   totalReceived = 0,
   paymentDueDate,
-  renewalDefaults,
   branches,
   groups,
   schedules,
@@ -160,14 +153,7 @@ export default function StudentFileOperations({
   const router = useRouter();
 
   const [panel, setPanel] = useState<
-    | "payment"
-    | "renewal"
-    | "obligation"
-    | "transfer"
-    | "compensation"
-    | "message"
-    | "delete"
-    | null
+    "payment" | "transfer" | "compensation" | "message" | "delete" | null
   >(null);
 
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -175,23 +161,6 @@ export default function StudentFileOperations({
     "cash" | "card" | "bank_transfer" | "eft" | "other"
   >("cash");
   const [paymentDescription, setPaymentDescription] = useState("");
-  const [renewalStartDate, setRenewalStartDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [renewalDueDate, setRenewalDueDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [renewalLessonCount, setRenewalLessonCount] = useState(
-    String(renewalDefaults?.lesson_count || 8),
-  );
-  const [renewalNote, setRenewalNote] = useState("");
-  const [obligationType, setObligationType] = useState("equipment");
-  const [obligationTitle, setObligationTitle] = useState("");
-  const [obligationAmount, setObligationAmount] = useState("");
-  const [obligationDueDate, setObligationDueDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [obligationDescription, setObligationDescription] = useState("");
 
   const [targetBranchId, setTargetBranchId] = useState("");
   const [targetGroupId, setTargetGroupId] = useState("");
@@ -301,72 +270,6 @@ export default function StudentFileOperations({
     } catch (error) {
       console.error(error);
       setResult("Ödeme kaydedilirken bağlantı hatası oluştu.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function submitRenewal() {
-    try {
-      setSubmitting(true);
-      setResult("");
-      const response = await fetch("/api/student-renewals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: student.id,
-          packageId: renewalDefaults?.package_id,
-          groupId: renewalDefaults?.group_id,
-          branchId: renewalDefaults?.branch_id,
-          lessonCount: Number(renewalLessonCount),
-          startDate: renewalStartDate,
-          paymentDueDate: renewalDueDate,
-          note: renewalNote,
-        }),
-      });
-      const data = await response.json();
-      setResult(data.message || data.error || "Kayıt yenileme tamamlanamadı.");
-      if (response.ok && data.ok) router.refresh();
-    } catch (error) {
-      console.error(error);
-      setResult("Kayıt yenileme sırasında bağlantı hatası oluştu.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function submitObligation() {
-    try {
-      setSubmitting(true);
-      setResult("");
-      const parsedAmount = Number(
-        obligationAmount.replace(/\./g, "").replace(",", "."),
-      );
-      const response = await fetch("/api/student-obligations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: student.id,
-          enrollmentId,
-          obligationType,
-          title: obligationTitle,
-          amount: parsedAmount,
-          dueDate: obligationDueDate,
-          description: obligationDescription,
-          reminderDays: 3,
-        }),
-      });
-      const data = await response.json();
-      setResult(data.message || data.error || "Borç kaydı oluşturulamadı.");
-      if (response.ok && data.ok) {
-        setObligationTitle("");
-        setObligationAmount("");
-        setObligationDescription("");
-        router.refresh();
-      }
-    } catch (error) {
-      console.error(error);
-      setResult("Borçlandırma sırasında bağlantı hatası oluştu.");
     } finally {
       setSubmitting(false);
     }
@@ -525,28 +428,6 @@ export default function StudentFileOperations({
         <div className="fileCommandActions">
           <button
             type="button"
-            className="renewal"
-            onClick={() => {
-              setResult("");
-              setPanel("renewal");
-            }}
-          >
-            <FileIcon name="plus" /> Kayıt Yenile
-          </button>
-
-          <button
-            type="button"
-            className="obligation"
-            onClick={() => {
-              setResult("");
-              setPanel("obligation");
-            }}
-          >
-            <FileIcon name="wallet" /> Borçlandır / Ürün Ver
-          </button>
-
-          <button
-            type="button"
             className="payment"
             onClick={() => {
               setResult("");
@@ -654,15 +535,11 @@ export default function StudentFileOperations({
                     ? "PROGRAM DÜZENLEME"
                     : panel === "payment"
                       ? "ÖDEME VE KASA"
-                      : panel === "renewal"
-                        ? "KAYIT YENİLEME"
-                        : panel === "obligation"
-                          ? "VADELİ BORÇ / ÜRÜN"
-                          : panel === "compensation"
-                            ? "BİREYSEL TELAFİ"
-                            : panel === "message"
-                              ? "İLETİŞİM MERKEZİ"
-                              : "YÖNETİCİ ONAYLI ARŞİVLEME"}
+                      : panel === "compensation"
+                        ? "BİREYSEL TELAFİ"
+                        : panel === "message"
+                          ? "İLETİŞİM MERKEZİ"
+                          : "YÖNETİCİ ONAYLI ARŞİVLEME"}
                 </span>
                 <h3>{fullName}</h3>
               </div>
@@ -672,127 +549,6 @@ export default function StudentFileOperations({
             </header>
 
             <div className="fileOpsBody">
-              {panel === "renewal" && (
-                <>
-                  <div className="proInfo renewalInfo">
-                    <strong>Yeni eğitim dönemini oluştur</strong>
-                    <p>
-                      Mevcut dönem geçmişe kaldırılır; grup, yoklama ve ödeme
-                      geçmişi korunarak yeni ders hakkı başlatılır.
-                    </p>
-                  </div>
-                  <label>
-                    <span>Yeni Ders Sayısı</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="200"
-                      value={renewalLessonCount}
-                      onChange={(event) =>
-                        setRenewalLessonCount(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Yeni Dönem Başlangıcı</span>
-                    <input
-                      type="date"
-                      value={renewalStartDate}
-                      onChange={(event) =>
-                        setRenewalStartDate(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Ödeme Vadesi</span>
-                    <input
-                      type="date"
-                      value={renewalDueDate}
-                      onChange={(event) =>
-                        setRenewalDueDate(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Yenileme Notu</span>
-                    <textarea
-                      rows={4}
-                      value={renewalNote}
-                      onChange={(event) => setRenewalNote(event.target.value)}
-                      placeholder="Örn. Aynı grup ve saatle 12 ders yenilendi."
-                    />
-                  </label>
-                </>
-              )}
-
-              {panel === "obligation" && (
-                <>
-                  <div className="proInfo obligationInfo">
-                    <strong>Ürün veya vadeli ek ücret kaydı</strong>
-                    <p>
-                      Vade yaklaştığında uyarı verir; tarih geçtiğinde öğrenci
-                      dosyası ve finans ekranında kırmızı görünür.
-                    </p>
-                  </div>
-                  <label>
-                    <span>Borç Türü</span>
-                    <select
-                      value={obligationType}
-                      onChange={(event) =>
-                        setObligationType(event.target.value)
-                      }
-                    >
-                      <option value="equipment">Palet / Bone / Ekipman</option>
-                      <option value="service">Ek Hizmet</option>
-                      <option value="installment">Taksit / Taahhüt</option>
-                      <option value="other">Diğer</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Ürün / Borç Açıklaması</span>
-                    <input
-                      value={obligationTitle}
-                      onChange={(event) =>
-                        setObligationTitle(event.target.value)
-                      }
-                      placeholder="Örn. Yüzme paleti"
-                    />
-                  </label>
-                  <label>
-                    <span>Tutar</span>
-                    <input
-                      inputMode="decimal"
-                      value={obligationAmount}
-                      onChange={(event) =>
-                        setObligationAmount(event.target.value)
-                      }
-                      placeholder="Örn. 750"
-                    />
-                  </label>
-                  <label>
-                    <span>Ödeme Taahhüt / Vade Tarihi</span>
-                    <input
-                      type="date"
-                      value={obligationDueDate}
-                      onChange={(event) =>
-                        setObligationDueDate(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Not</span>
-                    <textarea
-                      rows={4}
-                      value={obligationDescription}
-                      onChange={(event) =>
-                        setObligationDescription(event.target.value)
-                      }
-                      placeholder="Örn. Veli ayın 3'ünde ödeme yapacağını bildirdi."
-                    />
-                  </label>
-                </>
-              )}
-
               {panel === "payment" && (
                 <>
                   <div className="proInfo paymentInfo">
@@ -863,41 +619,6 @@ export default function StudentFileOperations({
                     />
                   </label>
                 </>
-              )}
-
-              {panel === "renewal" && (
-                <button
-                  type="button"
-                  className="primary renewal"
-                  disabled={
-                    submitting ||
-                    !renewalStartDate ||
-                    Number(renewalLessonCount) < 1
-                  }
-                  onClick={submitRenewal}
-                >
-                  {submitting
-                    ? "Kayıt Yenileniyor..."
-                    : "✓ Kaydı Yenile ve Yeni Dönemi Başlat"}
-                </button>
-              )}
-
-              {panel === "obligation" && (
-                <button
-                  type="button"
-                  className="primary obligation"
-                  disabled={
-                    submitting ||
-                    !obligationTitle.trim() ||
-                    !obligationAmount ||
-                    !obligationDueDate
-                  }
-                  onClick={submitObligation}
-                >
-                  {submitting
-                    ? "Borç Kaydediliyor..."
-                    : "✓ Borcu Kaydet ve Takibe Al"}
-                </button>
               )}
 
               {panel === "transfer" && (
@@ -1242,20 +963,6 @@ export default function StudentFileOperations({
           box-shadow: 0 8px 18px rgba(8, 116, 67, 0.2);
         }
 
-        .fileCommandActions .renewal {
-          background: linear-gradient(135deg, #165dcc, #2587f4);
-          border-color: #165dcc;
-          color: #ffffff;
-          box-shadow: 0 8px 18px rgba(22, 93, 204, 0.2);
-        }
-
-        .fileCommandActions .obligation {
-          background: linear-gradient(135deg, #7c3aed, #9b5cf6);
-          border-color: #7c3aed;
-          color: #ffffff;
-          box-shadow: 0 8px 18px rgba(124, 58, 237, 0.18);
-        }
-
         .fileCommandActions .green {
           background: #eefaf4;
           border-color: #bfe6d2;
@@ -1466,24 +1173,6 @@ export default function StudentFileOperations({
           color: #087443;
         }
 
-        .renewalInfo {
-          border-color: #b9d7ff;
-          background: #eff6ff;
-        }
-
-        .renewalInfo strong {
-          color: #165dcc;
-        }
-
-        .obligationInfo {
-          border-color: #d8c4ff;
-          background: #f7f2ff;
-        }
-
-        .obligationInfo strong {
-          color: #6d28d9;
-        }
-
         .paymentSummaryGrid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1594,14 +1283,6 @@ export default function StudentFileOperations({
 
         .fileOpsPanel > footer .payment {
           background: #087443;
-        }
-
-        .fileOpsPanel > footer .renewal {
-          background: #165dcc;
-        }
-
-        .fileOpsPanel > footer .obligation {
-          background: #7c3aed;
         }
 
         .deleteApprovalCheck {
