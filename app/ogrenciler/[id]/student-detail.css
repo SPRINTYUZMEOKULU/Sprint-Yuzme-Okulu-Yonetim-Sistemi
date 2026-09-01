@@ -300,11 +300,11 @@
   }
 }
 /* =========================================================
-   SPRINTOS — MASTER ÖĞRENCİ KARTI EK STİLLERİ
+   SPRINTOS â€” MASTER Ã–ÄRENCÄ° KARTI EK STÄ°LLERÄ°
    Mevcut CSS'in EN ALTINA eklenecek
    ========================================================= */
 
-/* ---------- ÖĞRENCİ NUMARASI ---------- */
+/* ---------- Ã–ÄRENCÄ° NUMARASI ---------- */
 
 .studentNumber {
   display: inline-flex;
@@ -472,7 +472,7 @@
   }
 }
 
-/* ---------- HIZLI İŞLEMLER ---------- */
+/* ---------- HIZLI Ä°ÅLEMLER ---------- */
 
 .quickActions {
   display: flex;
@@ -568,7 +568,7 @@
 }
 
 /* =========================================================
-   ANA ÖZET / DURUM KARTLARI
+   ANA Ã–ZET / DURUM KARTLARI
    ========================================================= */
 
 .masterSummaryGrid {
@@ -691,7 +691,7 @@
 }
 
 /* =========================================================
-   AİDAT / FİNANS
+   AÄ°DAT / FÄ°NANS
    ========================================================= */
 
 .financeOverview {
@@ -742,7 +742,7 @@
 }
 
 /* =========================================================
-   TEKNİK / ELEKTRONİK ONAY
+   TEKNÄ°K / ELEKTRONÄ°K ONAY
    ========================================================= */
 
 .auditCard {
@@ -869,7 +869,7 @@
 }
 
 /* =========================================================
-   MOBİL / ANDROID
+   MOBÄ°L / ANDROID
    ========================================================= */
 
 @media (max-width: 900px) {
@@ -927,7 +927,205 @@
 }
 
 /* =========================================================
-   TEK SAYFALIK PROFESYONEL ÖĞRENCİ BİLGİ KARTI
+   MOBÄ°L TAM GENÄ°ÅLÄ°K VE TAÅMA DÃœZELTMESÄ°
+   ========================================================= */
+
+@media (max-width: 760px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .studentFilePage {
+    width: 100vw;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+    padding: 14px 12px 34px;
+    overflow-x: clip;
+  }
+
+  .studentFilePage > * {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .studentHero {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    padding: 20px 16px;
+    border-radius: 22px;
+  }
+
+  .studentHero .avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 19px;
+    font-size: 23px;
+  }
+
+  .studentHero .heroText {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .studentHero .heroText h1 {
+    font-size: clamp(23px, 7vw, 29px);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  .studentHero .heroBadges {
+    max-width: 100%;
+  }
+
+  .studentHero .heroBadges span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .studentHero .backButton {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .fileCommandBar,
+  .smartAlertPanel,
+  .obligationStrip,
+  .panel,
+  .masterStudentCard {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .fileCommandBar {
+    padding: 16px 14px !important;
+  }
+
+  .fileCommandIntro {
+    min-width: 0 !important;
+  }
+
+  .fileCommandActions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px !important;
+  }
+
+  .fileCommandActions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    padding: 9px 7px !important;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .fileSectionNav {
+    position: relative !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px !important;
+    margin: 0 0 18px !important;
+    padding: 7px !important;
+    overflow: visible !important;
+  }
+
+  .fileSectionNav button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 7px 6px !important;
+    white-space: normal !important;
+    line-height: 1.15;
+  }
+
+  .metricGrid,
+  .masterSummaryGrid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricGrid article,
+  .masterSummaryCard {
+    min-width: 0;
+  }
+
+  .twoColumn,
+  .formGrid,
+  .healthGrid,
+  .financeOverview,
+  .auditGrid,
+  .masterInfoGrid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .smartAlertPanel {
+    padding: 17px 14px;
+  }
+
+  .panelHead,
+  .smartAlertHead,
+  .obligationStripHead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .infoRows div,
+  .list article {
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .infoRows strong,
+  .list article span {
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 380px) {
+  .studentFilePage {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .studentHero {
+    grid-template-columns: 56px minmax(0, 1fr);
+    padding: 17px 13px;
+  }
+
+  .studentHero .avatar {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* =========================================================
+   TEK SAYFALIK PROFESYONEL Ã–ÄRENCÄ° BÄ°LGÄ° KARTI
    ========================================================= */
 
 .printStudentCard {
@@ -936,8 +1134,8 @@
 
 @media print {
   /*
-   Normal detay ekranını baskıda kaldır.
-   Sadece özel öğrenci bilgi kartını göster.
+   Normal detay ekranÄ±nÄ± baskÄ±da kaldÄ±r.
+   Sadece Ã¶zel Ã¶ÄŸrenci bilgi kartÄ±nÄ± gÃ¶ster.
   */
 
   .studentFilePage > * {
@@ -1172,7 +1370,7 @@
   }
 
   /*
-   Tek A4'e sığdırmak için gereksiz boşluk yok.
+   Tek A4'e sÄ±ÄŸdÄ±rmak iÃ§in gereksiz boÅŸluk yok.
   */
 
   @page {
