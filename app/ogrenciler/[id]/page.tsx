@@ -120,7 +120,6 @@ export default async function StudentFile({
     lessonLedgerResult,
     paymentSummaryResult,
     paymentsResult,
-    obligationsResult,
     coachReportsResult,
     enrollmentHistoryResult,
     attendanceResult,
@@ -216,13 +215,6 @@ export default async function StudentFile({
       .limit(30),
 
     supabase
-      .from("student_financial_obligation_summary")
-      .select("*")
-      .eq("organization_id", profile.organization_id)
-      .eq("student_id", id)
-      .order("due_date", { ascending: true }),
-
-    supabase
       .from("student_coach_reports")
       .select("*")
       .eq("student_id", id)
@@ -268,7 +260,6 @@ export default async function StudentFile({
   const lessonLedger = lessonLedgerResult.data ?? [];
   const paymentSummary = paymentSummaryResult.data;
   const payments = paymentsResult.data ?? [];
-  const obligations = obligationsResult.data ?? [];
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
@@ -671,22 +662,6 @@ export default async function StudentFile({
           target: "genel-bilgiler",
         }
       : null,
-    obligations.some((item: any) => item.alert_status === "overdue")
-      ? {
-          tone: "danger",
-          title: "Vadesi geçmiş ek borç var",
-          description: `${obligations.filter((item: any) => item.alert_status === "overdue").length} borç kaydı için tahsilat bekleniyor.`,
-          target: "ek-borclar",
-        }
-      : obligations.some((item: any) => item.alert_status === "due_soon")
-        ? {
-            tone: "warning",
-            title: "Ek borç vadesi yaklaşıyor",
-            description:
-              "Palet, ekipman veya vadeli ücret kaydı kontrol edilmelidir.",
-            target: "ek-borclar",
-          }
-        : null,
   ].filter(Boolean) as Array<{
     tone: string;
     title: string;
@@ -752,24 +727,6 @@ export default async function StudentFile({
         paymentDueDate={fmtDate(
           enrollment?.payment_due_date ?? enrollment?.start_date,
         )}
-        renewalDefaults={{
-          package_id:
-            enrollment?.package_id ?? student.preferred_package_id ?? null,
-          group_id: groupInfo?.id ?? student.preferred_group_id ?? null,
-          branch_id: branchInfo?.id ?? student.branch_id ?? null,
-          lesson_count: normalTotal || packageInfo?.lesson_count || 8,
-        }}
-        obligations={obligations.map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          obligation_type: item.obligation_type,
-          amount: Number(item.amount || 0),
-          paid_amount: Number(item.paid_amount || 0),
-          remaining_amount: Number(item.remaining_amount || 0),
-          due_date: item.due_date,
-          status: item.status,
-          alert_status: item.alert_status,
-        }))}
         branches={operationBranches}
         groups={operationGroups}
         schedules={operationSchedules}
