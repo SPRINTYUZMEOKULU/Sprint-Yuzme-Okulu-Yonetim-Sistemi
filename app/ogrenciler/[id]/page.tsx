@@ -727,6 +727,13 @@ export default async function StudentFile({
         paymentDueDate={fmtDate(
           enrollment?.payment_due_date ?? enrollment?.start_date,
         )}
+        renewalDefaults={{
+          package_id:
+            enrollment?.package_id ?? student.preferred_package_id ?? null,
+          group_id: groupInfo?.id ?? student.preferred_group_id ?? null,
+          branch_id: branchInfo?.id ?? student.branch_id ?? null,
+          lesson_count: normalTotal || packageInfo?.lesson_count || 8,
+        }}
         branches={operationBranches}
         groups={operationGroups}
         schedules={operationSchedules}
