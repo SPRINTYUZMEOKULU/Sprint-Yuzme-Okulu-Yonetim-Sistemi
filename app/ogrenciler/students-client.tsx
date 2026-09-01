@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -831,6 +831,9 @@ export default function StudentsClient({
   const [dayFilter, setDayFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importResult, setImportResult] = useState("");
   const [bulkMode, setBulkMode] = useState<
     "transfer" | "message" | null
   >(null);
@@ -1910,6 +1913,12 @@ function closeLessonAction() {
     );
   }
 
+  function exportStudents() {
+    if (!selectedStudentIds.length) return filteredStudents;
+    const selected = new Set(selectedStudentIds);
+    return filteredStudents.filter((student) => selected.has(student.id));
+  }
+
   function exportCSV() {
     const headers = [
       "Öğrenci",
@@ -1928,7 +1937,7 @@ function closeLessonAction() {
       "Telefon",
     ];
 
-    const rows = filteredStudents.map((student) => {
+    const rows = exportStudents().map((student) => {
       const normalLessons = numberValue(student.package_lesson_count);
       const compensation = numberValue(student.compensation_lessons);
       const totalRights = normalLessons + compensation;
@@ -1976,6 +1985,68 @@ function closeLessonAction() {
     anchor.remove();
 
     URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const rows = exportStudents();
+    if (!rows.length) {
+      setImportResult("PDF için öğrenci bulunamadı.");
+      return;
+    }
+    const escape = (value: unknown) => String(value ?? "")
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    const body = rows.map((student) => `<tr><td>${escape(`${student.first_name} ${student.last_name}`)}</td><td>${escape(statusLabels[student.status || ""] || student.status || "")}</td><td>${escape(student.branch_name)}</td><td>${escape(student.group_name)}</td><td>${escape(student.swimming_level)}</td><td>${escape(student.package_name)}</td><td>${numberValue(student.used_lessons)}</td><td>${numberValue(student.remaining_lessons)}</td><td>${escape(formatDate(student.end_date))}</td><td>${escape(student.phone || student.guardian_phone)}</td></tr>`).join("");
+    const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SprintOS Öğrenci Listesi</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#10213a;margin:0}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #176de9;padding-bottom:10px;margin-bottom:14px}.head h1{margin:0;font-size:22px}.head p{margin:4px 0 0;color:#64748b;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{padding:7px 6px;border:1px solid #dbe4ef;text-align:left;vertical-align:top}th{background:#edf5ff;color:#174a7c}.foot{margin-top:10px;color:#64748b;font-size:9px;text-align:right}</style></head><body><div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt</p></div><strong>SprintOS</strong></div><table><thead><tr><th>Öğrenci</th><th>Durum</th><th>Şube</th><th>Grup</th><th>Seviye</th><th>Paket</th><th>Kullanılan</th><th>Kalan</th><th>Bitiş</th><th>Telefon</th></tr></thead><tbody>${body}</tbody></table><div class="foot">${escape(new Date().toLocaleString("tr-TR"))}</div><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`;
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) {
+      setImportResult("PDF penceresi tarayıcı tarafından engellendi.");
+      return;
+    }
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+  }
+
+  async function importStudents(file?: File) {
+    if (!file) return;
+    setImportSubmitting(true);
+    setImportResult("Öğrenciler kontrol ediliyor ve aktarılıyor…");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const response = await fetch("/api/student-import", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "İçe aktarma tamamlanamadı.");
+      setImportResult(`${result.imported || 0} öğrenci Ön Kayıt durumunda aktarıldı.${result.warnings?.length ? ` ${result.warnings.length} satır için uyarı var.` : ""}`);
+      router.refresh();
+    } catch (error) {
+      setImportResult(error instanceof Error ? error.message : "İçe aktarma sırasında hata oluştu.");
+    } finally {
+      setImportSubmitting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }
+
+  async function requestBulkArchive() {
+    if (!selectedStudentIds.length) return;
+    const reason = window.prompt("Arşivleme gerekçesini yazın:");
+    if (!reason?.trim()) return;
+    if (!window.confirm(`${selectedStudentIds.length} öğrenci için yönetici onaylı arşivleme talebi oluşturulsun mu?`)) return;
+    setBulkSubmitting(true);
+    setBulkResult("Arşivleme talepleri oluşturuluyor…");
+    const selected = students.filter((student) => selectedStudentIds.includes(student.id));
+    const results = await Promise.all(selected.map(async (student) => {
+      const response = await fetch("/api/student-status-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_type: "delete", student_id: student.id, branch_id: student.branch_id || null, group_id: student.group_id || null, reason: reason.trim(), description: "Toplu işlem merkezinden oluşturuldu.", old_status: student.status || "active", new_status: "deleted" }),
+      });
+      return response.ok;
+    }));
+    const completed = results.filter(Boolean).length;
+    setBulkResult(`${completed}/${selected.length} arşivleme talebi yönetici onayına gönderildi.`);
+    setBulkSubmitting(false);
   }
 
   return (
@@ -2238,9 +2309,32 @@ function closeLessonAction() {
         </select>
 
         <button className="exportButton" onClick={exportCSV}>
-          Excel&apos;e Aktar
+          {selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Listeyi Excel’e Aktar"}
         </button>
+        <button className="exportButton" onClick={exportPDF}>
+          {selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "Listeyi PDF’ye Aktar"}
+        </button>
+        <a className="exportButton" href="/api/student-import">
+          İçe Aktarma Şablonu
+        </a>
+        <button
+          className="exportButton"
+          type="button"
+          disabled={importSubmitting}
+          onClick={() => importInputRef.current?.click()}
+        >
+          {importSubmitting ? "Aktarılıyor…" : "Excel/CSV İçe Aktar"}
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          hidden
+          onChange={(event) => void importStudents(event.target.files?.[0])}
+        />
       </section>
+
+      {importResult && <div className="resultInfo" role="status">{importResult}</div>}
 
       <section className="selectionToolbar">
         <label className="selectAllLabel">
@@ -2268,6 +2362,9 @@ function closeLessonAction() {
             </button>
             <button type="button" onClick={openBulkMessage}>
               ✉ Toplu Mesaj
+            </button>
+            <button type="button" disabled={bulkSubmitting} onClick={() => void requestBulkArchive()}>
+              🗃 Güvenli Arşivleme
             </button>
             <button type="button" onClick={clearSelection}>
               Seçimi Temizle
