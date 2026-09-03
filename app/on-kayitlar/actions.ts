@@ -63,6 +63,43 @@ export async function updatePreRegistration(formData: FormData) {
     registration_note: nullable(formData.get("registration_note"), 1000),
   };
 
+  const { data: currentConsent, error: consentLookupError } = await supabase
+    .from("registration_consents")
+    .select("*")
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .order("accepted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (consentLookupError) {
+    throw new Error(`Kabul kayıtları okunamadı: ${consentLookupError.message}`);
+  }
+
+  const managementConfirmed = formData.get("management_confirmation") === "yes";
+  const nextConsent = {
+    registration_for: text(formData.get("registration_for"), 20) || "child",
+    health_declaration: formData.get("health_declaration") === "yes",
+    health_note: nullable(formData.get("health_note"), 1500),
+    rules_accepted: formData.get("rules_accepted") === "yes",
+    whatsapp_permission: formData.get("whatsapp_permission") === "yes",
+    contact_request: nullable(formData.get("contact_request"), 80),
+  };
+
+  const consentWasChanged =
+    String(currentConsent?.registration_for ?? "child") !== nextConsent.registration_for ||
+    Boolean(currentConsent?.health_declaration) !== nextConsent.health_declaration ||
+    String(currentConsent?.health_note ?? "") !== String(nextConsent.health_note ?? "") ||
+    Boolean(currentConsent?.rules_accepted) !== nextConsent.rules_accepted ||
+    Boolean(currentConsent?.whatsapp_permission) !== nextConsent.whatsapp_permission ||
+    String(currentConsent?.contact_request ?? "") !== String(nextConsent.contact_request ?? "");
+
+  if (consentWasChanged && !managementConfirmed) {
+    throw new Error(
+      "Sağlık ve kabul bilgilerini değiştirmek için veli/kursiyer beyanının yönetim tarafından teyit edildiğini işaretleyiniz."
+    );
+  }
+
   if (!next.first_name || !next.last_name) {
     throw new Error("Ad ve soyad boş bırakılamaz.");
   }
@@ -158,19 +195,62 @@ export async function updatePreRegistration(formData: FormData) {
     }
   }
 
-  if (!Object.keys(changes).length) {
+  if (!Object.keys(changes).length && !consentWasChanged) {
     redirect(`/on-kayitlar?student=${encodeURIComponent(studentId)}`);
   }
 
-  const { error: updateError } = await supabase
-    .from("students")
-    .update(next)
-    .eq("id", studentId)
-    .eq("organization_id", profile.organization_id)
-    .eq("status", "pre_registration");
+  if (Object.keys(changes).length) {
+    const { error: updateError } = await supabase
+      .from("students")
+      .update(next)
+      .eq("id", studentId)
+      .eq("organization_id", profile.organization_id)
+      .eq("status", "pre_registration");
 
-  if (updateError) {
-    throw new Error(`Ön kayıt güncellenemedi: ${updateError.message}`);
+    if (updateError) {
+      throw new Error(`Ön kayıt güncellenemedi: ${updateError.message}`);
+    }
+  }
+
+  if (consentWasChanged) {
+    const now = new Date().toISOString();
+    const consentPayload = {
+      ...nextConsent,
+      accepted_at: now,
+      rules_version: currentConsent?.rules_version || "SPRINT-KURALLAR-v1",
+      form_version: currentConsent?.form_version || "SPRINT-YONETIM-TAMAMLAMA-v1",
+      form_snapshot:
+        currentConsent?.form_snapshot || {
+          source: "management_completed_import",
+          completed_at: now,
+          completed_by: { profile_id: profile.id, name: editor },
+          student: {
+            first_name: next.first_name,
+            last_name: next.last_name,
+            phone: next.phone,
+            guardian_name: next.guardian_name,
+            guardian_phone: next.guardian_phone,
+          },
+          consents: nextConsent,
+        },
+    };
+
+    const consentMutation = currentConsent?.student_id
+      ? supabase
+          .from("registration_consents")
+          .update(consentPayload)
+          .eq("organization_id", profile.organization_id)
+          .eq("id", currentConsent.id)
+      : supabase.from("registration_consents").insert({
+          organization_id: profile.organization_id,
+          student_id: studentId,
+          ...consentPayload,
+        });
+
+    const { error: consentUpdateError } = await consentMutation;
+    if (consentUpdateError) {
+      throw new Error(`Sağlık ve kabul bilgileri kaydedilemedi: ${consentUpdateError.message}`);
+    }
   }
 
   const { data: relation } = await supabase
@@ -214,15 +294,32 @@ export async function updatePreRegistration(formData: FormData) {
     .map((key) => changedLabels[key] || key)
     .join(", ");
 
+  const completeChangedText = [
+    changedText,
+    consentWasChanged ? "Sağlık, iletişim ve elektronik kabul bilgileri" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   const { error: logError } = await supabase.from("student_activity_logs").insert({
     organization_id: profile.organization_id,
     student_id: studentId,
     activity_type: "pre_registration_updated",
     title: "Ön kayıt bilgileri güncellendi",
-    description: `${editor} tarafından şu alanlar güncellendi: ${changedText}.`,
+    description: `${editor} tarafından şu alanlar güncellendi: ${completeChangedText}.`,
     new_value: {
       edited_by: { profile_id: profile.id, name: editor },
       changes,
+      consent_changes: consentWasChanged
+        ? {
+            health_declaration: nextConsent.health_declaration,
+            health_note_provided: Boolean(nextConsent.health_note),
+            rules_accepted: nextConsent.rules_accepted,
+            whatsapp_permission: nextConsent.whatsapp_permission,
+            contact_request: nextConsent.contact_request,
+            management_confirmed: managementConfirmed,
+          }
+        : null,
     },
     source_type: "pre_registration_center",
     source_id: studentId,
