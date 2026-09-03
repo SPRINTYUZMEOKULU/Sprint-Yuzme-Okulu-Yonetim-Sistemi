@@ -121,14 +121,6 @@ function contactLabel(value: string | null | undefined) {
   }
 }
 
-function sourceLabel(value: string | null | undefined) {
-  if (value === "sprintyuzmekursu.com") return "Sprint Yüzme Kursu";
-  if (value === "larayuzmekursu.com") return "Lara Yüzme Kursu";
-  if (value === "konyaalti-yuzme-kursu") return "Konyaaltı Yüzme Kursu";
-  if (value === "yonetim-paneli") return "Yönetim Paneli";
-  return "Web Ön Kayıt Formu";
-}
-
 function getSnapshot(consent?: Consent | null) {
   if (!consent?.form_snapshot || typeof consent.form_snapshot !== "object") {
     return null;
@@ -281,7 +273,6 @@ export default function PreRegistrationCenter({
         student.phone,
         student.guardian_name,
         student.guardian_phone,
-        sourceLabel(student.registration_source),
         student.branch_id ? branchMap.get(student.branch_id) : "",
         student.preferred_group_id
           ? groupMap.get(student.preferred_group_id)
@@ -312,18 +303,6 @@ export default function PreRegistrationCenter({
     : null;
 
   const selectedSnapshot = getSnapshot(selectedConsent);
-
-  const selectedMissingFields = selected
-    ? [
-        !selected.branch_id ? "Şube" : "",
-        !selected.preferred_group_id ? "Grup" : "",
-        !selected.preferred_package_id ? "Paket" : "",
-        !selected.phone && !selected.guardian_phone ? "Telefon" : "",
-        !selectedConsent?.health_declaration ? "Sağlık beyanı" : "",
-        !selectedConsent?.rules_accepted ? "Kuralların kabulü" : "",
-        !selectedConsent?.whatsapp_permission ? "WhatsApp izni" : "",
-      ].filter(Boolean)
-    : [];
 
   const selectedActivities = useMemo(
     () =>
@@ -659,25 +638,12 @@ export default function PreRegistrationCenter({
                     <Info label="İletişim Tercihi">
                       {contactLabel(selectedConsent?.contact_request)}
                     </Info>
-                    <Info label="Başvuru Kaynağı">
-                      {sourceLabel(selected.registration_source)}
-                    </Info>
                   </div>
 
                   <HealthNotice
                     declaration={selectedConsent?.health_declaration}
                     note={selectedConsent?.health_note}
                   />
-
-                  {selectedMissingFields.length > 0 && (
-                    <div className="preMissingFieldsNotice" role="alert">
-                      <strong>Kayda aktarılmadan önce tamamlanması gereken bilgiler</strong>
-                      <p>{selectedMissingFields.join(" • ")}</p>
-                      <button type="button" onClick={openEdit}>
-                        Eksik Bilgileri Düzenle
-                      </button>
-                    </div>
-                  )}
 
                   <div className="preNoteBox">
                     <span>Kayıt Notu</span>
@@ -771,22 +737,12 @@ export default function PreRegistrationCenter({
                         ✎ Bilgileri Düzenle
                       </button>
 
-                      {selectedMissingFields.length ? (
-                        <button
-                          type="button"
-                          className="primaryPreAction"
-                          onClick={openEdit}
-                        >
-                          Eksikleri Tamamla →
-                        </button>
-                      ) : (
-                        <Link
-                          className="primaryPreAction"
-                          href={`/kayit-tamamlama/${selected.id}`}
-                        >
-                          Kayda Aktar →
-                        </Link>
-                      )}
+                      <Link
+                        className="primaryPreAction"
+                        href={`/kayit-tamamlama/${selected.id}`}
+                      >
+                        Kayda Aktar →
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -1041,85 +997,6 @@ export default function PreRegistrationCenter({
                           defaultValue={selected.registration_note || ""}
                         />
                       </label>
-
-                      <div className="full preConsentEditBox">
-                        <div className="preConsentEditHead">
-                          <strong>Sağlık, Kurallar ve İletişim Onayları</strong>
-                          <span>Excel/CSV ile gelen eksik kayıtları burada tamamlayabilirsiniz.</span>
-                        </div>
-
-                        <label>
-                          <span>Kayıt Türü</span>
-                          <select
-                            name="registration_for"
-                            defaultValue={selectedConsent?.registration_for || "child"}
-                          >
-                            <option value="child">Çocuk</option>
-                            <option value="adult">Yetişkin</option>
-                          </select>
-                        </label>
-
-                        <label>
-                          <span>İletişim Talebi</span>
-                          <select
-                            name="contact_request"
-                            defaultValue={selectedConsent?.contact_request || "whatsapp_info"}
-                          >
-                            <option value="whatsapp_info">WhatsApp üzerinden bilgi</option>
-                            <option value="call_me">Beni arayın</option>
-                            <option value="ready_to_start">Kayıt sonrası başlamak istiyor</option>
-                            <option value="need_information">Detaylı bilgi istiyor</option>
-                          </select>
-                        </label>
-
-                        <label className="full">
-                          <span>Sağlık Notu / Antrenör Bilgilendirmesi</span>
-                          <textarea
-                            name="health_note"
-                            rows={4}
-                            defaultValue={selectedConsent?.health_note || ""}
-                            placeholder="Alerji, kronik rahatsızlık, ilaç veya bilinmesi gereken durum varsa yazın."
-                          />
-                        </label>
-
-                        <div className="full preConsentChecks">
-                          <label>
-                            <input
-                              type="checkbox"
-                              name="health_declaration"
-                              value="yes"
-                              defaultChecked={Boolean(selectedConsent?.health_declaration)}
-                            />
-                            Sağlık beyanı alındı
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              name="rules_accepted"
-                              value="yes"
-                              defaultChecked={Boolean(selectedConsent?.rules_accepted)}
-                            />
-                            Kurallar okundu, anlaşıldı ve kabul edildi
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              name="whatsapp_permission"
-                              value="yes"
-                              defaultChecked={Boolean(selectedConsent?.whatsapp_permission)}
-                            />
-                            WhatsApp bilgilendirme izni alındı
-                          </label>
-                          <label className="managementConfirm">
-                            <input
-                              type="checkbox"
-                              name="management_confirmation"
-                              value="yes"
-                            />
-                            Veli/kursiyer beyanını yönetim olarak teyit ediyorum
-                          </label>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="preEditActions">
@@ -1197,7 +1074,6 @@ export default function PreRegistrationCenter({
                     <PrintInfo label="Veli">{selected.guardian_name || "Yetişkin kayıt"}</PrintInfo>
                     <PrintInfo label="Veli Telefonu">{selected.guardian_phone || "Belirtilmedi"}</PrintInfo>
                     <PrintInfo label="İletişim Tercihi">{contactLabel(selectedConsent?.contact_request)}</PrintInfo>
-                    <PrintInfo label="Başvuru Kaynağı">{sourceLabel(selected.registration_source)}</PrintInfo>
                   </div>
                 </div>
 
