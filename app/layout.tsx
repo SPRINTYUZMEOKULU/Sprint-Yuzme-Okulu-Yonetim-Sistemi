@@ -6,6 +6,7 @@ import type {
 import "./globals.css";
 
 import PWARegister from "./components/pwa-register";
+import LiveNotificationCenter from "./components/live-notification-center";
 
 export const metadata: Metadata = {
   title: {
@@ -73,6 +74,7 @@ export default function RootLayout({
         {children}
 
         <PWARegister />
+        <LiveNotificationCenter />
       </body>
     </html>
   );
