@@ -210,7 +210,7 @@ export default async function RenewalOperationsPage() {
         </section>
       </main>
 
-      <script dangerouslySetInnerHTML={{__html:`document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-complete-renewal="1"]');if(!a)return;a.style.pointerEvents='none';a.style.opacity='.72';a.textContent='Yenileme hazırlanıyor…';},true);`}} />
+      <script dangerouslySetInnerHTML={{ __html: `document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-complete-renewal="1"]');if(!a)return;a.style.pointerEvents='none';a.style.opacity='.72';a.textContent='Yenileme hazırlanıyor…';},true);` }} />
 
       <style>{`
         .renewalsPage{min-height:100vh;padding:28px;background:linear-gradient(180deg,#f4f7fb,#edf3f9);color:#10213a;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
