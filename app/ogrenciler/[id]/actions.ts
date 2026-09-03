@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 
 const staffRoles = [
   "owner",
@@ -18,6 +19,19 @@ const approvalRoles = [
   "owner",
   "admin",
 ] as const;
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
+  }
+
+  return createSupabaseAdminClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 function getText(
   value: FormDataEntryValue | null,
@@ -362,7 +376,11 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
     goError(studentId, `Sağlık bilgileri kaydedilemedi: ${healthError.message}`);
   }
 
-  const { data: existingConsent, error: lookupError } = await supabase
+  // Kullanıcı ve organizasyon erişimi yukarıda doğrulandı. Beyan tablosunun
+  // RLS politikası yönetim INSERT işlemini kapattığı için yalnızca bu dar
+  // sunucu işlemi admin istemcisiyle yürütülür.
+  const admin = createAdminClient();
+  const { data: existingConsent, error: lookupError } = await admin
     .from("registration_consents")
     .select("student_id,form_snapshot")
     .eq("student_id", studentId)
@@ -398,11 +416,11 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
   };
 
   const consentMutation = existingConsent
-    ? supabase
+    ? admin
         .from("registration_consents")
         .update(consentPayload)
         .eq("student_id", studentId)
-    : supabase.from("registration_consents").insert({
+    : admin.from("registration_consents").insert({
         student_id: studentId,
         ...consentPayload,
       });
