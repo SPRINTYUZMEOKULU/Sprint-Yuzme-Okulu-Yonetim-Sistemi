@@ -29,9 +29,11 @@ export default function StudentRenewalCenter() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageKind, setMessageKind] = useState<"success" | "error" | "">("");
+  const [messageKind, setMessageKind] = useState<"success" | "error" | "approval" | "">("");
   const [packages, setPackages] = useState<PackageOption[]>([]);
   const [packageId, setPackageId] = useState("");
+  const [customEnabled, setCustomEnabled] = useState(false);
+  const [customLessonCount, setCustomLessonCount] = useState("");
   const [startDate, setStartDate] = useState(today());
   const [paymentDueDate, setPaymentDueDate] = useState(today());
   const [note, setNote] = useState("");
@@ -43,6 +45,9 @@ export default function StudentRenewalCenter() {
   }, []);
 
   const selectedPackage = packages.find((item) => item.id === packageId) || null;
+  const customCount = Number(customLessonCount);
+  const customNeedsApproval =
+    customEnabled && Number.isInteger(customCount) && customCount > 0 && customCount !== 8 && customCount !== 12;
 
   async function openCenter() {
     if (!studentId) return;
@@ -50,6 +55,8 @@ export default function StudentRenewalCenter() {
     setLoading(true);
     setMessage("");
     setMessageKind("");
+    setCustomEnabled(false);
+    setCustomLessonCount("");
     try {
       const response = await fetch(
         `/api/student-renewals?studentId=${encodeURIComponent(studentId)}`,
@@ -104,6 +111,11 @@ export default function StudentRenewalCenter() {
       setMessageKind("error");
       return;
     }
+    if (customEnabled && (!Number.isInteger(customCount) || customCount < 1 || customCount > 100)) {
+      setMessage("Özel ders sayısı 1 ile 100 arasında tam sayı olmalıdır.");
+      setMessageKind("error");
+      return;
+    }
 
     setSubmitting(true);
     setMessage("");
@@ -115,12 +127,21 @@ export default function StudentRenewalCenter() {
         body: JSON.stringify({
           studentId,
           packageId,
+          customLessonCount: customEnabled ? customCount : null,
           startDate,
           paymentDueDate: paymentDueDate || startDate,
           note: note.trim(),
         }),
       });
       const data = await response.json();
+
+      if (data.approvalRequired) {
+        setMessage(data.message || "Standart dışı ders sayısı yönetici onayına gönderildi.");
+        setMessageKind("approval");
+        router.refresh();
+        return;
+      }
+
       if (!response.ok || !data.ok) {
         setMessage(data.error || "Kayıt yenileme tamamlanamadı.");
         setMessageKind("error");
@@ -164,7 +185,7 @@ export default function StudentRenewalCenter() {
             <div>
               <span>KAYIT VE PROGRAM</span>
               <h2>Kayıt Yenileme Merkezi</h2>
-              <p>Yeni paketi seçin; mevcut şube ve grup korunarak yeni dönem oluşturulsun.</p>
+              <p>Standart 8/12 ders paketini seçin veya yönetici onayıyla özel ders sayısı talep edin.</p>
             </div>
             <button type="button" onClick={() => setOpen(false)}>×</button>
           </header>
@@ -199,6 +220,42 @@ export default function StudentRenewalCenter() {
                   </div>
                 )}
 
+                <label className="full customToggle">
+                  <input
+                    type="checkbox"
+                    checked={customEnabled}
+                    onChange={(e) => {
+                      setCustomEnabled(e.target.checked);
+                      if (!e.target.checked) setCustomLessonCount("");
+                    }}
+                  />
+                  <span>Özel ders sayısı ile yenile</span>
+                </label>
+
+                {customEnabled && (
+                  <label className="full">
+                    <span>Özel Ders Sayısı</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={customLessonCount}
+                      onChange={(e) => setCustomLessonCount(e.target.value)}
+                      placeholder="Örn. 3"
+                    />
+                    <small>
+                      8 ve 12 ders standarttır. Bunların dışındaki ders sayıları doğrudan yenilenmez; Onay Merkezi'ne yönetici onayı için gönderilir.
+                    </small>
+                  </label>
+                )}
+
+                {customNeedsApproval && (
+                  <div className="approvalNotice full">
+                    <strong>Yönetici onayı gerekli</strong>
+                    <span>{customCount} derslik yenileme önce Onay Merkezi'ne gönderilecek. Onaylandıktan sonra aynı bilgilerle yenilemeyi tekrar çalıştırabilirsiniz.</span>
+                  </div>
+                )}
+
                 <label>
                   <span>Yeni Dönem Başlangıcı</span>
                   <input
@@ -217,7 +274,7 @@ export default function StudentRenewalCenter() {
                 <label className="full">
                   <span>Yenileme Notu</span>
                   <textarea
-                    rows={5}
+                    rows={4}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Örn. Aynı grup ve program ile yeni döneme devam."
@@ -232,11 +289,11 @@ export default function StudentRenewalCenter() {
 
             <div className="renewalAutoMessage">
               <strong>WhatsApp bilgilendirmesi otomatik hazırlanır</strong>
-              <p>Kayıt başarıyla yenilendiğinde yeni paket, başlangıç, bitiş ve ödeme vadesini içeren veli mesajı kaydedilir ve WhatsApp gönderim ekranı otomatik açılır.</p>
+              <p>Kayıt başarıyla yenilendiğinde ders sayısı, yeni paket, başlangıç, bitiş ve ödeme vadesini içeren veli mesajı kaydedilir ve WhatsApp gönderim ekranı otomatik açılır.</p>
             </div>
 
             {message && (
-              <div className={`renewalMessage ${messageKind === "error" ? "error" : "success"}`}>
+              <div className={`renewalMessage ${messageKind || "success"}`}>
                 {message}
               </div>
             )}
@@ -250,7 +307,11 @@ export default function StudentRenewalCenter() {
               disabled={submitting || loading || !packageId}
               onClick={submitRenewal}
             >
-              {submitting ? "Yenileniyor…" : "✓ Kaydı Yenile ve Mesajı Hazırla"}
+              {submitting
+                ? "İşleniyor…"
+                : customNeedsApproval
+                  ? "✓ Yönetici Onayına Gönder"
+                  : "✓ Kaydı Yenile ve Mesajı Hazırla"}
             </button>
           </footer>
         </aside>
@@ -265,28 +326,20 @@ export default function StudentRenewalCenter() {
         .renewalPanel{width:min(650px,98vw);height:100%;display:flex;flex-direction:column;background:#f5f8fc;box-shadow:-24px 0 70px rgba(0,0,0,.28)}
         header{display:flex;justify-content:space-between;gap:18px;padding:24px;background:linear-gradient(135deg,#2f1f59,#6843a8);color:#fff}
         header span{display:block;color:#f6c55f;font-size:10px;font-weight:900;letter-spacing:.12em}
-        header h2{margin:5px 0 3px;font-size:25px}
-        header p{margin:0;color:#e9e1fa;font-size:13px}
+        header h2{margin:5px 0 3px;font-size:25px} header p{margin:0;color:#e9e1fa;font-size:13px}
         header button{width:40px;height:40px;border:1px solid rgba(255,255,255,.3);border-radius:11px;background:rgba(255,255,255,.1);color:#fff;font-size:25px;cursor:pointer}
         .renewalBody{flex:1;overflow:auto;padding:22px}
         .renewalInfo,.renewalWarning,.renewalMessage,.renewalAutoMessage,.renewalLoading{padding:14px 15px;border-radius:13px;margin-bottom:16px}
-        .renewalInfo{background:#f2edff;border:1px solid #ded1fb;color:#52368a}
-        .renewalInfo p,.renewalAutoMessage p{margin:5px 0 0;font-size:12px;line-height:1.5}
-        .renewalInfo p{color:#706286}
-        .renewalGrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
-        .renewalGrid label{display:grid;gap:6px}.renewalGrid .full{grid-column:1/-1}
-        .renewalGrid label>span{font-size:11px;font-weight:850;color:#4f647a}
-        .renewalGrid input,.renewalGrid textarea,.renewalGrid select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px 12px;background:#fff;color:#142f4a;font:inherit}
-        .packageSummary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid #dcd3f3;border-radius:12px;background:#faf8ff;color:#5d428f}
-        .packageSummary strong{margin-right:auto;color:#3f286f}.packageSummary span{font-size:12px;font-weight:850}
-        .renewalWarning{margin-top:16px;background:#fff8e8;border:1px solid #f2d79b;color:#805b14;font-size:12px;line-height:1.5}
-        .renewalAutoMessage{background:#edf8ff;border:1px solid #cde7f8;color:#245d7b}.renewalAutoMessage strong{color:#075a88}
-        .renewalMessage.success{background:#eefaf4;border:1px solid #c8e3d3;color:#17643d;font-weight:800}
-        .renewalMessage.error{background:#fff0f0;border:1px solid #efc3c3;color:#a22727;font-weight:800;white-space:pre-wrap}
+        .renewalInfo{background:#f2edff;border:1px solid #ded1fb;color:#52368a}.renewalInfo p,.renewalAutoMessage p{margin:5px 0 0;font-size:12px;line-height:1.5}.renewalInfo p{color:#706286}
+        .renewalGrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.renewalGrid label{display:grid;gap:6px}.renewalGrid .full{grid-column:1/-1}.renewalGrid label>span{font-size:11px;font-weight:850;color:#4f647a}
+        .renewalGrid input,.renewalGrid textarea,.renewalGrid select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px 12px;background:#fff;color:#142f4a;font:inherit}.renewalGrid small{color:#718397;line-height:1.45}
+        .packageSummary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid #dcd3f3;border-radius:12px;background:#faf8ff;color:#5d428f}.packageSummary strong{margin-right:auto;color:#3f286f}.packageSummary span{font-size:12px;font-weight:850}
+        .customToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;padding:12px 14px;border:1px dashed #b8a5e2;border-radius:12px;background:#fbf9ff}.customToggle input{width:18px!important;height:18px}.customToggle span{font-size:13px!important;color:#4c347d!important}
+        .approvalNotice{display:grid;gap:4px;padding:13px 14px;border:1px solid #f0c87c;border-radius:12px;background:#fff7df;color:#80580c}.approvalNotice span{font-size:12px;line-height:1.45}
+        .renewalWarning{margin-top:16px;background:#fff8e8;border:1px solid #f2d79b;color:#805b14;font-size:12px;line-height:1.5}.renewalAutoMessage{background:#edf8ff;border:1px solid #cde7f8;color:#245d7b}.renewalAutoMessage strong{color:#075a88}
+        .renewalMessage.success{background:#eefaf4;border:1px solid #c8e3d3;color:#17643d;font-weight:800}.renewalMessage.error{background:#fff0f0;border:1px solid #efc3c3;color:#a22727;font-weight:800;white-space:pre-wrap}.renewalMessage.approval{background:#fff7df;border:1px solid #f0c87c;color:#78520a;font-weight:800}
         .renewalLoading{background:#fff;border:1px solid #dbe4ee;color:#60778f;text-align:center}
-        footer{display:flex;justify-content:flex-end;gap:9px;padding:16px 20px;border-top:1px solid #dbe4ee;background:#fff}
-        footer button{min-height:43px;padding:0 16px;border-radius:11px;font-weight:900;cursor:pointer}
-        .ghost{border:1px solid #d2dce7;background:#fff;color:#49647e}.primary{border:0;background:#6843a8;color:#fff}.primary:disabled{opacity:.55;cursor:not-allowed}
+        footer{display:flex;justify-content:flex-end;gap:9px;padding:16px 20px;border-top:1px solid #dbe4ee;background:#fff}footer button{min-height:43px;padding:0 16px;border-radius:11px;font-weight:900;cursor:pointer}.ghost{border:1px solid #d2dce7;background:#fff;color:#49647e}.primary{border:0;background:#6843a8;color:#fff}.primary:disabled{opacity:.55;cursor:not-allowed}
         @media(max-width:640px){.renewalGrid{grid-template-columns:1fr}.renewalGrid .full{grid-column:auto}header{padding:19px}footer{flex-direction:column-reverse}.packageSummary strong{width:100%}}
       `}</style>
     </>
