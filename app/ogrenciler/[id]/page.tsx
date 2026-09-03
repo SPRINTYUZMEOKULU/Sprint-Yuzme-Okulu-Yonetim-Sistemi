@@ -9,6 +9,7 @@ import {
   updateStudentProfile,
 } from "./actions";
 import StudentFileOperations from "./student-file-operations";
+import PendingSubmitButton from "./pending-submit-button";
 import "./student-detail.css";
 
 export const dynamic = "force-dynamic";
@@ -918,9 +919,12 @@ export default async function StudentFile({
               />
             </label>
 
-            <button className="primaryButton" type="submit">
+            <PendingSubmitButton
+              className="primaryButton"
+              pendingText="Bilgiler kaydediliyor…"
+            >
               Bilgileri Kaydet
-            </button>
+            </PendingSubmitButton>
           </form>
         </section>
 
@@ -1092,9 +1096,12 @@ export default async function StudentFile({
             </small>
           </div>
 
-          <button className="primaryButton" type="submit">
+          <PendingSubmitButton
+            className="primaryButton"
+            pendingText="Sağlık ve beyanlar kaydediliyor…"
+          >
             Sağlık ve Beyanları Kaydet
-          </button>
+          </PendingSubmitButton>
         </form>
       </section>
 
@@ -1418,9 +1425,12 @@ export default async function StudentFile({
               panelinde göster
             </label>
 
-            <button className="primaryButton" type="submit">
+            <PendingSubmitButton
+              className="primaryButton"
+              pendingText="Not ekleniyor…"
+            >
               Notu Ekle
-            </button>
+            </PendingSubmitButton>
           </form>
 
           <div className="list">
