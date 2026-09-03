@@ -6,6 +6,7 @@ import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
 import StudentHeroEnhancer from "./student-hero-enhancer";
 import RenewalApprovalOpenBridge from "./renewal-approval-open-bridge";
+import RenewalMobilePolish from "./renewal-mobile-polish";
 import "./student-file-tabs.css";
 import "./student-crm-polish.css";
 
@@ -20,6 +21,7 @@ export default function StudentFileLayout({ children }: { children: ReactNode })
       <StudentRenewalCenter />
       <StudentHeroEnhancer />
       <RenewalApprovalOpenBridge />
+      <RenewalMobilePolish />
     </>
   );
 }
