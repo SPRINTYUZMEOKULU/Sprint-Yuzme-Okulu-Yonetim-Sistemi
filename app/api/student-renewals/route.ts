@@ -15,6 +15,26 @@ function isoDate(value: unknown) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
 }
 
+function errorText(error: unknown) {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message || "Bilinmeyen hata");
+  }
+  return String(error || "Bilinmeyen hata");
+}
+
+function fail(step: string, error: unknown, status = 500) {
+  const detail = errorText(error);
+  console.error(`student renewal ${step} error`, error);
+  return NextResponse.json(
+    {
+      ok: false,
+      error: `Kayıt yenileme tamamlanamadı: ${detail}`,
+      step,
+    },
+    { status },
+  );
+}
+
 function calculateEndDate(
   startDate: string,
   lessonCount: number,
@@ -26,14 +46,87 @@ function calculateEndDate(
   let guard = 0;
 
   while (count < lessonCount && guard < 730) {
-    const jsDay = cursor.getDay();
-    const isoDay = jsDay === 0 ? 7 : jsDay;
-    if (selected.has(isoDay)) count += 1;
+    if (selected.has(cursor.getDay())) count += 1;
     if (count < lessonCount) cursor.setDate(cursor.getDate() + 1);
     guard += 1;
   }
 
   return cursor.toISOString().slice(0, 10);
+}
+
+function formatDateTR(value: string) {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}.${month}.${year}` : value;
+}
+
+function cleanPhone(value: unknown) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("0")) digits = `90${digits.slice(1)}`;
+  if (digits.length === 10) digits = `90${digits}`;
+  return digits;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const profile = await requireProfile([...ROLES]);
+    const organizationId = profile.organization_id;
+    const studentId = String(request.nextUrl.searchParams.get("studentId") || "");
+
+    if (!organizationId || !studentId) {
+      return NextResponse.json(
+        { ok: false, error: "Öğrenci bilgisi eksik." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = await createClient();
+    const [packagesResult, studentResult, enrollmentResult] = await Promise.all([
+      supabase
+        .from("course_packages")
+        .select("id,name,lesson_count,price,is_active")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .order("lesson_count", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .from("students")
+        .select("id,preferred_package_id")
+        .eq("organization_id", organizationId)
+        .eq("id", studentId)
+        .maybeSingle(),
+      supabase
+        .from("student_enrollments")
+        .select("id,package_id")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (packagesResult.error) return fail("packages", packagesResult.error);
+    if (studentResult.error) return fail("student", studentResult.error);
+    if (enrollmentResult.error) return fail("active-enrollment", enrollmentResult.error);
+    if (!studentResult.data) {
+      return NextResponse.json(
+        { ok: false, error: "Öğrenci bulunamadı." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      packages: packagesResult.data || [],
+      selectedPackageId:
+        enrollmentResult.data?.package_id ||
+        studentResult.data.preferred_package_id ||
+        packagesResult.data?.[0]?.id ||
+        "",
+    });
+  } catch (error) {
+    return fail("load", error);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -44,29 +137,20 @@ export async function POST(request: NextRequest) {
     const studentId = String(body.studentId || "");
     const startDate = isoDate(body.startDate);
     const paymentDueDate = isoDate(body.paymentDueDate) || startDate;
-    const lessonCount = Math.floor(Number(body.lessonCount));
 
-    if (
-      !organizationId ||
-      !studentId ||
-      !startDate ||
-      lessonCount < 1 ||
-      lessonCount > 200
-    ) {
+    if (!organizationId || !studentId || !startDate) {
       return NextResponse.json(
-        {
-          error: "Öğrenci, başlangıç tarihi ve geçerli ders sayısı zorunludur.",
-        },
+        { ok: false, error: "Öğrenci ve yeni dönem başlangıç tarihi zorunludur." },
         { status: 400 },
       );
     }
 
     const supabase = await createClient();
-    const [{ data: student }, { data: activeEnrollment }] = await Promise.all([
+    const [studentResult, enrollmentResult] = await Promise.all([
       supabase
         .from("students")
         .select(
-          "id,first_name,last_name,branch_id,preferred_group_id,preferred_package_id",
+          "id,first_name,last_name,phone,guardian_name,guardian_phone,branch_id,preferred_group_id,preferred_package_id",
         )
         .eq("organization_id", organizationId)
         .eq("id", studentId)
@@ -82,9 +166,14 @@ export async function POST(request: NextRequest) {
         .maybeSingle(),
     ]);
 
+    if (studentResult.error) return fail("student", studentResult.error);
+    if (enrollmentResult.error) return fail("active-enrollment", enrollmentResult.error);
+
+    const student = studentResult.data;
+    const activeEnrollment = enrollmentResult.data;
     if (!student) {
       return NextResponse.json(
-        { error: "Öğrenci bulunamadı." },
+        { ok: false, error: "Öğrenci bulunamadı." },
         { status: 404 },
       );
     }
@@ -101,37 +190,90 @@ export async function POST(request: NextRequest) {
         student.preferred_group_id ||
         "",
     );
-    const branchId = String(
-      body.branchId || activeEnrollment?.branch_id || student.branch_id || "",
-    );
 
-    if (!packageId || !groupId || !branchId) {
+    if (!packageId || !groupId) {
       return NextResponse.json(
-        { error: "Yenileme için paket, grup ve şube bilgisi eksik." },
+        { ok: false, error: "Yenileme için paket ve grup bilgisi eksik." },
         { status: 400 },
       );
     }
 
-    const { data: schedules, error: scheduleError } = await supabase
-      .from("lesson_schedules")
-      .select("id,weekday")
-      .eq("organization_id", organizationId)
-      .eq("group_id", groupId)
-      .eq("is_active", true);
+    const [packageResult, groupResult, schedulesResult] = await Promise.all([
+      supabase
+        .from("course_packages")
+        .select("id,name,lesson_count,price,is_active")
+        .eq("organization_id", organizationId)
+        .eq("id", packageId)
+        .eq("is_active", true)
+        .maybeSingle(),
+      supabase
+        .from("training_groups")
+        .select("id,name,branch_id,course_type")
+        .eq("organization_id", organizationId)
+        .eq("id", groupId)
+        .maybeSingle(),
+      supabase
+        .from("lesson_schedules")
+        .select("id,weekday,start_time,end_time")
+        .eq("organization_id", organizationId)
+        .eq("group_id", groupId)
+        .eq("is_active", true),
+    ]);
 
-    if (scheduleError) throw scheduleError;
+    if (packageResult.error) return fail("package", packageResult.error);
+    if (groupResult.error) return fail("group", groupResult.error);
+    if (schedulesResult.error) return fail("schedule", schedulesResult.error);
+
+    const selectedPackage = packageResult.data;
+    const group = groupResult.data;
+    if (!selectedPackage) {
+      return NextResponse.json(
+        { ok: false, error: "Seçilen aktif paket bulunamadı." },
+        { status: 400 },
+      );
+    }
+    if (!group) {
+      return NextResponse.json(
+        { ok: false, error: "Öğrencinin aktif grubu bulunamadı." },
+        { status: 400 },
+      );
+    }
+
+    const lessonCount = Math.floor(Number(selectedPackage.lesson_count));
+    if (!Number.isInteger(lessonCount) || lessonCount < 1 || lessonCount > 200) {
+      return NextResponse.json(
+        { ok: false, error: "Seçilen paketin ders sayısı geçersiz." },
+        { status: 400 },
+      );
+    }
+
+    const branchId = String(group.branch_id || student.branch_id || "");
+    if (!branchId) {
+      return NextResponse.json(
+        { ok: false, error: "Yenileme için şube bilgisi eksik." },
+        { status: 400 },
+      );
+    }
+
+    const { data: branch, error: branchError } = await supabase
+      .from("branches")
+      .select("id,name")
+      .eq("organization_id", organizationId)
+      .eq("id", branchId)
+      .maybeSingle();
+    if (branchError) return fail("branch", branchError);
 
     const weekdays = Array.from(
       new Set(
-        (schedules || [])
+        (schedulesResult.data || [])
           .map((row) => Number(row.weekday))
-          .filter((day) => day >= 1 && day <= 7),
+          .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
       ),
-    );
+    ).sort((a, b) => a - b);
 
     if (!weekdays.length) {
       return NextResponse.json(
-        { error: "Seçilen grubun aktif ders programı bulunamadı." },
+        { ok: false, error: "Seçilen grubun aktif ders programı bulunamadı." },
         { status: 400 },
       );
     }
@@ -139,7 +281,7 @@ export async function POST(request: NextRequest) {
     const plannedEndDate = calculateEndDate(startDate, lessonCount, weekdays);
     const now = new Date().toISOString();
 
-    const { data: newEnrollment, error: insertError } = await supabase
+    const insertResult = await supabase
       .from("student_enrollments")
       .insert({
         organization_id: organizationId,
@@ -161,7 +303,10 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
 
-    if (insertError) throw insertError;
+    if (insertResult.error || !insertResult.data) {
+      return fail("new-enrollment", insertResult.error || "Yeni kayıt oluşturulamadı.");
+    }
+    const newEnrollment = insertResult.data;
 
     if (activeEnrollment?.id) {
       const { error: closeError } = await supabase
@@ -175,7 +320,7 @@ export async function POST(request: NextRequest) {
           .from("student_enrollments")
           .delete()
           .eq("id", newEnrollment.id);
-        throw closeError;
+        return fail("close-previous-enrollment", closeError);
       }
     }
 
@@ -185,19 +330,31 @@ export async function POST(request: NextRequest) {
       .eq("organization_id", organizationId)
       .eq("id", newEnrollment.id);
 
-    if (activateError) throw activateError;
+    if (activateError) return fail("activate-new-enrollment", activateError);
 
-    await Promise.all([
+    const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    const recipient = cleanPhone(student.guardian_phone || student.phone);
+    const renewalMessage =
+      `Merhaba${student.guardian_name ? ` ${student.guardian_name}` : ""},\n\n` +
+      `${studentName} öğrencimizin Sprint Yüzme Okulu kaydı başarıyla yenilenmiştir.\n\n` +
+      `*Yeni Dönem Bilgileri*\n` +
+      `Şube: ${branch?.name || "-"}\n` +
+      `Grup: ${group.name || "-"}\n` +
+      `Paket: ${selectedPackage.name} (${lessonCount} ders)\n` +
+      `Başlangıç: ${formatDateTR(startDate)}\n` +
+      `Planlanan Bitiş: ${formatDateTR(plannedEndDate)}\n` +
+      `Ödeme Vadesi: ${formatDateTR(paymentDueDate || startDate)}\n\n` +
+      `Yeni döneminizin sağlıklı ve başarılı geçmesini dileriz.\n` +
+      `*Sprint Yüzme Okulu*`;
+
+    const optionalWrites = await Promise.all([
       supabase.from("student_renewal_events").insert({
         organization_id: organizationId,
         student_id: studentId,
         previous_enrollment_id: activeEnrollment?.id || null,
         new_enrollment_id: newEnrollment.id,
         renewal_status: "completed",
-        note:
-          String(body.note || "")
-            .trim()
-            .slice(0, 1000) || null,
+        note: String(body.note || "").trim().slice(0, 1000) || null,
         created_by: profile.id,
       }),
       supabase
@@ -221,6 +378,7 @@ export async function POST(request: NextRequest) {
         source_id: newEnrollment.id,
         new_value: {
           enrollment_id: newEnrollment.id,
+          package_id: packageId,
           lesson_count: lessonCount,
         },
         performed_at: now,
@@ -230,8 +388,7 @@ export async function POST(request: NextRequest) {
         category: "registration",
         event_key: "student_registration_renewed",
         title: "Öğrenci kaydı yenilendi",
-        message:
-          `${student.first_name || ""} ${student.last_name || ""} için ${lessonCount} derslik yeni dönem oluşturuldu.`.trim(),
+        message: `${studentName} için ${lessonCount} derslik yeni dönem oluşturuldu.`,
         severity: "success",
         entity_type: "student",
         entity_id: studentId,
@@ -240,18 +397,60 @@ export async function POST(request: NextRequest) {
         created_by: profile.id,
         metadata: { enrollment_id: newEnrollment.id },
       }),
+      supabase.from("message_logs").insert({
+        organization_id: organizationId,
+        student_id: studentId,
+        template_key: "registration_renewed",
+        channel: "whatsapp",
+        recipient: recipient || null,
+        subject: "Kayıt Yenileme Bilgilendirmesi",
+        message_body: renewalMessage,
+        status: "prepared",
+        prepared_by: profile.id,
+        metadata: {
+          source: "student_renewal_center",
+          enrollment_id: newEnrollment.id,
+          package_id: packageId,
+        },
+      }),
+      supabase.from("student_contact_logs").insert({
+        organization_id: organizationId,
+        student_id: studentId,
+        contact_type: "renewal",
+        channel: "whatsapp",
+        recipient_phone: recipient || null,
+        message_text: renewalMessage,
+        status: "prepared",
+        created_by: profile.id,
+        metadata: {
+          source: "student_renewal_center",
+          enrollment_id: newEnrollment.id,
+        },
+      }),
     ]);
+
+    optionalWrites.forEach((result, index) => {
+      if (result.error) {
+        console.error(`student renewal optional write ${index} error`, result.error);
+      }
+    });
+
+    const whatsappUrl = recipient
+      ? `https://wa.me/${recipient}?text=${encodeURIComponent(renewalMessage)}`
+      : null;
 
     return NextResponse.json({
       ok: true,
-      message: `Kayıt yenilendi. Yeni bitiş tarihi: ${plannedEndDate}`,
+      message: `Kayıt yenilendi. Yeni bitiş tarihi: ${formatDateTR(plannedEndDate)}.`,
       enrollmentId: newEnrollment.id,
+      packageName: selectedPackage.name,
+      lessonCount,
+      plannedEndDate,
+      renewalMessage,
+      whatsappUrl,
+      recipientFound: Boolean(recipient),
     });
   } catch (error) {
-    console.error("student renewal POST error", error);
-    return NextResponse.json(
-      { error: "Kayıt yenileme tamamlanamadı." },
-      { status: 500 },
-    );
+    return fail("unexpected", error);
   }
 }
