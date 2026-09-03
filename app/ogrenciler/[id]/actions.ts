@@ -313,6 +313,120 @@ export async function updateStudentProfile(
   );
 }
 
+export async function updateStudentHealthAndConsents(formData: FormData) {
+  const profile = await requireProfile([...staffRoles]);
+  const studentId = getText(formData.get("student_id"), 100);
+
+  if (!studentId || !profile.organization_id) {
+    goError(studentId, "Öğrenci bulunamadı.");
+  }
+
+  if (formData.get("management_confirmed") !== "on") {
+    goError(
+      studentId,
+      "Sağlık ve kabul bilgilerini kaydetmek için yönetim teyidi zorunludur.",
+    );
+  }
+
+  const supabase = await createClient();
+  const healthDeclaration = formData.get("health_declaration") === "on";
+  const rulesAccepted = formData.get("rules_accepted") === "on";
+  const whatsappPermission = formData.get("whatsapp_permission") === "on";
+  const healthNote = getText(formData.get("health_note"), 2000) || null;
+
+  const { data: student, error: studentError } = await supabase
+    .from("students")
+    .select("id,birth_date")
+    .eq("organization_id", profile.organization_id)
+    .eq("id", studentId)
+    .single();
+
+  if (studentError || !student) {
+    goError(studentId, "Öğrenci bulunamadı veya bu kayda erişim yetkiniz yok.");
+  }
+
+  const { error: healthError } = await supabase
+    .from("students")
+    .update({
+      allergy_note: getText(formData.get("allergy_note"), 2000) || null,
+      chronic_condition_note:
+        getText(formData.get("chronic_condition_note"), 2000) || null,
+      medication_note: getText(formData.get("medication_note"), 2000) || null,
+      emergency_medical_note:
+        getText(formData.get("emergency_medical_note"), 2000) || null,
+    })
+    .eq("organization_id", profile.organization_id)
+    .eq("id", studentId);
+
+  if (healthError) {
+    goError(studentId, `Sağlık bilgileri kaydedilemedi: ${healthError.message}`);
+  }
+
+  const { data: existingConsent, error: lookupError } = await supabase
+    .from("registration_consents")
+    .select("student_id,form_snapshot")
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  if (lookupError) {
+    goError(studentId, `Beyan bilgileri okunamadı: ${lookupError.message}`);
+  }
+
+  const now = new Date().toISOString();
+  const previousSnapshot =
+    existingConsent?.form_snapshot &&
+    typeof existingConsent.form_snapshot === "object" &&
+    !Array.isArray(existingConsent.form_snapshot)
+      ? existingConsent.form_snapshot
+      : {};
+  const consentPayload = {
+    registration_for: "child",
+    health_declaration: healthDeclaration,
+    health_note: healthNote,
+    rules_accepted: rulesAccepted,
+    whatsapp_permission: whatsappPermission,
+    contact_request: true,
+    accepted_at: now,
+    form_snapshot: {
+      ...previousSnapshot,
+      management_completion: {
+        completed_at: now,
+        completed_by: profile.id,
+        source: "student_file",
+      },
+    },
+  };
+
+  const consentMutation = existingConsent
+    ? supabase
+        .from("registration_consents")
+        .update(consentPayload)
+        .eq("student_id", studentId)
+    : supabase.from("registration_consents").insert({
+        student_id: studentId,
+        ...consentPayload,
+      });
+  const { error: consentError } = await consentMutation;
+
+  if (consentError) {
+    goError(studentId, `Beyan bilgileri kaydedilemedi: ${consentError.message}`);
+  }
+
+  await supabase.from("student_timeline_events").insert({
+    organization_id: profile.organization_id,
+    student_id: studentId,
+    event_type: "health_consents_updated",
+    title: "Sağlık ve kabul beyanları güncellendi",
+    description:
+      "Sağlık bilgileri ve kayıt kabulleri yönetim teyidiyle öğrenci dosyasından kaydedildi.",
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/ogrenciler/${studentId}`);
+  revalidatePath("/on-kayitlar");
+  goSaved(studentId, "health-consents");
+}
+
 /* =========================================================
    ÖĞRENCİ SİLME TALEBİ
    ========================================================= */

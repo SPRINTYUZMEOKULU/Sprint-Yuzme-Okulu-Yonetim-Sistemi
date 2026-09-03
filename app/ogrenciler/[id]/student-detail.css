@@ -1180,3 +1180,4 @@
     margin: 8mm;
   }
 }
+.healthConsentBox{display:grid;gap:12px;padding:18px;border:1px solid #cfe0f5;border-radius:16px;background:#f7fbff}.healthConsentBox>strong{color:#12365f;font-size:15px}.healthConsentBox .checkbox{display:flex;align-items:center;gap:10px;margin:0;color:#334e6f;font-weight:700}.healthConsentBox .checkbox input{width:18px;height:18px;margin:0}.healthConsentBox .managementConfirmation{margin-top:4px;padding:12px;border-radius:12px;background:#fff4df;color:#7a4b00}.healthConsentBox small{color:#72839a}

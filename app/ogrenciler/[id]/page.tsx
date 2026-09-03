@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   addStudentNote,
   deleteStudentNote,
+  updateStudentHealthAndConsents,
   updateStudentProfile,
 } from "./actions";
 import StudentFileOperations from "./student-file-operations";
@@ -123,6 +124,7 @@ export default async function StudentFile({
     coachReportsResult,
     enrollmentHistoryResult,
     attendanceResult,
+    consentResult,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", id).single(),
 
@@ -239,6 +241,14 @@ export default async function StudentFile({
       .order("lesson_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(200),
+
+    supabase
+      .from("registration_consents")
+      .select(
+        "student_id,health_declaration,health_note,rules_accepted,whatsapp_permission,accepted_at,form_snapshot",
+      )
+      .eq("student_id", id)
+      .maybeSingle(),
   ]);
 
   const student = studentResult.data;
@@ -263,6 +273,7 @@ export default async function StudentFile({
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
+  const consent = consentResult.data;
 
   const [
     operationBranchesResult,
@@ -992,7 +1003,10 @@ export default async function StudentFile({
           </div>
         </div>
 
-        <form action={updateStudentProfile} className="formGrid healthGrid">
+        <form
+          action={updateStudentHealthAndConsents}
+          className="formGrid healthGrid"
+        >
           <input type="hidden" name="student_id" value={student.id} />
 
           <label>
@@ -1031,8 +1045,55 @@ export default async function StudentFile({
             />
           </label>
 
+          <label className="full">
+            Ön kayıt sağlık açıklaması
+            <textarea
+              name="health_note"
+              rows={3}
+              defaultValue={consent?.health_note || ""}
+              placeholder="Veli/kursiyer tarafından bildirilen sağlık açıklaması"
+            />
+          </label>
+
+          <div className="full healthConsentBox">
+            <strong>Sağlık ve kayıt beyanları</strong>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                name="health_declaration"
+                defaultChecked={Boolean(consent?.health_declaration)}
+              />
+              Sağlık beyanı alındı
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                name="rules_accepted"
+                defaultChecked={Boolean(consent?.rules_accepted)}
+              />
+              Kurallar okundu ve kabul edildi
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                name="whatsapp_permission"
+                defaultChecked={Boolean(consent?.whatsapp_permission)}
+              />
+              WhatsApp bilgilendirme izni alındı
+            </label>
+            <label className="checkbox managementConfirmation">
+              <input type="checkbox" name="management_confirmed" required />
+              Veli/kursiyer beyanını yönetim olarak teyit ediyorum
+            </label>
+            <small>
+              {consent?.accepted_at
+                ? `Son beyan kaydı: ${fmt(consent.accepted_at)}`
+                : "Bu öğrenci için henüz beyan kaydı bulunmuyor."}
+            </small>
+          </div>
+
           <button className="primaryButton" type="submit">
-            Sağlık Bilgilerini Kaydet
+            Sağlık ve Beyanları Kaydet
           </button>
         </form>
       </section>
