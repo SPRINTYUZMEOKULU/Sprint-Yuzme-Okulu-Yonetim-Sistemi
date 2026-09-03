@@ -10,6 +10,20 @@ type PackageOption = {
   price: number | string | null;
 };
 
+type RenewalRequest = {
+  id: string;
+  status: "pending" | "approved";
+  totalLessons: number | null;
+  packageId: string | null;
+  groupId: string | null;
+  branchId: string | null;
+  startDate: string | null;
+  paymentDueDate: string | null;
+  note: string | null;
+  requestedAt: string | null;
+  reviewedAt: string | null;
+};
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -21,6 +35,14 @@ function money(value: number | string | null) {
     currency: "TRY",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function updateQuickButton(label: string, state: "normal" | "checking" | "pending" | "approved" = "normal") {
+  const button = document.querySelector<HTMLButtonElement>("[data-renewal-button='1']");
+  if (!button) return;
+  button.dataset.renewalState = state;
+  button.disabled = state === "checking";
+  button.innerHTML = `<span aria-hidden="true">↻</span> ${label}`;
 }
 
 export default function StudentRenewalCenter() {
@@ -37,6 +59,8 @@ export default function StudentRenewalCenter() {
   const [startDate, setStartDate] = useState(today());
   const [paymentDueDate, setPaymentDueDate] = useState(today());
   const [note, setNote] = useState("");
+  const [activeRequest, setActiveRequest] = useState<RenewalRequest | null>(null);
+  const [openRequestCount, setOpenRequestCount] = useState(0);
 
   const studentId = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -49,30 +73,78 @@ export default function StudentRenewalCenter() {
   const customNeedsApproval =
     customEnabled && Number.isInteger(customCount) && customCount > 0 && customCount !== 8 && customCount !== 12;
 
-  async function openCenter() {
+  async function openCenter(requestId?: string) {
     if (!studentId) return;
+
     setOpen(true);
     setLoading(true);
     setMessage("");
     setMessageKind("");
-    setCustomEnabled(false);
-    setCustomLessonCount("");
+    updateQuickButton("Kontrol ediliyor…", "checking");
+
     try {
-      const response = await fetch(
-        `/api/student-renewals?studentId=${encodeURIComponent(studentId)}`,
-        { cache: "no-store" },
-      );
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        setMessage(data.error || "Yenileme bilgileri yüklenemedi.");
+      const statusQuery = new URLSearchParams({ studentId });
+      if (requestId) statusQuery.set("requestId", requestId);
+
+      const [renewalResponse, statusResponse] = await Promise.all([
+        fetch(`/api/student-renewals?studentId=${encodeURIComponent(studentId)}`, { cache: "no-store" }),
+        fetch(`/api/student-renewals/status?${statusQuery.toString()}`, { cache: "no-store" }),
+      ]);
+
+      const renewalData = await renewalResponse.json();
+      const statusData = await statusResponse.json();
+
+      if (!renewalResponse.ok || !renewalData.ok) {
+        setMessage(renewalData.error || "Yenileme bilgileri yüklenemedi.");
         setMessageKind("error");
+        updateQuickButton("Kayıt Yenile", "normal");
         return;
       }
-      setPackages(data.packages || []);
-      setPackageId(data.selectedPackageId || data.packages?.[0]?.id || "");
+
+      setPackages(renewalData.packages || []);
+      setPackageId(renewalData.selectedPackageId || renewalData.packages?.[0]?.id || "");
+      setCustomEnabled(false);
+      setCustomLessonCount("");
+      setStartDate(today());
+      setPaymentDueDate(today());
+      setNote("");
+      setActiveRequest(null);
+      setOpenRequestCount(0);
+
+      if (statusResponse.ok && statusData.ok) {
+        const request = (statusData.request || null) as RenewalRequest | null;
+        setOpenRequestCount(Number(statusData.openCount || 0));
+        setActiveRequest(request);
+
+        if (request) {
+          if (request.packageId) setPackageId(request.packageId);
+          if (request.totalLessons) {
+            setCustomEnabled(true);
+            setCustomLessonCount(String(request.totalLessons));
+          }
+          if (request.startDate) setStartDate(request.startDate);
+          if (request.paymentDueDate) setPaymentDueDate(request.paymentDueDate);
+          if (request.note) setNote(request.note);
+
+          if (request.status === "pending") {
+            setMessage(`${request.totalLessons || "Özel"} derslik yenileme talebi daha önce gönderilmiş. Yönetici onayı bekleniyor.`);
+            setMessageKind("approval");
+            updateQuickButton("Onay Bekliyor", "pending");
+          } else {
+            setMessage(`${request.totalLessons || "Özel"} derslik yenileme yönetici tarafından onaylandı. Bilgileri kontrol edip aşağıdaki “Yenilemeyi Tamamla” butonuyla işlemi tamamlayabilirsiniz.`);
+            setMessageKind("success");
+            updateQuickButton("Onaylandı · Tamamla", "approved");
+          }
+        } else {
+          updateQuickButton("Kayıt Yenile", "normal");
+        }
+      } else {
+        updateQuickButton("Kayıt Yenile", "normal");
+      }
     } catch {
       setMessage("Yenileme bilgileri yüklenirken bağlantı hatası oluştu.");
       setMessageKind("error");
+      updateQuickButton("Kayıt Yenile", "normal");
     } finally {
       setLoading(false);
     }
@@ -85,18 +157,37 @@ export default function StudentRenewalCenter() {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.renewalButton = "1";
+      button.dataset.renewalState = "normal";
       button.className = "renewalQuickButton";
       button.innerHTML = '<span aria-hidden="true">↻</span> Kayıt Yenile';
-      button.addEventListener("click", () => void openCenter());
       const payment = actions.querySelector("button");
       if (payment?.nextSibling) actions.insertBefore(button, payment.nextSibling);
       else actions.appendChild(button);
     };
 
+    const onClick = (event: MouseEvent) => {
+      const target = (event.target as Element | null)?.closest<HTMLElement>("[data-renewal-button='1']");
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void openCenter();
+    };
+
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      void openCenter(detail?.requestId);
+    };
+
     ensureButton();
-    const observer = new MutationObserver(ensureButton);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const timer = window.setTimeout(ensureButton, 300);
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("sprint:open-renewal", onOpen as EventListener);
+
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("sprint:open-renewal", onOpen as EventListener);
+    };
   }, [studentId]);
 
   async function submitRenewal() {
@@ -117,9 +208,17 @@ export default function StudentRenewalCenter() {
       return;
     }
 
+    if (activeRequest?.status === "pending") {
+      setMessage("Bu yenileme talebi zaten yönetici onayı bekliyor. Yeni bir talep oluşturulmadı.");
+      setMessageKind("approval");
+      updateQuickButton("Onay Bekliyor", "pending");
+      return;
+    }
+
     setSubmitting(true);
-    setMessage("");
-    setMessageKind("");
+    setMessage(activeRequest?.status === "approved" ? "Onaylı yenileme uygulanıyor…" : "Kayıt yenileme işlemi başlatıldı…");
+    setMessageKind("approval");
+
     try {
       const response = await fetch("/api/student-renewals", {
         method: "POST",
@@ -136,8 +235,10 @@ export default function StudentRenewalCenter() {
       const data = await response.json();
 
       if (data.approvalRequired) {
+        setActiveRequest((current) => current ? { ...current, status: "pending" } : current);
         setMessage(data.message || "Standart dışı ders sayısı yönetici onayına gönderildi.");
         setMessageKind("approval");
+        updateQuickButton("Onay Bekliyor", "pending");
         router.refresh();
         return;
       }
@@ -153,6 +254,9 @@ export default function StudentRenewalCenter() {
         : " Veli/öğrenci telefonu bulunamadığı için WhatsApp açılamadı; mesaj kaydı oluşturuldu.";
       setMessage(`${data.message || "Kayıt başarıyla yenilendi."}${suffix}`);
       setMessageKind("success");
+      setActiveRequest(null);
+      setOpenRequestCount(0);
+      updateQuickButton("Kayıt Yenilendi", "normal");
       router.refresh();
 
       if (data.whatsappUrl) {
@@ -171,8 +275,8 @@ export default function StudentRenewalCenter() {
   if (!open) {
     return (
       <style jsx global>{`
-        .renewalQuickButton{background:#f3efff!important;border-color:#d7c8f5!important;color:#6843a8!important}
-        .renewalQuickButton span{font-size:17px;font-weight:900}
+        .renewalQuickButton{background:linear-gradient(180deg,#f7f2ff,#eee7ff)!important;border:1px solid #cdbcf1!important;color:#5e3b9c!important;box-shadow:0 5px 14px rgba(104,67,168,.09)!important}
+        .renewalQuickButton span{font-size:17px;font-weight:900}.renewalQuickButton[data-renewal-state="pending"]{background:#fff6df!important;border-color:#efcd82!important;color:#855b09!important}.renewalQuickButton[data-renewal-state="approved"]{background:#e9f9ef!important;border-color:#a8dbb9!important;color:#17623b!important}.renewalQuickButton[data-renewal-state="checking"]{opacity:.7!important}
       `}</style>
     );
   }
@@ -185,162 +289,92 @@ export default function StudentRenewalCenter() {
             <div>
               <span>KAYIT VE PROGRAM</span>
               <h2>Kayıt Yenileme Merkezi</h2>
-              <p>Standart 8/12 ders paketini seçin veya yönetici onayıyla özel ders sayısı talep edin.</p>
+              <p>Mevcut yenileme talebini kontrol edin, onaylı işlemi tamamlayın veya yeni dönem başlatın.</p>
             </div>
             <button type="button" onClick={() => setOpen(false)}>×</button>
           </header>
 
           <div className="renewalBody">
+            {activeRequest ? (
+              <div className={`requestStatus ${activeRequest.status}`}>
+                <strong>{activeRequest.status === "pending" ? "Yönetici onayı bekleniyor" : "Yönetici onayladı · işlem tamamlanabilir"}</strong>
+                <p>{activeRequest.totalLessons ? `${activeRequest.totalLessons} derslik yenileme` : "Özel ders sayılı yenileme"}{openRequestCount > 1 ? ` · Bu öğrenci için ${openRequestCount} açık yenileme işlemi var.` : ""}</p>
+              </div>
+            ) : null}
+
             <div className="renewalInfo">
               <strong>Mevcut kayıt geçmişi korunur</strong>
               <p>Eski dönem tamamlandı olarak işaretlenir, yeni dönem ayrı kayıt olarak açılır. Yoklama, ödeme ve işlem geçmişi silinmez.</p>
             </div>
 
             {loading ? (
-              <div className="renewalLoading">Paket ve kayıt bilgileri yükleniyor…</div>
+              <div className="renewalLoading">Paket, kayıt ve onay durumu kontrol ediliyor…</div>
             ) : (
               <div className="renewalGrid">
                 <label className="full">
                   <span>Yeni Dönem Paketi</span>
-                  <select value={packageId} onChange={(e) => setPackageId(e.target.value)}>
+                  <select value={packageId} onChange={(e) => setPackageId(e.target.value)} disabled={activeRequest?.status === "pending"}>
                     <option value="">Paket seçin</option>
                     {packages.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} · {item.lesson_count} ders · {money(item.price)}
-                      </option>
+                      <option key={item.id} value={item.id}>{item.name} · {item.lesson_count} ders · {money(item.price)}</option>
                     ))}
                   </select>
                 </label>
 
                 {selectedPackage && (
                   <div className="packageSummary full">
-                    <strong>{selectedPackage.name}</strong>
-                    <span>{selectedPackage.lesson_count} ders</span>
-                    <span>{money(selectedPackage.price)}</span>
+                    <strong>{selectedPackage.name}</strong><span>{selectedPackage.lesson_count} ders</span><span>{money(selectedPackage.price)}</span>
                   </div>
                 )}
 
                 <label className="full customToggle">
-                  <input
-                    type="checkbox"
-                    checked={customEnabled}
-                    onChange={(e) => {
-                      setCustomEnabled(e.target.checked);
-                      if (!e.target.checked) setCustomLessonCount("");
-                    }}
-                  />
+                  <input type="checkbox" checked={customEnabled} disabled={activeRequest?.status === "pending"} onChange={(e) => { setCustomEnabled(e.target.checked); if (!e.target.checked) setCustomLessonCount(""); }} />
                   <span>Özel ders sayısı ile yenile</span>
                 </label>
 
                 {customEnabled && (
                   <label className="full">
                     <span>Özel Ders Sayısı</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={customLessonCount}
-                      onChange={(e) => setCustomLessonCount(e.target.value)}
-                      placeholder="Örn. 3"
-                    />
-                    <small>
-                      8 ve 12 ders standarttır. Bunların dışındaki ders sayıları doğrudan yenilenmez; Onay Merkezi'ne yönetici onayı için gönderilir.
-                    </small>
+                    <input type="number" min="1" max="100" value={customLessonCount} disabled={activeRequest?.status === "pending"} onChange={(e) => setCustomLessonCount(e.target.value)} placeholder="Örn. 3" />
+                    <small>8 ve 12 ders standarttır. Diğer ders sayıları yönetici onayı ile uygulanır.</small>
                   </label>
                 )}
 
-                {customNeedsApproval && (
-                  <div className="approvalNotice full">
-                    <strong>Yönetici onayı gerekli</strong>
-                    <span>{customCount} derslik yenileme önce Onay Merkezi'ne gönderilecek. Onaylandıktan sonra aynı bilgilerle yenilemeyi tekrar çalıştırabilirsiniz.</span>
-                  </div>
+                {customNeedsApproval && !activeRequest && (
+                  <div className="approvalNotice full"><strong>Yönetici onayı gerekli</strong><span>{customCount} derslik yenileme önce Onay Merkezi'ne gönderilecek.</span></div>
                 )}
 
-                <label>
-                  <span>Yeni Dönem Başlangıcı</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      if (!paymentDueDate) setPaymentDueDate(e.target.value);
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>Ödeme Vade Tarihi</span>
-                  <input type="date" value={paymentDueDate} onChange={(e) => setPaymentDueDate(e.target.value)} />
-                </label>
-                <label className="full">
-                  <span>Yenileme Notu</span>
-                  <textarea
-                    rows={4}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Örn. Aynı grup ve program ile yeni döneme devam."
-                  />
-                </label>
+                <label><span>Yeni Dönem Başlangıcı</span><input type="date" value={startDate} disabled={activeRequest?.status === "pending"} onChange={(e) => { setStartDate(e.target.value); if (!paymentDueDate) setPaymentDueDate(e.target.value); }} /></label>
+                <label><span>Ödeme Vade Tarihi</span><input type="date" value={paymentDueDate} disabled={activeRequest?.status === "pending"} onChange={(e) => setPaymentDueDate(e.target.value)} /></label>
+                <label className="full"><span>Yenileme Notu</span><textarea rows={4} value={note} disabled={activeRequest?.status === "pending"} onChange={(e) => setNote(e.target.value)} placeholder="Örn. Aynı grup ve program ile yeni döneme devam." /></label>
               </div>
             )}
 
-            <div className="renewalWarning">
-              <strong>Kontrol:</strong> Şube ve grup mevcut aktif kayıttan korunur. Grup değişecekse önce “Grup / Şube Değiştir” işlemini uygulayın.
-            </div>
-
-            <div className="renewalAutoMessage">
-              <strong>WhatsApp bilgilendirmesi otomatik hazırlanır</strong>
-              <p>Kayıt başarıyla yenilendiğinde ders sayısı, yeni paket, başlangıç, bitiş ve ödeme vadesini içeren veli mesajı kaydedilir ve WhatsApp gönderim ekranı otomatik açılır.</p>
-            </div>
-
-            {message && (
-              <div className={`renewalMessage ${messageKind || "success"}`}>
-                {message}
-              </div>
-            )}
+            <div className="renewalWarning"><strong>Kontrol:</strong> Şube ve grup mevcut aktif kayıttan korunur. Grup değişecekse önce “Grup / Şube Değiştir” işlemini uygulayın.</div>
+            <div className="renewalAutoMessage"><strong>WhatsApp bilgilendirmesi otomatik hazırlanır</strong><p>Kayıt başarıyla yenilendiğinde ders sayısı, yeni paket, başlangıç, bitiş ve ödeme vadesini içeren veli mesajı kaydedilir ve WhatsApp gönderim ekranı otomatik açılır.</p></div>
+            {message && <div className={`renewalMessage ${messageKind || "success"}`}>{message}</div>}
           </div>
 
           <footer>
             <button type="button" className="ghost" onClick={() => setOpen(false)}>Vazgeç</button>
-            <button
-              type="button"
-              className="primary"
-              disabled={submitting || loading || !packageId}
-              onClick={submitRenewal}
-            >
-              {submitting
-                ? "İşleniyor…"
-                : customNeedsApproval
-                  ? "✓ Yönetici Onayına Gönder"
-                  : "✓ Kaydı Yenile ve Mesajı Hazırla"}
+            <button type="button" className="primary" disabled={submitting || loading || !packageId || activeRequest?.status === "pending"} onClick={submitRenewal}>
+              {submitting ? "İşlem yapılıyor…" : activeRequest?.status === "approved" ? "✓ Onaylı Yenilemeyi Tamamla" : customNeedsApproval ? "✓ Yönetici Onayına Gönder" : "✓ Kaydı Yenile ve Mesajı Hazırla"}
             </button>
           </footer>
         </aside>
       </div>
 
       <style jsx global>{`
-        .renewalQuickButton{background:#f3efff!important;border-color:#d7c8f5!important;color:#6843a8!important}
-        .renewalQuickButton span{font-size:17px;font-weight:900}
+        .renewalQuickButton{background:linear-gradient(180deg,#f7f2ff,#eee7ff)!important;border:1px solid #cdbcf1!important;color:#5e3b9c!important;box-shadow:0 5px 14px rgba(104,67,168,.09)!important}.renewalQuickButton span{font-size:17px;font-weight:900}.renewalQuickButton[data-renewal-state="pending"]{background:#fff6df!important;border-color:#efcd82!important;color:#855b09!important}.renewalQuickButton[data-renewal-state="approved"]{background:#e9f9ef!important;border-color:#a8dbb9!important;color:#17623b!important}
       `}</style>
       <style jsx>{`
-        .renewalOverlay{position:fixed;inset:0;z-index:1510;display:flex;justify-content:flex-end;background:rgba(4,20,38,.64);backdrop-filter:blur(7px)}
-        .renewalPanel{width:min(650px,98vw);height:100%;display:flex;flex-direction:column;background:#f5f8fc;box-shadow:-24px 0 70px rgba(0,0,0,.28)}
-        header{display:flex;justify-content:space-between;gap:18px;padding:24px;background:linear-gradient(135deg,#2f1f59,#6843a8);color:#fff}
-        header span{display:block;color:#f6c55f;font-size:10px;font-weight:900;letter-spacing:.12em}
-        header h2{margin:5px 0 3px;font-size:25px} header p{margin:0;color:#e9e1fa;font-size:13px}
-        header button{width:40px;height:40px;border:1px solid rgba(255,255,255,.3);border-radius:11px;background:rgba(255,255,255,.1);color:#fff;font-size:25px;cursor:pointer}
-        .renewalBody{flex:1;overflow:auto;padding:22px}
-        .renewalInfo,.renewalWarning,.renewalMessage,.renewalAutoMessage,.renewalLoading{padding:14px 15px;border-radius:13px;margin-bottom:16px}
-        .renewalInfo{background:#f2edff;border:1px solid #ded1fb;color:#52368a}.renewalInfo p,.renewalAutoMessage p{margin:5px 0 0;font-size:12px;line-height:1.5}.renewalInfo p{color:#706286}
-        .renewalGrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.renewalGrid label{display:grid;gap:6px}.renewalGrid .full{grid-column:1/-1}.renewalGrid label>span{font-size:11px;font-weight:850;color:#4f647a}
-        .renewalGrid input,.renewalGrid textarea,.renewalGrid select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px 12px;background:#fff;color:#142f4a;font:inherit}.renewalGrid small{color:#718397;line-height:1.45}
-        .packageSummary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid #dcd3f3;border-radius:12px;background:#faf8ff;color:#5d428f}.packageSummary strong{margin-right:auto;color:#3f286f}.packageSummary span{font-size:12px;font-weight:850}
-        .customToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;padding:12px 14px;border:1px dashed #b8a5e2;border-radius:12px;background:#fbf9ff}.customToggle input{width:18px!important;height:18px}.customToggle span{font-size:13px!important;color:#4c347d!important}
-        .approvalNotice{display:grid;gap:4px;padding:13px 14px;border:1px solid #f0c87c;border-radius:12px;background:#fff7df;color:#80580c}.approvalNotice span{font-size:12px;line-height:1.45}
-        .renewalWarning{margin-top:16px;background:#fff8e8;border:1px solid #f2d79b;color:#805b14;font-size:12px;line-height:1.5}.renewalAutoMessage{background:#edf8ff;border:1px solid #cde7f8;color:#245d7b}.renewalAutoMessage strong{color:#075a88}
-        .renewalMessage.success{background:#eefaf4;border:1px solid #c8e3d3;color:#17643d;font-weight:800}.renewalMessage.error{background:#fff0f0;border:1px solid #efc3c3;color:#a22727;font-weight:800;white-space:pre-wrap}.renewalMessage.approval{background:#fff7df;border:1px solid #f0c87c;color:#78520a;font-weight:800}
-        .renewalLoading{background:#fff;border:1px solid #dbe4ee;color:#60778f;text-align:center}
-        footer{display:flex;justify-content:flex-end;gap:9px;padding:16px 20px;border-top:1px solid #dbe4ee;background:#fff}footer button{min-height:43px;padding:0 16px;border-radius:11px;font-weight:900;cursor:pointer}.ghost{border:1px solid #d2dce7;background:#fff;color:#49647e}.primary{border:0;background:#6843a8;color:#fff}.primary:disabled{opacity:.55;cursor:not-allowed}
-        @media(max-width:640px){.renewalGrid{grid-template-columns:1fr}.renewalGrid .full{grid-column:auto}header{padding:19px}footer{flex-direction:column-reverse}.packageSummary strong{width:100%}}
+        .renewalOverlay{position:fixed;inset:0;z-index:1510;display:flex;justify-content:flex-end;background:rgba(4,20,38,.64);backdrop-filter:blur(7px)}.renewalPanel{width:min(650px,98vw);height:100%;display:flex;flex-direction:column;background:#f5f8fc;box-shadow:-24px 0 70px rgba(0,0,0,.28)}
+        header{display:flex;justify-content:space-between;gap:18px;padding:24px;background:linear-gradient(135deg,#2f1f59,#6843a8);color:#fff}header span{display:block;color:#f6c55f;font-size:10px;font-weight:900;letter-spacing:.12em}header h2{margin:5px 0 3px;font-size:25px}header p{margin:0;color:#e9e1fa;font-size:13px}header button{width:40px;height:40px;border:1px solid rgba(255,255,255,.3);border-radius:11px;background:rgba(255,255,255,.1);color:#fff;font-size:25px;cursor:pointer}
+        .renewalBody{flex:1;overflow:auto;padding:22px}.renewalInfo,.renewalWarning,.renewalMessage,.renewalAutoMessage,.renewalLoading,.requestStatus{padding:14px 15px;border-radius:13px;margin-bottom:16px}.requestStatus{display:grid;gap:4px}.requestStatus p{margin:0;font-size:12px}.requestStatus.pending{background:#fff6df;border:1px solid #efcd82;color:#855b09}.requestStatus.approved{background:#eaf9f0;border:1px solid #b9dfc5;color:#17623b}
+        .renewalInfo{background:#f2edff;border:1px solid #ded1fb;color:#52368a}.renewalInfo p,.renewalAutoMessage p{margin:5px 0 0;font-size:12px;line-height:1.5}.renewalInfo p{color:#706286}.renewalGrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.renewalGrid label{display:grid;gap:6px}.renewalGrid .full{grid-column:1/-1}.renewalGrid label>span{font-size:11px;font-weight:850;color:#4f647a}.renewalGrid input,.renewalGrid textarea,.renewalGrid select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px 12px;background:#fff;color:#142f4a;font:inherit}.renewalGrid input:disabled,.renewalGrid textarea:disabled,.renewalGrid select:disabled{background:#f2f4f7;color:#77879a}.renewalGrid small{color:#718397;line-height:1.45}
+        .packageSummary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid #dcd3f3;border-radius:12px;background:#faf8ff;color:#5d428f}.packageSummary strong{margin-right:auto;color:#3f286f}.packageSummary span{font-size:12px;font-weight:850}.customToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;padding:12px 14px;border:1px dashed #b8a5e2;border-radius:12px;background:#fbf9ff}.customToggle input{width:18px!important;height:18px}.customToggle span{font-size:13px!important;color:#4c347d!important}.approvalNotice{display:grid;gap:4px;padding:13px 14px;border:1px solid #f0c87c;border-radius:12px;background:#fff7df;color:#80580c}.approvalNotice span{font-size:12px;line-height:1.45}
+        .renewalWarning{margin-top:16px;background:#fff8e8;border:1px solid #f2d79b;color:#805b14;font-size:12px;line-height:1.5}.renewalAutoMessage{background:#edf8ff;border:1px solid #cde7f8;color:#245d7b}.renewalAutoMessage strong{color:#075a88}.renewalMessage.success{background:#eefaf4;border:1px solid #c8e3d3;color:#17643d;font-weight:800}.renewalMessage.error{background:#fff0f0;border:1px solid #efc3c3;color:#a22727;font-weight:800;white-space:pre-wrap}.renewalMessage.approval{background:#fff7df;border:1px solid #f0c87c;color:#78520a;font-weight:800}.renewalLoading{background:#fff;border:1px solid #dbe4ee;color:#60778f;text-align:center}
+        footer{display:flex;justify-content:flex-end;gap:9px;padding:16px 20px;border-top:1px solid #dbe4ee;background:#fff}footer button{min-height:46px;padding:0 16px;border-radius:11px;font-weight:900;cursor:pointer}.ghost{border:1px solid #d2dce7;background:#fff;color:#49647e}.primary{border:0;background:#6843a8;color:#fff}.primary:disabled{opacity:.55;cursor:not-allowed}@media(max-width:640px){.renewalGrid{grid-template-columns:1fr}.renewalGrid .full{grid-column:auto}header{padding:19px}footer{flex-direction:column-reverse}.packageSummary strong{width:100%}}
       `}</style>
     </>
   );
