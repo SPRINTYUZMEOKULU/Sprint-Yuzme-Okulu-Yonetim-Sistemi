@@ -398,6 +398,7 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
       ? existingConsent.form_snapshot
       : {};
   const consentPayload = {
+    organization_id: profile.organization_id,
     registration_for: "child",
     health_declaration: healthDeclaration,
     health_note: healthNote,
