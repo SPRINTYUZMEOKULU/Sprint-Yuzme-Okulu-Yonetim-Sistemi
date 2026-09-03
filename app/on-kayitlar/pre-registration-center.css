@@ -533,106 +533,6 @@
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.09);
 }
 
-.preEditGrid > .full {
-  grid-column: 1 / -1;
-}
-
-.preConsentEditBox {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 6px;
-  padding: 18px;
-  border: 1px solid #cfe0f3;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f7fbff, #f2f7fc);
-}
-
-.preConsentEditHead {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.preConsentEditHead strong {
-  color: #0b3f73;
-  font-size: 15px;
-}
-
-.preConsentEditHead span {
-  color: #64788f;
-  font-size: 12px;
-}
-
-.preConsentChecks {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-}
-
-.preConsentChecks label {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 12px;
-  border: 1px solid #dbe6f2;
-  border-radius: 12px;
-  background: #fff;
-  color: #183b62;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.4;
-}
-
-.preConsentChecks input[type="checkbox"] {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: #1671e8;
-}
-
-.preConsentChecks .managementConfirm {
-  grid-column: 1 / -1;
-  border-color: #f0c46b;
-  background: #fff9e9;
-  color: #83540a;
-}
-
-.preMissingFieldsNotice {
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid #f2c46d;
-  border-radius: 14px;
-  background: #fff9e8;
-  color: #75480a;
-}
-
-.preMissingFieldsNotice strong,
-.preMissingFieldsNotice p {
-  display: block;
-  margin: 0;
-}
-
-.preMissingFieldsNotice p {
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.preMissingFieldsNotice button {
-  margin-top: 10px;
-  border: 0;
-  border-radius: 10px;
-  padding: 9px 12px;
-  background: #d97706;
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-}
-
 .preEditActions {
   display: flex;
   justify-content: flex-end;
@@ -855,17 +755,6 @@
 
   .preEditGrid label.full {
     grid-column: auto;
-  }
-
-  .preEditGrid > .full,
-  .preConsentEditHead,
-  .preConsentChecks .managementConfirm {
-    grid-column: auto;
-  }
-
-  .preConsentEditBox,
-  .preConsentChecks {
-    grid-template-columns: 1fr;
   }
 }
 
