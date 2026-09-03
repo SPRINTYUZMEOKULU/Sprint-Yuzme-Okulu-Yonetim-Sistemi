@@ -7,22 +7,22 @@ export default function RenewalApprovalOpenBridge() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("renewalApproval") !== "approved") return;
 
-    let tries = 0;
-    const open = () => {
-      const button = document.querySelector<HTMLButtonElement>("[data-renewal-button='1']");
-      if (button) {
-        button.click();
-        params.delete("renewalApproval");
-        const query = params.toString();
-        const cleanUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
-        window.history.replaceState(null, "", cleanUrl);
-        return;
-      }
-      tries += 1;
-      if (tries < 20) window.setTimeout(open, 150);
-    };
+    const requestId = params.get("renewalRequestId") || undefined;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("sprint:open-renewal", {
+          detail: { requestId },
+        }),
+      );
 
-    open();
+      params.delete("renewalApproval");
+      params.delete("renewalRequestId");
+      const query = params.toString();
+      const cleanUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+      window.history.replaceState(null, "", cleanUrl);
+    }, 180);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   return null;
