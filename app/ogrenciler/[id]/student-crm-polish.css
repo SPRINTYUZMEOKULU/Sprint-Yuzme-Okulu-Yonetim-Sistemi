@@ -1,0 +1,61 @@
+/* SprintOS Kursiyer CRM — kompakt operasyon özeti */
+.studentFilePage .metricGrid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.studentFilePage .metricGrid article {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 14px;
+  box-shadow: 0 7px 20px rgba(15, 42, 76, 0.055);
+}
+
+.studentFilePage .metricGrid span {
+  font-size: 9px;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+
+.studentFilePage .metricGrid strong {
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .studentFilePage .metricGrid {
+    grid-template-columns: repeat(4, minmax(145px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 3px;
+  }
+}
+
+@media (max-width: 700px) {
+  .studentFilePage .metricGrid {
+    display: flex;
+    gap: 7px;
+    margin: 9px 0 13px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .studentFilePage .metricGrid::-webkit-scrollbar { display: none; }
+  .studentFilePage .metricGrid article {
+    flex: 0 0 auto;
+    min-width: 112px;
+    padding: 10px 11px;
+    scroll-snap-align: start;
+  }
+  .studentFilePage .metricGrid strong { font-size: 16px; }
+}
+
+@media print {
+  .studentFilePage .metricGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    overflow: visible;
+  }
+}
