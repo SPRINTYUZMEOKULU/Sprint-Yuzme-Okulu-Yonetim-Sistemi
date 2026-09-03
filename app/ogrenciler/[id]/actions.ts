@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 
 const staffRoles = [
   "owner",
@@ -19,6 +19,19 @@ const approvalRoles = [
   "owner",
   "admin",
 ] as const;
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
+  }
+
+  return createSupabaseAdminClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 function getText(
   value: FormDataEntryValue | null,
