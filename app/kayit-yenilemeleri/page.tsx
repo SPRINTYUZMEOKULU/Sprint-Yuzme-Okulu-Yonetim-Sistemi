@@ -148,7 +148,7 @@ export default async function RenewalOperationsPage() {
                       <Link href="/onay-merkezi" className="approvalButton">Onay Merkezine Git</Link>
                     ) : null}
                     {isReady && row.student_id ? (
-                      <Link href={`/ogrenciler/${row.student_id}?renewalApproval=approved`} className="completeButton">
+                      <Link href={`/ogrenciler/${row.student_id}?renewalApproval=approved&renewalRequestId=${row.id}`} className="completeButton">
                         Yenilemeyi Tamamla
                       </Link>
                     ) : null}
