@@ -41,34 +41,27 @@
   box-shadow: 0 7px 18px rgba(11, 77, 136, 0.2);
 }
 
-.studentFilePage.tabsReady [data-file-tab] {
+.studentFilePage.tabsReady [data-file-tab][hidden],
+.studentFilePage.tabsReady [data-file-tab-container][hidden] {
   display: none !important;
 }
 
-.studentFilePage.tabsReady[data-active-tab="genel-bilgiler"] [data-file-tab="genel-bilgiler"],
-.studentFilePage.tabsReady[data-active-tab="kurs-kaydi"] [data-file-tab="kurs-kaydi"],
-.studentFilePage.tabsReady[data-active-tab="odeme"] [data-file-tab="odeme"],
-.studentFilePage.tabsReady[data-active-tab="yoklama"] [data-file-tab="yoklama"],
-.studentFilePage.tabsReady[data-active-tab="ders-hareketleri"] [data-file-tab="ders-hareketleri"],
-.studentFilePage.tabsReady[data-active-tab="saglik"] [data-file-tab="saglik"] {
-  display: grid !important;
+.studentFilePage.tabsReady [data-file-tab-container]:not([hidden]) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.studentFilePage.tabsReady[data-active-tab="genel-bilgiler"] [data-mixed-general-course="true"] #kurs-kaydi {
-  display: none !important;
+.studentFilePage.tabsReady [data-file-tab-container]:not([hidden]) > [data-file-tab]:not([hidden]) {
+  min-width: 0;
 }
 
-.studentFilePage.tabsReady[data-active-tab="kurs-kaydi"] [data-mixed-general-course="true"] {
-  display: grid !important;
-  grid-template-columns: 1fr;
-}
+@media (max-width: 980px) {
+  .studentFileTabs {
+    gap: 6px;
+  }
 
-.studentFilePage.tabsReady[data-active-tab="kurs-kaydi"] [data-mixed-general-course="true"] #duzenle {
-  display: none !important;
-}
-
-.studentFilePage.tabsReady[data-active-tab="kurs-kaydi"] [data-mixed-general-course="true"] #kurs-kaydi {
-  display: block !important;
+  .studentFileTabs button {
+    padding-inline: 12px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -77,12 +70,14 @@
     margin: 14px -4px;
     padding: 7px;
     border-radius: 14px;
+    scroll-snap-type: x proximity;
   }
 
   .studentFileTabs button {
     min-height: 39px;
     padding: 9px 11px;
     font-size: 11px;
+    scroll-snap-align: start;
   }
 }
 
@@ -91,12 +86,12 @@
     display: none !important;
   }
 
-  .studentFilePage.tabsReady [data-file-tab] {
-    display: grid !important;
+  .studentFilePage.tabsReady [data-file-tab],
+  .studentFilePage.tabsReady [data-file-tab-container] {
+    display: revert !important;
   }
 
-  .studentFilePage.tabsReady [data-mixed-general-course="true"] #duzenle,
-  .studentFilePage.tabsReady [data-mixed-general-course="true"] #kurs-kaydi {
-    display: block !important;
+  .studentFilePage.tabsReady [data-file-tab-container] {
+    display: grid !important;
   }
 }
