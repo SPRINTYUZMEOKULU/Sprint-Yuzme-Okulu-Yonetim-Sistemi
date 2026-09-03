@@ -3,13 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
-import { usePermissions } from "@/lib/auth/use-permissions";
-
 import {
   bulkTransferStudents,
   prepareBulkStudentMessage,
-  requestSelectedStudentsCompensation,
-  requestSelectedStudentsDeactivation,
 } from "./bulk-actions";
 
 export type StudentListItem = {
@@ -824,14 +820,13 @@ export default function StudentsClient({
   schedules: scheduleOptions = [],
 }: Props) {
   const router = useRouter();
-  const { can, canAny } = usePermissions();
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("active");
   const [branch, setBranch] = useState("all");
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
-  const [sort, setSort] = useState<SortType>("start_new");
+  const [sort, setSort] = useState<SortType>("name_asc");
 
   const [dayFilter, setDayFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all");
@@ -840,12 +835,8 @@ export default function StudentsClient({
   const [importSubmitting, setImportSubmitting] = useState(false);
   const [importResult, setImportResult] = useState("");
   const [bulkMode, setBulkMode] = useState<
-    "actions" | "transfer" | "message" | "compensation" | "passive" | null
+    "transfer" | "message" | null
   >(null);
-  const [bulkActionReason, setBulkActionReason] = useState("");
-  const [bulkActionDescription, setBulkActionDescription] = useState("");
-  const [bulkCompensationCount, setBulkCompensationCount] = useState("1");
-  const [bulkActionPrepareMessages, setBulkActionPrepareMessages] = useState(true);
 
   const [targetBranchId, setTargetBranchId] = useState("");
   const [targetGroupId, setTargetGroupId] = useState("");
@@ -1510,12 +1501,6 @@ function closeLessonAction() {
     setBulkResult("");
   }
 
-  function openBulkActions() {
-    if (!selectedStudentIds.length) return;
-    setBulkMode("actions");
-    setBulkResult("");
-  }
-
   function openBulkMessage() {
     if (!selectedStudentIds.length) return;
     setBulkMode("message");
@@ -1528,52 +1513,6 @@ function closeLessonAction() {
   function closeBulkPanel() {
     setBulkMode(null);
     setBulkResult("");
-  }
-
-  async function submitSelectedCompensation() {
-    const lessonCount = Number(bulkCompensationCount);
-    if (!bulkActionReason.trim()) {
-      setBulkResult("Telafi gerekçesi yazılmalıdır.");
-      return;
-    }
-
-    setBulkSubmitting(true);
-    setBulkResult("");
-    try {
-      const result = await requestSelectedStudentsCompensation({
-        studentIds: selectedStudentIds,
-        lessonCount,
-        reason: bulkActionReason,
-        description: bulkActionDescription,
-        prepareMessages: bulkActionPrepareMessages,
-      });
-      setBulkResult(result.message);
-      if (result.ok) router.refresh();
-    } finally {
-      setBulkSubmitting(false);
-    }
-  }
-
-  async function submitSelectedDeactivation() {
-    if (!bulkActionReason.trim()) {
-      setBulkResult("Pasife alma gerekçesi yazılmalıdır.");
-      return;
-    }
-
-    setBulkSubmitting(true);
-    setBulkResult("");
-    try {
-      const result = await requestSelectedStudentsDeactivation({
-        studentIds: selectedStudentIds,
-        reason: bulkActionReason,
-        description: bulkActionDescription,
-        prepareMessages: bulkActionPrepareMessages,
-      });
-      setBulkResult(result.message);
-      if (result.ok) router.refresh();
-    } finally {
-      setBulkSubmitting(false);
-    }
   }
 
   async function submitBulkTransfer() {
@@ -1604,43 +1543,10 @@ function closeLessonAction() {
         logHistory: logTransferHistory,
       });
 
-      const failedItems = "failed" in result ? result.failed : [];
-      const failureDetails = failedItems
-        .slice(0, 4)
-        .map((item) => {
-          const failedStudent = selectedStudents.find(
-            (student) => student.id === item.studentId
-          );
-          const studentName = failedStudent
-            ? `${failedStudent.first_name} ${failedStudent.last_name}`.trim()
-            : "Öğrenci";
-          return `${studentName}: ${item.reason}`;
-        })
-        .join(" • ");
-
-      setBulkResult(
-        failureDetails ? `${result.message} ${failureDetails}` : result.message
-      );
+      setBulkResult(result.message);
 
       if (result.transferredCount && result.transferredCount > 0) {
-        const preparedMessages =
-          "preparedMessages" in result ? result.preparedMessages : [];
-
-        if (preparedMessages.length) {
-          setBulkPreparedMessages(preparedMessages);
-          setSelectedWhatsappStudentIds(
-            preparedMessages
-              .filter((item) => Boolean(item.recipient))
-              .map((item) => item.studentId)
-          );
-          setOpenedWhatsappStudentIds([]);
-          setBulkMode("message");
-          setBulkResult(
-            `${result.message} Aktarım bilgilendirme mesajları WhatsApp gönderimi için hazırlandı.`
-          );
-        } else {
-          setSelectedStudentIds([]);
-        }
+        setSelectedStudentIds([]);
         router.refresh();
       }
     } catch (error) {
@@ -2144,15 +2050,46 @@ function closeLessonAction() {
   }
 
   return (
-    <div className="studentCenter">
-      <div className="studentPageNav">
-        <button type="button" className="studentPageNavBack" onClick={() => router.back()}>
-          ← Geri
-        </button>
-        <button type="button" className="studentPageNavHome" onClick={() => router.push("/")}>
-          ⌂ Ana Sayfa
-        </button>
-      </div>
+    <div className="studentCenter"> 
+      <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    marginBottom: "16px",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => router.back()}
+    style={{
+      padding: "10px 16px",
+      border: "1px solid #dbe4f0",
+      borderRadius: "10px",
+      background: "#ffffff",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    ← Geri
+  </button>
+
+  <button
+    type="button"
+    onClick={() => router.push("/")}
+    style={{
+      padding: "10px 16px",
+      border: "none",
+      borderRadius: "10px",
+      background: "#1671e8",
+      color: "#ffffff",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    ⌂ Ana Sayfa
+  </button>
+</div>
       <section className="studentCommandHeader">
         <div>
           <span className="commandEyebrow">
@@ -2182,27 +2119,23 @@ function closeLessonAction() {
             <Icon name="plus" /> Yeni Kayıt
           </button>
 
-          {can("students.message") && (
-            <button
-              type="button"
-              className="commandButton orange"
-              onClick={openBulkMessage}
-              disabled={!selectedStudentIds.length}
-            >
-              <Icon name="message" /> Mesaj Merkezi
-            </button>
-          )}
+          <button
+            type="button"
+            className="commandButton orange"
+            onClick={openBulkMessage}
+            disabled={!selectedStudentIds.length}
+          >
+            <Icon name="message" /> Mesaj Merkezi
+          </button>
 
-          {can("students.bulk_operations") && (
-            <button
-              type="button"
-              className="commandButton"
-              onClick={openBulkActions}
-              disabled={!selectedStudentIds.length}
-            >
-              <Icon name="transfer" /> Toplu İşlemler
-            </button>
-          )}
+          <button
+            type="button"
+            className="commandButton"
+            onClick={openBulkTransfer}
+            disabled={!selectedStudentIds.length}
+          >
+            <Icon name="transfer" /> Toplu İşlem
+          </button>
         </div>
       </section>
 
@@ -2366,40 +2299,32 @@ function closeLessonAction() {
           value={sort}
           onChange={(event) => setSort(event.target.value as SortType)}
         >
-          <option value="start_new">Yeni Başlayanlar</option>
-          <option value="start_old">Eski Başlayanlar</option>
           <option value="name_asc">Ad Soyad A-Z</option>
           <option value="name_desc">Ad Soyad Z-A</option>
+          <option value="start_new">Yeni Başlayanlar</option>
+          <option value="start_old">Eski Başlayanlar</option>
           <option value="end_near">Bitiş Tarihi Yakın</option>
           <option value="remaining_desc">Kalan Ders Çoktan Aza</option>
           <option value="remaining_asc">Kalan Ders Azdan Çoğa</option>
         </select>
 
-        {can("students.export") && (
-          <button className="exportButton" onClick={exportCSV}>
-            {selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Listeyi Excel’e Aktar"}
-          </button>
-        )}
-        {can("students.export") && (
-          <button className="exportButton" onClick={exportPDF}>
-            {selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "Listeyi PDF’ye Aktar"}
-          </button>
-        )}
-        {can("students.import") && (
-          <a className="exportButton" href="/api/student-import">
-            İçe Aktarma Şablonu
-          </a>
-        )}
-        {can("students.import") && (
-          <button
-            className="exportButton"
-            type="button"
-            disabled={importSubmitting}
-            onClick={() => importInputRef.current?.click()}
-          >
-            {importSubmitting ? "Aktarılıyor…" : "Excel/CSV İçe Aktar"}
-          </button>
-        )}
+        <button className="exportButton" onClick={exportCSV}>
+          {selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Listeyi Excel’e Aktar"}
+        </button>
+        <button className="exportButton" onClick={exportPDF}>
+          {selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "Listeyi PDF’ye Aktar"}
+        </button>
+        <a className="exportButton" href="/api/student-import">
+          İçe Aktarma Şablonu
+        </a>
+        <button
+          className="exportButton"
+          type="button"
+          disabled={importSubmitting}
+          onClick={() => importInputRef.current?.click()}
+        >
+          {importSubmitting ? "Aktarılıyor…" : "Excel/CSV İçe Aktar"}
+        </button>
         <input
           ref={importInputRef}
           type="file"
@@ -2432,21 +2357,15 @@ function closeLessonAction() {
 
         {selectedStudentIds.length > 0 && (
           <div className="selectionActions">
-            {can("students.transfer") && (
-              <button type="button" onClick={openBulkTransfer}>
-                ⇄ Grup / Şube Aktar
-              </button>
-            )}
-            {can("students.message") && (
-              <button type="button" onClick={openBulkMessage}>
-                ✉ Toplu Mesaj
-              </button>
-            )}
-            {can("students.archive") && (
-              <button type="button" disabled={bulkSubmitting} onClick={() => void requestBulkArchive()}>
-                🗃 Güvenli Arşivleme
-              </button>
-            )}
+            <button type="button" onClick={openBulkTransfer}>
+              ⇄ Grup / Şube Aktar
+            </button>
+            <button type="button" onClick={openBulkMessage}>
+              ✉ Toplu Mesaj
+            </button>
+            <button type="button" disabled={bulkSubmitting} onClick={() => void requestBulkArchive()}>
+              🗃 Güvenli Arşivleme
+            </button>
             <button type="button" onClick={clearSelection}>
               Seçimi Temizle
             </button>
@@ -2717,7 +2636,7 @@ function closeLessonAction() {
       <Icon name="message" /> WhatsApp
     </button>
 
-    {can("students.message") && <button
+    <button
       type="button"
       className="studentActionButton message"
       disabled={!phone}
@@ -2727,7 +2646,7 @@ function closeLessonAction() {
       }}
     >
       <Icon name="message" /> Hazır Mesaj
-    </button>}
+    </button>
     <button
       type="button"
       className="studentActionButton"
@@ -2750,7 +2669,7 @@ function closeLessonAction() {
       <Icon name="print" /> A4 Çıktı
     </button>
 
-    {canAny(["students.edit", "attendance.compensation"]) && <button
+    <button
       type="button"
       className="studentActionButton primary"
       onClick={(event) => {
@@ -2774,8 +2693,8 @@ function closeLessonAction() {
       }}
     >
       <Icon name="calendar" /> Ders / Paket
-    </button>}
-    {student.status === "active" && can("students.archive") && (
+    </button>
+    {student.status === "active" && (
   <button
     type="button"
     className="studentActionButton passive"
@@ -2795,7 +2714,7 @@ function closeLessonAction() {
   </button>
 )}
 
-{student.status === "passive" && can("students.delete") && (
+{student.status === "passive" && (
   <button
     type="button"
     className="studentActionButton delete"
@@ -2824,107 +2743,6 @@ function closeLessonAction() {
             Seçtiğiniz filtrelere uygun öğrenci bulunamadı.
           </div>
         )}
-        {bulkMode === "actions" && (
-          <div className="bulkOverlay" onClick={closeBulkPanel}>
-            <div className="bulkPanel actionHubPanel" onClick={(event) => event.stopPropagation()}>
-              <div className="bulkPanelHeader">
-                <div>
-                  <span>TOPLU İŞLEM MERKEZİ</span>
-                  <h3>{selectedStudentIds.length} öğrenci seçildi</h3>
-                  <p>Uygulanacak işlemi seçin. Hiçbir işlem onay verilmeden tamamlanmaz.</p>
-                </div>
-                <button type="button" onClick={closeBulkPanel}>×</button>
-              </div>
-              <div className="bulkPanelBody">
-                <div className="bulkActionCards">
-                  {can("students.transfer") && (
-                    <button type="button" onClick={() => { setBulkMode("transfer"); setBulkResult(""); }}>
-                      <b>⇄ Grup / Şube Aktar</b>
-                      <span>Kalan dersleri, katılım planını ve öğrenci geçmişini koruyarak yeni programa aktarır.</span>
-                    </button>
-                  )}
-                  {can("students.message") && (
-                    <button type="button" onClick={openBulkMessage}>
-                      <b>✉ Toplu Mesaj Hazırla</b>
-                      <span>Seçilen öğrenci veya veliler için düzenlenebilir WhatsApp mesajları oluşturur.</span>
-                    </button>
-                  )}
-                  {can("attendance.compensation") && (
-                    <button type="button" onClick={() => { setBulkMode("compensation"); setBulkResult(""); setBulkActionReason(""); }}>
-                      <b>＋ Toplu Telafi Ekle</b>
-                      <span>Yalnızca seçilen öğrencilere telafi talebi oluşturur ve onay sonrası mesaj hazırlar.</span>
-                    </button>
-                  )}
-                  {can("students.archive") && (
-                    <button type="button" className="dangerAction" onClick={() => { setBulkMode("passive"); setBulkResult(""); setBulkActionReason(""); }}>
-                      <b>⏸ Toplu Pasife Al</b>
-                      <span>Seçilen aktif öğrenciler için yönetici onaylı pasife alma talebi oluşturur.</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="bulkPanelFooter">
-                <button type="button" className="ghost" onClick={closeBulkPanel}>Kapat</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(bulkMode === "compensation" || bulkMode === "passive") && (
-          <div className="bulkOverlay" onClick={closeBulkPanel}>
-            <div className="bulkPanel" onClick={(event) => event.stopPropagation()}>
-              <div className="bulkPanelHeader">
-                <div>
-                  <span>{bulkMode === "compensation" ? "TOPLU TELAFİ" : "TOPLU PASİFE ALMA"}</span>
-                  <h3>{selectedStudentIds.length} öğrenci için işlem</h3>
-                  <p>Talep Onay Merkezi'ne gönderilecek ve işlem geçmişine kaydedilecektir.</p>
-                </div>
-                <button type="button" onClick={closeBulkPanel}>×</button>
-              </div>
-              <div className="bulkPanelBody">
-                {bulkMode === "compensation" && (
-                  <label>
-                    <span>Eklenecek telafi dersi</span>
-                    <select value={bulkCompensationCount} onChange={(event) => setBulkCompensationCount(event.target.value)}>
-                      {[1, 2, 3, 4, 5, 6, 8, 10].map((count) => <option key={count} value={count}>{count} ders</option>)}
-                    </select>
-                  </label>
-                )}
-                <label>
-                  <span>İşlem gerekçesi</span>
-                  <input
-                    value={bulkActionReason}
-                    onChange={(event) => setBulkActionReason(event.target.value)}
-                    placeholder={bulkMode === "compensation" ? "Örn. Tesis kaynaklı ders iptali" : "Örn. Kayıt dönemi tamamlandı"}
-                  />
-                </label>
-                <label>
-                  <span>Açıklama / yönetici notu</span>
-                  <textarea rows={5} value={bulkActionDescription} onChange={(event) => setBulkActionDescription(event.target.value)} />
-                </label>
-                <div className="bulkChecks">
-                  <label>
-                    <input type="checkbox" checked={bulkActionPrepareMessages} onChange={(event) => setBulkActionPrepareMessages(event.target.checked)} />
-                    Onay sonrası ayrıntılı WhatsApp mesajı hazırla
-                  </label>
-                </div>
-                {bulkResult && <div className="bulkResult">{bulkResult}</div>}
-              </div>
-              <div className="bulkPanelFooter">
-                <button type="button" className="ghost" onClick={() => setBulkMode("actions")} disabled={bulkSubmitting}>Geri</button>
-                <button
-                  type="button"
-                  className={`primary ${bulkMode === "passive" ? "dangerPrimary" : ""}`}
-                  disabled={bulkSubmitting}
-                  onClick={() => void (bulkMode === "compensation" ? submitSelectedCompensation() : submitSelectedDeactivation())}
-                >
-                  {bulkSubmitting ? "Gönderiliyor…" : "Yönetici Onayına Gönder"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {bulkMode === "transfer" && (
           <div className="bulkOverlay" onClick={closeBulkPanel}>
             <aside
@@ -4005,24 +3823,6 @@ function closeLessonAction() {
         box-shadow: 0 18px 45px rgba(15, 58, 107, 0.18);
       }
 
-      .studentPageNav {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 16px;
-      }
-
-      .studentPageNav button {
-        min-height: 42px;
-        padding: 10px 16px;
-        border-radius: 11px;
-        font-weight: 800;
-        cursor: pointer;
-      }
-
-      .studentPageNavBack { border: 1px solid #dbe4f0; background: #fff; color: #17345c; }
-      .studentPageNavHome { border: 1px solid #1671e8; background: #1671e8; color: #fff; }
-
       .commandEyebrow {
         display: block;
         margin-bottom: 6px;
@@ -4237,7 +4037,6 @@ function closeLessonAction() {
       }
 
       .bulkPanelBody select,
-      .bulkPanelBody input,
       .bulkPanelBody input[type="date"],
       .bulkPanelBody textarea {
         width: 100%;
@@ -4391,38 +4190,6 @@ function closeLessonAction() {
       .bulkPanelFooter .primary.orange {
         background: #ff9418;
       }
-
-      .bulkPanelFooter .primary.dangerPrimary {
-        background: #bd2c35;
-      }
-
-      .bulkActionCards {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .bulkActionCards button {
-        display: grid;
-        gap: 7px;
-        min-height: 128px;
-        padding: 16px;
-        border: 1px solid #d7e3ef;
-        border-radius: 15px;
-        background: #fff;
-        color: #173b62;
-        text-align: left;
-        cursor: pointer;
-      }
-
-      .bulkActionCards button:hover {
-        border-color: #3d82d5;
-        box-shadow: 0 10px 24px rgba(25, 77, 135, .1);
-      }
-
-      .bulkActionCards b { font-size: 15px; }
-      .bulkActionCards span { color: #647a91; font-size: 12px; line-height: 1.5; }
-      .bulkActionCards .dangerAction { border-color: #f0c6ca; background: #fff7f7; color: #a42731; }
 
       .messageModeChoice strong {
         display: block;
@@ -4797,8 +4564,6 @@ function closeLessonAction() {
         .bulkPanel {
           width: 100%;
         }
-
-        .bulkActionCards { grid-template-columns: 1fr; }
       }
 
 
@@ -5321,10 +5086,6 @@ function closeLessonAction() {
         }
 
         .exportButton {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          box-sizing: border-box;
           border: 0;
           border-radius: 12px;
           padding: 0 18px;
@@ -5334,8 +5095,6 @@ function closeLessonAction() {
           font-weight: 700;
           cursor: pointer;
           white-space: nowrap;
-          text-align: center;
-          text-decoration: none;
         }
 
         .resultInfo {
