@@ -4,6 +4,8 @@ import StudentProfileCenter from "./student-profile-center";
 import ProfileCenterClickBridge from "./profile-center-click-bridge";
 import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
+import StudentPaymentCenter from "./student-payment-center";
+import StudentActionFeedback from "./student-action-feedback";
 import StudentHeroEnhancer from "./student-hero-enhancer";
 import RenewalApprovalOpenBridge from "./renewal-approval-open-bridge";
 import RenewalMobilePolish from "./renewal-mobile-polish";
@@ -19,6 +21,8 @@ export default function StudentFileLayout({ children }: { children: ReactNode })
       <ProfileCenterClickBridge />
       <GeneralInfoSummary />
       <StudentRenewalCenter />
+      <StudentPaymentCenter />
+      <StudentActionFeedback />
       <StudentHeroEnhancer />
       <RenewalApprovalOpenBridge />
       <RenewalMobilePolish />
