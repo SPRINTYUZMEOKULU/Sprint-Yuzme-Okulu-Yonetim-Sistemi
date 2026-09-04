@@ -5,10 +5,7 @@ import { useEffect } from "react";
 type RoutedMouseEvent = MouseEvent & { __sprintRouted?: boolean };
 
 function cleanText(element: Element | null) {
-  return (element?.textContent || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleLowerCase("tr-TR");
+  return (element?.textContent || "").replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
 }
 
 function dispatchRoutedClick(element: HTMLElement) {
@@ -17,38 +14,23 @@ function dispatchRoutedClick(element: HTMLElement) {
     cancelable: true,
     view: window,
   }) as RoutedMouseEvent;
-
   event.__sprintRouted = true;
   element.dispatchEvent(event);
 }
 
+function findQuickAction(label: string) {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(".fileCommandActions button, .fileCommandActions a"),
+  ).find((item) => cleanText(item).includes(label));
+}
+
 function openSection(sectionId: string) {
   const nextHash = `#${sectionId}`;
-
   if (window.location.hash === nextHash) {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   } else {
     window.location.hash = sectionId;
   }
-}
-
-function findQuickAction(label: string) {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(
-      ".fileCommandActions button, .fileCommandActions a",
-    ),
-  ).find((item) => cleanText(item).includes(label));
-}
-
-function openPaymentEntry() {
-  const paymentButton = findQuickAction("ödeme al");
-
-  if (paymentButton) {
-    dispatchRoutedClick(paymentButton);
-    return;
-  }
-
-  openSection("odeme");
 }
 
 export default function StudentActionRouter() {
@@ -60,17 +42,18 @@ export default function StudentActionRouter() {
       const target = event.target as Element | null;
       if (!target) return;
 
-      const quickAction = target.closest<HTMLElement>(
-        ".fileCommandActions button, .fileCommandActions a",
-      );
-
+      const quickAction = target.closest<HTMLElement>(".fileCommandActions button, .fileCommandActions a");
       if (quickAction) {
         const text = cleanText(quickAction);
 
-        // Ödeme Al kendi React ödeme formunu açar. Burada olaya müdahale etmiyoruz.
-        if (text.includes("ödeme al")) return;
+        if (text.includes("ödeme al")) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const paymentTrigger = findQuickAction("ödeme al");
+          if (paymentTrigger) dispatchRoutedClick(paymentTrigger);
+          return;
+        }
 
-        // Ödeme Geçmişi yalnızca finans sekmesini / geçmiş kayıtları gösterir.
         if (text.includes("ödeme geçmişi")) {
           event.preventDefault();
           event.stopImmediatePropagation();
@@ -81,63 +64,36 @@ export default function StudentActionRouter() {
         if (text.includes("bilgileri düzenle")) {
           event.preventDefault();
           event.stopImmediatePropagation();
-
-          const profileTrigger = document.querySelector<HTMLElement>(
-            "[data-open-profile-center='1']",
-          );
-
+          const profileTrigger = document.querySelector<HTMLElement>("[data-open-profile-center='1']");
           if (profileTrigger) dispatchRoutedClick(profileTrigger);
           return;
         }
 
-        if (
-          quickAction.matches("[data-renewal-button='1']") ||
-          text.includes("kayıt yenile") ||
-          text.includes("onay bekliyor") ||
-          text.includes("onaylandı · tamamla")
-        ) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
-          return;
-        }
-
-        // Grup/şube, telafi, mesaj, A4 ve sil/arşivle kendi React işleyicilerini kullanır.
+        // Kayıt Yenile kendi StudentRenewalCenter click işleyicisini kullanır.
+        // Grup/şube, telafi, mesaj, çıktı ve sil/arşivle de kendi React
+        // işleyicilerine bırakılır. Burada bu işlemlere müdahale etmiyoruz.
         return;
       }
 
-      const alertAction = target.closest<HTMLElement>(
-        ".smartAlertGrid a, .smartAlertGrid button",
-      );
+      const alertAction = target.closest<HTMLElement>(".smartAlertGrid a, .smartAlertGrid button");
       if (!alertAction) return;
 
-      const card =
-        alertAction.closest<HTMLElement>(".smartAlertGrid > *") ||
-        alertAction.parentElement;
+      const card = alertAction.closest<HTMLElement>(".smartAlertGrid > *") || alertAction.parentElement;
       const cardText = cleanText(card);
-      const href =
-        alertAction instanceof HTMLAnchorElement
-          ? alertAction.getAttribute("href") || ""
-          : "";
+      const href = alertAction instanceof HTMLAnchorElement ? alertAction.getAttribute("href") || "" : "";
 
-      // Ödeme ile ilgili "İşlemi Aç" her zaman tahsilat giriş ekranını açar.
       if (href === "#odeme" || cardText.includes("ödeme")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        openPaymentEntry();
+        const paymentTrigger = findQuickAction("ödeme al");
+        if (paymentTrigger) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          dispatchRoutedClick(paymentTrigger);
+        }
         return;
       }
 
-      // İletişim uyarıları öğrenci / veli bilgi merkezine gider.
-      if (
-        href === "#genel-bilgiler" ||
-        cardText.includes("telefon") ||
-        cardText.includes("iletişim")
-      ) {
-        const profileTrigger = document.querySelector<HTMLElement>(
-          "[data-open-profile-center='1']",
-        );
-
+      if (href === "#genel-bilgiler" || cardText.includes("telefon") || cardText.includes("iletişim")) {
+        const profileTrigger = document.querySelector<HTMLElement>("[data-open-profile-center='1']");
         if (profileTrigger) {
           event.preventDefault();
           event.stopImmediatePropagation();
@@ -146,7 +102,6 @@ export default function StudentActionRouter() {
         return;
       }
 
-      // Ders hakkı / yenileme uyarıları kayıt yenileme merkezine gider.
       if (
         cardText.includes("ders hakkı") ||
         cardText.includes("kayıt yenile") ||
@@ -155,10 +110,7 @@ export default function StudentActionRouter() {
         event.preventDefault();
         event.stopImmediatePropagation();
         window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
-        return;
       }
-
-      // Diğer uyarılarda mevcut href hedefini bozmuyoruz.
     };
 
     document.addEventListener("click", onClick, true);
