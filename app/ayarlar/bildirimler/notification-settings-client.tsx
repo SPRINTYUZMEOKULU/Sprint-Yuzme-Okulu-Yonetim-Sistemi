@@ -141,6 +141,7 @@ export default function NotificationSettingsClient() {
   }
 
   const isOn = state === "on";
+  const isWorking = state === "working";
 
   return (
     <section className="notificationSettingsCard">
@@ -152,7 +153,7 @@ export default function NotificationSettingsClient() {
             <h2>Telefon Bildirimleri</h2>
           </div>
           <b className={`notificationBadge ${isOn ? "on" : "off"}`}>
-            {state === "checking" || state === "working" ? "Kontrol ediliyor" : isOn ? "Açık" : state === "blocked" ? "Engellendi" : "Kapalı"}
+            {state === "checking" || isWorking ? "Kontrol ediliyor" : isOn ? "Açık" : state === "blocked" ? "Engellendi" : "Kapalı"}
           </b>
         </div>
 
@@ -168,11 +169,11 @@ export default function NotificationSettingsClient() {
 
         <div className="notificationActions">
           {isOn ? (
-            <button type="button" className="notificationDanger" onClick={disableNotifications} disabled={state === "working"}>Bildirimleri Kapat</button>
+            <button type="button" className="notificationDanger" onClick={disableNotifications}>Bildirimleri Kapat</button>
           ) : (
-            <button type="button" className="notificationPrimary" onClick={enableNotifications} disabled={state === "working" || state === "blocked" || state === "unsupported"}>Bildirimleri Aç</button>
+            <button type="button" className="notificationPrimary" onClick={enableNotifications} disabled={isWorking || state === "blocked" || state === "unsupported"}>Bildirimleri Aç</button>
           )}
-          <button type="button" className="notificationSecondary" onClick={refreshState} disabled={state === "working"}>Durumu Yenile</button>
+          <button type="button" className="notificationSecondary" onClick={refreshState} disabled={isWorking}>Durumu Yenile</button>
         </div>
       </div>
 
