@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import ApprovalCenterClient from "./approval-center-client";
+import ApprovedArchiveFinalizer from "./approved-archive-finalizer";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +16,10 @@ export default async function ApprovalCenterPage() {
     redirect("/yetkisiz");
   }
 
-  return <ApprovalCenterClient />;
+  return (
+    <>
+      {["owner", "admin"].includes(profile.role) ? <ApprovedArchiveFinalizer /> : null}
+      <ApprovalCenterClient />
+    </>
+  );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createNotification } from "@/lib/notifications/create-notification";
 
 type RequestBody = {
   request_type: "deactivate" | "delete";
@@ -27,10 +28,7 @@ export async function POST(request: NextRequest) {
     const reason = clean(body.reason, 250);
     const description = clean(body.description, 1000);
     const oldStatus = clean(body.old_status, 50) || "active";
-
-    // Ekrandaki “Sil / Arşivle” kalıcı silme yapmaz. Denetim geçmişi,
-    // ödeme ve yoklama kayıtları korunarak öğrenci pasife/arşive alınır.
-    const requestedType = body.request_type === "delete" ? "deactivate" : "deactivate";
+    const requestedType = "deactivate";
     const newStatus = "passive";
 
     if (!studentId) {
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     const { data: studentRecord, error: studentError } = await supabase
       .from("students")
-      .select("organization_id")
+      .select("organization_id,first_name,last_name")
       .eq("id", studentId)
       .single();
 
@@ -131,9 +129,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    try {
+      const { data: managers } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .in("role", ["owner", "admin"]);
+
+      const managerIds = (managers || []).map((row: any) => String(row.id)).filter(Boolean);
+      const studentName = `${studentRecord.first_name || ""} ${studentRecord.last_name || ""}`.trim() || "Öğrenci";
+
+      await createNotification({
+        organizationId,
+        title: "Pasife alma / arşivleme onayı bekliyor",
+        body: `${studentName} için yönetici onayı bekleyen arşivleme talebi oluşturuldu. Gerekçe: ${reason}`,
+        category: "approvals",
+        eventKey: "student_status_deactivate_requested",
+        notificationType: "student_status_requested",
+        severity: "warning",
+        priority: "high",
+        studentId,
+        sourceType: "student_status",
+        sourceId: data.id,
+        entityType: "student_status_request",
+        entityId: data.id,
+        targetPath: `/onay-merkezi?status=pending&archiveRequestId=${encodeURIComponent(data.id)}`,
+        metadata: {
+          request_id: data.id,
+          student_id: studentId,
+          request_type: requestedType,
+          requested_by: user.id,
+          requested_status: newStatus,
+        },
+        createdBy: user.id,
+        recipientProfileIds: managerIds.length ? managerIds : undefined,
+        push: true,
+      });
+    } catch (notificationError) {
+      console.error("status request notification error:", notificationError);
+    }
+
     return NextResponse.json({
       ok: true,
-      message: "Arşivleme / pasife alma talebi yönetici onayına gönderildi.",
+      message: "Arşivleme / pasife alma talebi yönetici onayına gönderildi ve bildirim oluşturuldu.",
       request: data,
     });
   } catch (error) {
