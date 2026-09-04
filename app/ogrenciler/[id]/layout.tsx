@@ -3,7 +3,6 @@ import StudentFileTabs from "./student-file-tabs";
 import StudentProfileCenter from "./student-profile-center";
 import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
-import StudentPaymentCenter from "./student-payment-center";
 import StudentActionRouter from "./student-action-router";
 import StudentActionFeedback from "./student-action-feedback";
 import StudentHeroEnhancer from "./student-hero-enhancer";
@@ -20,7 +19,6 @@ export default function StudentFileLayout({ children }: { children: ReactNode })
       <StudentProfileCenter />
       <GeneralInfoSummary />
       <StudentRenewalCenter />
-      <StudentPaymentCenter />
       <StudentActionRouter />
       <StudentActionFeedback />
       <StudentHeroEnhancer />
