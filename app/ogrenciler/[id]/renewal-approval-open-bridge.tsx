@@ -5,9 +5,13 @@ import { useEffect } from "react";
 export default function RenewalApprovalOpenBridge() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("renewalApproval") !== "approved") return;
+    const approvedOpen = params.get("renewalApproval") === "approved";
+    const directOpen = params.get("renewalOpen") === "1";
+    if (!approvedOpen && !directOpen) return;
 
-    const requestId = params.get("renewalRequestId") || undefined;
+    const requestId = approvedOpen
+      ? params.get("renewalRequestId") || undefined
+      : undefined;
     const body = document.body;
     body.classList.add("renewalDirectOpenPending");
 
@@ -16,7 +20,7 @@ export default function RenewalApprovalOpenBridge() {
     veil.innerHTML = `
       <div class="renewalDirectOpenCard" role="status" aria-live="polite">
         <div class="renewalDirectOpenSpinner" aria-hidden="true"></div>
-        <strong>Onaylı yenileme hazırlanıyor…</strong>
+        <strong>${approvedOpen ? "Onaylı yenileme hazırlanıyor…" : "Kayıt yenileme merkezi hazırlanıyor…"}</strong>
         <span>Doğrudan Kayıt Yenileme Merkezi açılıyor.</span>
       </div>
     `;
@@ -40,6 +44,7 @@ export default function RenewalApprovalOpenBridge() {
     const cleanupUrl = () => {
       params.delete("renewalApproval");
       params.delete("renewalRequestId");
+      params.delete("renewalOpen");
       const query = params.toString();
       const cleanUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
       window.history.replaceState(null, "", cleanUrl);
@@ -60,7 +65,9 @@ export default function RenewalApprovalOpenBridge() {
         return;
       }
 
-      window.dispatchEvent(new CustomEvent("sprint:open-renewal", { detail: { requestId } }));
+      window.dispatchEvent(
+        new CustomEvent("sprint:open-renewal", { detail: { requestId } }),
+      );
       tries += 1;
 
       if (tries < 30) {
@@ -72,18 +79,20 @@ export default function RenewalApprovalOpenBridge() {
       veil.innerHTML = `
         <div class="renewalDirectOpenCard error" role="alert">
           <strong>Yenileme merkezi açılamadı.</strong>
-          <span>Tekrar deneyebilir veya öğrenci dosyasındaki “Kayıt Yenile” düğmesini kullanabilirsiniz.</span>
+          <span>Sayfa yenilendi ancak Kayıt Yenileme Merkezi başlatılamadı. Tekrar deneyebilirsiniz.</span>
           <button type="button" data-renewal-retry>Tekrar Dene</button>
         </div>
       `;
-      veil.querySelector<HTMLButtonElement>("[data-renewal-retry]")?.addEventListener("click", () => {
-        tries = 0;
-        body.classList.add("renewalDirectOpenPending");
-        open();
-      });
+      veil
+        .querySelector<HTMLButtonElement>("[data-renewal-retry]")
+        ?.addEventListener("click", () => {
+          tries = 0;
+          body.classList.add("renewalDirectOpenPending");
+          open();
+        });
     };
 
-    timer = window.setTimeout(open, 80);
+    timer = window.setTimeout(open, 120);
 
     return () => {
       window.clearTimeout(timer);
