@@ -52,23 +52,11 @@ export default function StudentActionFeedback() {
       show(action);
     };
 
-    const onTouchEnd = (event: TouchEvent) => {
-      const action = findAction(event.target);
-      if (!action?.closest("[data-renewal-button='1']")) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      show(action);
-      window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
-    };
-
     document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("touchend", onTouchEnd, { capture: true, passive: false });
 
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
       document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("touchend", onTouchEnd, true);
     };
   }, []);
 
