@@ -5,7 +5,10 @@ import { useEffect } from "react";
 type RoutedMouseEvent = MouseEvent & { __sprintRouted?: boolean };
 
 function cleanText(element: Element | null) {
-  return (element?.textContent || "").replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
+  return (element?.textContent || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("tr-TR");
 }
 
 function dispatchRoutedClick(element: HTMLElement) {
@@ -20,7 +23,9 @@ function dispatchRoutedClick(element: HTMLElement) {
 
 function findQuickAction(label: string) {
   return Array.from(
-    document.querySelectorAll<HTMLElement>(".fileCommandActions button, .fileCommandActions a"),
+    document.querySelectorAll<HTMLElement>(
+      ".fileCommandActions button, .fileCommandActions a",
+    ),
   ).find((item) => cleanText(item).includes(label));
 }
 
@@ -33,6 +38,10 @@ function openSection(sectionId: string) {
   }
 }
 
+function openRenewal() {
+  window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
+}
+
 export default function StudentActionRouter() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -42,7 +51,10 @@ export default function StudentActionRouter() {
       const target = event.target as Element | null;
       if (!target) return;
 
-      const quickAction = target.closest<HTMLElement>(".fileCommandActions button, .fileCommandActions a");
+      const quickAction = target.closest<HTMLElement>(
+        ".fileCommandActions button, .fileCommandActions a",
+      );
+
       if (quickAction) {
         const text = cleanText(quickAction);
 
@@ -61,26 +73,54 @@ export default function StudentActionRouter() {
           return;
         }
 
+        /*
+         * Bilgileri Düzenle işlemini StudentProfileCenter'ın kendi
+         * React/delegated click işleyicisine bırakıyoruz. Önceden burada
+         * data-open-profile-center='1' aranıyordu; özet butonunda attribute
+         * değer taşımadığı için tıklama yutuluyor ve panel açılmıyordu.
+         */
         if (text.includes("bilgileri düzenle")) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          const profileTrigger = document.querySelector<HTMLElement>("[data-open-profile-center='1']");
-          if (profileTrigger) dispatchRoutedClick(profileTrigger);
           return;
         }
 
-        // Kayıt Yenile kendi StudentRenewalCenter click işleyicisini kullanır.
-        // Grup/şube, telafi, mesaj, çıktı ve sil/arşivle de kendi React
+        /*
+         * Kayıt Yenile butonu DOM'a sonradan eklendiği için mobil Safari'de
+         * click sırası zaman zaman yenileme merkezinin listener'ına ulaşmıyor.
+         * Eğer kendi listener'ı olayı zaten işlediyse defaultPrevented true
+         * olur ve ikinci kez açmayız. İşlenmediyse merkezi custom event ile
+         * yenileme merkezini doğrudan açarız.
+         */
+        if (
+          quickAction.dataset.renewalButton === "1" ||
+          text.includes("kayıt yenile") ||
+          text.includes("onay bekliyor") ||
+          text.includes("onaylandı · tamamla")
+        ) {
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          openRenewal();
+          return;
+        }
+
+        // Grup/şube, telafi, mesaj, çıktı ve sil/arşivle kendi React
         // işleyicilerine bırakılır. Burada bu işlemlere müdahale etmiyoruz.
         return;
       }
 
-      const alertAction = target.closest<HTMLElement>(".smartAlertGrid a, .smartAlertGrid button");
+      const alertAction = target.closest<HTMLElement>(
+        ".smartAlertGrid a, .smartAlertGrid button",
+      );
       if (!alertAction) return;
 
-      const card = alertAction.closest<HTMLElement>(".smartAlertGrid > *") || alertAction.parentElement;
+      const card =
+        alertAction.closest<HTMLElement>(".smartAlertGrid > *") ||
+        alertAction.parentElement;
       const cardText = cleanText(card);
-      const href = alertAction instanceof HTMLAnchorElement ? alertAction.getAttribute("href") || "" : "";
+      const href =
+        alertAction instanceof HTMLAnchorElement
+          ? alertAction.getAttribute("href") || ""
+          : "";
 
       if (href === "#odeme" || cardText.includes("ödeme")) {
         const paymentTrigger = findQuickAction("ödeme al");
@@ -92,13 +132,15 @@ export default function StudentActionRouter() {
         return;
       }
 
-      if (href === "#genel-bilgiler" || cardText.includes("telefon") || cardText.includes("iletişim")) {
-        const profileTrigger = document.querySelector<HTMLElement>("[data-open-profile-center='1']");
-        if (profileTrigger) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          dispatchRoutedClick(profileTrigger);
-        }
+      /*
+       * Telefon / iletişim uyarısını StudentProfileCenter doğrudan yönetir.
+       * Böylece hızlı buton ile akıllı uyarı aynı bilgi düzenleme panelini açar.
+       */
+      if (
+        href === "#genel-bilgiler" ||
+        cardText.includes("telefon") ||
+        cardText.includes("iletişim")
+      ) {
         return;
       }
 
@@ -109,7 +151,7 @@ export default function StudentActionRouter() {
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
+        openRenewal();
       }
     };
 
