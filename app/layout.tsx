@@ -7,6 +7,7 @@ import "./globals.css";
 
 import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
+import DashboardLiveOperations from "./components/dashboard-live-operations";
 
 export const metadata: Metadata = {
   title: {
@@ -73,6 +74,7 @@ export default function RootLayout({
       <body>
         {children}
 
+        <DashboardLiveOperations />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
