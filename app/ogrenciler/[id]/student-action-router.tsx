@@ -49,20 +49,17 @@ function isRenewalAction(element: HTMLElement | null) {
   );
 }
 
-function openRenewal() {
-  window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
+function hardOpenRenewal() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("renewalOpen", "1");
+  url.hash = "";
+  window.location.assign(url.toString());
 }
 
 export default function StudentActionRouter() {
   useEffect(() => {
     let renewalTapAt = 0;
 
-    /*
-     * iOS/Safari'de sonradan DOM'a eklenen Kayıt Yenile butonunun click olayı
-     * bazı durumlarda document click zincirine ulaşmadan kaybolabiliyor.
-     * Pointer-up aşamasında doğrudan yenileme merkezini açarak click bağımlılığını
-     * kaldırıyoruz. Sonraki click olayı kısa süreli kilitle tekrar açamaz.
-     */
     const onPointerUp = (event: PointerEvent) => {
       const target = event.target as Element | null;
       const quickAction = target?.closest<HTMLElement>(
@@ -71,7 +68,9 @@ export default function StudentActionRouter() {
       if (!isRenewalAction(quickAction || null)) return;
 
       renewalTapAt = Date.now();
-      openRenewal();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      hardOpenRenewal();
     };
 
     const onClick = (event: MouseEvent) => {
@@ -110,16 +109,11 @@ export default function StudentActionRouter() {
         if (isRenewalAction(quickAction)) {
           event.preventDefault();
           event.stopImmediatePropagation();
-
-          // Pointer-up aynı dokunmayı zaten açtıysa ikinci kez fetch/modal açma.
           if (Date.now() - renewalTapAt < 1200) return;
-
-          openRenewal();
+          hardOpenRenewal();
           return;
         }
 
-        // Grup/şube, telafi, mesaj, çıktı ve sil/arşivle kendi React
-        // işleyicilerine bırakılır. Burada bu işlemlere müdahale etmiyoruz.
         return;
       }
 
@@ -162,7 +156,7 @@ export default function StudentActionRouter() {
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openRenewal();
+        hardOpenRenewal();
       }
     };
 
