@@ -18,6 +18,15 @@ function dispatchRoutedClick(element: HTMLElement) {
   element.dispatchEvent(event);
 }
 
+function openSection(sectionId: string) {
+  const nextHash = `#${sectionId}`;
+  if (window.location.hash === nextHash) {
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  } else {
+    window.location.hash = sectionId;
+  }
+}
+
 export default function StudentActionRouter() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -34,7 +43,7 @@ export default function StudentActionRouter() {
         if (text.includes("ödeme al") || text.includes("ödeme geçmişi")) {
           event.preventDefault();
           event.stopImmediatePropagation();
-          dispatchRoutedClick(quickAction);
+          openSection("odeme");
           return;
         }
 
@@ -58,8 +67,6 @@ export default function StudentActionRouter() {
           return;
         }
 
-        // Grup/şube, telafi, mesaj, çıktı ve sil/arşivle mevcut React
-        // işleyicilerini kullanır. Bu işlemlerde olaya müdahale etmiyoruz.
         return;
       }
 
@@ -71,14 +78,9 @@ export default function StudentActionRouter() {
       const href = alertAction instanceof HTMLAnchorElement ? alertAction.getAttribute("href") || "" : "";
 
       if (href === "#odeme" || cardText.includes("ödeme")) {
-        const paymentTrigger = Array.from(
-          document.querySelectorAll<HTMLElement>(".fileCommandActions button, .fileCommandActions a"),
-        ).find((item) => cleanText(item).includes("ödeme al"));
-        if (paymentTrigger) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          dispatchRoutedClick(paymentTrigger);
-        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openSection("odeme");
         return;
       }
 
