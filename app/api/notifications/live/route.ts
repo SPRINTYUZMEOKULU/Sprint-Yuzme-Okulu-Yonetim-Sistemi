@@ -23,37 +23,38 @@ export async function GET() {
 
     const supabase = await createClient();
     const manager = ["owner", "admin"].includes(String((profile as any).role || ""));
-    const recipientFilter = manager
-      ? `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`
-      : `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id}`;
+
+    // Null alıcılı yönetici bildirimlerini de okuyup aşağıda güvenli biçimde filtreliyoruz.
+    // Böylece pasif alma onayı, talebi oluşturan personele de özel olarak gösterilebilir.
+    const recipientFilter = `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
 
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("system_notifications")
-      .select("id,title,body,message,severity,priority,event_key,target_path,student_id,entity_id,metadata,created_at,is_read")
+      .select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id")
       .eq("organization_id", profile.organization_id)
       .eq("is_read", false)
       .gte("created_at", since)
       .or(recipientFilter)
       .order("created_at", { ascending: false })
-      .limit(12);
+      .limit(50);
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
     const rows = data || [];
-    const approvalIds = rows
+    const renewalApprovalIds = rows
       .filter((row: any) => row.event_key === "registration_custom_lesson_count_approved" && row.entity_id)
       .map((row: any) => row.entity_id as string);
 
     const approvalSource = new Map<string, string>();
-    if (approvalIds.length) {
+    if (renewalApprovalIds.length) {
       const { data: approvals } = await supabase
         .from("approval_requests")
         .select("id,metadata")
         .eq("organization_id", profile.organization_id)
-        .in("id", approvalIds);
+        .in("id", renewalApprovalIds);
 
       for (const approval of approvals || []) {
         const metadata = approval.metadata && typeof approval.metadata === "object" ? approval.metadata : {};
@@ -61,8 +62,36 @@ export async function GET() {
       }
     }
 
-    const notifications = rows.map((row: any) => {
+    const statusSourceIds = rows
+      .filter((row: any) => row.source_type === "student_status" && row.source_id)
+      .map((row: any) => String(row.source_id));
+
+    const statusRequests = new Map<string, any>();
+    if (statusSourceIds.length) {
+      const { data: statusRows } = await supabase
+        .from("student_status_change_requests")
+        .select("id,requested_by,request_type,requested_status,new_status,status,student_id")
+        .eq("organization_id", profile.organization_id)
+        .in("id", statusSourceIds);
+
+      for (const item of statusRows || []) statusRequests.set(String(item.id), item);
+    }
+
+    const visibleRows = rows.filter((row: any) => {
+      if (manager) return true;
+      if (row.recipient_profile_id === profile.id || row.recipient_user_id === profile.id) return true;
+
+      if (row.notification_type === "student_status_approved" && row.source_id) {
+        const statusRequest = statusRequests.get(String(row.source_id));
+        return statusRequest?.requested_by === profile.id;
+      }
+
+      return false;
+    });
+
+    const notifications = visibleRows.slice(0, 12).map((row: any) => {
       let targetPath = row.target_path || "/bildirimler";
+
       if (
         row.event_key === "registration_custom_lesson_count_approved" &&
         row.student_id &&
@@ -70,6 +99,14 @@ export async function GET() {
         approvalSource.get(row.entity_id) === "student_renewal_center"
       ) {
         targetPath = `/ogrenciler/${row.student_id}?renewalApproval=approved`;
+      }
+
+      if (row.notification_type === "student_status_approved" && row.source_id) {
+        const statusRequest = statusRequests.get(String(row.source_id));
+        const targetStatus = String(statusRequest?.requested_status || statusRequest?.new_status || "");
+        if (targetStatus === "passive" || statusRequest?.request_type === "deactivate") {
+          targetPath = `/onay-merkezi?status=approved&archiveRequestId=${encodeURIComponent(String(row.source_id))}`;
+        }
       }
 
       return {
