@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 const tabs = [
   { id: "genel-bilgiler", label: "Genel Bilgiler" },
@@ -35,49 +36,31 @@ function tabForHash(hash: string): TabId {
 
 function headingTab(element: HTMLElement): TabId | null {
   const text = (element.textContent || "").toLocaleUpperCase("tr-TR");
-
   if (text.includes("ANTRENÖR RAPORLARI")) return "ders-hareketleri";
   if (text.includes("KAYIT GEÇMİŞİ")) return "kurs-kaydi";
   if (text.includes("KAYIT DURUMU")) return "kurs-kaydi";
   if (text.includes("MESAJ GEÇMİŞİ")) return "mesajlar";
   if (text.includes("İŞLEM GEÇMİŞİ")) return "islem-gecmisi";
   if (text.includes("NOTLAR")) return "notlar";
-
   return null;
 }
 
 function tabForElement(element: HTMLElement): TabId | null {
   if (element.id && targetToTab[element.id]) return targetToTab[element.id];
-
-  const nestedIds = Array.from(element.querySelectorAll<HTMLElement>("[id]"))
-    .map((node) => node.id)
-    .filter(Boolean);
-
-  for (const id of nestedIds) {
-    if (targetToTab[id]) return targetToTab[id];
+  for (const node of Array.from(element.querySelectorAll<HTMLElement>("[id]"))) {
+    if (targetToTab[node.id]) return targetToTab[node.id];
   }
-
   return headingTab(element);
 }
 
 function classifySections(root: HTMLElement) {
   for (const element of Array.from(root.children) as HTMLElement[]) {
-    if (
-      element.matches(
-        ".studentHero,.smartAlertPanel,.metricGrid,.notice,.studentFileOperations,.studentFileTabs",
-      )
-    ) {
-      continue;
-    }
+    if (element.matches(".studentHero,.smartAlertPanel,.metricGrid,.notice,.studentFileOperations,.studentFileTabsHost")) continue;
 
-    const children = Array.from(element.children).filter((child): child is HTMLElement =>
-      child instanceof HTMLElement,
-    );
-
+    const children = Array.from(element.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
     const childTabs = children
       .map((child) => ({ child, tab: tabForElement(child) }))
       .filter((item): item is { child: HTMLElement; tab: TabId } => Boolean(item.tab));
-
     const uniqueTabs = new Set(childTabs.map((item) => item.tab));
 
     if (childTabs.length > 1 && uniqueTabs.size > 1) {
@@ -93,50 +76,61 @@ function classifySections(root: HTMLElement) {
 
 function applyVisibility(root: HTMLElement, tab: TabId) {
   root.dataset.activeTab = tab;
-
-  for (const element of Array.from(
-    root.querySelectorAll<HTMLElement>("[data-file-tab]"),
-  )) {
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>("[data-file-tab]"))) {
     element.hidden = element.dataset.fileTab !== tab;
   }
-
-  for (const container of Array.from(
-    root.querySelectorAll<HTMLElement>("[data-file-tab-container]"),
-  )) {
-    const visibleChild = Array.from(
-      container.querySelectorAll<HTMLElement>(":scope > [data-file-tab]"),
-    ).some((child) => !child.hidden);
+  for (const container of Array.from(root.querySelectorAll<HTMLElement>("[data-file-tab-container]"))) {
+    const visibleChild = Array.from(container.querySelectorAll<HTMLElement>(":scope > [data-file-tab]")).some((child) => !child.hidden);
     container.hidden = !visibleChild;
   }
 }
 
 export default function StudentFileTabs() {
   const [activeTab, setActiveTab] = useState<TabId>("genel-bilgiler");
-  const navRef = useRef<HTMLElement>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const nav = useMemo(() => (
+    <nav className="studentFileTabs" aria-label="Öğrenci dosyası bölümleri">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className={activeTab === tab.id ? "active" : ""}
+          aria-current={activeTab === tab.id ? "page" : undefined}
+          onClick={() => {
+            const root = document.querySelector<HTMLElement>(".studentFilePage");
+            setActiveTab(tab.id);
+            if (root) applyVisibility(root, tab.id);
+            window.history.replaceState(null, "", `#${tab.id}`);
+          }}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+  ), [activeTab]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".studentFilePage");
-    const nav = navRef.current;
-    if (!root || !nav) return;
+    if (!root) return;
 
     classifySections(root);
     root.classList.add("tabsReady");
 
+    const portalHost = document.createElement("div");
+    portalHost.className = "studentFileTabsHost";
     const alerts = root.querySelector(".smartAlertPanel");
-    if (alerts) alerts.insertAdjacentElement("afterend", nav);
-    else root.querySelector(".studentHero")?.insertAdjacentElement("afterend", nav);
+    if (alerts) alerts.insertAdjacentElement("afterend", portalHost);
+    else root.querySelector(".studentHero")?.insertAdjacentElement("afterend", portalHost);
+    if (!portalHost.parentElement) root.prepend(portalHost);
+    setHost(portalHost);
 
     const applyTab = (tab: TabId, scrollTarget?: string) => {
       setActiveTab(tab);
       applyVisibility(root, tab);
-
       if (scrollTarget) {
-        window.requestAnimationFrame(() =>
-          document.getElementById(scrollTarget)?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          }),
-        );
+        window.requestAnimationFrame(() => {
+          document.getElementById(scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       }
     };
 
@@ -145,58 +139,22 @@ export default function StudentFileTabs() {
       applyTab(tabForHash(window.location.hash), target || undefined);
     };
 
-    const onClick = (event: MouseEvent) => {
-      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
-        'a[href^="#"]',
-      );
-      if (!link || !root.contains(link)) return;
-
-      const target = link.getAttribute("href")?.slice(1);
-      if (!target || !targetToTab[target]) return;
-
-      event.preventDefault();
-      window.history.replaceState(null, "", `#${target}`);
-      applyTab(targetToTab[target], target);
-    };
-
     syncFromHash();
     window.addEventListener("hashchange", syncFromHash);
-    root.addEventListener("click", onClick);
 
     return () => {
+      window.removeEventListener("hashchange", syncFromHash);
       root.classList.remove("tabsReady");
       delete root.dataset.activeTab;
-      window.removeEventListener("hashchange", syncFromHash);
-      root.removeEventListener("click", onClick);
-
-      for (const element of Array.from(
-        root.querySelectorAll<HTMLElement>("[data-file-tab],[data-file-tab-container]"),
-      )) {
+      for (const element of Array.from(root.querySelectorAll<HTMLElement>("[data-file-tab],[data-file-tab-container]"))) {
         element.hidden = false;
+        delete element.dataset.fileTab;
+        delete element.dataset.fileTabContainer;
       }
+      portalHost.remove();
+      setHost(null);
     };
   }, []);
 
-  const selectTab = (tab: TabId) => {
-    const root = document.querySelector<HTMLElement>(".studentFilePage");
-    setActiveTab(tab);
-    if (root) applyVisibility(root, tab);
-    window.history.replaceState(null, "", `#${tab}`);
-  };
-
-  return (
-    <nav ref={navRef} className="studentFileTabs" aria-label="Öğrenci dosyası bölümleri">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={activeTab === tab.id ? "active" : ""}
-          aria-current={activeTab === tab.id ? "page" : undefined}
-          onClick={() => selectTab(tab.id)}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </nav>
-  );
+  return host ? createPortal(nav, host) : null;
 }
