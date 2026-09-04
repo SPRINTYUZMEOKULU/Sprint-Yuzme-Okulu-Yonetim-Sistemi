@@ -38,12 +38,42 @@ function openSection(sectionId: string) {
   }
 }
 
+function isRenewalAction(element: HTMLElement | null) {
+  if (!element) return false;
+  const text = cleanText(element);
+  return (
+    element.dataset.renewalButton === "1" ||
+    text.includes("kayıt yenile") ||
+    text.includes("onay bekliyor") ||
+    text.includes("onaylandı · tamamla")
+  );
+}
+
 function openRenewal() {
   window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
 }
 
 export default function StudentActionRouter() {
   useEffect(() => {
+    let renewalTapAt = 0;
+
+    /*
+     * iOS/Safari'de sonradan DOM'a eklenen Kayıt Yenile butonunun click olayı
+     * bazı durumlarda document click zincirine ulaşmadan kaybolabiliyor.
+     * Pointer-up aşamasında doğrudan yenileme merkezini açarak click bağımlılığını
+     * kaldırıyoruz. Sonraki click olayı kısa süreli kilitle tekrar açamaz.
+     */
+    const onPointerUp = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      const quickAction = target?.closest<HTMLElement>(
+        ".fileCommandActions button, .fileCommandActions a, [data-renewal-button='1']",
+      );
+      if (!isRenewalAction(quickAction || null)) return;
+
+      renewalTapAt = Date.now();
+      openRenewal();
+    };
+
     const onClick = (event: MouseEvent) => {
       const routedEvent = event as RoutedMouseEvent;
       if (routedEvent.__sprintRouted) return;
@@ -73,32 +103,17 @@ export default function StudentActionRouter() {
           return;
         }
 
-        /*
-         * Bilgileri Düzenle işlemini StudentProfileCenter'ın kendi
-         * React/delegated click işleyicisine bırakıyoruz. Önceden burada
-         * data-open-profile-center='1' aranıyordu; özet butonunda attribute
-         * değer taşımadığı için tıklama yutuluyor ve panel açılmıyordu.
-         */
         if (text.includes("bilgileri düzenle")) {
           return;
         }
 
-        /*
-         * Kayıt Yenile butonu DOM'a sonradan eklendiği için mobil Safari'de
-         * click sırası zaman zaman yenileme merkezinin listener'ına ulaşmıyor.
-         * Eğer kendi listener'ı olayı zaten işlediyse defaultPrevented true
-         * olur ve ikinci kez açmayız. İşlenmediyse merkezi custom event ile
-         * yenileme merkezini doğrudan açarız.
-         */
-        if (
-          quickAction.dataset.renewalButton === "1" ||
-          text.includes("kayıt yenile") ||
-          text.includes("onay bekliyor") ||
-          text.includes("onaylandı · tamamla")
-        ) {
-          if (event.defaultPrevented) return;
+        if (isRenewalAction(quickAction)) {
           event.preventDefault();
           event.stopImmediatePropagation();
+
+          // Pointer-up aynı dokunmayı zaten açtıysa ikinci kez fetch/modal açma.
+          if (Date.now() - renewalTapAt < 1200) return;
+
           openRenewal();
           return;
         }
@@ -132,10 +147,6 @@ export default function StudentActionRouter() {
         return;
       }
 
-      /*
-       * Telefon / iletişim uyarısını StudentProfileCenter doğrudan yönetir.
-       * Böylece hızlı buton ile akıllı uyarı aynı bilgi düzenleme panelini açar.
-       */
       if (
         href === "#genel-bilgiler" ||
         cardText.includes("telefon") ||
@@ -155,8 +166,12 @@ export default function StudentActionRouter() {
       }
     };
 
+    document.addEventListener("pointerup", onPointerUp, true);
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("click", onClick, true);
+    };
   }, []);
 
   return null;
