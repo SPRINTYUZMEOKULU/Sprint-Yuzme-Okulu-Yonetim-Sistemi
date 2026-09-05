@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import LessonOperationsClient from "./lesson-operations-client";
+import OperationSelectionHydrator from "./operation-selection-hydrator";
 import "../dashboard.css";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,8 @@ export default async function LessonOperationsPage({
   const selectedGroupIds = Array.from(new Set(selectedMemberships.map((row: any) => row.group_id).filter(Boolean)));
   const groupMap = new Map((groupsResult.data || []).map((row: any) => [row.id, row]));
   const selectedGroupNames = selectedGroupIds.map((id) => groupMap.get(id)?.name).filter(Boolean);
+  const initialGroupId = selectedGroupIds.length === 1 ? String(selectedGroupIds[0]) : "";
+  const initialBranchId = initialGroupId ? String(groupMap.get(initialGroupId)?.branch_id || "") : "";
 
   return (
     <main style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
@@ -125,6 +128,9 @@ export default async function LessonOperationsPage({
           schedules={schedulesResult.data || []}
           memberCounts={memberCounts}
         />
+        {initialBranchId && initialGroupId ? (
+          <OperationSelectionHydrator branchId={initialBranchId} groupId={initialGroupId} />
+        ) : null}
       </div>
     </main>
   );
