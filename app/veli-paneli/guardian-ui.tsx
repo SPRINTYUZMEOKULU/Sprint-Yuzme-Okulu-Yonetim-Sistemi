@@ -33,6 +33,7 @@ export function GuardianHeader({
           <Link href={`/veli-mesajlar${query}`}>Mesajlar</Link>
           <Link href={`/veli-duyurular${query}`}>Duyurular</Link>
           <Link href={`/veli-belgeler${query}`}>Belgeler</Link>
+          <Link href={`/veli-talepleri${query}`}>Talep Oluştur</Link>
         </nav>
         {students.length > 1 ? (
           <div className="childSwitch">
