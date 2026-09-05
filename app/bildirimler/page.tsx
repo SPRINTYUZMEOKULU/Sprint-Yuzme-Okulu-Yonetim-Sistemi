@@ -171,6 +171,7 @@ export default async function BildirimlerPage() {
           push_requested,
           push_sent,
           push_sent_at,
+          metadata,
           created_at
         `
       )
@@ -193,7 +194,14 @@ export default async function BildirimlerPage() {
   ]);
 
   const notifications =
-    (notificationsResult.data as NotificationItem[] | null) ?? [];
+    ((notificationsResult.data as (NotificationItem & { metadata?: { reminder_at?: string } | null })[] | null) ?? [])
+      .filter((item) => {
+        if (item.notification_type !== "registration_note_reminder") return true;
+        const reminderAt = item.metadata?.reminder_at;
+        if (!reminderAt) return true;
+        const time = new Date(reminderAt).getTime();
+        return !Number.isFinite(time) || time <= Date.now();
+      });
 
   const devices =
     (subscriptionsResult.data as DeviceRow[] | null) ?? [];

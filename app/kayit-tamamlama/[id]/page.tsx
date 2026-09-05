@@ -78,6 +78,7 @@ export default async function RegistrationCompletionPage({
         swimming_level,
         status,
         registration_note,
+        birth_date,
         created_at
       `)
       .eq(
@@ -548,6 +549,17 @@ export default async function RegistrationCompletionPage({
 
             {student.student_number ||
               "Öğrenci numarası kayıt tamamlandığında hazır olacak"}
+
+            {student.birth_date ? (
+              <>
+                {" · Doğum Tarihi: "}
+                {new Intl.DateTimeFormat("tr-TR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                }).format(new Date(`${student.birth_date}T12:00:00`))}
+              </>
+            ) : null}
           </p>
 
         </div>

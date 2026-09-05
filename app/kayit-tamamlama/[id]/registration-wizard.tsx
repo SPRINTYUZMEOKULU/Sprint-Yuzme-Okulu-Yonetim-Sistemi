@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   addRegistrationNote,
@@ -87,6 +88,8 @@ type Student = {
   status?: string | null;
 
   registration_note?: string | null;
+
+  birth_date?: string | null;
 
   created_at?: string | null;
 };
@@ -316,6 +319,19 @@ function formatDate(
         "long",
     }
   ).format(date);
+}
+
+function formatNumericDate(value?: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatDateTime(
@@ -662,6 +678,23 @@ function Icon({
     >
       {icons[name]}
     </svg>
+  );
+}
+
+function SaveDraftButton({ className = "saveDraftButton" }: { className?: string }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      formAction={saveRegistrationDraft}
+      className={className}
+      disabled={pending}
+      aria-busy={pending}
+    >
+      <Icon name={pending ? "clock" : "save"} size={18} />
+      {pending ? "Kaydediliyor…" : "Kaydet"}
+    </button>
   );
 }
 
@@ -1891,20 +1924,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
 
         </div>
 
-        <button
-          type="submit"
-          formAction={
-            saveRegistrationDraft
-          }
-          className="saveDraftButton"
-        >
-          <Icon
-            name="save"
-            size={18}
-          />
-
-          Kaydet
-        </button>
+        <SaveDraftButton />
 
       </div>
 
@@ -1945,6 +1965,24 @@ _Antalya'nın En Köklü Yüzme Okulu_`
         </div>
 
         <div className="formGrid">
+
+          <label>
+
+            <span>
+              Doğum Tarihi
+            </span>
+
+            <input
+              value={formatNumericDate(student.birth_date)}
+              readOnly
+              aria-label="Ön kayıt formundan gelen doğum tarihi"
+            />
+
+            <small className="fieldHint">
+              Ön kayıt formundan otomatik aktarılmıştır.
+            </small>
+
+          </label>
 
           <label>
 
@@ -2232,8 +2270,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
 
             <input
               value={
-                endDate ||
-                ""
+                formatNumericDate(endDate)
               }
               readOnly
             />
@@ -2434,10 +2471,10 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           <Link
             className="sectionLink"
             href={
-              `/odemeler?student=${student.id}`
+              `/odemeler?student=${student.id}&action=payment`
             }
           >
-            Ödemelere Git
+            Ödeme Al / Plan Hazırla
 
             <Icon
               name="arrow"

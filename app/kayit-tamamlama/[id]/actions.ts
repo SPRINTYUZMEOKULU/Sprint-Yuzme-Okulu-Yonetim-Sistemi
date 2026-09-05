@@ -555,9 +555,11 @@ export async function addRegistrationNote(
   if (
     reminderLocal
   ) {
+    /* datetime-local saat dilimi taşımaz. SprintOS Türkiye'de
+     * çalıştığı için girilen saati UTC+03:00 olarak saklıyoruz. */
     const parsed =
       new Date(
-        reminderLocal
+        `${reminderLocal}:00+03:00`
       );
 
     if (
@@ -587,6 +589,7 @@ export async function addRegistrationNote(
    */
 
   const {
+    data: noteLog,
     error:
       noteError,
   } =
@@ -629,7 +632,9 @@ export async function addRegistrationNote(
 
         reminder_completed:
           false,
-      });
+      })
+      .select("id")
+      .single();
 
   if (
     noteError
@@ -653,50 +658,37 @@ export async function addRegistrationNote(
   if (
     reminderAt
   ) {
-    await supabase
-      .from(
-        "system_notifications"
-      )
-      .insert({
-        organization_id:
-          profile.organization_id,
+    const reminderBody =
+      `${student.first_name} ${student.last_name}: ${note}`;
 
-        recipient_profile_id:
-          profile.id,
+    const notificationResult = await createNotification({
+      organizationId: profile.organization_id!,
+      category: "students",
+      eventKey: "registration_note_reminder",
+      notificationType: "registration_note_reminder",
+      title: "Öğrenci notu hatırlatması",
+      body: reminderBody,
+      message: reminderBody,
+      severity: "warning",
+      priority: "normal",
+      studentId,
+      sourceType: "registration_note",
+      sourceId: noteLog?.id || studentId,
+      entityType: "student_activity_log",
+      entityId: noteLog?.id || null,
+      targetPath: `/kayit-tamamlama/${studentId}#notlar`,
+      recipientProfileIds: [profile.id],
+      push: false,
+      metadata: {
+        reminder_at: reminderAt,
+        student_id: studentId,
+        note,
+      },
+    });
 
-        notification_type:
-          "registration_note_reminder",
-
-        title:
-          "Öğrenci notu hatırlatması",
-
-        body:
-          `${student.first_name} ${student.last_name}: ${note}`,
-
-        priority:
-          "normal",
-
-        student_id:
-          studentId,
-
-        source_type:
-          "registration_note",
-
-        source_id:
-          studentId,
-
-        target_path:
-          `/kayit-tamamlama/${studentId}#notlar`,
-
-        push_required:
-          false,
-
-        /*
-         * Bildirimi burada hemen okunmamış şekilde tutuyoruz.
-         * Zaman bazlı otomatik görünürlük/uyarı motorunu
-         * Bildirim-Uyarı Merkezi entegrasyonunda tamamlayacağız.
-         */
-      });
+    if (!notificationResult.ok) {
+      console.error("Öğrenci notu hatırlatması oluşturulamadı:", notificationResult.message);
+    }
   }
 
   revalidatePath(

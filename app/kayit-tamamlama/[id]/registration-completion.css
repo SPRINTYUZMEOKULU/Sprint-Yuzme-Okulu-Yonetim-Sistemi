@@ -333,6 +333,18 @@
   transform: translateY(1px);
 }
 
+.saveDraftButton:disabled {
+  opacity: 0.78;
+  cursor: wait;
+  transform: none;
+}
+
+.fieldHint {
+  color: #78899f;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 /* =========================================================
    KARTLAR
    ========================================================= */
@@ -1583,6 +1595,7 @@
     top: 7px;
 
     align-items: stretch;
+    flex-direction: column;
   }
 
   .commandTabs {
@@ -1600,7 +1613,9 @@
   }
 
   .saveDraftButton {
+    width: 100%;
     flex: 0 0 auto;
+    order: -1;
   }
 
   .paymentOverview,

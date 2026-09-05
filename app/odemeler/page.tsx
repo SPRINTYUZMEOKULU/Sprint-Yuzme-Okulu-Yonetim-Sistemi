@@ -71,7 +71,12 @@ function isAdultCourse(value: unknown) {
   );
 }
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const query = await searchParams;
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -735,6 +740,8 @@ export default async function PaymentsPage() {
         students={preparedStudents}
         payments={validPayments}
         currentProfileId={profile.id}
+        initialStudentId={query.student || null}
+        initialAction={query.action === "due" ? "due" : query.action === "payment" ? "payment" : null}
       />
     </main>
   );

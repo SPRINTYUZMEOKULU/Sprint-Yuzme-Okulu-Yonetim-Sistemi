@@ -29,15 +29,31 @@ export async function GET() {
     const recipientFilter = `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
 
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from("system_notifications")
-      .select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id")
-      .eq("organization_id", profile.organization_id)
-      .eq("is_read", false)
-      .gte("created_at", since)
-      .or(recipientFilter)
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const nowIso = new Date().toISOString();
+    const [notificationResult, dueReminderResult] = await Promise.all([
+      supabase
+        .from("system_notifications")
+        .select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id")
+        .eq("organization_id", profile.organization_id)
+        .eq("is_read", false)
+        .or(`created_at.gte.${since},notification_type.eq.registration_note_reminder`)
+        .or(recipientFilter)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("student_activity_logs")
+        .select("id,student_id,title,description,reminder_at,performed_by")
+        .eq("organization_id", profile.organization_id)
+        .eq("activity_type", "registration_note")
+        .eq("reminder_completed", false)
+        .eq("performed_by", profile.id)
+        .not("reminder_at", "is", null)
+        .lte("reminder_at", nowIso)
+        .order("reminder_at", { ascending: true })
+        .limit(20),
+    ]);
+
+    const { data, error } = notificationResult;
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -77,7 +93,14 @@ export async function GET() {
       for (const item of statusRows || []) statusRequests.set(String(item.id), item);
     }
 
+    const now = Date.now();
     const visibleRows = rows.filter((row: any) => {
+      if (row.notification_type === "registration_note_reminder") {
+        const reminderAt = row.metadata?.reminder_at;
+        const reminderTime = reminderAt ? new Date(reminderAt).getTime() : Number.NaN;
+        if (Number.isFinite(reminderTime) && reminderTime > now) return false;
+      }
+
       if (manager) return true;
       if (row.recipient_profile_id === profile.id || row.recipient_user_id === profile.id) return true;
 
@@ -89,7 +112,7 @@ export async function GET() {
       return false;
     });
 
-    const notifications = visibleRows.slice(0, 12).map((row: any) => {
+    const scheduledNotifications = visibleRows.map((row: any) => {
       let targetPath = row.target_path || "/bildirimler";
 
       if (
@@ -121,6 +144,27 @@ export async function GET() {
       };
     });
 
+    const scheduledSourceIds = new Set(
+      visibleRows
+        .filter((row: any) => row.source_type === "registration_note" && row.source_id)
+        .map((row: any) => String(row.source_id)),
+    );
+
+    const fallbackReminders = (dueReminderResult.data || [])
+      .filter((item: any) => !scheduledSourceIds.has(String(item.id)))
+      .map((item: any) => ({
+        id: `reminder:${item.id}`,
+        title: item.title || "Öğrenci notu hatırlatması",
+        body: item.description || "Takip zamanı gelen bir öğrenci notunuz var.",
+        severity: "warning",
+        priority: "normal",
+        eventKey: "registration_note_reminder",
+        targetPath: `/kayit-tamamlama/${item.student_id}#notlar`,
+        createdAt: item.reminder_at,
+      }));
+
+    const notifications = [...fallbackReminders, ...scheduledNotifications].slice(0, 12);
+
     return NextResponse.json({ ok: true, notifications });
   } catch (error) {
     return NextResponse.json(
@@ -140,6 +184,26 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
+
+    if (id.startsWith("reminder:")) {
+      const reminderId = id.slice("reminder:".length);
+      const { error } = await supabase
+        .from("student_activity_logs")
+        .update({
+          reminder_completed: true,
+          reminder_completed_at: new Date().toISOString(),
+        })
+        .eq("organization_id", profile.organization_id)
+        .eq("id", reminderId)
+        .eq("performed_by", profile.id);
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
     const { error } = await supabase
       .from("system_notifications")
       .update({ is_read: true, read_at: new Date().toISOString() })

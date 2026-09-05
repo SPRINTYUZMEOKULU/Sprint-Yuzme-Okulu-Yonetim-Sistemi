@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -82,6 +82,8 @@ type Props = {
   students: PaymentStudent[];
   payments: PaymentRecord[];
   currentProfileId: string;
+  initialStudentId?: string | null;
+  initialAction?: "payment" | "due" | null;
 };
 
 type QuickFilter =
@@ -415,8 +417,11 @@ function buildMessage(
 export default function PaymentsClient({
   students,
   payments,
+  initialStudentId,
+  initialAction,
 }: Props) {
   const router = useRouter();
+  const initialActionOpened = useRef(false);
 
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] =
@@ -827,6 +832,22 @@ export default function PaymentsClient({
     setDueDateValue(student.due_date || "");
     setDueDateMessage("");
   }
+
+  useEffect(() => {
+    if (!initialStudentId || !initialAction || initialActionOpened.current) return;
+
+    const student = students.find((item) => item.id === initialStudentId);
+    if (!student) return;
+
+    initialActionOpened.current = true;
+    setSearch(studentName(student));
+    if (initialAction === "due") {
+      openDueDateModal(student);
+    } else {
+      openPaymentModal(student);
+    }
+    router.replace("/odemeler", { scroll: false });
+  }, [initialAction, initialStudentId, router, students]);
 
   function savePaymentDueDate() {
     if (!dueDateStudent?.enrollment_id) {
