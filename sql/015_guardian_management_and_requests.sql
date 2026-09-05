@@ -53,9 +53,9 @@ drop policy if exists "staff manage guardian requests" on public.guardian_reques
 create policy "staff manage guardian requests" on public.guardian_requests
 for all to authenticated
 using (
-  organization_id = public.current_organization_id()
+  organization_id = public.current_user_organization_id()
   and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting','coach')
 )
-with check (organization_id = public.current_organization_id());
+with check (organization_id = public.current_user_organization_id());
 
 commit;
