@@ -9,6 +9,11 @@ import "./registration-completion.css";
 
 export const dynamic = "force-dynamic";
 
+function formatBirthDate(value?: string | null) {
+  if (!value) return "Doğum tarihi girilmemiş";
+  return new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" }).format(new Date(`${value}T12:00:00Z`));
+}
+
 export default async function RegistrationCompletionPage({
   params,
   searchParams,
@@ -65,6 +70,7 @@ export default async function RegistrationCompletionPage({
         student_number,
         first_name,
         last_name,
+        birth_date,
         phone,
         email,
         guardian_name,
@@ -550,6 +556,11 @@ export default async function RegistrationCompletionPage({
               "Öğrenci numarası kayıt tamamlandığında hazır olacak"}
           </p>
 
+          <div className="headerBirthDate">
+            <span>Doğum Tarihi</span>
+            <strong>{formatBirthDate(student.birth_date)}</strong>
+          </div>
+
         </div>
 
         {/*
@@ -569,7 +580,7 @@ export default async function RegistrationCompletionPage({
               `/on-kayitlar?student=${student.id}`
             }
           >
-            Ön Kaydı Gör
+            Orijinal Ön Kayıt Formunu Gör
           </Link>
 
           <Link href="/on-kayitlar">
