@@ -27,9 +27,9 @@ export default function WhatsAppGroupPolicy() {
     setHost(document.querySelector("#whatsapp"));
   }, []);
 
-  if (!host) return null;
-
   function openGroupInvite() {
+    if (!host) return;
+
     const recipient = getRecipientFromPrimaryLink(host);
 
     if (!recipient) {
@@ -45,6 +45,8 @@ export default function WhatsAppGroupPolicy() {
 
     setOpened(true);
   }
+
+  if (!host) return null;
 
   return createPortal(
     <div className="whatsappGroupInviteCard">
