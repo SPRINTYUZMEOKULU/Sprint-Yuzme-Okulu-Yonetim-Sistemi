@@ -174,14 +174,15 @@ export default function GroupEditor({
           <div className="groupEditorBody">
             <div className="editorGrid">
               <label className="editorWide">
-                Eğitim grubu adı
+                Kısa grup adı
 
                 <input
                   name="name"
                   defaultValue={group.name}
                   required
-                  placeholder="Örn. Çocuk 1"
+                  placeholder="Örn. Çocuk, Yetişkin veya Takım Altyapı"
                 />
+                <small className="groupNameHelp">Şube, gün ve saat bilgisini grup adına tekrar yazmayın. Bunlar aşağıdaki alanlardan alınır ve ön kayıt formunda otomatik, düzenli biçimde birleştirilir.</small>
               </label>
 
               <label>
@@ -520,6 +521,17 @@ export default function GroupEditor({
           background: #fbfcff;
           color: #13233f;
           font: inherit;
+        }
+
+        .groupNameHelp {
+          display: block;
+          margin-top: 7px;
+          padding: 9px 10px;
+          border-radius: 9px;
+          background: #eef6ff;
+          color: #315f94;
+          font-size: 11px;
+          line-height: 1.45;
         }
 
         .editorGrid input,
