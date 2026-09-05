@@ -64,6 +64,7 @@ type Student = {
 
   first_name: string;
   last_name: string;
+  birth_date?: string | null;
 
   phone?: string | null;
   email?: string | null;
@@ -271,6 +272,19 @@ const dayNames: Record<
 
   6: "Cumartesi",
 };
+
+function groupOptionLabel(group: Group) {
+  const shortName = group.name
+    .split("·")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !/\d{1,2}:\d{2}/.test(part) && !/(pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar)/i.test(part))
+    .at(-1) || group.course_type;
+  const groupDays = Array.from(new Set(group.schedules.map((item) => dayNames[item.weekday]))).filter(Boolean).join(" – ");
+  const first = group.schedules[0];
+  const time = first ? `${String(first.start_time).slice(0, 5)}–${String(first.end_time).slice(0, 5)}` : "Saat tanımsız";
+  return `${groupDays || "Gün tanımsız"} · ${time} · ${shortName}`;
+}
 
 /*
  * Şubenin özel konumu yoksa
@@ -1014,6 +1028,11 @@ export default function RegistrationWizard({
   ] =
     useState(false);
 
+  const [missingRequirements, setMissingRequirements] = useState<Array<{
+    label: string;
+    section: "plan" | "payment" | "consent" | "message";
+  }>>([]);
+
   const initialWhatsappOpened =
     draftUsesCurrentRegistrationTemplate &&
     draftData.whatsapp_opened === true;
@@ -1741,6 +1760,27 @@ _Antalya'nın En Köklü Yüzme Okulu_`
     paymentStatus !==
       "Ödendi";
 
+  function validateFinalRegistration() {
+    const missing: Array<{
+      label: string;
+      section: "plan" | "payment" | "consent" | "message";
+    }> = [];
+    if (!branchId) missing.push({ label: "Şube seçimi", section: "plan" });
+    if (!groupId) missing.push({ label: "Grup seçimi", section: "plan" });
+    if (!packageId) missing.push({ label: "Paket seçimi", section: "plan" });
+    if (!startDate) missing.push({ label: "Başlangıç tarihi", section: "plan" });
+    if (!endDate) missing.push({ label: "Planlanan bitiş tarihi", section: "plan" });
+    if (!weekdays.length) missing.push({ label: "Öğrencinin katılacağı ders günleri", section: "plan" });
+    if (!paymentDueDate) missing.push({ label: "Ödeme vade tarihi", section: "payment" });
+    if (!consent?.rules_accepted) missing.push({ label: "Ön kayıt kurallar onayı", section: "consent" });
+    if (!messageSent) missing.push({ label: "WhatsApp bilgilendirme gönderim teyidi", section: "message" });
+    setMissingRequirements(missing);
+    if (!missing.length) return true;
+    const refs = { plan: planRef, payment: paymentRef, consent: consentRef, message: messageRef };
+    window.setTimeout(() => refs[missing[0].section].current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+    return false;
+  }
+
   /*
    * ==========================================================
    * RENDER
@@ -1753,11 +1793,16 @@ _Antalya'nın En Köklü Yüzme Okulu_`
         completeRegistration
       }
       className="registrationShell"
+      noValidate
       onSubmit={(event) => {
         const nativeEvent = event.nativeEvent as SubmitEvent;
         const submitter = nativeEvent.submitter as HTMLButtonElement | null;
 
         if (submitter?.dataset.finalRegistration === "true") {
+          if (!validateFinalRegistration()) {
+            event.preventDefault();
+            return;
+          }
           setFinalSubmitting(true);
         }
       }}
@@ -1917,7 +1962,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
       <section
         ref={planRef}
         id="kayit-plani"
-        className="wizardCard planCard"
+        className={`wizardCard planCard ${missingRequirements.some((item) => item.section === "plan") ? "sectionMissing" : ""}`}
       >
 
         <div className="sectionHeading">
@@ -2027,7 +2072,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
                       group.id
                     }
                   >
-                    {group.name}
+                    {groupOptionLabel(group)}
                   </option>
                 )
               )}
@@ -2406,7 +2451,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
       <section
         ref={paymentRef}
         id="odeme"
-        className="wizardCard paymentCard"
+        className={`wizardCard paymentCard ${missingRequirements.some((item) => item.section === "payment") ? "sectionMissing" : ""}`}
       >
 
         <div className="sectionHeading">
@@ -2633,7 +2678,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
       <section
         ref={consentRef}
         id="onaylar"
-        className="wizardCard"
+        className={`wizardCard ${missingRequirements.some((item) => item.section === "consent") ? "sectionMissing" : ""}`}
       >
 
         <div className="sectionHeading">
@@ -3084,7 +3129,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
       <section
         ref={messageRef}
         id="whatsapp"
-        className="wizardCard messageCard"
+        className={`wizardCard messageCard ${missingRequirements.some((item) => item.section === "message") ? "sectionMissing" : ""}`}
       >
 
         <div className="sectionHeading">
@@ -3326,6 +3371,13 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           </div>
         </div>
 
+        {missingRequirements.length ? (
+          <div className="missingRequirements" role="alert">
+            <strong>Kayıt tamamlanamadı — aşağıdaki zorunlu alanları doldurunuz:</strong>
+            <ul>{missingRequirements.map((item) => <li key={`${item.section}-${item.label}`}>{item.label}</li>)}</ul>
+          </div>
+        ) : null}
+
         {finalSubmitting ? (
           <div
             role="status"
@@ -3379,7 +3431,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               finalSubmitting ||
               (requiresManagerApproval && !customApprovalApproved
                 ? customApprovalPending
-                : !consent?.rules_accepted || !messageSent)
+                : false)
             }
             data-final-registration={
               !requiresManagerApproval || customApprovalApproved
@@ -3401,9 +3453,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
                   ? customApprovalRejected
                     ? "Yeniden Yönetici Onayına Gönder"
                     : "Yönetici Onayına Gönder"
-                  : !messageSent
-                    ? "Önce WhatsApp Mesajını Gönderin"
-                    : "Kaydı Tamamla ve Öğrenciye Aktar"}
+                  : "Kaydı Tamamla ve Öğrenciye Aktar"}
 
           </button>
 
