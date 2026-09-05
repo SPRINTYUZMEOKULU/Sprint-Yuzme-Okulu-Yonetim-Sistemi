@@ -4,7 +4,7 @@ import StudentFileTabs from "./student-file-tabs";
 import StudentProfileCenter from "./student-profile-center";
 import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
-import StudentPaymentCenter from "./student-payment-center";
+import StudentFinanceCenter from "./student-finance-center";
 import StudentActionRouter from "./student-action-router";
 import StudentActionFeedback from "./student-action-feedback";
 import StudentHeroEnhancer from "./student-hero-enhancer";
@@ -13,6 +13,7 @@ import RenewalMobilePolish from "./renewal-mobile-polish";
 import AdminCorrectionLauncher from "./admin-correction-launcher";
 import "./student-file-tabs.css";
 import "./student-crm-polish.css";
+import "./student-finance-center.css";
 
 export default async function StudentFileLayout({
   children,
@@ -39,7 +40,7 @@ export default async function StudentFileLayout({
       <StudentProfileCenter />
       <GeneralInfoSummary />
       <StudentRenewalCenter />
-      <StudentPaymentCenter />
+      <StudentFinanceCenter />
       <StudentActionRouter />
       <StudentActionFeedback />
       <StudentHeroEnhancer />
