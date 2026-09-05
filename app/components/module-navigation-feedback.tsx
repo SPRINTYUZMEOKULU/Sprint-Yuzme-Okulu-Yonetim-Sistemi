@@ -18,6 +18,7 @@ const labels: Record<string, string> = {
   "/bildirimler": "Bildirimler",
   "/uyarilar": "Akıllı Uyarılar",
   "/onay-merkezi": "Onay Merkezi",
+  "/denetim-merkezi": "Değişiklik ve Denetim Merkezi",
   "/kullanicilar-ve-yetkiler": "Kullanıcılar ve Yetkiler",
   "/raporlar": "Raporlar",
   "/ayarlar": "Ayarlar",
@@ -33,7 +34,14 @@ export default function ModuleNavigationFeedback() {
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
-      if (anchor.target === "_blank" || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (
+        anchor.target === "_blank" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
 
       let url: URL;
       try {
@@ -43,7 +51,10 @@ export default function ModuleNavigationFeedback() {
       }
 
       if (url.origin !== window.location.origin) return;
-      const match = Object.entries(labels).find(([path]) => url.pathname === path || url.pathname.startsWith(`${path}/`));
+      const match = Object.entries(labels).find(
+        ([path]) =>
+          url.pathname === path || url.pathname.startsWith(`${path}/`),
+      );
       if (!match) return;
 
       setLabel(`${match[1]} açılıyor…`);
