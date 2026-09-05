@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { createNotification } from "@/lib/notifications/create-notification";
 
 const staffRoles = [
   "owner",
@@ -70,6 +71,12 @@ function studentFullName(student: {
     .trim();
 }
 
+function reminderIso(value: string) {
+  if (!value) return null;
+  const parsed = new Date(`${value}:00+03:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 /* =========================================================
    NOT EKLE
    ========================================================= */
@@ -104,7 +111,7 @@ export async function addStudentNote(
 
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data: createdNote, error } = await supabase
     .from("student_notes")
     .insert({
       organization_id:
@@ -128,13 +135,59 @@ export async function addStudentNote(
         formData.get(
           "is_guardian_visible"
         ) === "on",
-    });
+    })
+    .select("id")
+    .single();
 
   if (error) {
     goError(
       studentId,
       error.message
     );
+  }
+
+  const reminderAt = reminderIso(getText(formData.get("reminder_at"), 30));
+
+  if (reminderAt && createdNote?.id) {
+    const { data: reminderLog } = await supabase
+      .from("student_activity_logs")
+      .insert({
+        organization_id: profile.organization_id,
+        student_id: studentId,
+        activity_type: "student_note_reminder",
+        title: "Öğrenci notu hatırlatması",
+        description: body,
+        source_type: "student_note",
+        source_id: createdNote.id,
+        performed_by: profile.id,
+        performed_at: new Date().toISOString(),
+        reminder_at: reminderAt,
+        reminder_completed: false,
+      })
+      .select("id")
+      .single();
+
+    if (reminderLog?.id) {
+      await createNotification({
+        organizationId: profile.organization_id!,
+        category: "students",
+        eventKey: "student_note_reminder",
+        notificationType: "student_note_reminder",
+        title: "Öğrenci notu hatırlatması",
+        body,
+        severity: "warning",
+        priority: "normal",
+        studentId,
+        sourceType: "student_note_reminder",
+        sourceId: reminderLog.id,
+        entityType: "student_note",
+        entityId: createdNote.id,
+        targetPath: `/ogrenciler/${studentId}#notlar`,
+        recipientProfileIds: [profile.id],
+        push: false,
+        metadata: { reminder_at: reminderAt, student_id: studentId, note: body },
+      });
+    }
   }
 
   await supabase
@@ -204,12 +257,6 @@ export async function updateStudentProfile(
         30
       ) || null,
 
-    email:
-      getText(
-        formData.get("email"),
-        200
-      ) || null,
-
     guardian_name:
       getText(
         formData.get("guardian_name"),
@@ -220,12 +267,6 @@ export async function updateStudentProfile(
       getText(
         formData.get("guardian_phone"),
         30
-      ) || null,
-
-    guardian_email:
-      getText(
-        formData.get("guardian_email"),
-        200
       ) || null,
 
     emergency_contact_name:
@@ -296,6 +337,51 @@ export async function updateStudentProfile(
       studentId,
       error.message
     );
+  }
+
+  const generalNote = getText(formData.get("general_note"), 4000);
+  const generalReminderAt = reminderIso(
+    getText(formData.get("general_note_reminder_at"), 30),
+  );
+
+  if (generalNote && generalReminderAt) {
+    const { data: reminderLog } = await supabase
+      .from("student_activity_logs")
+      .insert({
+        organization_id: profile.organization_id,
+        student_id: studentId,
+        activity_type: "student_note_reminder",
+        title: "Genel öğrenci notu hatırlatması",
+        description: generalNote,
+        source_type: "student_general_note",
+        source_id: studentId,
+        performed_by: profile.id,
+        performed_at: new Date().toISOString(),
+        reminder_at: generalReminderAt,
+        reminder_completed: false,
+      })
+      .select("id")
+      .single();
+
+    if (reminderLog?.id) {
+      await createNotification({
+        organizationId: profile.organization_id!,
+        category: "students",
+        eventKey: "student_note_reminder",
+        notificationType: "student_note_reminder",
+        title: "Genel öğrenci notu hatırlatması",
+        body: generalNote,
+        severity: "warning",
+        priority: "normal",
+        studentId,
+        sourceType: "student_note_reminder",
+        sourceId: reminderLog.id,
+        targetPath: `/ogrenciler/${studentId}#genel-bilgiler`,
+        recipientProfileIds: [profile.id],
+        push: false,
+        metadata: { reminder_at: generalReminderAt, student_id: studentId, note: generalNote },
+      });
+    }
   }
 
   await supabase
@@ -1440,6 +1526,90 @@ export async function restoreStudent(
 }
 
 /* =========================================================
+   ÖĞRENCİ NOTU DÜZENLE
+   ========================================================= */
+export async function updateStudentNote(formData: FormData) {
+  const profile = await requireProfile([...staffRoles]);
+  const studentId = getText(formData.get("student_id"), 100);
+  const noteId = getText(formData.get("note_id"), 100);
+  const body = getText(formData.get("body"), 4000);
+
+  if (!studentId || !noteId || !body || !profile.organization_id) {
+    goError(studentId, "Düzenlenecek not bilgisi eksik.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_notes")
+    .update({ body })
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("id", noteId);
+
+  if (error) goError(studentId, error.message);
+  revalidatePath(`/ogrenciler/${studentId}`);
+  goSaved(studentId, "note-updated");
+}
+
+/* =========================================================
+   KAYIT AŞAMASI NOTU DÜZENLE / SİL
+   ========================================================= */
+export async function updateRegistrationNote(formData: FormData) {
+  const profile = await requireProfile([...staffRoles]);
+  const studentId = getText(formData.get("student_id"), 100);
+  const noteId = getText(formData.get("note_id"), 100);
+  const description = getText(formData.get("body"), 4000);
+
+  if (!studentId || !noteId || !description || !profile.organization_id) {
+    goError(studentId, "Düzenlenecek kayıt notu bilgisi eksik.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_activity_logs")
+    .update({ description })
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("id", noteId)
+    .eq("activity_type", "registration_note");
+
+  if (error) goError(studentId, error.message);
+  revalidatePath(`/ogrenciler/${studentId}`);
+  goSaved(studentId, "registration-note-updated");
+}
+
+export async function deleteRegistrationNote(formData: FormData) {
+  const profile = await requireProfile([...approvalRoles]);
+  const studentId = getText(formData.get("student_id"), 100);
+  const noteId = getText(formData.get("note_id"), 100);
+
+  if (!studentId || !noteId || !profile.organization_id) {
+    goError(studentId, "Silinecek kayıt notu bulunamadı.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("student_activity_logs")
+    .delete()
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("id", noteId)
+    .eq("activity_type", "registration_note");
+
+  if (error) goError(studentId, error.message);
+
+  await supabase
+    .from("system_notifications")
+    .delete()
+    .eq("organization_id", profile.organization_id)
+    .eq("source_type", "registration_note")
+    .eq("source_id", noteId);
+
+  revalidatePath(`/ogrenciler/${studentId}`);
+  goSaved(studentId, "registration-note-deleted");
+}
+
+/* =========================================================
    NOT SİL - SADECE OWNER / ADMIN
    ========================================================= */
 export async function deleteStudentNote(formData: FormData) {
@@ -1496,6 +1666,29 @@ export async function deleteStudentNote(formData: FormData) {
   if (error) {
     goError(studentId, error.message);
   }
+
+  const { data: reminderLogs } = await supabase
+    .from("student_activity_logs")
+    .select("id")
+    .eq("organization_id", profile.organization_id)
+    .eq("source_type", "student_note")
+    .eq("source_id", noteId);
+
+  const reminderIds = (reminderLogs || []).map((item) => item.id);
+  if (reminderIds.length) {
+    await supabase
+      .from("system_notifications")
+      .delete()
+      .eq("organization_id", profile.organization_id)
+      .in("source_id", reminderIds);
+  }
+
+  await supabase
+    .from("student_activity_logs")
+    .delete()
+    .eq("organization_id", profile.organization_id)
+    .eq("source_type", "student_note")
+    .eq("source_id", noteId);
 
   await supabase
     .from("student_timeline_events")

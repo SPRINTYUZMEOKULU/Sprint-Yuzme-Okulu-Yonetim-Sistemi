@@ -147,6 +147,93 @@
   font-weight: 800;
   color: #405168;
 }
+
+.noteForm input[type="datetime-local"] {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #17304f;
+  font: inherit;
+}
+
+.reminderField {
+  display: grid;
+  gap: 7px;
+  color: #314966;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.reminderField small,
+.managedNote small {
+  color: #78899f;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.registrationNotesBlock {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e4eaf2;
+}
+
+.panelHead.compact h3 {
+  margin: 2px 0 0;
+  color: #17304f;
+  font-size: 16px;
+}
+
+.noteControls {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.noteEdit summary {
+  color: #1769e8;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.noteEdit form {
+  min-width: min(320px, 65vw);
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.noteEdit textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  font: inherit;
+}
+
+.noteEdit button,
+.deleteNoteButton {
+  padding: 7px 10px;
+  border: 1px solid #cbdcf2;
+  border-radius: 9px;
+  background: #edf5ff;
+  color: #145bb9;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.deleteNoteButton {
+  border-color: #efcaca;
+  background: #fff3f3;
+  color: #a52c2c;
+}
 .formGrid input,
 .formGrid textarea,
 .noteForm textarea,

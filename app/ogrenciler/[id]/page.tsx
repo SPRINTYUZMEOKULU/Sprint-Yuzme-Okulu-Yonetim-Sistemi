@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   addStudentNote,
   deleteStudentNote,
+  deleteRegistrationNote,
+  updateRegistrationNote,
+  updateStudentNote,
   updateStudentHealthAndConsents,
   updateStudentProfile,
 } from "./actions";
@@ -266,6 +269,12 @@ export default async function StudentFile({
   const notes = notesResult.data ?? [];
   const oldTimeline = oldTimelineResult.data ?? [];
   const activityLogs = activityResult.data ?? [];
+  const registrationNotes = activityLogs.filter(
+    (item: any) => item.activity_type === "registration_note",
+  );
+  const operationalActivityLogs = activityLogs.filter(
+    (item: any) => !["registration_note", "student_note_reminder"].includes(item.activity_type),
+  );
   const messages = messagesResult.data ?? [];
   const contactLogs = contactLogsResult.data ?? [];
   const lessonLedger = lessonLedgerResult.data ?? [];
@@ -861,15 +870,6 @@ export default async function StudentFile({
             </label>
 
             <label>
-              E-posta
-              <input
-                name="email"
-                type="email"
-                defaultValue={student.email || ""}
-              />
-            </label>
-
-            <label>
               Veli Adı Soyadı
               <input
                 name="guardian_name"
@@ -882,15 +882,6 @@ export default async function StudentFile({
               <input
                 name="guardian_phone"
                 defaultValue={student.guardian_phone || ""}
-              />
-            </label>
-
-            <label>
-              Veli E-postası
-              <input
-                name="guardian_email"
-                type="email"
-                defaultValue={student.guardian_email || ""}
               />
             </label>
 
@@ -917,6 +908,12 @@ export default async function StudentFile({
                 rows={3}
                 defaultValue={student.general_note || ""}
               />
+            </label>
+
+            <label className="full reminderField">
+              Genel Not Hatırlatma Tarihi / Saati (isteğe bağlı)
+              <input name="general_note_reminder_at" type="datetime-local" />
+              <small>Tarih seçmezseniz genel not yalnızca öğrenci dosyasında saklanır.</small>
             </label>
 
             <PendingSubmitButton
@@ -1420,6 +1417,12 @@ export default async function StudentFile({
               required
             />
 
+            <label className="reminderField">
+              Hatırlatma Tarihi / Saati (isteğe bağlı)
+              <input name="reminder_at" type="datetime-local" />
+              <small>Boş bırakırsanız yalnızca normal öğrenci notu olarak kaydedilir.</small>
+            </label>
+
             <label className="checkbox">
               <input type="checkbox" name="is_guardian_visible" /> Veli
               panelinde göster
@@ -1435,7 +1438,7 @@ export default async function StudentFile({
 
           <div className="list">
             {notes.map((note: any) => (
-              <article key={note.id}>
+              <article key={note.id} className="managedNote">
                 <div>
                   <strong>{String(note.note_type).toUpperCase()}</strong>
 
@@ -1444,6 +1447,16 @@ export default async function StudentFile({
 
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
                   <span>{fmt(note.created_at)}</span>
+
+                  <details className="noteEdit">
+                    <summary>Düzenle</summary>
+                    <form action={updateStudentNote}>
+                      <input type="hidden" name="student_id" value={student.id} />
+                      <input type="hidden" name="note_id" value={note.id} />
+                      <textarea name="body" rows={3} defaultValue={note.body} required />
+                      <PendingSubmitButton pendingText="Not güncelleniyor…">Değişikliği Kaydet</PendingSubmitButton>
+                    </form>
+                  </details>
 
                   {canManageDestructiveActions && (
                     <form action={deleteStudentNote}>
@@ -1476,6 +1489,47 @@ export default async function StudentFile({
 
             {!notes.length && <p className="empty">Henüz not yok.</p>}
           </div>
+
+          <div className="registrationNotesBlock">
+            <div className="panelHead compact">
+              <div>
+                <p>KAYIT AŞAMASINDAKİ NOTLAR</p>
+                <h3>Ön kayıt ve kesin kayıt notları</h3>
+              </div>
+            </div>
+
+            <div className="list">
+              {registrationNotes.map((note: any) => (
+                <article key={note.id} className="managedNote">
+                  <div>
+                    <strong>{note.title || "Kayıt Notu"}</strong>
+                    <p>{note.description || "—"}</p>
+                    {note.reminder_at ? <small>Hatırlatma: {fmt(note.reminder_at)}</small> : null}
+                  </div>
+                  <div className="noteControls">
+                    <span>{fmt(note.performed_at)}</span>
+                    <details className="noteEdit">
+                      <summary>Düzenle</summary>
+                      <form action={updateRegistrationNote}>
+                        <input type="hidden" name="student_id" value={student.id} />
+                        <input type="hidden" name="note_id" value={note.id} />
+                        <textarea name="body" rows={3} defaultValue={note.description || ""} required />
+                        <PendingSubmitButton pendingText="Not güncelleniyor…">Değişikliği Kaydet</PendingSubmitButton>
+                      </form>
+                    </details>
+                    {canManageDestructiveActions ? (
+                      <form action={deleteRegistrationNote}>
+                        <input type="hidden" name="student_id" value={student.id} />
+                        <input type="hidden" name="note_id" value={note.id} />
+                        <button type="submit" className="deleteNoteButton">Notu Sil</button>
+                      </form>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+              {!registrationNotes.length ? <p className="empty">Kayıt aşamasından aktarılan not bulunmuyor.</p> : null}
+            </div>
+          </div>
         </section>
 
         <section className="panel" id="islem-gecmisi">
@@ -1487,7 +1541,7 @@ export default async function StudentFile({
           </div>
 
           <div className="timeline">
-            {activityLogs.map((event: any) => (
+            {operationalActivityLogs.map((event: any) => (
               <article key={event.id}>
                 <i />
 
@@ -1501,7 +1555,7 @@ export default async function StudentFile({
               </article>
             ))}
 
-            {!activityLogs.length &&
+            {!operationalActivityLogs.length &&
               oldTimeline.map((event: any) => (
                 <article key={event.id}>
                   <i />
@@ -1516,7 +1570,7 @@ export default async function StudentFile({
                 </article>
               ))}
 
-            {!activityLogs.length && !oldTimeline.length && (
+            {!operationalActivityLogs.length && !oldTimeline.length && (
               <p className="empty">Henüz işlem geçmişi yok.</p>
             )}
           </div>

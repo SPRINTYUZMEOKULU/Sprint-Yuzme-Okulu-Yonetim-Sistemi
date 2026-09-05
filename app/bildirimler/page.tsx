@@ -196,7 +196,7 @@ export default async function BildirimlerPage() {
   const notifications =
     ((notificationsResult.data as (NotificationItem & { metadata?: { reminder_at?: string } | null })[] | null) ?? [])
       .filter((item) => {
-        if (item.notification_type !== "registration_note_reminder") return true;
+        if (!["registration_note_reminder", "student_note_reminder"].includes(item.notification_type || "")) return true;
         const reminderAt = item.metadata?.reminder_at;
         if (!reminderAt) return true;
         const time = new Date(reminderAt).getTime();

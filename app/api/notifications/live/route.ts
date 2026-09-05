@@ -36,7 +36,7 @@ export async function GET() {
         .select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id")
         .eq("organization_id", profile.organization_id)
         .eq("is_read", false)
-        .or(`created_at.gte.${since},notification_type.eq.registration_note_reminder`)
+        .or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder`)
         .or(recipientFilter)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -44,7 +44,7 @@ export async function GET() {
         .from("student_activity_logs")
         .select("id,student_id,title,description,reminder_at,performed_by")
         .eq("organization_id", profile.organization_id)
-        .eq("activity_type", "registration_note")
+        .in("activity_type", ["registration_note", "student_note_reminder"])
         .eq("reminder_completed", false)
         .eq("performed_by", profile.id)
         .not("reminder_at", "is", null)
@@ -95,7 +95,7 @@ export async function GET() {
 
     const now = Date.now();
     const visibleRows = rows.filter((row: any) => {
-      if (row.notification_type === "registration_note_reminder") {
+      if (["registration_note_reminder", "student_note_reminder"].includes(row.notification_type)) {
         const reminderAt = row.metadata?.reminder_at;
         const reminderTime = reminderAt ? new Date(reminderAt).getTime() : Number.NaN;
         if (Number.isFinite(reminderTime) && reminderTime > now) return false;
@@ -114,6 +114,10 @@ export async function GET() {
 
     const scheduledNotifications = visibleRows.map((row: any) => {
       let targetPath = row.target_path || "/bildirimler";
+
+      if (row.notification_type === "registration_note_reminder" && row.student_id) {
+        targetPath = `/ogrenciler/${row.student_id}#notlar`;
+      }
 
       if (
         row.event_key === "registration_custom_lesson_count_approved" &&
@@ -159,7 +163,7 @@ export async function GET() {
         severity: "warning",
         priority: "normal",
         eventKey: "registration_note_reminder",
-        targetPath: `/kayit-tamamlama/${item.student_id}#notlar`,
+        targetPath: `/ogrenciler/${item.student_id}#notlar`,
         createdAt: item.reminder_at,
       }));
 

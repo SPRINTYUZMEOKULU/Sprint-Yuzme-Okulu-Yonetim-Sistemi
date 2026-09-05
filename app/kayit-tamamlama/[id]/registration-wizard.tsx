@@ -1900,16 +1900,14 @@ _Antalya'nın En Köklü Yüzme Okulu_`
             Sağlık & Kurallar
           </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              scrollTo(
-                notesRef
-              )
-            }
-          >
-            Notlar
-          </button>
+          {student.status !== "active" ? (
+            <button
+              type="button"
+              onClick={() => scrollTo(notesRef)}
+            >
+              Notlar
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -2944,6 +2942,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
        * =====================================================
        */}
 
+      {student.status !== "active" ? (
       <section
         ref={notesRef}
         id="notlar"
@@ -3111,6 +3110,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
         </div>
 
       </section>
+      ) : null}
 
       {/*
        * =====================================================
