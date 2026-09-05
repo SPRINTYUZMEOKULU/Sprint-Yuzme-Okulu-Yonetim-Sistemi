@@ -1,0 +1,309 @@
+.auditPage {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
+  padding: 24px;
+  background: #f3f7fc;
+  color: #10213a;
+}
+.auditPage > * {
+  width: 100%;
+  max-width: 1180px;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+}
+.auditHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #071f43, #116fc4);
+  color: #fff;
+  box-shadow: 0 18px 45px rgba(18, 65, 120, 0.16);
+}
+.auditHero > div > span {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 900;
+  color: #ffc35a;
+}
+.auditHero h1 {
+  margin: 7px 0 10px;
+  font-size: 34px;
+  line-height: 1.08;
+}
+.auditHero p {
+  max-width: 800px;
+  margin: 0;
+  color: #dceafa;
+  line-height: 1.6;
+}
+.auditHero aside {
+  display: grid;
+  place-content: center;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+.auditHero aside b {
+  font-size: 36px;
+}
+.auditHero aside span,
+.auditHero aside small {
+  color: #dceafa;
+}
+.auditTools {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 15px;
+  border: 1px solid #dfe7f2;
+  border-radius: 16px;
+  background: #fff;
+}
+.auditTools label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+}
+.auditTools label span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #52667e;
+}
+.auditTools input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #ccd8e7;
+  border-radius: 11px;
+  font: inherit;
+}
+.auditTools button,
+.auditTools a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 11px;
+  background: #0c65c7;
+  color: #fff;
+  text-decoration: none;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+.auditTools a {
+  background: #edf3fa;
+  color: #26496e;
+}
+.auditList {
+  display: grid;
+  gap: 15px;
+  margin-top: 16px;
+  padding-bottom: 40px;
+}
+.auditCard {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dfe7f2;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 9px 28px rgba(19, 56, 96, 0.065);
+}
+.auditCard header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf1f6;
+}
+.auditCard header span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+  color: #1970cc;
+}
+.auditCard h2 {
+  margin: 4px 0 0;
+  font-size: 21px;
+}
+.auditCard time {
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #52667e;
+  font-size: 12px;
+  font-weight: 800;
+}
+.auditMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  color: #5e7188;
+  font-size: 12px;
+}
+.auditMeta a {
+  margin-left: auto;
+  color: #0c65c7;
+  font-weight: 850;
+  text-decoration: none;
+}
+.auditReason {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #fff8e8;
+  color: #6d521e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.comparisonTable {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #dce5ef;
+  border-radius: 14px;
+}
+.comparisonHead,
+.comparisonRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.75fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.comparisonHead {
+  background: #eef3f9;
+  color: #435971;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.comparisonHead b,
+.comparisonRow > * {
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+}
+.comparisonRow {
+  border-top: 1px solid #e7edf4;
+  font-size: 13px;
+}
+.comparisonRow strong {
+  background: #fafbfd;
+  color: #30465e;
+}
+.beforeValue {
+  color: #982f2f;
+  background: #fff7f7;
+  text-decoration-color: #da9b9b;
+}
+.afterValue {
+  color: #17613a;
+  background: #f1fbf5;
+  font-weight: 750;
+}
+.noComparison,
+.auditEmpty,
+.auditError {
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #dfe7f2;
+  color: #61758c;
+}
+.auditError {
+  margin-top: 16px;
+  border-color: #efc4c4;
+  background: #fff2f2;
+  color: #8d2222;
+}
+@media (max-width: 760px) {
+  .auditPage {
+    padding: 14px;
+  }
+  .auditHero {
+    grid-template-columns: 1fr;
+    padding: 20px;
+    border-radius: 20px;
+  }
+  .auditHero h1 {
+    font-size: 27px;
+  }
+  .auditHero aside {
+    grid-template-columns: auto auto;
+    gap: 4px 8px;
+    text-align: left;
+  }
+  .auditHero aside b {
+    grid-row: 1/3;
+    font-size: 32px;
+  }
+  .auditTools {
+    display: grid;
+  }
+  .auditTools button,
+  .auditTools a {
+    width: 100%;
+  }
+  .auditCard {
+    padding: 15px;
+    border-radius: 16px;
+  }
+  .auditCard header {
+    display: grid;
+  }
+  .auditCard time {
+    justify-self: start;
+  }
+  .auditMeta {
+    display: grid;
+  }
+  .auditMeta a {
+    margin-left: 0;
+  }
+  .comparisonHead {
+    display: none;
+  }
+  .comparisonTable {
+    display: grid;
+    gap: 10px;
+    border: 0;
+    overflow: visible;
+  }
+  .comparisonRow {
+    display: grid;
+    grid-template-columns: 1fr;
+    border: 1px solid #dce5ef;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .comparisonRow strong {
+    padding: 9px 11px;
+    border-bottom: 1px solid #e7edf4;
+  }
+  .beforeValue::before {
+    content: "ÖNCEKİ: ";
+    font-size: 10px;
+    font-weight: 900;
+  }
+  .afterValue::before {
+    content: "YENİ: ";
+    font-size: 10px;
+    font-weight: 900;
+  }
+}

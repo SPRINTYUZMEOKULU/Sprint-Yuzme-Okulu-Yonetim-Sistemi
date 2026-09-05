@@ -61,9 +61,9 @@ function uniqueStrings(values: Array<string | null | undefined>) {
     new Set(
       values.filter(
         (value): value is string =>
-          typeof value === "string" && value.trim().length > 0
-      )
-    )
+          typeof value === "string" && value.trim().length > 0,
+      ),
+    ),
   );
 }
 
@@ -72,7 +72,7 @@ function formatDateTR(value: string) {
   if (!year || !month || !day) return value;
   return `${String(day).padStart(2, "0")}.${String(month).padStart(
     2,
-    "0"
+    "0",
   )}.${year}`;
 }
 
@@ -87,7 +87,7 @@ function isoToJsDay(day: number) {
 function calculateEndDate(
   startDate: string,
   lessonCount: number,
-  isoWeekdays: number[]
+  isoWeekdays: number[],
 ) {
   if (lessonCount <= 0) return startDate;
 
@@ -165,7 +165,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       supabase
         .from("students")
         .select(
-          "id,first_name,last_name,student_number,phone,guardian_phone,branch_id,preferred_group_id"
+          "id,first_name,last_name,student_number,phone,guardian_phone,branch_id,preferred_group_id",
         )
         .eq("organization_id", organizationId)
         .in("id", studentIds),
@@ -187,7 +187,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       supabase
         .from("lesson_schedules")
         .select(
-          "id,group_id,branch_id,coach_id,weekday,start_time,end_time,is_active"
+          "id,group_id,branch_id,coach_id,weekday,start_time,end_time,is_active",
         )
         .eq("organization_id", organizationId)
         .eq("group_id", input.targetGroupId)
@@ -196,9 +196,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
 
       supabase
         .from("student_enrollments")
-        .select(
-          "id,student_id,package_id,group_id,branch_id,start_date,planned_end_date,lesson_weekdays,total_lessons,used_lessons,status"
-        )
+        .select("*")
         .eq("organization_id", organizationId)
         .eq("status", "active")
         .in("student_id", studentIds)
@@ -259,7 +257,9 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       };
     }
 
-    if (targetSchedules.length !== uniqueStrings(input.targetScheduleIds).length) {
+    if (
+      targetSchedules.length !== uniqueStrings(input.targetScheduleIds).length
+    ) {
       return {
         ok: false as const,
         message: "Seçilen ders seanslarından biri geçersiz.",
@@ -270,10 +270,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       new Set(
         targetSchedules
           .map((schedule) => Number(schedule.weekday))
-          .filter(
-            (day) => Number.isInteger(day) && day >= 1 && day <= 7
-          )
-      )
+          .filter((day) => Number.isInteger(day) && day >= 1 && day <= 7),
+      ),
     ).sort((a, b) => a - b);
 
     if (!targetWeekdays.length) {
@@ -291,42 +289,30 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
     }
 
     const membershipMap = new Map(
-      (membershipsResult.data || []).map((row: any) => [
-        row.student_id,
-        row,
-      ])
+      (membershipsResult.data || []).map((row: any) => [row.student_id, row]),
     );
 
     const planMap = new Map(
-      (plansResult.data || []).map((row: any) => [
-        row.student_id,
-        row,
-      ])
+      (plansResult.data || []).map((row: any) => [row.student_id, row]),
     );
 
     const balanceMap = new Map(
       (balancesResult.data || []).map((row: any) => [
         row.student_id,
-        Math.max(
-          0,
-          Number(row.compensation_lesson_balance || 0)
-        ),
-      ])
+        Math.max(0, Number(row.compensation_lesson_balance || 0)),
+      ]),
     );
 
     const studentMap = new Map(
-      (studentsResult.data || []).map((student: any) => [
-        student.id,
-        student,
-      ])
+      (studentsResult.data || []).map((student: any) => [student.id, student]),
     );
 
     const oldGroupIds = uniqueStrings(
-      Array.from(enrollmentMap.values()).map((row: any) => row.group_id)
+      Array.from(enrollmentMap.values()).map((row: any) => row.group_id),
     );
 
     const oldBranchIds = uniqueStrings(
-      Array.from(enrollmentMap.values()).map((row: any) => row.branch_id)
+      Array.from(enrollmentMap.values()).map((row: any) => row.branch_id),
     );
 
     const [oldGroupsResult, oldBranchesResult] = await Promise.all([
@@ -348,28 +334,27 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
     ]);
 
     const oldGroupMap = new Map(
-      (oldGroupsResult.data || []).map((row: any) => [row.id, row])
+      (oldGroupsResult.data || []).map((row: any) => [row.id, row]),
     );
 
     const oldBranchMap = new Map(
-      (oldBranchesResult.data || []).map((row: any) => [row.id, row])
+      (oldBranchesResult.data || []).map((row: any) => [row.id, row]),
     );
 
     const scheduleText = targetSchedules
       .slice()
       .sort((a: any, b: any) => {
-        const dayDiff =
-          Number(a.weekday || 0) - Number(b.weekday || 0);
+        const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
         if (dayDiff !== 0) return dayDiff;
         return String(a.start_time || "").localeCompare(
-          String(b.start_time || "")
+          String(b.start_time || ""),
         );
       })
       .map(
         (schedule: any) =>
           `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} ${timeText(
-            schedule.start_time
-          )}-${timeText(schedule.end_time)}`
+            schedule.start_time,
+          )}-${timeText(schedule.end_time)}`,
       )
       .join(" • ");
 
@@ -397,30 +382,21 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         continue;
       }
 
-      const totalLessons = Math.max(
-        Number(enrollment.total_lessons || 0),
-        0
-      );
-      const usedLessons = Math.max(
-        Number(enrollment.used_lessons || 0),
-        0
-      );
-      const remainingLessons = Math.max(
-        totalLessons - usedLessons,
-        0
-      );
+      const totalLessons = Math.max(Number(enrollment.total_lessons || 0), 0);
+      const usedLessons = Math.max(Number(enrollment.used_lessons || 0), 0);
+      const remainingLessons = Math.max(totalLessons - usedLessons, 0);
       const compensationBalance = balanceMap.get(studentId) || 0;
 
       const newNormalEndDate = calculateEndDate(
         input.effectiveDate,
         remainingLessons,
-        targetWeekdays
+        targetWeekdays,
       );
 
       const newCompensationEndDate = calculateEndDate(
         input.effectiveDate,
         remainingLessons + compensationBalance,
-        targetWeekdays
+        targetWeekdays,
       );
 
       const oldGroup = enrollment.group_id
@@ -433,14 +409,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         student.branch_id ??
         null;
 
-      const oldBranch = oldBranchId
-        ? oldBranchMap.get(oldBranchId)
-        : null;
+      const oldBranch = oldBranchId ? oldBranchMap.get(oldBranchId) : null;
 
       const enrollmentUpdate = await supabase
         .from("student_enrollments")
         .update({
-          branch_id: input.targetBranchId,
           group_id: input.targetGroupId,
           planned_end_date: newNormalEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
@@ -515,24 +488,21 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           }
         }
 
-        const newPlan = await supabase
-          .from("student_attendance_plans")
-          .insert({
-            organization_id: organizationId,
-            student_id: studentId,
-            enrollment_id: enrollment.id,
-            group_id: input.targetGroupId,
-            selected_weekdays: targetWeekdays,
-            weekly_frequency: targetWeekdays.length,
-            package_lesson_count: totalLessons,
-            start_date: input.effectiveDate,
-            normal_planned_end_date: newNormalEndDate,
-            compensation_planned_end_date:
-              newCompensationEndDate,
-            is_active: true,
-            created_by: profile.id,
-            updated_by: profile.id,
-          });
+        const newPlan = await supabase.from("student_attendance_plans").insert({
+          organization_id: organizationId,
+          student_id: studentId,
+          enrollment_id: enrollment.id,
+          group_id: input.targetGroupId,
+          selected_weekdays: targetWeekdays,
+          weekly_frequency: targetWeekdays.length,
+          package_lesson_count: totalLessons,
+          start_date: input.effectiveDate,
+          normal_planned_end_date: newNormalEndDate,
+          compensation_planned_end_date: newCompensationEndDate,
+          is_active: true,
+          created_by: profile.id,
+          updated_by: profile.id,
+        });
 
         if (newPlan.error) {
           failed.push({
@@ -548,9 +518,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         .update({
           branch_id: input.targetBranchId,
           preferred_group_id: input.targetGroupId,
-          preferred_days: targetWeekdays
-            .map(isoToJsDay)
-            .join(","),
+          preferred_days: targetWeekdays.map(isoToJsDay).join(","),
           updated_at: now,
         })
         .eq("id", studentId)
@@ -621,9 +589,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           `📅 *Yeni Program:* ${scheduleText}\n` +
           `▶️ *Başlangıç:* ${formatDateTR(input.effectiveDate)}\n` +
           `🏊 *Kalan Normal Ders:* ${remainingLessons}\n` +
-          `📌 *Yeni Planlanan Bitiş:* ${formatDateTR(
-            newNormalEndDate
-          )}\n\n` +
+          `📌 *Yeni Planlanan Bitiş:* ${formatDateTR(newNormalEndDate)}\n\n` +
           `Dersleriniz yeni program doğrultusunda kaldığı yerden devam edecektir.\n\n` +
           `*Sprint Yüzme Okulu Yönetimi*`;
 
@@ -752,9 +718,7 @@ export async function prepareBulkStudentMessage(input: BulkMessageInput) {
 
     for (const student of students || []) {
       const recipient =
-        cleanPhone(student.guardian_phone) ||
-        cleanPhone(student.phone) ||
-        null;
+        cleanPhone(student.guardian_phone) || cleanPhone(student.phone) || null;
 
       const studentName =
         `${student.first_name || ""} ${student.last_name || ""}`.trim();

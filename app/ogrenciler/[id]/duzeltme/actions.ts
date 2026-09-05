@@ -333,14 +333,12 @@ export async function applyManagerCorrection(formData: FormData) {
   const enrollmentUpdate = await supabase
     .from("student_enrollments")
     .update({
-      branch_id: branchId,
       group_id: groupId,
       package_id: packageId,
       start_date: startDate,
       planned_end_date: plannedEndDate,
       total_lessons: totalLessons,
       lesson_weekdays: isoWeekdays.map(isoToJsDay),
-      payment_due_date: paymentDueDate,
       updated_at: now,
     })
     .eq("organization_id", organizationId)
@@ -350,6 +348,30 @@ export async function applyManagerCorrection(formData: FormData) {
     redirect(
       `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt/paket düzeltilemedi: ${enrollmentUpdate.error.message}`)}`,
     );
+  }
+
+  // Bazı eski kurulumlarda bu iki kolon henüz bulunmuyor. Ana kayıt işlemini
+  // engellemeden, mevcut olan opsiyonel kolonları ayrı ayrı güncelliyoruz.
+  for (const optionalUpdate of [
+    { branch_id: branchId },
+    { payment_due_date: paymentDueDate },
+  ]) {
+    const optionalResult = await supabase
+      .from("student_enrollments")
+      .update(optionalUpdate)
+      .eq("organization_id", organizationId)
+      .eq("id", enrollment.id);
+
+    const message = optionalResult.error?.message || "";
+    const missingSchemaColumn =
+      optionalResult.error &&
+      /could not find the .* column|schema cache/i.test(message);
+
+    if (optionalResult.error && !missingSchemaColumn) {
+      redirect(
+        `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt ek bilgileri düzeltilemedi: ${message}`)}`,
+      );
+    }
   }
 
   const updatedEnrollmentResult = await supabase
