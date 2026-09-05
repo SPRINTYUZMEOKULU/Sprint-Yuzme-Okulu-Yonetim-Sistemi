@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,19 @@ const DAY_NAMES: Record<number, string> = {
   6: "Cumartesi",
   7: "Pazar",
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function selectedStudentIdsFromCookie(value?: string) {
+  return Array.from(
+    new Set(
+      decodeURIComponent(String(value || ""))
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => UUID_RE.test(id))
+    )
+  ).slice(0, 200);
+}
 
 function formatDateTR(value?: string | null) {
   if (!value) return "—";
@@ -112,6 +126,11 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       return { ok: false as const, message: "Özel telafi için tarih ve seans seçilmelidir.", preparedMessages };
     }
 
+    const cookieStore = await cookies();
+    const selectedStudentIds = selectedStudentIdsFromCookie(
+      cookieStore.get("sprintos-lesson-operation-students")?.value
+    );
+
     const supabase = await createClient();
 
     const [groupResult, sourceScheduleResult, schedulesResult, membershipsResult] = await Promise.all([
@@ -156,10 +175,19 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     }
 
     const sourceWeekday = Number(sourceSchedule.weekday || 0);
-    const membershipStudentIds = Array.from(new Set((membershipsResult.data || []).map((row: any) => row.student_id).filter(Boolean)));
+    const allMembershipStudentIds = Array.from(new Set((membershipsResult.data || []).map((row: any) => row.student_id).filter(Boolean)));
+    const membershipStudentIds = selectedStudentIds.length
+      ? allMembershipStudentIds.filter((id: string) => selectedStudentIds.includes(id))
+      : allMembershipStudentIds;
 
     if (!membershipStudentIds.length) {
-      return { ok: false as const, message: "Bu grupta aktif kursiyer bulunamadı.", preparedMessages };
+      return {
+        ok: false as const,
+        message: selectedStudentIds.length
+          ? "Seçili kursiyerlerden hiçbiri seçilen grubun aktif üyesi değil. Öğrenci Merkezi'nden seçimi kontrol edin."
+          : "Bu grupta aktif kursiyer bulunamadı.",
+        preparedMessages,
+      };
     }
 
     const [studentsResult, enrollmentsResult, plansResult] = await Promise.all([
@@ -373,6 +401,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
             compensation_date: compensationDate,
             old_normal_end_date: oldNormalEndDate,
             new_compensation_end_date: newCompensationEndDate,
+            selected_operation: selectedStudentIds.length > 0,
           },
         });
 
@@ -400,7 +429,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     return {
       ok: processed > 0,
       message:
-        `${processed} kursiyer için ders iptali işlendi. ` +
+        `${processed} ${selectedStudentIds.length ? "seçili " : ""}kursiyer için ders iptali işlendi. ` +
         (input.compensationMode === "reserve"
           ? "Telafi hakları planlama bekliyor."
           : `${compensationCreated} telafi dersi oluşturuldu.`) +
