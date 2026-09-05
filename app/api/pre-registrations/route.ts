@@ -283,6 +283,16 @@ export async function POST(
     const phone =
       clean(body.phone, 20);
 
+    const email =
+      visible("email", false)
+        ? clean(body.email, 180) || null
+        : null;
+
+    const guardianEmail =
+      registrationFor === "child" && visible("guardian_email", false)
+        ? clean(body.guardianEmail, 180) || null
+        : null;
+
     const branchId =
       clean(body.branchId, 60);
 
@@ -407,6 +417,20 @@ export async function POST(
           error:
             "Telefon numarası zorunludur.",
         },
+        { status: 400 }
+      );
+    }
+
+    if (required("email", false) && !email) {
+      return NextResponse.json(
+        { error: "E-posta adresi zorunludur.", field: "email" },
+        { status: 400 }
+      );
+    }
+
+    if (registrationFor === "child" && required("guardian_email", false) && !guardianEmail) {
+      return NextResponse.json(
+        { error: "Veli e-posta adresi zorunludur.", field: "guardianEmail" },
         { status: 400 }
       );
     }
@@ -819,6 +843,8 @@ export async function POST(
         phone:
           phone || null,
 
+        email,
+
         guardian_name:
           registrationFor ===
             "child"
@@ -831,6 +857,11 @@ export async function POST(
             "child"
             ? phone ||
               null
+            : null,
+
+        guardian_email:
+          registrationFor === "child"
+            ? guardianEmail
             : null,
 
         status:
@@ -903,6 +934,8 @@ export async function POST(
 
           phone:
             phone || null,
+
+          email: guardianEmail,
 
           relationship:
             "Veli",
