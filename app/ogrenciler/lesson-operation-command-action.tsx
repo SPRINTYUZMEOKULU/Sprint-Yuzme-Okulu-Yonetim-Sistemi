@@ -44,6 +44,13 @@ export default function LessonOperationCommandAction() {
 
   function openOperations() {
     const selectedIds = selectedStudentIdsFromPage();
+
+    if (selectedIds.length) {
+      document.cookie = `sprintos-lesson-operation-students=${encodeURIComponent(selectedIds.join(","))}; path=/; max-age=1800; samesite=lax`;
+    } else {
+      document.cookie = "sprintos-lesson-operation-students=; path=/; max-age=0; samesite=lax";
+    }
+
     const query = selectedIds.length
       ? `?studentIds=${encodeURIComponent(selectedIds.join(","))}`
       : "";
