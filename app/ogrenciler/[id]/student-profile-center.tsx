@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   createOrLinkGuardianPortal,
   getStudentProfileForCenter,
+  resetGuardianPortalPassword,
   saveStudentProfileFromCenter,
   setGuardianPortalActive,
   unlinkGuardianPortal,
@@ -54,6 +55,7 @@ export default function StudentProfileCenter() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [portalPassword, setPortalPassword] = useState("");
   const [message, setMessage] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [portal, setPortal] = useState<GuardianPortal>(null);
@@ -115,6 +117,7 @@ export default function StudentProfileCenter() {
       generalNote: student.general_note || "",
     });
     setPortal((response as any).guardianPortal || null);
+    setPortalPassword("");
     setPortalForm({
       fullName: student.guardian_name || "",
       email: student.guardian_email || "",
@@ -179,6 +182,16 @@ export default function StudentProfileCenter() {
     setPortalBusy(false);
   }
 
+  async function resetPortalPassword() {
+    if (!studentId || !portal || portalBusy || portalPassword.length < 8) return;
+    setPortalBusy(true);
+    setMessage("");
+    const response = await resetGuardianPortalPassword(studentId, portalPassword);
+    setMessage(response.message);
+    if (response.ok) setPortalPassword("");
+    setPortalBusy(false);
+  }
+
   if (!open) return null;
 
   return (
@@ -238,6 +251,13 @@ export default function StudentProfileCenter() {
                     <button type="button" className="portalToggle" disabled={portalBusy} onClick={togglePortal}>{portal.isActive ? "Portal Erişimini Pasife Al" : "Portal Erişimini Aktif Et"}</button>
                     <button type="button" className="portalUnlink" disabled={portalBusy} onClick={unlinkPortal}>Öğrenci Bağlantısını Kaldır</button>
                   </div>
+                  <div className="portalPasswordPanel">
+                    <div><strong>Giriş şifresini yenile</strong><small>En az 8 karakterlik yeni bir geçici şifre belirleyin.</small></div>
+                    <div className="portalPasswordControls">
+                      <input type="password" autoComplete="new-password" value={portalPassword} onChange={(event) => setPortalPassword(event.target.value)} placeholder="Yeni geçici şifre" />
+                      <button type="button" disabled={portalBusy || portalPassword.length < 8} onClick={resetPortalPassword}>{portalBusy ? "İşleniyor…" : "Şifreyi Yenile"}</button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -271,9 +291,9 @@ export default function StudentProfileCenter() {
         .profileCenterBody{flex:1;overflow-y:auto;padding:22px;display:grid;gap:16px}.profileCenterLoading{flex:1;padding:40px;text-align:center;color:#60778f}section{padding:18px;border:1px solid #dbe5ef;border-radius:17px;background:#fff;box-shadow:0 8px 24px rgba(20,55,90,.05)}
         .sectionTitle{display:flex;align-items:center;gap:11px;margin-bottom:15px}.sectionTitle>b{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#edf5ff;color:#0b62b3}.sectionTitle strong,.sectionTitle small{display:block}.sectionTitle strong{color:#11395f}.sectionTitle small{margin-top:2px;color:#728499}
         .profileGrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.profileGrid label{display:grid;gap:6px}.profileGrid .full{grid-column:1/-1}.profileGrid span{font-size:11px;font-weight:850;color:#4f647a}.profileGrid input,.profileGrid textarea{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px 12px;background:#fbfdff;color:#142f4a;font:inherit;outline:none}.profileGrid input:focus,.profileGrid textarea:focus{border-color:#4894d5;box-shadow:0 0 0 3px rgba(72,148,213,.12)}
-        .portalSection{border-color:#cfe0f3}.portalInfo{margin-bottom:14px;padding:13px 14px;border:1px solid #d6e6f6;border-radius:12px;background:#f1f7fd}.portalInfo strong{color:#0b5797}.portalInfo p{margin:5px 0 0;color:#58718a;font-size:12px;line-height:1.5}.portalCreate{margin-top:14px;width:100%;min-height:43px;border:0;border-radius:11px;background:#0b67b2;color:#fff;font-weight:900;cursor:pointer}.portalConnected{display:grid;gap:14px}.portalStatusRow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;border:1px solid #d8e4ef;border-radius:13px;background:#fbfdff}.portalStatusRow span,.portalStatusRow strong,.portalStatusRow small{display:block}.portalStatusRow span{font-size:9px;font-weight:900;color:#6e8196;letter-spacing:.08em}.portalStatusRow strong{margin-top:4px;color:#173d62}.portalStatusRow small{margin-top:3px;color:#71849a}.portalStatusRow em{font-style:normal;font-size:10px;font-weight:900;padding:6px 9px;border-radius:999px}.portalStatusRow em.active{background:#dcfce7;color:#166534}.portalStatusRow em.passive{background:#fee2e2;color:#991b1b}.portalActions{display:flex;gap:9px;flex-wrap:wrap}.portalActions button{min-height:40px;padding:0 13px;border-radius:10px;font-weight:850;cursor:pointer}.portalToggle{border:1px solid #c8daf0;background:#eef6ff;color:#0a5da5}.portalUnlink{border:1px solid #efcaca;background:#fff3f3;color:#a52c2c}
+        .portalSection{border-color:#cfe0f3}.portalInfo{margin-bottom:14px;padding:13px 14px;border:1px solid #d6e6f6;border-radius:12px;background:#f1f7fd}.portalInfo strong{color:#0b5797}.portalInfo p{margin:5px 0 0;color:#58718a;font-size:12px;line-height:1.5}.portalCreate{margin-top:14px;width:100%;min-height:43px;border:0;border-radius:11px;background:#0b67b2;color:#fff;font-weight:900;cursor:pointer}.portalConnected{display:grid;gap:14px}.portalStatusRow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;border:1px solid #d8e4ef;border-radius:13px;background:#fbfdff}.portalStatusRow span,.portalStatusRow strong,.portalStatusRow small{display:block}.portalStatusRow span{font-size:9px;font-weight:900;color:#6e8196;letter-spacing:.08em}.portalStatusRow strong{margin-top:4px;color:#173d62}.portalStatusRow small{margin-top:3px;color:#71849a}.portalStatusRow em{font-style:normal;font-size:10px;font-weight:900;padding:6px 9px;border-radius:999px}.portalStatusRow em.active{background:#dcfce7;color:#166534}.portalStatusRow em.passive{background:#fee2e2;color:#991b1b}.portalActions{display:flex;gap:9px;flex-wrap:wrap}.portalActions button{min-height:40px;padding:0 13px;border-radius:10px;font-weight:850;cursor:pointer}.portalToggle{border:1px solid #c8daf0;background:#eef6ff;color:#0a5da5}.portalUnlink{border:1px solid #efcaca;background:#fff3f3;color:#a52c2c}.portalPasswordPanel{display:grid;gap:11px;padding:14px;border:1px solid #cfe0f3;border-radius:13px;background:linear-gradient(135deg,#f7fbff,#edf6ff)}.portalPasswordPanel strong,.portalPasswordPanel small{display:block}.portalPasswordPanel strong{color:#123f68}.portalPasswordPanel small{margin-top:3px;color:#6c8095;font-size:12px}.portalPasswordControls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.portalPasswordControls input{min-width:0;border:1px solid #c8d8e8;border-radius:10px;padding:11px 12px;background:#fff;color:#17334e;font:inherit;outline:none}.portalPasswordControls input:focus{border-color:#2780c6;box-shadow:0 0 0 3px rgba(39,128,198,.12)}.portalPasswordControls button{min-height:42px;border:0;border-radius:10px;padding:0 15px;background:linear-gradient(135deg,#075eaa,#0878c9);color:#fff;font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgba(7,94,170,.18)}
         .profileCenterMessage{padding:12px 14px;border-radius:11px;background:#eefaf4;color:#14643f;font-weight:800}footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid #dbe4ee;background:#fff}footer button{min-height:43px;padding:0 17px;border-radius:11px;font-weight:850;cursor:pointer}.ghost{border:1px solid #d2dce7;background:#fff;color:#49647e}.save{border:1px solid #0a6d46;background:linear-gradient(135deg,#087443,#12a365);color:#fff;box-shadow:0 8px 18px rgba(8,116,67,.18)}button:disabled{opacity:.55;cursor:not-allowed}
-        @media(max-width:640px){header{padding:19px}.profileCenterBody{padding:13px}.profileGrid{grid-template-columns:1fr}.profileGrid .full{grid-column:auto}section{padding:14px}footer{position:sticky;bottom:0;flex-direction:column-reverse}.portalStatusRow{align-items:flex-start;flex-direction:column}.portalActions{display:grid}.portalActions button{width:100%}}
+        @media(max-width:640px){header{padding:19px}.profileCenterBody{padding:13px}.profileGrid{grid-template-columns:1fr}.profileGrid .full{grid-column:auto}section{padding:14px}footer{position:sticky;bottom:0;flex-direction:column-reverse}.portalStatusRow{align-items:flex-start;flex-direction:column}.portalActions,.portalPasswordControls{display:grid;grid-template-columns:1fr}.portalActions button,.portalPasswordControls button{width:100%}}
       `}</style>
     </div>
   );

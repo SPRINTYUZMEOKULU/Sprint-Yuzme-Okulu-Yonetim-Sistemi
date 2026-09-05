@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
       .from("profiles")
       .select("id")
       .in("phone", candidates)
+      .in("role", ALLOWED_ROLES[requestedRole])
       .limit(1)
       .maybeSingle();
 
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
       authUserId = profileByPhone.id;
     }
 
-    if (!authUserId) {
+    if (!authUserId && requestedRole !== "guardian") {
       const { data: staffByPhone, error: staffPhoneError } = await admin
         .from("staff")
         .select("auth_user_id")
