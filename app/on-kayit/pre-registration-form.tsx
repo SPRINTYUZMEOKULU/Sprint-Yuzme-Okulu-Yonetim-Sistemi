@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import {
   FormEvent,
   useEffect,
@@ -44,12 +46,25 @@ type Level = {
   sort_order: number;
 };
 
+type FormField = {
+  id: string;
+  field_key: string;
+  label: string;
+  placeholder?: string | null;
+  help_text?: string | null;
+  is_visible: boolean;
+  is_required: boolean;
+  applies_to: "all" | "child" | "adult";
+};
+
 type Options = {
   branches: Branch[];
   groups: Group[];
   schedules: Schedule[];
   packages: Package[];
   levels: Level[];
+  formFields: FormField[];
+  visibleFormFields: FormField[];
 };
 
 type RegistrationFor =
@@ -65,6 +80,21 @@ const days = [
   "Cuma",
   "Cumartesi",
 ];
+
+function FieldLabel({ text, required }: { text: string; required: boolean }) {
+  return <span className="fieldLabelText">{text}{required ? <b aria-label="zorunlu">*</b> : null}</span>;
+}
+
+function SuccessIcon({ name, size = 22 }: { name: "users" | "award" | "bolt" | "clock" | "refresh"; size?: number }) {
+  const paths = {
+    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    award: <><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/></>,
+    bolt: <path d="m13 2-9 12h8l-1 8 9-12h-8z"/>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
+    refresh: <><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.2-2L20 12M4 12l2.7 5a7 7 0 0 0 11.2-2"/></>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
 
 export default function PreRegistrationForm() {
   const [status, setStatus] =
@@ -85,6 +115,8 @@ export default function PreRegistrationForm() {
       schedules: [],
       packages: [],
       levels: [],
+      formFields: [],
+      visibleFormFields: [],
     });
 
   const [loading, setLoading] =
@@ -106,6 +138,31 @@ export default function PreRegistrationForm() {
 
   const [groupId, setGroupId] =
     useState("");
+
+  function fieldSetting(key: string, fallbackVisible = true, fallbackRequired = false) {
+    const field = options.formFields.find((item) => item.field_key === key);
+    if (!field) return { visible: fallbackVisible, required: fallbackRequired, label: "" };
+    const applicable = field.applies_to === "all" || field.applies_to === registrationFor;
+    return {
+      visible: field.is_visible && applicable,
+      required: field.is_visible && field.is_required && applicable,
+      label: field.label,
+    };
+  }
+
+  function clearFieldErrors(form: HTMLFormElement) {
+    form.querySelectorAll(".fieldInvalid").forEach((element) => element.classList.remove("fieldInvalid"));
+    form.querySelectorAll(".fieldErrorGroup").forEach((element) => element.classList.remove("fieldErrorGroup"));
+  }
+
+  function showMissingField(form: HTMLFormElement, control: HTMLElement, label: string) {
+    control.classList.add("fieldInvalid");
+    control.closest("label, .requestOptions, .registrationType")?.classList.add("fieldErrorGroup");
+    setStatus("error");
+    setMessage(`${label} zorunlu alandır. Lütfen kırmızı kutu içerisindeki alanı doldurunuz.`);
+    window.setTimeout(() => control.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) control.focus({ preventScroll: true });
+  }
 
   useEffect(() => {
     fetch(
@@ -244,7 +301,13 @@ export default function PreRegistrationForm() {
           )}`
         : "Saat tanımlanmadı";
 
-    return `${group.name} · ${dayText} · ${time}`;
+    const shortName = group.name
+      .split("·")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .find((part) => !options.branches.some((branch) => branch.name === part) && !/\d{1,2}:\d{2}/.test(part) && !/(pazartesi|salı|çarşamba|perşembe|cuma|cumartesi|pazar)/i.test(part)) || group.course_type;
+
+    return `${dayText || "Gün tanımsız"} · ${time} · ${shortName}`;
   }
 
   async function handleSubmit(
@@ -253,11 +316,42 @@ export default function PreRegistrationForm() {
   ) {
     event.preventDefault();
 
-    setStatus("sending");
-    setMessage("");
-
     const formElement =
       event.currentTarget;
+
+    clearFieldErrors(formElement);
+    const invalidControl = Array.from(formElement.elements).find((element) => {
+      return element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement
+        ? !element.checkValidity()
+        : false;
+    }) as HTMLElement | undefined;
+
+    if (invalidControl) {
+      const fieldNames: Record<string, string> = {
+        firstName: "Öğrenci / katılımcı adı",
+        lastName: "Soyadı",
+        birthDate: "Doğum tarihi",
+        guardianName: "Veli adı soyadı",
+        phone: "Telefon",
+        email: "E-posta",
+        guardianEmail: "Veli e-posta",
+        courseType: "Kurs türü",
+        branchId: "Şube",
+        groupId: "Grup",
+        swimmingLevel: "Yüzme seviyesi",
+        packageId: "Paket tercihi",
+        contactRequest: "İletişim talebi",
+        healthDeclaration: "Sağlık beyanı",
+        rulesAccepted: "Kurallar onayı",
+        whatsappPermission: "WhatsApp bilgilendirme onayı",
+      };
+      const name = invalidControl.getAttribute("name") || "Bu alan";
+      showMissingField(formElement, invalidControl, fieldNames[name] || "Bu alan");
+      return;
+    }
+
+    setStatus("sending");
+    setMessage("Ön kaydınız tamamlanıyor. Bilgileriniz güvenli şekilde kayıt ekibimize iletiliyor…");
 
     const payload =
       Object.fromEntries(
@@ -289,10 +383,12 @@ export default function PreRegistrationForm() {
         await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          result.error ||
-            "Kayıt oluşturulamadı."
-        );
+        const serverField = result.field ? formElement.elements.namedItem(String(result.field)) : null;
+        if (serverField instanceof HTMLElement) {
+          showMissingField(formElement, serverField, result.error || "Bu alan");
+          return;
+        }
+        throw new Error(result.error || "Kayıt oluşturulamadı.");
       }
 
       setStatus("success");
@@ -368,20 +464,7 @@ export default function PreRegistrationForm() {
                 marginBottom: 34,
               }}
             >
-              <div
-                style={{
-                  color: "#0b4e9c",
-                  fontSize: 15,
-                  lineHeight: 1.05,
-                  fontWeight: 1000,
-                  textAlign: "center",
-                  letterSpacing: ".03em",
-                }}
-              >
-                SPRINT
-                <br />
-                <span style={{ fontSize: 9 }}>YÜZME OKULU</span>
-              </div>
+              <Image src="/sprint-logo.png" alt="Sprint Yüzme Okulu" width={78} height={78} style={{ objectFit: "contain" }} />
             </div>
 
             <div
@@ -440,7 +523,7 @@ export default function PreRegistrationForm() {
                   marginBottom: 7,
                 }}
               >
-                🎉 Ön Kaydınız Başarıyla Alındı!
+                Ön Kaydınız Başarıyla Alındı
               </strong>
               <span
                 style={{
@@ -464,9 +547,9 @@ export default function PreRegistrationForm() {
               }}
             >
               {[
-                ["👥", "Butik gruplar", "Kontenjan sınırılı eğitim"],
-                ["🏅", "Uzman antrenörler", "Deneyimli ve sertifikalı kadro"],
-                ["⚡", "Hızlı dönüş", "Başvurunuz kayıtsız kalmaz"],
+                ["users", "Butik gruplar", "Kontenjan sınırlı eğitim"],
+                ["award", "Uzman antrenörler", "Deneyimli ve sertifikalı kadro"],
+                ["bolt", "Hızlı dönüş", "Başvurunuz kayıtsız kalmaz"],
               ].map(([icon, title, desc]) => (
                 <div
                   key={title}
@@ -492,7 +575,7 @@ export default function PreRegistrationForm() {
                       fontSize: 20,
                     }}
                   >
-                    {icon}
+                    <SuccessIcon name={icon as "users" | "award" | "bolt"} />
                   </div>
                   <div>
                     <strong style={{ display: "block", fontSize: 15 }}>
@@ -583,7 +666,7 @@ export default function PreRegistrationForm() {
                   fontWeight: 1000,
                 }}
               >
-                Ön Kaydınız Alındı! 🎉
+                Ön Kaydınız Alındı
               </h1>
 
               <p
@@ -629,7 +712,7 @@ export default function PreRegistrationForm() {
                     fontSize: 22,
                   }}
                 >
-                  🕒
+                  <SuccessIcon name="clock" />
                 </div>
                 <div
                   style={{
@@ -653,7 +736,7 @@ export default function PreRegistrationForm() {
                   fontStyle: "italic",
                 }}
               >
-                Başvurunuz için teşekkür ederiz. 💙
+                Başvurunuz için teşekkür ederiz.
               </div>
 
               <div
@@ -690,7 +773,8 @@ export default function PreRegistrationForm() {
                   boxShadow: "0 14px 30px rgba(11,111,244,.28)",
                 }}
               >
-                ↻ &nbsp; Yeni Kayıt Oluştur
+                <span style={{ display: "inline-flex", verticalAlign: "middle", marginRight: 8 }}><SuccessIcon name="refresh" size={18} /></span>
+                Yeni Kayıt Oluştur
               </button>
 
               <div
@@ -707,7 +791,7 @@ export default function PreRegistrationForm() {
                   fontSize: 14,
                 }}
               >
-                🎁 Sizi en kısa sürede aramızda görmek için sabırsızlanıyoruz! 🏊
+                Sizi en kısa sürede aramızda görmek için sabırsızlanıyoruz.
               </div>
             </section>
           </main>
@@ -814,6 +898,12 @@ export default function PreRegistrationForm() {
     <form
       className="registrationForm"
       onSubmit={handleSubmit}
+      noValidate
+      onInput={(event) => {
+        const target = event.target as HTMLElement;
+        target.classList.remove("fieldInvalid");
+        target.closest("label, .requestOptions, .registrationType")?.classList.remove("fieldErrorGroup");
+      }}
     >
       <input
         className="hiddenField"
@@ -911,58 +1001,59 @@ export default function PreRegistrationForm() {
         </div>
 
         <div className="formGrid">
-          <label>
-            Öğrenci / Katılımcı adı
+          {fieldSetting("first_name", true, true).visible ? <label>
+            <FieldLabel text={fieldSetting("first_name").label || "Öğrenci / Katılımcı adı"} required={fieldSetting("first_name", true, true).required} />
 
             <input
               name="firstName"
-              required
+              required={fieldSetting("first_name", true, true).required}
               maxLength={60}
               placeholder="Adı"
             />
-          </label>
+          </label> : null}
 
-          <label>
-            Soyadı
+          {fieldSetting("last_name", true, true).visible ? <label>
+            <FieldLabel text={fieldSetting("last_name").label || "Soyadı"} required={fieldSetting("last_name", true, true).required} />
 
             <input
               name="lastName"
-              required
+              required={fieldSetting("last_name", true, true).required}
               maxLength={60}
               placeholder="Soyadı"
             />
-          </label>
+          </label> : null}
 
-          <label>
-            Doğum tarihi
+          {fieldSetting("birth_date", true, true).visible ? <label>
+            <FieldLabel text={fieldSetting("birth_date").label || "Doğum tarihi"} required={fieldSetting("birth_date", true, true).required} />
 
             <input
               name="birthDate"
               type="date"
+              required={fieldSetting("birth_date", true, true).required}
             />
-          </label>
+          </label> : null}
 
           {registrationFor ===
-            "child" && (
+            "child" && fieldSetting("guardian_name", true, true).visible && (
             <label>
-              Veli adı soyadı
+              <FieldLabel text={fieldSetting("guardian_name").label || "Veli adı soyadı"} required={fieldSetting("guardian_name", true, true).required} />
 
               <input
                 name="guardianName"
-                required
+                required={fieldSetting("guardian_name", true, true).required}
                 maxLength={120}
                 placeholder="Veli adı soyadı"
               />
             </label>
           )}
 
-          <label>
-            Telefon
+          {fieldSetting("phone", true, true).visible ? <label>
+            <FieldLabel text={fieldSetting("phone").label || "Telefon"} required={fieldSetting("phone", true, true).required} />
 
             <input
               name="phone"
               type="tel"
-              required
+              required={fieldSetting("phone", true, true).required}
               inputMode="tel"
               autoComplete="tel"
               placeholder="05xx xxx xx xx"
@@ -970,7 +1061,17 @@ export default function PreRegistrationForm() {
               pattern="(?:\+90|0)?5\d{9}"
               title="Telefon numarasını 05XXXXXXXXX veya +905XXXXXXXXX formatında giriniz."
             />
-          </label>
+          </label> : null}
+
+          {fieldSetting("email", false, false).visible ? <label>
+            <FieldLabel text={fieldSetting("email").label || "Öğrenci / katılımcı e-posta"} required={fieldSetting("email", false, false).required} />
+            <input name="email" type="email" autoComplete="email" required={fieldSetting("email", false, false).required} placeholder="ornek@eposta.com" />
+          </label> : null}
+
+          {registrationFor === "child" && fieldSetting("guardian_email", false, false).visible ? <label>
+            <FieldLabel text={fieldSetting("guardian_email").label || "Veli e-posta"} required={fieldSetting("guardian_email", false, false).required} />
+            <input name="guardianEmail" type="email" autoComplete="email" required={fieldSetting("guardian_email", false, false).required} placeholder="veli@eposta.com" />
+          </label> : null}
         </div>
       </section>
 
@@ -998,12 +1099,12 @@ export default function PreRegistrationForm() {
           </div>
         ) : (
           <div className="formGrid">
-            <label>
-              Kurs türü
+            {fieldSetting("course_type", true, true).visible ? <label>
+              <FieldLabel text={fieldSetting("course_type").label || "Kurs türü"} required={fieldSetting("course_type", true, true).required} />
 
               <select
                 name="courseType"
-                required
+                required={fieldSetting("course_type", true, true).required}
                 value={courseType}
                 onChange={(event) => {
                   setCourseType(
@@ -1032,14 +1133,14 @@ export default function PreRegistrationForm() {
                   )
                 )}
               </select>
-            </label>
+            </label> : null}
 
-            <label>
-              Şube
+            {fieldSetting("branch", true, true).visible ? <label>
+              <FieldLabel text={fieldSetting("branch").label || "Şube"} required={fieldSetting("branch", true, true).required} />
 
               <select
                 name="branchId"
-                required
+                required={fieldSetting("branch", true, true).required}
                 value={branchId}
                 onChange={(event) => {
                   setBranchId(
@@ -1071,14 +1172,14 @@ export default function PreRegistrationForm() {
                   )
                 )}
               </select>
-            </label>
+            </label> : null}
 
-            <label className="wideGroupSelect">
-              Aktif grup, gün ve saat
+            {fieldSetting("group", true, true).visible ? <label className="wideGroupSelect">
+              <FieldLabel text={fieldSetting("group").label || "Aktif grup, gün ve saat"} required={fieldSetting("group", true, true).required} />
 
               <select
                 name="groupId"
-                required
+                required={fieldSetting("group", true, true).required}
                 value={groupId}
                 onChange={(event) =>
                   setGroupId(
@@ -1110,13 +1211,14 @@ export default function PreRegistrationForm() {
                   )
                 )}
               </select>
-            </label>
+            </label> : null}
 
-            <label>
-              Yüzme seviyesi
+            {fieldSetting("swimming_level", true, false).visible ? <label>
+              <FieldLabel text={fieldSetting("swimming_level").label || "Yüzme seviyesi"} required={fieldSetting("swimming_level", true, false).required} />
 
               <select
                 name="swimmingLevel"
+                required={fieldSetting("swimming_level", true, false).required}
                 defaultValue=""
               >
                 <option value="">
@@ -1139,15 +1241,15 @@ export default function PreRegistrationForm() {
                   Bilmiyorum
                 </option>
               </select>
-            </label>
+            </label> : null}
 
-            <label>
-              Paket tercihi
+            {fieldSetting("package", true, true).visible ? <label>
+              <FieldLabel text={fieldSetting("package").label || "Paket tercihi"} required={fieldSetting("package", true, true).required} />
 
               <select
                 name="packageId"
                 defaultValue=""
-                required
+                required={fieldSetting("package", true, true).required}
               >
                 <option value="">
                   Paket seçin
@@ -1177,7 +1279,7 @@ export default function PreRegistrationForm() {
                   )
                 )}
               </select>
-            </label>
+            </label> : null}
           </div>
         )}
 
@@ -1188,9 +1290,7 @@ export default function PreRegistrationForm() {
                 SEÇİLEN GRUP
               </span>
 
-              <strong>
-                {selectedGroup.name}
-              </strong>
+              <strong>{groupLabel(selectedGroup)}</strong>
 
               <small>
                 {
@@ -1248,13 +1348,6 @@ export default function PreRegistrationForm() {
                 </b>
               </span>
 
-              <span>
-                Seviye:{" "}
-                <b>
-                  {selectedLevel?.name ||
-                    "Tüm seviyeler"}
-                </b>
-              </span>
             </div>
 
             {selectedGroup.description ? (
@@ -1318,13 +1411,13 @@ export default function PreRegistrationForm() {
         ) : null}
       </section>
 
-      <section className="formSection">
+      {fieldSetting("contact_request", true, true).visible ? <section className="formSection">
         <div className="formSectionTitle">
           <b>3</b>
 
           <div>
             <strong>
-              İletişim talebiniz
+              <FieldLabel text={fieldSetting("contact_request").label || "İletişim talebiniz"} required={fieldSetting("contact_request", true, true).required} />
             </strong>
 
             <span>
@@ -1341,7 +1434,7 @@ export default function PreRegistrationForm() {
               type="radio"
               name="contactRequest"
               value="call_me"
-              required
+              required={fieldSetting("contact_request", true, true).required}
             />
             Beni aramanızı istiyorum
           </label>
@@ -1376,9 +1469,9 @@ export default function PreRegistrationForm() {
             bilgi almak istiyorum
           </label>
         </div>
-      </section>
+      </section> : null}
 
-      <section className="formSection">
+      {fieldSetting("note", true, false).visible ? <section className="formSection">
         <div className="formSectionTitle">
           <b>4</b>
 
@@ -1396,18 +1489,19 @@ export default function PreRegistrationForm() {
         </div>
 
         <label className="fullWidth">
-          Açıklama / özel durum
+          <FieldLabel text={fieldSetting("note").label || "Açıklama / özel durum"} required={fieldSetting("note", true, false).required} />
 
           <textarea
             name="note"
+            required={fieldSetting("note", true, false).required}
             rows={4}
             maxLength={1000}
             placeholder="Su korkusu veya kayıtla ilgili eklemek istediğiniz not..."
           />
         </label>
-      </section>
+      </section> : null}
 
-      <section className="formSection">
+      {(fieldSetting("health_declaration", true, true).visible || fieldSetting("health_note", true, false).visible) ? <section className="formSection">
         <div className="formSectionTitle">
           <b>5</b>
 
@@ -1424,12 +1518,12 @@ export default function PreRegistrationForm() {
           </div>
         </div>
 
-        <label className="consent">
+        {fieldSetting("health_declaration", true, true).visible ? <label className="consent">
           <input
             type="checkbox"
             name="healthDeclaration"
             value="true"
-            required
+            required={fieldSetting("health_declaration", true, true).required}
           />
 
           <span>
@@ -1441,18 +1535,19 @@ export default function PreRegistrationForm() {
             yüzme eğitimine katılım açısından bilinen bir
             engel bulunmadığını beyan ediyorum.
           </span>
-        </label>
+        </label> : null}
 
-        <label className="fullWidth">
-          Sağlıkla ilgili açıklama
+        {fieldSetting("health_note", true, false).visible ? <label className="fullWidth">
+          <FieldLabel text={fieldSetting("health_note").label || "Sağlıkla ilgili açıklama"} required={fieldSetting("health_note", true, false).required} />
           <textarea
             name="healthNote"
+            required={fieldSetting("health_note", true, false).required}
             rows={3}
             maxLength={1000}
             placeholder="Varsa alerji, kronik rahatsızlık, özel gereksinim veya antrenörün bilmesi gereken durumu yazınız. Yoksa boş bırakabilirsiniz."
           />
-        </label>
-      </section>
+        </label> : null}
+      </section> : null}
 
       <section className="formSection">
         <div className="formSectionTitle">
@@ -1531,12 +1626,12 @@ export default function PreRegistrationForm() {
           </div>
         </details>
 
-        <label className="consent">
+        {fieldSetting("rules_accepted", true, true).visible ? <label className="consent">
           <input
             type="checkbox"
             name="rulesAccepted"
             value="true"
-            required
+            required={fieldSetting("rules_accepted", true, true).required}
           />
 
           <span>
@@ -1544,14 +1639,14 @@ export default function PreRegistrationForm() {
             kurallarını okudum,
             anladım ve kabul ediyorum.
           </span>
-        </label>
+        </label> : null}
 
-        <label className="consent">
+        {fieldSetting("whatsapp_permission", true, true).visible ? <label className="consent">
           <input
             type="checkbox"
             name="whatsappPermission"
             value="true"
-            required
+            required={fieldSetting("whatsapp_permission", true, true).required}
           />
 
           <span>
@@ -1560,7 +1655,7 @@ export default function PreRegistrationForm() {
             telefon numarasına WhatsApp üzerinden
             gönderilmesini kabul ediyorum.
           </span>
-        </label>
+        </label> : null}
       </section>
 
       <div
@@ -1581,6 +1676,13 @@ export default function PreRegistrationForm() {
         başvuruyu kontrol ederek sizinle iletişime geçer.
       </div>
 
+      {status === "error" && message ? (
+        <div className="formValidationAlert" role="alert">
+          <strong>Eksik veya hatalı bilgi var</strong>
+          <span>{message}</span>
+        </div>
+      ) : null}
+
       <div className="submitRow">
         <button
           className="submitButton"
@@ -1597,11 +1699,15 @@ export default function PreRegistrationForm() {
         </button>
       </div>
 
-      {status === "error" && message && (
-        <p className="formMessage error" role="alert">
-          {message}
-        </p>
-      )}
+      {status === "sending" ? (
+        <div className="submittingOverlay" role="status" aria-live="polite" aria-modal="true">
+          <div className="submittingCard">
+            <span className="submitSpinner" aria-hidden="true" />
+            <strong>Ön kaydınız tamamlanıyor</strong>
+            <p>Bilgileriniz güvenli şekilde kayıt ekibimize iletiliyor. Lütfen bu ekranı kapatmayın.</p>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }
