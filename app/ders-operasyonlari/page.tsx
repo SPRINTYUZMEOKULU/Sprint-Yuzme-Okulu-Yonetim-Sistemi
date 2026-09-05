@@ -85,9 +85,8 @@ export default async function LessonOperationsPage({
   const selectedStudentIds = requestedStudentIds.filter((id) => validSelectedIds.has(id));
   const selectedMemberships = (membershipsResult.data || []).filter((row: any) => selectedStudentIds.includes(row.student_id));
   const selectedGroupIds = Array.from(new Set(selectedMemberships.map((row: any) => row.group_id).filter(Boolean)));
-  const initialGroupId = selectedGroupIds.length === 1 ? String(selectedGroupIds[0]) : "";
   const groupMap = new Map((groupsResult.data || []).map((row: any) => [row.id, row]));
-  const initialBranchId = initialGroupId ? String(groupMap.get(initialGroupId)?.branch_id || "") : "";
+  const selectedGroupNames = selectedGroupIds.map((id) => groupMap.get(id)?.name).filter(Boolean);
 
   return (
     <main style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
@@ -98,15 +97,33 @@ export default async function LessonOperationsPage({
           <Link href="/" style={{ padding: "10px 14px", borderRadius: 10, background: "#1671e8", textDecoration: "none", color: "#fff", fontWeight: 800 }}>Ana Sayfa</Link>
         </div>
 
+        {selectedStudentIds.length ? (
+          <section style={{ marginBottom: 16, padding: 16, borderRadius: 16, border: "1px solid #bfd6f2", background: "#eef6ff", color: "#17345c" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+              <div>
+                <strong style={{ display: "block", fontSize: 16 }}>{selectedStudentIds.length} seçili kursiyer operasyon merkezine aktarıldı</strong>
+                <span style={{ fontSize: 12, color: "#657a93" }}>İşlem uygulandığında yalnız bu seçili kursiyerler hedeflenir.</span>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 800, color: selectedGroupIds.length > 1 ? "#a04a00" : "#17643c" }}>
+                {selectedGroupIds.length === 1 ? `Grup: ${selectedGroupNames[0] || "—"}` : `${selectedGroupIds.length} farklı grup seçili`}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              {(selectedStudentsResult.data || []).slice(0, 20).map((student: any) => (
+                <span key={student.id} style={{ padding: "6px 9px", borderRadius: 999, background: "#fff", border: "1px solid #d3e3f6", fontSize: 12, fontWeight: 700 }}>
+                  {student.first_name} {student.last_name}
+                </span>
+              ))}
+              {selectedStudentIds.length > 20 ? <span style={{ padding: "6px 9px", fontSize: 12 }}>+{selectedStudentIds.length - 20} kişi</span> : null}
+            </div>
+          </section>
+        ) : null}
+
         <LessonOperationsClient
           branches={branchesResult.data || []}
           groups={groupsResult.data || []}
           schedules={schedulesResult.data || []}
           memberCounts={memberCounts}
-          selectedStudentIds={selectedStudentIds}
-          selectedStudents={selectedStudentsResult.data || []}
-          initialBranchId={initialBranchId}
-          initialGroupId={initialGroupId}
         />
       </div>
     </main>
