@@ -25,6 +25,53 @@ function back(path: string, key: "saved" | "error", message: string): never {
   redirect(`${path}?${key}=${encodeURIComponent(message)}`);
 }
 
+async function ensureGuardianProfile(admin: ReturnType<typeof adminClient>, guardianId: string, organizationId: string) {
+  const { data: existing, error: profileReadError } = await admin
+    .from("profiles")
+    .select("id,organization_id,role")
+    .eq("id", guardianId)
+    .maybeSingle();
+
+  if (profileReadError) return { ok: false as const, message: profileReadError.message };
+
+  if (existing) {
+    if (existing.organization_id !== organizationId || existing.role !== "guardian") {
+      return { ok: false as const, message: "Veli profili bu organizasyona ait değil veya veli rolünde değil." };
+    }
+    return { ok: true as const };
+  }
+
+  const { data: authResult, error: authError } = await admin.auth.admin.getUserById(guardianId);
+  const authUser = authResult?.user;
+  if (authError || !authUser) {
+    return { ok: false as const, message: authError?.message || "Veli Auth hesabı bulunamadı." };
+  }
+
+  const metadata = authUser.user_metadata || {};
+  if (metadata.role && metadata.role !== "guardian") {
+    return { ok: false as const, message: "Auth hesabı veli rolünde değil." };
+  }
+  if (metadata.organization_id && metadata.organization_id !== organizationId) {
+    return { ok: false as const, message: "Auth hesabı farklı bir organizasyona bağlı." };
+  }
+
+  const rawPhone = String(authUser.phone || "").replace(/\D/g, "");
+  const { error: repairError } = await admin.from("profiles").upsert({
+    id: guardianId,
+    organization_id: organizationId,
+    full_name: String(metadata.full_name || "Veli").trim().slice(0, 200),
+    email: authUser.email || null,
+    phone: rawPhone ? `+${rawPhone}` : null,
+    role: "guardian",
+    is_active: true,
+    last_sign_in_at: authUser.last_sign_in_at || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "id" });
+
+  if (repairError) return { ok: false as const, message: `Veli profili onarılamadı: ${repairError.message}` };
+  return { ok: true as const };
+}
+
 export async function updateGuardian(formData: FormData) {
   const profile = await requireProfile([...managementRoles]);
   const guardianId = text(formData, "guardian_id", 100);
@@ -53,6 +100,17 @@ export async function linkGuardianStudent(formData: FormData) {
   if (!profile.organization_id || !guardianId || !studentId) back(path, "error", "Veli veya öğrenci seçilmedi.");
 
   const admin = adminClient();
+  const guardianState = await ensureGuardianProfile(admin, guardianId, profile.organization_id);
+  if (!guardianState.ok) back(path, "error", guardianState.message);
+
+  const { data: student, error: studentError } = await admin
+    .from("students")
+    .select("id")
+    .eq("id", studentId)
+    .eq("organization_id", profile.organization_id)
+    .maybeSingle();
+  if (studentError || !student) back(path, "error", studentError?.message || "Öğrenci bu organizasyonda bulunamadı.");
+
   const { error } = await admin.from("guardian_students").upsert({
     guardian_id: guardianId,
     student_id: studentId,
