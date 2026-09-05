@@ -6,7 +6,24 @@ import "../dashboard.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function LessonOperationsPage() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseStudentIds(value?: string) {
+  return Array.from(
+    new Set(
+      String(value || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => UUID_RE.test(id))
+    )
+  ).slice(0, 200);
+}
+
+export default async function LessonOperationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -14,6 +31,8 @@ export default async function LessonOperationsPage() {
     "registration_staff",
   ]);
 
+  const query = await searchParams;
+  const requestedStudentIds = parseStudentIds(query.studentIds);
   const supabase = await createClient();
   const organizationId = profile.organization_id;
 
@@ -21,7 +40,7 @@ export default async function LessonOperationsPage() {
     return <main className="operationPage"><section className="operationCard">Organizasyon bilgisi bulunamadı.</section></main>;
   }
 
-  const [branchesResult, groupsResult, schedulesResult, membershipsResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, membershipsResult, selectedStudentsResult] = await Promise.all([
     supabase
       .from("branches")
       .select("id,name")
@@ -46,6 +65,14 @@ export default async function LessonOperationsPage() {
       .select("group_id,student_id")
       .eq("organization_id", organizationId)
       .eq("is_active", true),
+    requestedStudentIds.length
+      ? supabase
+          .from("students")
+          .select("id,first_name,last_name,status")
+          .eq("organization_id", organizationId)
+          .eq("status", "active")
+          .in("id", requestedStudentIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const memberCounts: Record<string, number> = {};
@@ -53,6 +80,14 @@ export default async function LessonOperationsPage() {
     if (!row.group_id || !row.student_id) continue;
     memberCounts[row.group_id] = (memberCounts[row.group_id] || 0) + 1;
   }
+
+  const validSelectedIds = new Set((selectedStudentsResult.data || []).map((row: any) => row.id));
+  const selectedStudentIds = requestedStudentIds.filter((id) => validSelectedIds.has(id));
+  const selectedMemberships = (membershipsResult.data || []).filter((row: any) => selectedStudentIds.includes(row.student_id));
+  const selectedGroupIds = Array.from(new Set(selectedMemberships.map((row: any) => row.group_id).filter(Boolean)));
+  const initialGroupId = selectedGroupIds.length === 1 ? String(selectedGroupIds[0]) : "";
+  const groupMap = new Map((groupsResult.data || []).map((row: any) => [row.id, row]));
+  const initialBranchId = initialGroupId ? String(groupMap.get(initialGroupId)?.branch_id || "") : "";
 
   return (
     <main style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
@@ -68,6 +103,10 @@ export default async function LessonOperationsPage() {
           groups={groupsResult.data || []}
           schedules={schedulesResult.data || []}
           memberCounts={memberCounts}
+          selectedStudentIds={selectedStudentIds}
+          selectedStudents={selectedStudentsResult.data || []}
+          initialBranchId={initialBranchId}
+          initialGroupId={initialGroupId}
         />
       </div>
     </main>
