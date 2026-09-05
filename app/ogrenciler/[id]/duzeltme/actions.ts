@@ -24,7 +24,33 @@ function validDate(value: string) {
 }
 
 function uniqueStrings(values: FormDataEntryValue[]) {
-  return Array.from(new Set(values.map(String).map((v) => v.trim()).filter(Boolean)));
+  return Array.from(
+    new Set(
+      values
+        .map(String)
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function calculatePlannedEndDate(
+  startDate: string,
+  lessonCount: number,
+  isoWeekdays: number[],
+) {
+  const allowedDays = new Set(isoWeekdays.map(isoToJsDay));
+  const cursor = new Date(`${startDate}T12:00:00Z`);
+  let remaining = lessonCount;
+  let safety = 0;
+
+  while (remaining > 0 && safety < 730) {
+    if (allowedDays.has(cursor.getUTCDay())) remaining -= 1;
+    if (remaining > 0) cursor.setUTCDate(cursor.getUTCDate() + 1);
+    safety += 1;
+  }
+
+  return remaining === 0 ? cursor.toISOString().slice(0, 10) : null;
 }
 
 export async function applyManagerCorrection(formData: FormData) {
@@ -38,7 +64,9 @@ export async function applyManagerCorrection(formData: FormData) {
   }
 
   if (reason.length < 5) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Düzeltme gerekçesini en az 5 karakter yazınız.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Düzeltme gerekçesini en az 5 karakter yazınız.")}`,
+    );
   }
 
   const branchId = text(formData, "branch_id");
@@ -49,31 +77,112 @@ export async function applyManagerCorrection(formData: FormData) {
   const selectedScheduleIds = uniqueStrings(formData.getAll("schedule_ids"));
   const requestedTotalLessons = Number(formData.get("total_lessons") || 0);
 
-  if (!branchId || !groupId || !packageId || !validDate(startDate) || !selectedScheduleIds.length) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Şube, grup, paket, başlangıç tarihi ve en az bir ders seansı seçilmelidir.")}`);
+  if (
+    !branchId ||
+    !groupId ||
+    !packageId ||
+    !validDate(startDate) ||
+    !selectedScheduleIds.length
+  ) {
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Şube, grup, paket, başlangıç tarihi ve en az bir ders seansı seçilmelidir.")}`,
+    );
   }
 
   if (paymentDueDate && !validDate(paymentDueDate)) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ödeme vade tarihi geçersiz.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ödeme vade tarihi geçersiz.")}`,
+    );
   }
 
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  const [studentResult, enrollmentResult, membershipResult, planResult, branchResult, groupResult, packageResult, schedulesResult] = await Promise.all([
-    supabase.from("students").select("*").eq("organization_id", organizationId).eq("id", studentId).maybeSingle(),
-    supabase.from("student_enrollments").select("*").eq("organization_id", organizationId).eq("student_id", studentId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("student_group_memberships").select("*").eq("organization_id", organizationId).eq("student_id", studentId).eq("is_active", true).order("started_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("student_attendance_plans").select("*").eq("organization_id", organizationId).eq("student_id", studentId).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("branches").select("id,name").eq("organization_id", organizationId).eq("id", branchId).eq("is_active", true).maybeSingle(),
-    supabase.from("training_groups").select("id,name,branch_id").eq("organization_id", organizationId).eq("id", groupId).eq("is_active", true).maybeSingle(),
-    supabase.from("course_packages").select("id,name,lesson_count,price").eq("organization_id", organizationId).eq("id", packageId).maybeSingle(),
-    supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id", organizationId).eq("group_id", groupId).eq("is_active", true).in("id", selectedScheduleIds),
+  const [
+    studentResult,
+    enrollmentResult,
+    membershipResult,
+    planResult,
+    branchResult,
+    groupResult,
+    packageResult,
+    schedulesResult,
+  ] = await Promise.all([
+    supabase
+      .from("students")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("id", studentId)
+      .maybeSingle(),
+    supabase
+      .from("student_enrollments")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("student_group_memberships")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .eq("is_active", true)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("student_attendance_plans")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("branches")
+      .select("id,name")
+      .eq("organization_id", organizationId)
+      .eq("id", branchId)
+      .eq("is_active", true)
+      .maybeSingle(),
+    supabase
+      .from("training_groups")
+      .select("id,name,branch_id")
+      .eq("organization_id", organizationId)
+      .eq("id", groupId)
+      .eq("is_active", true)
+      .maybeSingle(),
+    supabase
+      .from("course_packages")
+      .select("id,name,lesson_count,price")
+      .eq("organization_id", organizationId)
+      .eq("id", packageId)
+      .maybeSingle(),
+    supabase
+      .from("lesson_schedules")
+      .select("id,group_id,weekday,start_time,end_time")
+      .eq("organization_id", organizationId)
+      .eq("group_id", groupId)
+      .eq("is_active", true)
+      .in("id", selectedScheduleIds),
   ]);
 
-  const loadError = studentResult.error || enrollmentResult.error || membershipResult.error || planResult.error || branchResult.error || groupResult.error || packageResult.error || schedulesResult.error;
+  const loadError =
+    studentResult.error ||
+    enrollmentResult.error ||
+    membershipResult.error ||
+    planResult.error ||
+    branchResult.error ||
+    groupResult.error ||
+    packageResult.error ||
+    schedulesResult.error;
   if (loadError) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Düzeltme verileri yüklenemedi: ${loadError.message}`)}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Düzeltme verileri yüklenemedi: ${loadError.message}`)}`,
+    );
   }
 
   const student = studentResult.data;
@@ -86,29 +195,56 @@ export async function applyManagerCorrection(formData: FormData) {
   const schedules = schedulesResult.data || [];
 
   if (!student || !enrollment || !branch || !group || !coursePackage) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Aktif öğrenci/kayıt veya seçilen program bulunamadı.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Aktif öğrenci/kayıt veya seçilen program bulunamadı.")}`,
+    );
   }
 
   if (group.branch_id !== branchId) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Seçilen grup ile şube eşleşmiyor.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Seçilen grup ile şube eşleşmiyor.")}`,
+    );
   }
 
   if (schedules.length !== selectedScheduleIds.length) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Seçilen ders seanslarından biri geçersiz.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Seçilen ders seanslarından biri geçersiz.")}`,
+    );
   }
 
-  const isoWeekdays = Array.from(new Set(schedules.map((row: any) => Number(row.weekday)).filter((day: number) => Number.isInteger(day) && day >= 1 && day <= 7))).sort((a, b) => a - b);
+  const isoWeekdays = Array.from(
+    new Set(
+      schedules
+        .map((row: any) => Number(row.weekday))
+        .filter((day: number) => Number.isInteger(day) && day >= 1 && day <= 7),
+    ),
+  ).sort((a, b) => a - b);
   if (!isoWeekdays.length) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ders programında geçerli gün bulunamadı.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ders programında geçerli gün bulunamadı.")}`,
+    );
   }
 
-  const totalLessons = Number.isInteger(requestedTotalLessons) && requestedTotalLessons > 0
-    ? requestedTotalLessons
-    : Number(coursePackage.lesson_count || 0);
+  const totalLessons =
+    Number.isInteger(requestedTotalLessons) && requestedTotalLessons > 0
+      ? requestedTotalLessons
+      : Number(coursePackage.lesson_count || 0);
 
   const usedLessons = Math.max(0, Number(enrollment.used_lessons || 0));
   if (!totalLessons || totalLessons < usedLessons) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Toplam ders sayısı kullanılan ders sayısından (${usedLessons}) az olamaz.`)}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Toplam ders sayısı kullanılan ders sayısından (${usedLessons}) az olamaz.`)}`,
+    );
+  }
+  const plannedEndDate = calculatePlannedEndDate(
+    startDate,
+    totalLessons,
+    isoWeekdays,
+  );
+  if (!plannedEndDate) {
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Planlanan bitiş tarihi hesaplanamadı.")}`,
+    );
   }
 
   const oldSnapshot = {
@@ -137,14 +273,22 @@ export async function applyManagerCorrection(formData: FormData) {
       lesson_weekdays: enrollment.lesson_weekdays,
       payment_due_date: enrollment.payment_due_date,
     },
-    membership: membership ? { id: membership.id, group_id: membership.group_id, started_at: membership.started_at } : null,
-    attendance_plan: oldPlan ? {
-      id: oldPlan.id,
-      group_id: oldPlan.group_id,
-      selected_weekdays: oldPlan.selected_weekdays,
-      normal_planned_end_date: oldPlan.normal_planned_end_date,
-      compensation_planned_end_date: oldPlan.compensation_planned_end_date,
-    } : null,
+    membership: membership
+      ? {
+          id: membership.id,
+          group_id: membership.group_id,
+          started_at: membership.started_at,
+        }
+      : null,
+    attendance_plan: oldPlan
+      ? {
+          id: oldPlan.id,
+          group_id: oldPlan.group_id,
+          selected_weekdays: oldPlan.selected_weekdays,
+          normal_planned_end_date: oldPlan.normal_planned_end_date,
+          compensation_planned_end_date: oldPlan.compensation_planned_end_date,
+        }
+      : null,
   };
 
   const currentProgramSignature = `${enrollment.branch_id || student.branch_id || ""}|${enrollment.group_id || membership?.group_id || ""}|${JSON.stringify(Array.isArray(oldPlan?.selected_weekdays) ? oldPlan.selected_weekdays : [])}`;
@@ -163,7 +307,9 @@ export async function applyManagerCorrection(formData: FormData) {
     });
 
     if (!transferResult.ok || !transferResult.transferredCount) {
-      redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(transferResult.message || "Program düzeltmesi uygulanamadı.")}`);
+      redirect(
+        `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(transferResult.message || "Program düzeltmesi uygulanamadı.")}`,
+      );
     }
 
     const refreshedEnrollment = await supabase
@@ -177,7 +323,9 @@ export async function applyManagerCorrection(formData: FormData) {
       .maybeSingle();
 
     if (refreshedEnrollment.error || !refreshedEnrollment.data) {
-      redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Program düzeltildi ancak aktif kayıt yeniden okunamadı.")}`);
+      redirect(
+        `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Program düzeltildi ancak aktif kayıt yeniden okunamadı.")}`,
+      );
     }
     enrollment = refreshedEnrollment.data;
   }
@@ -189,6 +337,7 @@ export async function applyManagerCorrection(formData: FormData) {
       group_id: groupId,
       package_id: packageId,
       start_date: startDate,
+      planned_end_date: plannedEndDate,
       total_lessons: totalLessons,
       lesson_weekdays: isoWeekdays.map(isoToJsDay),
       payment_due_date: paymentDueDate,
@@ -198,7 +347,9 @@ export async function applyManagerCorrection(formData: FormData) {
     .eq("id", enrollment.id);
 
   if (enrollmentUpdate.error) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt/paket düzeltilemedi: ${enrollmentUpdate.error.message}`)}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt/paket düzeltilemedi: ${enrollmentUpdate.error.message}`)}`,
+    );
   }
 
   const updatedEnrollmentResult = await supabase
@@ -209,7 +360,9 @@ export async function applyManagerCorrection(formData: FormData) {
     .maybeSingle();
 
   if (updatedEnrollmentResult.error || !updatedEnrollmentResult.data) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Güncellenen kayıt tekrar okunamadı.")}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Güncellenen kayıt tekrar okunamadı.")}`,
+    );
   }
 
   const updatedEnrollment = updatedEnrollmentResult.data;
@@ -235,7 +388,9 @@ export async function applyManagerCorrection(formData: FormData) {
     .eq("id", studentId);
 
   if (studentUpdate.error) {
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Öğrenci bilgileri düzeltilemedi: ${studentUpdate.error.message}`)}`);
+    redirect(
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Öğrenci bilgileri düzeltilemedi: ${studentUpdate.error.message}`)}`,
+    );
   }
 
   const activePlanResult = await supabase
@@ -252,9 +407,12 @@ export async function applyManagerCorrection(formData: FormData) {
   if (activePlan?.id) {
     const currentCompEnd = activePlan.compensation_planned_end_date || null;
     const normalEnd = updatedEnrollment.planned_end_date || null;
-    const compensationEnd = currentCompEnd && normalEnd
-      ? (currentCompEnd >= normalEnd ? currentCompEnd : normalEnd)
-      : (currentCompEnd || normalEnd);
+    const compensationEnd =
+      currentCompEnd && normalEnd
+        ? currentCompEnd >= normalEnd
+          ? currentCompEnd
+          : normalEnd
+        : currentCompEnd || normalEnd;
 
     await supabase
       .from("student_attendance_plans")

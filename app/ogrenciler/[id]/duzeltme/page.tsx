@@ -34,6 +34,11 @@ export default async function ManagerCorrectionPage({
 
   if (!studentResult.data) notFound();
 
+  const savedEnrollment = enrollmentResult.data;
+  const savedBranch = (branchesResult.data || []).find((branch) => branch.id === savedEnrollment?.branch_id);
+  const savedGroup = (groupsResult.data || []).find((group) => group.id === savedEnrollment?.group_id);
+  const savedPackage = (packagesResult.data || []).find((coursePackage) => coursePackage.id === savedEnrollment?.package_id);
+
   return (
     <main className="correctionPage">
       <div className="correctionShell">
@@ -62,6 +67,15 @@ export default async function ManagerCorrectionPage({
           <div className="correctionNotice success">
             <strong>✓ Düzeltme uygulandı.</strong>
             <span>Eski ve yeni değerler öğrenci işlem geçmişine kilitli denetim kaydı olarak eklendi.</span>
+            <div className="savedSummary" aria-label="Kaydedilen güncel bilgiler">
+              <div><small>Şube</small><b>{savedBranch?.name || "—"}</b></div>
+              <div><small>Grup</small><b>{savedGroup?.name || "—"}</b></div>
+              <div><small>Paket</small><b>{savedPackage?.name || "—"}</b></div>
+              <div><small>Toplam Ders</small><b>{savedEnrollment?.total_lessons ?? "—"}</b></div>
+              <div><small>Başlangıç</small><b>{savedEnrollment?.start_date || "—"}</b></div>
+              <div><small>Planlanan Bitiş</small><b>{savedEnrollment?.planned_end_date || "—"}</b></div>
+              <div><small>Ödeme Vadesi</small><b>{savedEnrollment?.payment_due_date || "—"}</b></div>
+            </div>
           </div>
         ) : null}
 
