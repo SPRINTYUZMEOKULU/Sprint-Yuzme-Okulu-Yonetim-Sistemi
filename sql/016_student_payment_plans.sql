@@ -43,13 +43,13 @@ alter table public.student_payment_installments enable row level security;
 
 drop policy if exists payment_plans_staff_all on public.student_payment_plans;
 create policy payment_plans_staff_all on public.student_payment_plans for all to authenticated
-using (organization_id = public.current_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'))
-with check (organization_id = public.current_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'));
+using (organization_id = public.current_user_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'))
+with check (organization_id = public.current_user_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'));
 
 drop policy if exists payment_installments_staff_all on public.student_payment_installments;
 create policy payment_installments_staff_all on public.student_payment_installments for all to authenticated
-using (organization_id = public.current_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'))
-with check (organization_id = public.current_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'));
+using (organization_id = public.current_user_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'))
+with check (organization_id = public.current_user_organization_id() and public.current_user_role() in ('owner','admin','branch_manager','registration_staff','accounting'));
 
 drop policy if exists payment_plans_guardian_select on public.student_payment_plans;
 create policy payment_plans_guardian_select on public.student_payment_plans for select to authenticated
