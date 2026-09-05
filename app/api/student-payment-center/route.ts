@@ -52,11 +52,12 @@ export async function GET(request: NextRequest) {
           .maybeSingle(),
         supabase
           .from("student_payments")
-          .select("*")
-          .eq("organization_id", organizationId)
+          .select(
+            "id,organization_id,student_id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,created_at,cash_handover_status,cancelled_at",
+          )
           .eq("student_id", studentId)
           .order("received_at", { ascending: false })
-          .limit(50),
+          .limit(100),
       ],
     );
 
@@ -84,7 +85,13 @@ export async function GET(request: NextRequest) {
       packageInfo = packageResult.data;
     }
 
-    const allPayments = paymentsResult.data || [];
+    // RLS zaten kullanıcıyı yalnızca yetkili olduğu organizasyon kayıtlarıyla
+    // sınırlar. Burada öğrenci ID'sine göre tüm tarihsel tahsilatları okuyoruz;
+    // böylece eski kayıt dönemine bağlı ödemeler de "Geçmiş"te görünür.
+    const allPayments = (paymentsResult.data || []).filter(
+      (row: any) => !row.cancelled_at && row.payment_status !== "cancelled",
+    );
+
     const activePayments = enrollment?.id
       ? allPayments.filter((row: any) => row.enrollment_id === enrollment.id)
       : [];
@@ -145,10 +152,11 @@ export async function GET(request: NextRequest) {
         id: row.id,
         enrollmentId: row.enrollment_id || null,
         amount: amount(row.amount),
-        method: row.payment_method || row.method || "other",
-        description: row.description || row.note || null,
+        method: row.payment_method || "other",
+        description: row.description || null,
         receivedAt: row.received_at || row.created_at || null,
-        status: row.status || null,
+        status: row.payment_status || "received",
+        cashHandoverStatus: row.cash_handover_status || null,
       })),
       paymentPlan,
       installments,
