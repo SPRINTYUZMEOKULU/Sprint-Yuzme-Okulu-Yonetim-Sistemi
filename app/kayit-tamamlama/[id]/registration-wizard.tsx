@@ -2469,7 +2469,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           <Link
             className="sectionLink"
             href={
-              `/odemeler?student=${student.id}&action=payment`
+              `/ogrenciler/${student.id}?payment=plan`
             }
           >
             Ödeme Al / Plan Hazırla

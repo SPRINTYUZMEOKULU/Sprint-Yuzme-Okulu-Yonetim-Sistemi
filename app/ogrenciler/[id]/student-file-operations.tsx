@@ -434,7 +434,11 @@ export default function StudentFileOperations({
               setPanel("payment");
             }}
           >
-            <FileIcon name="wallet" /> Ödeme Al
+            <FileIcon name="wallet" />
+            <span className="paymentButtonText">
+              <b>Ödeme Al</b>
+              <small>Plan ve tahsilat</small>
+            </span>
           </button>
 
           <button type="button" onClick={() => jumpTo("duzenle")}>
@@ -957,10 +961,31 @@ export default function StudentFileOperations({
         }
 
         .fileCommandActions .payment {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 48px;
+          padding: 8px 14px;
           background: linear-gradient(135deg, #087443, #12a365);
           border-color: #087443;
           color: #ffffff;
           box-shadow: 0 8px 18px rgba(8, 116, 67, 0.2);
+        }
+
+        .paymentButtonText {
+          display: grid;
+          gap: 1px;
+          text-align: left;
+        }
+
+        .paymentButtonText b {
+          font-size: 12px;
+        }
+
+        .paymentButtonText small {
+          color: rgba(255, 255, 255, 0.82);
+          font-size: 9px;
+          font-weight: 700;
         }
 
         .fileCommandActions .green {

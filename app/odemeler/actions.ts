@@ -5,12 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
-type PaymentMethod =
-  | "cash"
-  | "card"
-  | "bank_transfer"
-  | "eft"
-  | "other";
+type PaymentMethod = "cash" | "card" | "bank_transfer" | "eft" | "other";
 
 type CreatePaymentInput = {
   studentId: string;
@@ -19,6 +14,7 @@ type CreatePaymentInput = {
   paymentMethod: PaymentMethod;
   description?: string | null;
   dueDate?: string | null;
+  installmentId?: string | null;
 };
 
 type PaymentActionResult = {
@@ -116,12 +112,12 @@ function revalidateFinancePaths(studentId?: string | null) {
 async function getApprovalRule(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
-  ruleKey: string
+  ruleKey: string,
 ): Promise<ApprovalRuleState> {
   const { data, error } = await supabase
     .from("approval_rules")
     .select(
-      "is_active,requires_approval,dashboard_notification,push_notification"
+      "is_active,requires_approval,dashboard_notification,push_notification",
     )
     .eq("organization_id", organizationId)
     .eq("rule_key", ruleKey)
@@ -157,7 +153,7 @@ async function addSystemNotification(
     entityId?: string | null;
     pushRequested?: boolean;
     metadata?: Record<string, unknown>;
-  }
+  },
 ) {
   const { error } = await supabase.from("system_notifications").insert({
     organization_id: input.organizationId,
@@ -197,7 +193,7 @@ async function createApprovalRequest(
     reason: string;
     oldValues: Record<string, unknown>;
     newValues: Record<string, unknown>;
-  }
+  },
 ) {
   /*
    * Aynı kayıt için aynı tipte ikinci bekleyen talebi engelle.
@@ -239,9 +235,7 @@ async function createApprovalRequest(
     .single();
 
   if (error || !data) {
-    throw new Error(
-      error?.message || "Onay talebi oluşturulamadı."
-    );
+    throw new Error(error?.message || "Onay talebi oluşturulamadı.");
   }
 
   return {
@@ -260,7 +254,7 @@ async function createApprovalRequest(
  * Günlük Kasa ve Veli Ödemeleri aynı hareketi okuyabilir.
  */
 export async function createStudentPayment(
-  input: CreatePaymentInput
+  input: CreatePaymentInput,
 ): Promise<PaymentActionResult> {
   try {
     const profile = await getAuthorizedProfile();
@@ -328,7 +322,7 @@ export async function createStudentPayment(
     const { data: enrollment, error: enrollmentError } = await supabase
       .from("student_enrollments")
       .select(
-        "id,student_id,organization_id,status,start_date,payment_due_date"
+        "id,student_id,organization_id,status,start_date,payment_due_date",
       )
       .eq("id", enrollmentId)
       .eq("student_id", studentId)
@@ -380,32 +374,34 @@ export async function createStudentPayment(
      * Kart / havale / EFT: fiziki kasa teslimi gerektirmez.
      */
     const cashHandoverStatus =
-      input.paymentMethod === "cash"
-        ? "with_staff"
-        : "main_cash_confirmed";
+      input.paymentMethod === "cash" ? "with_staff" : "main_cash_confirmed";
+
+    const paymentInsert: Record<string, unknown> = {
+      organization_id: organizationId,
+      student_id: studentId,
+      enrollment_id: enrollmentId,
+      amount,
+      currency: "TRY",
+      payment_method: input.paymentMethod,
+      payment_status: "received",
+      description: cleanDescription(input.description),
+      received_by: profile.id,
+      received_at: now,
+      cash_handover_status: cashHandoverStatus,
+      cash_handover_requested_at: null,
+      cash_handover_approved_by: null,
+      cash_handover_approved_at: input.paymentMethod === "cash" ? null : now,
+      cancellation_reason: null,
+      cancelled_by: null,
+      cancelled_at: null,
+    };
+
+    if (input.installmentId)
+      paymentInsert.payment_installment_id = input.installmentId;
 
     const { data: payment, error: paymentError } = await supabase
       .from("student_payments")
-      .insert({
-        organization_id: organizationId,
-        student_id: studentId,
-        enrollment_id: enrollmentId,
-        amount,
-        currency: "TRY",
-        payment_method: input.paymentMethod,
-        payment_status: "received",
-        description: cleanDescription(input.description),
-        received_by: profile.id,
-        received_at: now,
-        cash_handover_status: cashHandoverStatus,
-        cash_handover_requested_at: null,
-        cash_handover_approved_by: null,
-        cash_handover_approved_at:
-          input.paymentMethod === "cash" ? null : now,
-        cancellation_reason: null,
-        cancelled_by: null,
-        cancelled_at: null,
-      })
+      .insert(paymentInsert)
       .select("id")
       .single();
 
@@ -416,6 +412,43 @@ export async function createStudentPayment(
           ? `Ödeme kaydedilemedi: ${paymentError.message}`
           : "Ödeme kaydedilemedi.",
       };
+    }
+
+    if (input.installmentId) {
+      const { data: installment } = await supabase
+        .from("student_payment_installments")
+        .select("id,amount,paid_amount,plan_id")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("enrollment_id", enrollmentId)
+        .eq("id", input.installmentId)
+        .maybeSingle();
+      if (installment) {
+        const paidAmount = Math.min(
+          Number(installment.amount),
+          Number(installment.paid_amount || 0) + amount,
+        );
+        await supabase
+          .from("student_payment_installments")
+          .update({
+            paid_amount: paidAmount,
+            status:
+              paidAmount >= Number(installment.amount) ? "paid" : "partial",
+            updated_at: now,
+          })
+          .eq("id", installment.id);
+        const { data: remainingRows } = await supabase
+          .from("student_payment_installments")
+          .select("id")
+          .eq("plan_id", installment.plan_id)
+          .neq("status", "paid")
+          .limit(1);
+        if (!remainingRows?.length)
+          await supabase
+            .from("student_payment_plans")
+            .update({ status: "completed", updated_at: now })
+            .eq("id", installment.plan_id);
+      }
     }
 
     const studentName = `${student.first_name || ""} ${
@@ -432,7 +465,7 @@ export async function createStudentPayment(
       title: "Yeni ödeme alındı",
       message:
         `${studentName || "Öğrenci"} için ${amount.toLocaleString(
-          "tr-TR"
+          "tr-TR",
         )} TL ${methodLabel} ödeme alındı.` +
         (input.paymentMethod === "cash"
           ? " Nakit personelde; kasa teslimi bekleniyor."
@@ -456,7 +489,7 @@ export async function createStudentPayment(
       ok: true,
       paymentId: payment.id,
       message: `${studentName} için ${amount.toLocaleString(
-        "tr-TR"
+        "tr-TR",
       )} TL ödeme başarıyla kaydedildi.`.trim(),
     };
   } catch (error) {
@@ -478,7 +511,7 @@ export async function createStudentPayment(
  * ----------------------------------------------------
  */
 export async function requestCashHandover(
-  paymentId: string
+  paymentId: string,
 ): Promise<PaymentActionResult> {
   try {
     const profile = await getAuthorizedProfile();
@@ -503,7 +536,7 @@ export async function requestCashHandover(
     const { data: payment, error: paymentError } = await supabase
       .from("student_payments")
       .select(
-        "id,student_id,amount,payment_method,cash_handover_status,cancelled_at"
+        "id,student_id,amount,payment_method,cash_handover_status,cancelled_at",
       )
       .eq("id", paymentId)
       .eq("organization_id", organizationId)
@@ -526,8 +559,7 @@ export async function requestCashHandover(
     if (payment.payment_method !== "cash") {
       return {
         ok: false,
-        message:
-          "Kasa teslim işlemi yalnızca nakit ödemelerde kullanılabilir.",
+        message: "Kasa teslim işlemi yalnızca nakit ödemelerde kullanılabilir.",
       };
     }
 
@@ -559,7 +591,7 @@ export async function requestCashHandover(
     const rule = await getApprovalRule(
       supabase,
       organizationId,
-      "cash_handover_approve"
+      "cash_handover_approve",
     );
 
     if (rule.dashboard_notification || rule.push_notification) {
@@ -570,7 +602,7 @@ export async function requestCashHandover(
         eventKey: "cash_handover_requested",
         title: "Kasa teslimi bekliyor",
         message: `${Number(payment.amount || 0).toLocaleString(
-          "tr-TR"
+          "tr-TR",
         )} TL nakit için ana kasa teslim onayı bekleniyor.`,
         severity: "warning",
         entityType: "student_payment",
@@ -611,14 +643,10 @@ export async function requestCashHandover(
  * Ayarlardaki Kasa Teslim Onayı kuralı bildirim/push davranışını belirler.
  */
 export async function approveCashHandover(
-  paymentId: string
+  paymentId: string,
 ): Promise<PaymentActionResult> {
   try {
-    const profile = await requireProfile([
-      "owner",
-      "admin",
-      "accounting",
-    ]);
+    const profile = await requireProfile(["owner", "admin", "accounting"]);
 
     const organizationId = profile.organization_id;
 
@@ -633,9 +661,7 @@ export async function approveCashHandover(
 
     const { data: payment, error: paymentError } = await supabase
       .from("student_payments")
-      .select(
-        "id,student_id,amount,cash_handover_status,cancelled_at"
-      )
+      .select("id,student_id,amount,cash_handover_status,cancelled_at")
       .eq("id", paymentId)
       .eq("organization_id", organizationId)
       .maybeSingle();
@@ -676,7 +702,7 @@ export async function approveCashHandover(
     const rule = await getApprovalRule(
       supabase,
       organizationId,
-      "cash_handover_approve"
+      "cash_handover_approve",
     );
 
     if (rule.dashboard_notification || rule.push_notification) {
@@ -687,7 +713,7 @@ export async function approveCashHandover(
         eventKey: "cash_handover_approved",
         title: "Nakit ana kasaya teslim edildi",
         message: `${Number(payment.amount || 0).toLocaleString(
-          "tr-TR"
+          "tr-TR",
         )} TL nakit ana kasaya teslim edildi ve onaylandı.`,
         severity: "success",
         entityType: "student_payment",
@@ -712,9 +738,7 @@ export async function approveCashHandover(
     return {
       ok: false,
       message:
-        error instanceof Error
-          ? error.message
-          : "Kasa teslimi onaylanamadı.",
+        error instanceof Error ? error.message : "Kasa teslimi onaylanamadı.",
     };
   }
 }
@@ -738,7 +762,7 @@ export async function approveCashHandover(
 export async function updatePaymentDueDate(
   enrollmentId: string,
   paymentDueDate: string | null,
-  reason?: string | null
+  reason?: string | null,
 ): Promise<PaymentActionResult> {
   try {
     const profile = await requireProfile([
@@ -765,10 +789,7 @@ export async function updatePaymentDueDate(
       };
     }
 
-    if (
-      paymentDueDate &&
-      !/^\d{4}-\d{2}-\d{2}$/.test(paymentDueDate)
-    ) {
+    if (paymentDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(paymentDueDate)) {
       return {
         ok: false,
         message: "Geçerli bir ödeme vade tarihi seçiniz.",
@@ -779,9 +800,7 @@ export async function updatePaymentDueDate(
 
     const { data: enrollment, error: enrollmentError } = await supabase
       .from("student_enrollments")
-      .select(
-        "id,student_id,status,start_date,payment_due_date"
-      )
+      .select("id,student_id,status,start_date,payment_due_date")
       .eq("id", enrollmentId)
       .eq("organization_id", organizationId)
       .maybeSingle();
@@ -796,26 +815,21 @@ export async function updatePaymentDueDate(
     if (enrollment.status !== "active") {
       return {
         ok: false,
-        message:
-          "Ödeme vadesi yalnızca aktif kayıt için değiştirilebilir.",
+        message: "Ödeme vadesi yalnızca aktif kayıt için değiştirilebilir.",
       };
     }
 
-    const requestedDueDate =
-      paymentDueDate || enrollment.start_date || null;
+    const requestedDueDate = paymentDueDate || enrollment.start_date || null;
 
     if (!requestedDueDate) {
       return {
         ok: false,
-        message:
-          "Kayıt başlangıç tarihi bulunamadığı için vade belirlenemedi.",
+        message: "Kayıt başlangıç tarihi bulunamadığı için vade belirlenemedi.",
       };
     }
 
     const currentDueDate =
-      enrollment.payment_due_date ||
-      enrollment.start_date ||
-      null;
+      enrollment.payment_due_date || enrollment.start_date || null;
 
     if (currentDueDate === requestedDueDate) {
       return {
@@ -827,7 +841,7 @@ export async function updatePaymentDueDate(
     const rule = await getApprovalRule(
       supabase,
       organizationId,
-      "payment_due_date_change"
+      "payment_due_date_change",
     );
 
     /*
@@ -964,7 +978,7 @@ export async function updatePaymentDueDate(
 export async function requestPaymentEdit(
   paymentId: string,
   changes: PaymentEditChanges,
-  reason: string
+  reason: string,
 ): Promise<PaymentActionResult> {
   try {
     const profile = await getAuthorizedProfile();
@@ -998,7 +1012,7 @@ export async function requestPaymentEdit(
     const { data: payment, error } = await supabase
       .from("student_payments")
       .select(
-        "id,student_id,enrollment_id,amount,payment_method,description,payment_status,cash_handover_status,cancelled_at"
+        "id,student_id,enrollment_id,amount,payment_method,description,payment_status,cash_handover_status,cancelled_at",
       )
       .eq("id", paymentId)
       .eq("organization_id", organizationId)
@@ -1050,7 +1064,7 @@ export async function requestPaymentEdit(
     const rule = await getApprovalRule(
       supabase,
       organizationId,
-      "payment_edit"
+      "payment_edit",
     );
 
     /*
@@ -1087,7 +1101,7 @@ export async function requestPaymentEdit(
           eventKey: "payment_edit_requested",
           title: "Ödeme düzeltme onayı bekliyor",
           message: `${Number(payment.amount || 0).toLocaleString(
-            "tr-TR"
+            "tr-TR",
           )} TL tutarındaki ödeme için düzeltme talebi oluşturuldu.`,
           severity: "warning",
           entityType: "approval_request",
@@ -1118,9 +1132,7 @@ export async function requestPaymentEdit(
      * güvenli başlangıç durumuna taşır.
      */
     const nextCashStatus =
-      newMethod === "cash"
-        ? "with_staff"
-        : "main_cash_confirmed";
+      newMethod === "cash" ? "with_staff" : "main_cash_confirmed";
 
     const now = new Date().toISOString();
 
@@ -1132,10 +1144,8 @@ export async function requestPaymentEdit(
         description: newDescription,
         cash_handover_status: nextCashStatus,
         cash_handover_requested_at: null,
-        cash_handover_approved_by:
-          newMethod === "cash" ? null : profile.id,
-        cash_handover_approved_at:
-          newMethod === "cash" ? null : now,
+        cash_handover_approved_by: newMethod === "cash" ? null : profile.id,
+        cash_handover_approved_at: newMethod === "cash" ? null : now,
       })
       .eq("id", paymentId)
       .eq("organization_id", organizationId);
@@ -1155,7 +1165,7 @@ export async function requestPaymentEdit(
         eventKey: "payment_edited",
         title: "Ödeme düzeltildi",
         message: `${Number(payment.amount || 0).toLocaleString(
-          "tr-TR"
+          "tr-TR",
         )} TL tutarındaki ödeme kaydı düzeltildi.`,
         severity: "info",
         entityType: "student_payment",
@@ -1199,7 +1209,7 @@ export async function requestPaymentEdit(
  */
 export async function requestPaymentCancellation(
   paymentId: string,
-  reason: string
+  reason: string,
 ): Promise<PaymentActionResult> {
   try {
     const profile = await getAuthorizedProfile();
@@ -1233,7 +1243,7 @@ export async function requestPaymentCancellation(
     const { data: payment, error } = await supabase
       .from("student_payments")
       .select(
-        "id,student_id,enrollment_id,amount,payment_method,payment_status,cash_handover_status,cancelled_at"
+        "id,student_id,enrollment_id,amount,payment_method,payment_status,cash_handover_status,cancelled_at",
       )
       .eq("id", paymentId)
       .eq("organization_id", organizationId)
@@ -1256,7 +1266,7 @@ export async function requestPaymentCancellation(
     const rule = await getApprovalRule(
       supabase,
       organizationId,
-      "payment_cancel"
+      "payment_cancel",
     );
 
     if (rule.is_active && rule.requires_approval) {
@@ -1289,7 +1299,7 @@ export async function requestPaymentCancellation(
           eventKey: "payment_cancel_requested",
           title: "Ödeme iptal onayı bekliyor",
           message: `${Number(payment.amount || 0).toLocaleString(
-            "tr-TR"
+            "tr-TR",
           )} TL tutarındaki ödeme için iptal talebi oluşturuldu.`,
           severity: "warning",
           entityType: "approval_request",
@@ -1343,7 +1353,7 @@ export async function requestPaymentCancellation(
         eventKey: "payment_cancelled",
         title: "Ödeme iptal edildi",
         message: `${Number(payment.amount || 0).toLocaleString(
-          "tr-TR"
+          "tr-TR",
         )} TL tutarındaki ödeme iptal edildi.`,
         severity: "warning",
         entityType: "student_payment",
