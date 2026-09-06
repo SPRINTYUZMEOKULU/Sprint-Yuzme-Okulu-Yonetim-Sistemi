@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type LiveNotification = {
   id: string;
+  dedupeKey?: string;
   title: string;
   body: string;
   severity: string;
@@ -18,7 +19,7 @@ const SEEN_KEY = "sprintos-live-notification-seen";
 function readSeen() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
-    return new Set<string>(Array.isArray(parsed) ? parsed.slice(-100) : []);
+    return new Set<string>(Array.isArray(parsed) ? parsed.slice(-200) : []);
   } catch {
     return new Set<string>();
   }
@@ -26,8 +27,12 @@ function readSeen() {
 
 function saveSeen(seen: Set<string>) {
   try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(seen).slice(-100)));
+    localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(seen).slice(-200)));
   } catch {}
+}
+
+function logicalKey(item: LiveNotification) {
+  return item.dedupeKey || item.id;
 }
 
 export default function LiveNotificationCenter() {
@@ -42,8 +47,8 @@ export default function LiveNotificationCenter() {
     currentRef.current = current;
   }, [current]);
 
-  const rememberHandled = useCallback((id: string) => {
-    seenRef.current.add(id);
+  const rememberHandled = useCallback((key: string) => {
+    seenRef.current.add(key);
     saveSeen(seenRef.current);
   }, []);
 
@@ -77,12 +82,10 @@ export default function LiveNotificationCenter() {
       if (!response.ok || !data?.ok || !Array.isArray(data.notifications)) return;
 
       const next = data.notifications.find(
-        (item: LiveNotification) => !seenRef.current.has(item.id),
+        (item: LiveNotification) => !seenRef.current.has(logicalKey(item)),
       ) as LiveNotification | undefined;
       if (!next) return;
 
-      // Önemli: Bildirim burada okunmuş/görülmüş sayılmaz.
-      // Kullanıcı Kapat veya İşleme Git seçeneğine basana kadar ekranda kalır.
       currentRef.current = next;
       setCurrent(next);
 
@@ -91,11 +94,11 @@ export default function LiveNotificationCenter() {
           const n = new Notification(next.title, {
             body: next.body,
             icon: "/icons/icon-192.png",
-            tag: `sprintos-live-${next.id}`,
+            tag: `sprintos-live-${logicalKey(next)}`,
           });
           n.onclick = () => {
             window.focus();
-            rememberHandled(next.id);
+            rememberHandled(logicalKey(next));
             void markRead(next.id);
             window.location.assign(next.targetPath || "/bildirimler");
           };
@@ -128,7 +131,7 @@ export default function LiveNotificationCenter() {
   const close = async () => {
     if (closing || navigating) return;
     setClosing(true);
-    rememberHandled(current.id);
+    rememberHandled(logicalKey(current));
     await markRead(current.id);
     currentRef.current = null;
     setCurrent(null);
@@ -139,7 +142,7 @@ export default function LiveNotificationCenter() {
   const go = async () => {
     if (navigating || closing) return;
     setNavigating(true);
-    rememberHandled(current.id);
+    rememberHandled(logicalKey(current));
     await markRead(current.id);
     window.location.assign(current.targetPath || "/bildirimler");
   };
