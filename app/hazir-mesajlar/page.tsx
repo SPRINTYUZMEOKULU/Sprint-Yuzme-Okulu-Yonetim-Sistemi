@@ -11,6 +11,10 @@ export default async function ReadyMessagesPage() {
   const organizationId = profile.organization_id;
   if (!organizationId) throw new Error("Organizasyon bilgisi bulunamadı.");
   const supabase = await createClient();
+  const whatsappApiReady = Boolean(
+    process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
+    process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
+  );
 
   const [branchesRes, groupsRes, schedulesRes, studentsRes, membershipsRes] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id",organizationId).eq("is_active",true).order("name"),
@@ -28,7 +32,7 @@ export default async function ReadyMessagesPage() {
         <div>
           <p className={styles.eyebrow}>SPRİNT YÜZME OKULU · İLETİŞİM MERKEZİ</p>
           <h1>Hazır Mesajlar & Toplu İletişim</h1>
-          <p>Şube, grup ve seans bazlı toplu mesaj hazırlayın; afiş ekleyin, WhatsApp görünümünü önizleyin ve hediye dersleri tek merkezden yönetin.</p>
+          <p>Şube, grup ve seans bazlı toplu mesaj hazırlayın; tüm operasyonlarda aynı akıllı mesaj dilini kullanın, afiş ekleyin ve WhatsApp gönderimlerini tek merkezden yönetin.</p>
         </div>
         <Link href="/" className={styles.back}>Yönetim paneline dön</Link>
       </section>
@@ -42,6 +46,7 @@ export default async function ReadyMessagesPage() {
           schedules={schedulesRes.data || []}
           students={studentsRes.data || []}
           memberships={membershipsRes.data || []}
+          whatsappApiReady={whatsappApiReady}
         />
       )}
     </main>
