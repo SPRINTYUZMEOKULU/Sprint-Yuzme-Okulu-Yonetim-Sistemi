@@ -15,6 +15,7 @@ type SearchParams = Promise<{
   status?: string;
   view?: string;
   filter?: string;
+  group?: string;
 }>;
 
 type PreStudent = {
@@ -79,6 +80,7 @@ export default async function PreRegistrationsPage({
   const supabase = await createClient();
   const params = searchParams ? await searchParams : {};
   const initialSelectedId = params.student || null;
+  const selectedGroupId = params.group || null;
   const initialMainTab = params.view === "archive" ? "archive" : "pending";
   const initialFilter =
     params.filter === "today"
@@ -142,9 +144,17 @@ export default async function PreRegistrationsPage({
       .limit(1000),
   ]);
 
-  const list = (students || []) as PreStudent[];
+  const allPending = (students || []) as PreStudent[];
+  const list = selectedGroupId
+    ? allPending.filter(
+        (student) => student.preferred_group_id === selectedGroupId
+      )
+    : allPending;
   const consentList = (consents || []) as ConsentRow[];
   const activityList = (activities || []) as ActivityRow[];
+  const selectedGroup = selectedGroupId
+    ? (groups || []).find((group) => group.id === selectedGroupId) || null
+    : null;
 
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = list.filter(
@@ -159,6 +169,10 @@ export default async function PreRegistrationsPage({
   const host = (await headers()).get("host") || "";
   const protocol = host.includes("localhost") ? "http" : "https";
   const formUrl = `${protocol}://${host}/on-kayit`;
+
+  const groupQuery = selectedGroupId
+    ? `&group=${encodeURIComponent(selectedGroupId)}`
+    : "";
 
   return (
     <main className="operationPage preRegistrationPage">
@@ -183,20 +197,32 @@ export default async function PreRegistrationsPage({
         </div>
       </header>
 
+      {selectedGroup ? (
+        <div className="preRegistrationFlash" role="status">
+          <strong>Seçili eğitim grubu: {selectedGroup.name}</strong>
+          <span>
+            Bu gruba bağlı {list.length} bekleyen ön kayıt gösteriliyor.{" "}
+            <Link href="/on-kayitlar#pre-registration-center">
+              Tüm ön kayıtları göster
+            </Link>
+          </span>
+        </div>
+      ) : null}
+
       <section className="operationStats preRegistrationStats">
         <Link
-          href="/on-kayitlar?view=pending&filter=all#pre-registration-center"
+          href={`/on-kayitlar?view=pending&filter=all${groupQuery}#pre-registration-center`}
           className={`preStatCard ${
             initialMainTab === "pending" && initialFilter === "all" ? "active" : ""
           }`}
         >
-          <span>Bekleyen Başvuru</span>
+          <span>{selectedGroup ? "Grubun Bekleyen Başvurusu" : "Bekleyen Başvuru"}</span>
           <strong>{list.length}</strong>
-          <small>Tüm bekleyenleri göster →</small>
+          <small>Bekleyenleri göster →</small>
         </Link>
 
         <Link
-          href="/on-kayitlar?view=pending&filter=today#pre-registration-center"
+          href={`/on-kayitlar?view=pending&filter=today${groupQuery}#pre-registration-center`}
           className={`preStatCard ${
             initialMainTab === "pending" && initialFilter === "today" ? "active" : ""
           }`}
@@ -218,7 +244,7 @@ export default async function PreRegistrationsPage({
         </Link>
 
         <Link
-          href="/on-kayitlar?view=pending&filter=health#pre-registration-center"
+          href={`/on-kayitlar?view=pending&filter=health${groupQuery}#pre-registration-center`}
           className={`preStatCard health ${
             initialMainTab === "pending" && initialFilter === "health" ? "active" : ""
           }`}
