@@ -5,7 +5,6 @@ import StudentProfileCenter from "./student-profile-center";
 import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
 import StudentFinanceCenter from "./student-finance-center";
-import StudentFinanceHistoryEnhancer from "./student-finance-history-enhancer";
 import StudentActionRouter from "./student-action-router";
 import StudentActionFeedback from "./student-action-feedback";
 import StudentHeroEnhancer from "./student-hero-enhancer";
@@ -42,7 +41,6 @@ export default async function StudentFileLayout({
       <GeneralInfoSummary />
       <StudentRenewalCenter />
       <StudentFinanceCenter studentId={id} />
-      <StudentFinanceHistoryEnhancer />
       <StudentActionRouter />
       <StudentActionFeedback />
       <StudentHeroEnhancer />
