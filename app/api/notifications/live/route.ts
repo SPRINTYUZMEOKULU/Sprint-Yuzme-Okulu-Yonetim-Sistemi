@@ -14,6 +14,188 @@ const ROLES = [
 
 export const dynamic = "force-dynamic";
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+function amount(value: unknown) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function syncPaymentDueNotifications(
+  supabase: SupabaseClient,
+  organizationId: string,
+) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: enrollments, error: enrollmentError } = await supabase
+    .from("student_enrollments")
+    .select("id,student_id,package_id,payment_due_date,status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .not("payment_due_date", "is", null)
+    .lte("payment_due_date", today)
+    .order("payment_due_date", { ascending: true })
+    .limit(100);
+
+  if (enrollmentError) {
+    console.error("payment due enrollment lookup error:", enrollmentError);
+    return;
+  }
+
+  const rows = enrollments || [];
+  const enrollmentIds = rows.map((row: any) => String(row.id));
+  const studentIds = [...new Set(rows.map((row: any) => String(row.student_id)).filter(Boolean))];
+  const packageIds = [...new Set(rows.map((row: any) => String(row.package_id || "")).filter(Boolean))];
+
+  const [studentsResult, packagesResult, paymentsResult, existingResult] =
+    await Promise.all([
+      studentIds.length
+        ? supabase
+            .from("students")
+            .select("id,first_name,last_name")
+            .eq("organization_id", organizationId)
+            .in("id", studentIds)
+        : Promise.resolve({ data: [], error: null } as any),
+      packageIds.length
+        ? supabase
+            .from("course_packages")
+            .select("id,name,price")
+            .eq("organization_id", organizationId)
+            .in("id", packageIds)
+        : Promise.resolve({ data: [], error: null } as any),
+      enrollmentIds.length
+        ? supabase
+            .from("student_payments")
+            .select("id,enrollment_id,amount,payment_status")
+            .eq("organization_id", organizationId)
+            .in("enrollment_id", enrollmentIds)
+            .eq("payment_status", "received")
+        : Promise.resolve({ data: [], error: null } as any),
+      supabase
+        .from("system_notifications")
+        .select("id,entity_id,is_read")
+        .eq("organization_id", organizationId)
+        .eq("event_key", "payment_due")
+        .eq("is_read", false),
+    ]);
+
+  if (studentsResult.error || packagesResult.error || paymentsResult.error) {
+    console.error(
+      "payment due finance lookup error:",
+      studentsResult.error || packagesResult.error || paymentsResult.error,
+    );
+    return;
+  }
+
+  const studentMap = new Map(
+    (studentsResult.data || []).map((row: any) => [String(row.id), row]),
+  );
+  const packageMap = new Map(
+    (packagesResult.data || []).map((row: any) => [String(row.id), row]),
+  );
+  const receivedByEnrollment = new Map<string, number>();
+
+  for (const payment of paymentsResult.data || []) {
+    const key = String((payment as any).enrollment_id || "");
+    receivedByEnrollment.set(
+      key,
+      (receivedByEnrollment.get(key) || 0) + amount((payment as any).amount),
+    );
+  }
+
+  const dueRows = rows
+    .map((enrollment: any) => {
+      const packageInfo = enrollment.package_id
+        ? packageMap.get(String(enrollment.package_id))
+        : null;
+      const total = amount((packageInfo as any)?.price);
+      const received = receivedByEnrollment.get(String(enrollment.id)) || 0;
+      const remaining = Math.max(0, total - received);
+      const student = studentMap.get(String(enrollment.student_id));
+
+      return {
+        enrollment,
+        packageInfo,
+        student,
+        total,
+        received,
+        remaining,
+      };
+    })
+    .filter((item) => item.total > 0 && item.remaining > 0);
+
+  const activeDueIds = new Set(
+    dueRows.map((item) => String(item.enrollment.id)),
+  );
+
+  // Vade ileri alındıysa veya borç kapandıysa eski açık vade uyarısını kapat.
+  const staleIds = (existingResult.data || [])
+    .filter((row: any) => !activeDueIds.has(String(row.entity_id || "")))
+    .map((row: any) => row.id);
+
+  if (staleIds.length) {
+    await supabase
+      .from("system_notifications")
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq("organization_id", organizationId)
+      .in("id", staleIds);
+  }
+
+  const existingDueIds = new Set(
+    (existingResult.data || [])
+      .filter((row: any) => activeDueIds.has(String(row.entity_id || "")))
+      .map((row: any) => String(row.entity_id)),
+  );
+
+  const inserts = dueRows
+    .filter((item) => !existingDueIds.has(String(item.enrollment.id)))
+    .map((item) => {
+      const studentName = `${item.student?.first_name || ""} ${
+        item.student?.last_name || ""
+      }`.trim();
+      const remainingText = item.remaining.toLocaleString("tr-TR", {
+        maximumFractionDigits: 2,
+      });
+
+      return {
+        organization_id: organizationId,
+        recipient_profile_id: null,
+        recipient_user_id: null,
+        notification_type: "payment_due",
+        category: "finance",
+        event_key: "payment_due",
+        title: "Ödeme vadesi geldi",
+        body: `${studentName || "Öğrenci"} için ${remainingText} TL ödeme bekleniyor.`,
+        message: `${studentName || "Öğrenci"} için ${remainingText} TL ödeme bekleniyor.`,
+        priority: "high",
+        severity: "warning",
+        student_id: item.enrollment.student_id,
+        source_type: "student_enrollment",
+        source_id: item.enrollment.id,
+        entity_type: "student_enrollment",
+        entity_id: String(item.enrollment.id),
+        target_path: `/ogrenciler/${item.enrollment.student_id}?payment=collect`,
+        is_read: false,
+        push_required: false,
+        push_requested: false,
+        metadata: {
+          student_id: item.enrollment.student_id,
+          enrollment_id: item.enrollment.id,
+          payment_due_date: item.enrollment.payment_due_date,
+          package_name: item.packageInfo?.name || null,
+          total_amount: item.total,
+          total_received: item.received,
+          remaining_amount: item.remaining,
+        },
+      };
+    });
+
+  if (inserts.length) {
+    const { error } = await supabase.from("system_notifications").insert(inserts);
+    if (error) console.error("payment due notification insert error:", error);
+  }
+}
+
 export async function GET() {
   try {
     const profile = await requireProfile([...ROLES]);
@@ -24,19 +206,19 @@ export async function GET() {
     const supabase = await createClient();
     const manager = ["owner", "admin"].includes(String((profile as any).role || ""));
 
-    // Null alıcılı yönetici bildirimlerini de okuyup aşağıda güvenli biçimde filtreliyoruz.
-    // Böylece pasif alma onayı, talebi oluşturan personele de özel olarak gösterilebilir.
-    const recipientFilter = `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
+    await syncPaymentDueNotifications(supabase, profile.organization_id);
 
+    const recipientFilter = `recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const nowIso = new Date().toISOString();
+
     const [notificationResult, dueReminderResult] = await Promise.all([
       supabase
         .from("system_notifications")
         .select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id")
         .eq("organization_id", profile.organization_id)
         .eq("is_read", false)
-        .or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder`)
+        .or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due`)
         .or(recipientFilter)
         .order("created_at", { ascending: false })
         .limit(50),
@@ -54,7 +236,6 @@ export async function GET() {
     ]);
 
     const { data, error } = notificationResult;
-
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
@@ -73,7 +254,10 @@ export async function GET() {
         .in("id", renewalApprovalIds);
 
       for (const approval of approvals || []) {
-        const metadata = approval.metadata && typeof approval.metadata === "object" ? approval.metadata : {};
+        const metadata =
+          approval.metadata && typeof approval.metadata === "object"
+            ? approval.metadata
+            : {};
         approvalSource.set(approval.id, String((metadata as any).source || ""));
       }
     }
@@ -104,6 +288,16 @@ export async function GET() {
       if (manager) return true;
       if (row.recipient_profile_id === profile.id || row.recipient_user_id === profile.id) return true;
 
+      // Finans vade uyarıları ödeme yetkili personeline ortak gösterilir.
+      if (
+        row.notification_type === "payment_due" &&
+        ["branch_manager", "registration_staff", "accounting"].includes(
+          String((profile as any).role || ""),
+        )
+      ) {
+        return true;
+      }
+
       if (row.notification_type === "student_status_approved" && row.source_id) {
         const statusRequest = statusRequests.get(String(row.source_id));
         return statusRequest?.requested_by === profile.id;
@@ -119,6 +313,10 @@ export async function GET() {
         targetPath = `/ogrenciler/${row.student_id}#notlar`;
       }
 
+      if (row.notification_type === "payment_due" && row.student_id) {
+        targetPath = `/ogrenciler/${row.student_id}?payment=collect`;
+      }
+
       if (
         row.event_key === "registration_custom_lesson_count_approved" &&
         row.student_id &&
@@ -130,9 +328,13 @@ export async function GET() {
 
       if (row.notification_type === "student_status_approved" && row.source_id) {
         const statusRequest = statusRequests.get(String(row.source_id));
-        const targetStatus = String(statusRequest?.requested_status || statusRequest?.new_status || "");
+        const targetStatus = String(
+          statusRequest?.requested_status || statusRequest?.new_status || "",
+        );
         if (targetStatus === "passive" || statusRequest?.request_type === "deactivate") {
-          targetPath = `/onay-merkezi?status=approved&archiveRequestId=${encodeURIComponent(String(row.source_id))}`;
+          targetPath = `/onay-merkezi?status=approved&archiveRequestId=${encodeURIComponent(
+            String(row.source_id),
+          )}`;
         }
       }
 
@@ -168,11 +370,13 @@ export async function GET() {
       }));
 
     const notifications = [...fallbackReminders, ...scheduledNotifications].slice(0, 12);
-
     return NextResponse.json({ ok: true, notifications });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Bildirimler alınamadı." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Bildirimler alınamadı.",
+      },
       { status: 500 },
     );
   }
@@ -183,8 +387,12 @@ export async function POST(request: NextRequest) {
     const profile = await requireProfile([...ROLES]);
     const body = await request.json();
     const id = String(body.id || "");
+
     if (!profile.organization_id || !id) {
-      return NextResponse.json({ ok: false, error: "Bildirim bilgisi eksik." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Bildirim bilgisi eksik." },
+        { status: 400 },
+      );
     }
 
     const supabase = await createClient();
@@ -221,7 +429,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Bildirim güncellenemedi." },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Bildirim güncellenemedi.",
+      },
       { status: 500 },
     );
   }
