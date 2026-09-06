@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { requireProfile } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
 
 const ROLES = [
   "owner",
@@ -14,6 +14,15 @@ const ROLES = [
 function amount(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -29,7 +38,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Yetki requireProfile ile doğrulandıktan sonra finans okumalarını service-role
+    // üzerinden yapıyoruz. Tüm sorgular organization_id + student_id ile sınırlandırılır.
+    // Böylece student_enrollments üzerindeki RLS farklılıkları finans merkezinde
+    // yanlış ₺0 / Ödendi durumuna dönüşmez.
+    const supabase = adminClient();
 
     const [studentResult, enrollmentResult, paymentsResult] = await Promise.all([
       supabase
