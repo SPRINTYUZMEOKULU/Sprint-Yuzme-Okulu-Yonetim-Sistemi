@@ -54,7 +54,7 @@ export async function GET(request:NextRequest){
     if(packageResult.error) throw packageResult.error;
     if(paymentResult.error) throw paymentResult.error;
 
-    const packageMap=new Map((packageResult.data||[]).map((x:any)=>[String(x.id),x]));
+    const packageMap=new Map<string,any>((packageResult.data||[]).map((x:any)=>[String(x.id),x] as [string,any]));
     const paidMap=new Map<string,number>();
     for(const row of paymentResult.data||[]){
       if(row.cancelled_at||row.payment_status==="cancelled") continue;
