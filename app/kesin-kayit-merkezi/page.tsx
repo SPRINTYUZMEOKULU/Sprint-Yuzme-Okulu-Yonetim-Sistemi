@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import RegistrationCenterFeedback from "./registration-center-feedback";
 import "../dashboard.css";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,8 @@ export default async function DefinitiveRegistrationCenter({
     .order("created_at", { ascending: false })
     .limit(300);
 
-  const rows = (data || []).filter((student: any) => {
+  const allRows = data || [];
+  const rows = allRows.filter((student: any) => {
     if (!search) return true;
     const haystack = [
       student.student_number,
@@ -60,7 +62,8 @@ export default async function DefinitiveRegistrationCenter({
   };
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f4f7fb", padding: "24px" }}>
+    <main data-registration-center style={{ minHeight: "100vh", background: "#f4f7fb", padding: "24px" }}>
+      <RegistrationCenterFeedback />
       <section style={{ maxWidth: 1180, margin: "0 auto" }}>
         <header
           style={{
@@ -83,12 +86,22 @@ export default async function DefinitiveRegistrationCenter({
             <p style={{ margin: 0, color: "#6c7f96", maxWidth: 720 }}>
               Ön kayıttan kesin kayda geçecek kursiyerleri bulun, ödeme-vade ve program bilgilerini tamamlayarak kayıt dosyasını açın.
             </p>
+            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 12px", borderRadius: 999, background: "#eaf3ff", color: "#155fbf", fontSize: 13, fontWeight: 900 }}>
+                Kesin kayıt bekleyen: {allRows.length} öğrenci
+              </span>
+              {search ? (
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "8px 12px", borderRadius: 999, background: "#f2f5f9", color: "#586e88", fontSize: 13, fontWeight: 850 }}>
+                  Arama sonucu: {rows.length} öğrenci
+                </span>
+              ) : null}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <Link href="/on-kayitlar" style={{ padding: "11px 14px", borderRadius: 12, border: "1px solid #d7e3f1", background: "#fff", color: "#294a70", textDecoration: "none", fontWeight: 850 }}>
+            <Link data-action-feedback="default" href="/on-kayitlar" style={{ padding: "11px 14px", borderRadius: 12, border: "1px solid #d7e3f1", background: "#fff", color: "#294a70", textDecoration: "none", fontWeight: 850 }}>
               Ön Kayıt Merkezi
             </Link>
-            <Link href="/ogrenciler" style={{ padding: "11px 14px", borderRadius: 12, background: "#176fe8", color: "#fff", textDecoration: "none", fontWeight: 850 }}>
+            <Link data-action-feedback="default" href="/ogrenciler" style={{ padding: "11px 14px", borderRadius: 12, background: "#176fe8", color: "#fff", textDecoration: "none", fontWeight: 850 }}>
               Öğrenci Merkezi
             </Link>
           </div>
@@ -101,7 +114,7 @@ export default async function DefinitiveRegistrationCenter({
             placeholder="Kursiyer, veli, telefon veya öğrenci numarası ara..."
             style={{ flex: 1, minHeight: 48, border: "1px solid #d4e0ee", borderRadius: 14, padding: "0 15px", background: "#fff", color: "#173654", fontSize: 15 }}
           />
-          <button type="submit" style={{ border: 0, borderRadius: 14, padding: "0 20px", background: "#102f55", color: "#fff", fontWeight: 900 }}>
+          <button data-action-feedback="default" type="submit" style={{ border: 0, borderRadius: 14, padding: "0 20px", background: "#102f55", color: "#fff", fontWeight: 900 }}>
             Ara
           </button>
         </form>
@@ -143,8 +156,9 @@ export default async function DefinitiveRegistrationCenter({
                   </div>
                 </div>
                 <Link
+                  data-action-feedback="open-registration"
                   href={`/kayit-tamamlama/${student.id}`}
-                  style={{ padding: "12px 15px", borderRadius: 13, background: "#176fe8", color: "#fff", textDecoration: "none", fontWeight: 900, whiteSpace: "nowrap" }}
+                  style={{ padding: "12px 15px", borderRadius: 13, background: "#176fe8", color: "#fff", textDecoration: "none", fontWeight: 900, whiteSpace: "nowrap", minWidth: 168, textAlign: "center" }}
                 >
                   Kesin Kaydı Aç →
                 </Link>
