@@ -4,6 +4,26 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function courseTypeLabel(courseType?: string | null) {
+  if (courseType === "Çocuk Yüzme Kursu") {
+    return "Çocuk Grubu";
+  }
+
+  if (courseType === "Yetişkin Yüzme Kursu") {
+    return "Yetişkin Grubu";
+  }
+
+  if (courseType === "Özel Ders") {
+    return "Özel Ders";
+  }
+
+  if (courseType === "Takım / Performans") {
+    return "Takım / Performans";
+  }
+
+  return courseType || "Eğitim Grubu";
+}
+
 export async function GET() {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -175,16 +195,36 @@ export async function GET() {
       );
     }
 
+    const levels = levelsResult.data || [];
+    const levelMap = new Map(levels.map((level) => [level.id, level.name]));
+
+    /*
+     * DB'deki group.name eski kayıtlarda şube + gün + saat bilgilerini de
+     * içeriyor olabilir. Ön kayıt formunda bu alanları tekrar etmiyoruz.
+     * Şube ayrı seçilir, gün/saat lesson_schedules üzerinden gösterilir,
+     * grup adı ise yalnızca eğitim türü + seviye anlamına gelir.
+     * Kimlik değişmez: preferred_group_id yine gerçek training_groups.id'dir.
+     */
+    const publicGroups = (groupsResult.data || []).map((group) => {
+      const levelName = group.level_id ? levelMap.get(group.level_id) : null;
+      const typeLabel = courseTypeLabel(group.course_type);
+
+      return {
+        ...group,
+        name: levelName ? `${typeLabel} · ${levelName}` : typeLabel,
+      };
+    });
+
     const formFields = formFieldsResult.data || [];
     const visibleFormFields = formFields.filter((field) => field.is_visible);
 
     return NextResponse.json(
       {
         branches: branchesResult.data || [],
-        groups: groupsResult.data || [],
+        groups: publicGroups,
         schedules: schedulesResult.data || [],
         packages: packagesResult.data || [],
-        levels: levelsResult.data || [],
+        levels,
         formFields,
         visibleFormFields,
       },
