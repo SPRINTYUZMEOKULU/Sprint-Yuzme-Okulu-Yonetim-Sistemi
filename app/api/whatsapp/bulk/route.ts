@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
+import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_ROLES = ["owner","admin","branch_manager","registration_staff"] as const;
 const MAX_RECIPIENTS = 200;
@@ -50,6 +51,10 @@ async function graphSend(options: {
 
 export async function POST(request: Request) {
   const profile = await requireProfile([...ALLOWED_ROLES]);
+  const organizationId = profile.organization_id;
+  if (!organizationId) {
+    return NextResponse.json({ ok:false, message:"Organizasyon bilgisi bulunamadı." }, { status:400 });
+  }
 
   const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
@@ -83,21 +88,47 @@ export async function POST(request: Request) {
       recipient: cleanPhone(item.recipient),
       message: String(item.message || "").trim(),
     }))
-    .filter((item) => item.recipient && item.message);
+    .filter((item) => item.studentId && item.recipient && item.message);
 
   if (!normalized.length) {
     return NextResponse.json({ ok: false, message: "Gönderilebilir alıcı veya mesaj bulunamadı." }, { status: 400 });
   }
 
+  const supabase = await createClient();
+  const studentIds = Array.from(new Set(normalized.map(item=>item.studentId)));
+  const { data: students, error: studentsError } = await supabase
+    .from("students")
+    .select("id,phone,guardian_phone,status")
+    .eq("organization_id", organizationId)
+    .in("id", studentIds);
+
+  if (studentsError) {
+    return NextResponse.json({ ok:false, message:`Alıcı doğrulaması yapılamadı: ${studentsError.message}` }, { status:500 });
+  }
+
+  const studentMap = new Map((students || []).map((student:any)=>[student.id, student]));
+  const verified = normalized.filter(item=>{
+    const student:any = studentMap.get(item.studentId);
+    if (!student || student.status !== "active") return false;
+    const allowed = new Set([cleanPhone(student.guardian_phone), cleanPhone(student.phone)].filter(Boolean));
+    return allowed.has(item.recipient);
+  });
+
+  if (!verified.length) {
+    return NextResponse.json({ ok:false, message:"Seçili alıcıların telefon numaraları kursiyer kayıtlarıyla doğrulanamadı." }, { status:400 });
+  }
+
+  const rejectedCount = normalized.length - verified.length;
   const results: Array<{
     studentId: string;
     recipient: string;
     ok: boolean;
     status?: number;
+    providerMessageId?: string | null;
     error?: string;
   }> = [];
 
-  for (const item of normalized) {
+  for (const item of verified) {
     try {
       if (mediaUrl) {
         const mediaResult = await graphSend({
@@ -134,19 +165,55 @@ export async function POST(request: Request) {
         },
       });
 
+      const providerMessageId = (textResult.data as any)?.messages?.[0]?.id || null;
+      const error = textResult.ok ? undefined : String((textResult.data as any)?.error?.message || "Mesaj gönderilemedi.");
+
       results.push({
         studentId: item.studentId,
         recipient: item.recipient,
         ok: textResult.ok,
         status: textResult.status,
-        error: textResult.ok ? undefined : String((textResult.data as any)?.error?.message || "Mesaj gönderilemedi."),
+        providerMessageId,
+        error,
+      });
+
+      await supabase.from("message_logs").insert({
+        organization_id: organizationId,
+        student_id: item.studentId,
+        template_key: body?.templateKey || "general",
+        channel: "whatsapp",
+        recipient: item.recipient,
+        subject: "Hazır Mesajlar / Toplu İletişim",
+        message_body: item.message,
+        status: textResult.ok ? "sent" : "failed",
+        prepared_by: profile.id,
+        metadata: {
+          provider: "meta_whatsapp_cloud_api",
+          provider_message_id: providerMessageId,
+          media_url: mediaUrl,
+          http_status: textResult.status,
+          error: error || null,
+        },
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Beklenmeyen WhatsApp API hatası.";
       results.push({
         studentId: item.studentId,
         recipient: item.recipient,
         ok: false,
-        error: error instanceof Error ? error.message : "Beklenmeyen WhatsApp API hatası.",
+        error: message,
+      });
+      await supabase.from("message_logs").insert({
+        organization_id: organizationId,
+        student_id: item.studentId,
+        template_key: body?.templateKey || "general",
+        channel: "whatsapp",
+        recipient: item.recipient,
+        subject: "Hazır Mesajlar / Toplu İletişim",
+        message_body: item.message,
+        status: "failed",
+        prepared_by: profile.id,
+        metadata: { provider:"meta_whatsapp_cloud_api", media_url:mediaUrl, error:message },
       });
     }
   }
@@ -156,14 +223,15 @@ export async function POST(request: Request) {
   const firstFailure = results.find((item) => !item.ok)?.error;
 
   return NextResponse.json({
-    ok: sent > 0 && failed === 0,
+    ok: sent > 0 && failed === 0 && rejectedCount === 0,
     sent,
     failed,
+    rejected: rejectedCount,
     attempted: results.length,
     message:
-      failed === 0
+      failed === 0 && rejectedCount === 0
         ? `${sent} WhatsApp mesajı başarıyla gönderildi.`
-        : `${sent} mesaj gönderildi, ${failed} mesaj başarısız.${firstFailure ? ` İlk hata: ${firstFailure}` : ""}`,
+        : `${sent} mesaj gönderildi, ${failed} mesaj başarısız${rejectedCount ? `, ${rejectedCount} alıcı güvenlik doğrulamasından geçmedi` : ""}.${firstFailure ? ` İlk hata: ${firstFailure}` : ""}`,
     results,
     templateKey: body?.templateKey || null,
     performedBy: profile.id,
