@@ -9,6 +9,7 @@ import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
 import DashboardLiveOperations from "./components/dashboard-live-operations";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
+import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 
 export const metadata: Metadata = {
   title: {
@@ -77,6 +78,7 @@ export default function RootLayout({
 
         <DashboardLiveOperations />
         <ModuleNavigationFeedback />
+        <SidebarBranchClickFix />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
