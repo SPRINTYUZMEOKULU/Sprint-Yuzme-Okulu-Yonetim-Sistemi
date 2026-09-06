@@ -424,8 +424,14 @@ export default async function PaymentsPage({
        * getPackagePrice fonksiyonu
        * alternatif kolonları da kontrol eder.
        */
-      const packagePrice =
-        getPackagePrice(coursePackage);
+      const packagePrice = toNumber(
+        firstValue(enrollment, [
+          "total_amount",
+          "total_price",
+          "package_price",
+          "amount",
+        ]) ?? getPackagePrice(coursePackage)
+      );
 
       /*
        * SADECE BU AKTİF KAYDIN ÖDEMELERİ.
@@ -499,7 +505,9 @@ export default async function PaymentsPage({
        * Aktif paketin son ödeme hareketi.
        */
       const latestPayment =
-        enrollmentPayments[0] || null;
+        validPayments.find(
+          (payment) => payment.student_id === student.id
+        ) || null;
 
       /*
        * Gelecekte due_date alanı

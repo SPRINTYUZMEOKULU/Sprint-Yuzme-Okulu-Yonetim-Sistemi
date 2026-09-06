@@ -411,9 +411,23 @@ export default function StudentFinanceCenter() {
           {tab === "history" ? (
             <section className="sfcCard">
               <div className="sfcCardHead"><div><span>TAHSİLAT GEÇMİŞİ</span><h3>Öğrencinin ödeme hareketleri</h3></div></div>
-              {data?.payments?.length ? (
+              {packageRemaining > 0 || data?.payments?.length ? (
                 <div className="sfcHistory">
-                  {data.payments.map((row) => (
+                  {packageRemaining > 0 && data?.enrollment ? (
+                    <article
+                      className="sfcUnpaidPeriod"
+                      style={{ background: "#fff9ec", borderColor: "#efd18b" }}
+                    >
+                      <div>
+                        <b>{money(packageRemaining)} · ÖDEME BEKLİYOR</b>
+                        <span>{data.enrollment.packageName || "Aktif kurs paketi"}</span>
+                        <span>{dateText(data.enrollment.startDate)} - {dateText(data.enrollment.plannedEndDate)} tarihleri arasındaki paket ücretinin kalan tutarı.</span>
+                        <small>Paket: {money(data.enrollment.totalAmount)} · Ödenen: {money(data.enrollment.totalReceived)} · Kalan: {money(packageRemaining)} · Vade: {dateText(data.enrollment.paymentDueDate)}</small>
+                      </div>
+                      <button className="sfcMini" type="button" onClick={() => setTab("payment")}>Ödeme Al</button>
+                    </article>
+                  ) : null}
+                  {(data?.payments || []).map((row) => (
                     <article key={row.id}>
                       <div>
                         <b>{money(row.amount)} · {methodLabels[row.method] || row.method}</b>
