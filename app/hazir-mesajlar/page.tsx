@@ -11,7 +11,8 @@ export default async function ReadyMessagesPage() {
   const organizationId = profile.organization_id;
   if (!organizationId) throw new Error("Organizasyon bilgisi bulunamadı.");
   const supabase = await createClient();
-  const whatsappApiReady = Boolean(
+  const canDirectWhatsApp = ["owner","admin","branch_manager","registration_staff"].includes(profile.role);
+  const whatsappApiReady = canDirectWhatsApp && Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
     process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
   );
