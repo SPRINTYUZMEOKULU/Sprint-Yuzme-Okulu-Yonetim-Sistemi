@@ -141,7 +141,13 @@ export async function GET(request: NextRequest) {
       0,
     );
 
-    const totalAmount = amount(packageInfo?.price ?? enrollment?.package_price ?? 0);
+    const totalAmount = amount(
+      enrollment?.total_amount ??
+        enrollment?.total_price ??
+        enrollment?.package_price ??
+        packageInfo?.price ??
+        0,
+    );
     const remainingPayment = Math.max(0, totalAmount - totalReceived);
 
     return NextResponse.json({
