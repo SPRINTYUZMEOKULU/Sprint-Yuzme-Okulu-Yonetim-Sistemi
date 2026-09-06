@@ -2,6 +2,7 @@ import UstGezinme from "@/app/components/UstGezinme";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import YetkiPaneliClient from "./YetkiPaneliClient";
+import PasswordWhatsAppBridge from "./password-whatsapp-bridge";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -172,6 +173,8 @@ export default async function Page() {
     );
   }
 
+  const profiles = profilesResult.data ?? [];
+
   return (
     <>
       <UstGezinme />
@@ -234,13 +237,20 @@ export default async function Page() {
           </header>
 
           <YetkiPaneliClient
-            profiles={profilesResult.data ?? []}
+            profiles={profiles}
             staffRows={staffResult.data ?? []}
             branches={branchesResult.data ?? []}
             permissionDefinitions={permissionDefinitionsResult.data ?? []}
             staffBranches={staffBranchesResult.data ?? []}
             staffPermissions={staffPermissionsResult.data ?? []}
             auditLogs={auditLogsResult.data ?? []}
+          />
+          <PasswordWhatsAppBridge
+            profiles={profiles.map((profile) => ({
+              id: profile.id,
+              full_name: profile.full_name,
+              phone: profile.phone,
+            }))}
           />
         </div>
       </main>
