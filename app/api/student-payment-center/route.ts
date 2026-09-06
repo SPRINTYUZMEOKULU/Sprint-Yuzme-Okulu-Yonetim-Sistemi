@@ -20,9 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const profile = await requireProfile([...ROLES]);
     const organizationId = profile.organization_id;
-    const studentId = String(
-      request.nextUrl.searchParams.get("studentId") || "",
-    );
+    const studentId = String(request.nextUrl.searchParams.get("studentId") || "");
 
     if (!organizationId || !studentId) {
       return NextResponse.json(
@@ -33,37 +31,37 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient();
 
-    const [studentResult, enrollmentResult, paymentsResult] = await Promise.all(
-      [
-        supabase
-          .from("students")
-          .select("id,first_name,last_name")
-          .eq("organization_id", organizationId)
-          .eq("id", studentId)
-          .maybeSingle(),
-        supabase
-          .from("student_enrollments")
-          .select("*")
-          .eq("organization_id", organizationId)
-          .eq("student_id", studentId)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from("student_payments")
-          .select(
-            "id,organization_id,student_id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,created_at,cash_handover_status,cancelled_at",
-          )
-          .eq("student_id", studentId)
-          .order("received_at", { ascending: false })
-          .limit(100),
-      ],
-    );
+    const [studentResult, enrollmentResult, paymentsResult] = await Promise.all([
+      supabase
+        .from("students")
+        .select("id,first_name,last_name,phone,guardian_name,guardian_phone")
+        .eq("organization_id", organizationId)
+        .eq("id", studentId)
+        .maybeSingle(),
+      supabase
+        .from("student_enrollments")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("student_payments")
+        .select(
+          "id,organization_id,student_id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,created_at,cash_handover_status,cancelled_at",
+        )
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .order("received_at", { ascending: false })
+        .limit(100),
+    ]);
 
     if (studentResult.error) throw studentResult.error;
     if (enrollmentResult.error) throw enrollmentResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
+
     if (!studentResult.data) {
       return NextResponse.json(
         { ok: false, error: "Öğrenci bulunamadı." },
@@ -77,7 +75,7 @@ export async function GET(request: NextRequest) {
     if (enrollment?.package_id) {
       const packageResult = await supabase
         .from("course_packages")
-        .select("*")
+        .select("id,name,price,lesson_count")
         .eq("organization_id", organizationId)
         .eq("id", enrollment.package_id)
         .maybeSingle();
@@ -85,12 +83,54 @@ export async function GET(request: NextRequest) {
       packageInfo = packageResult.data;
     }
 
-    // RLS zaten kullanıcıyı yalnızca yetkili olduğu organizasyon kayıtlarıyla
-    // sınırlar. Burada öğrenci ID'sine göre tüm tarihsel tahsilatları okuyoruz;
-    // böylece eski kayıt dönemine bağlı ödemeler de "Geçmiş"te görünür.
     const allPayments = (paymentsResult.data || []).filter(
       (row: any) => !row.cancelled_at && row.payment_status !== "cancelled",
     );
+
+    const historicalEnrollmentIds = [
+      ...new Set(
+        allPayments
+          .map((row: any) => String(row.enrollment_id || ""))
+          .filter(Boolean),
+      ),
+    ];
+
+    const enrollmentPeriodMap = new Map<string, any>();
+    if (historicalEnrollmentIds.length) {
+      const { data: historyEnrollments, error: historyEnrollmentError } = await supabase
+        .from("student_enrollments")
+        .select("id,package_id,start_date,planned_end_date,total_lessons,status")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .in("id", historicalEnrollmentIds);
+
+      if (historyEnrollmentError) throw historyEnrollmentError;
+
+      const packageIds = [
+        ...new Set(
+          (historyEnrollments || [])
+            .map((row: any) => String(row.package_id || ""))
+            .filter(Boolean),
+        ),
+      ];
+
+      const packageMap = new Map<string, any>();
+      if (packageIds.length) {
+        const { data: historyPackages } = await supabase
+          .from("course_packages")
+          .select("id,name,price,lesson_count")
+          .eq("organization_id", organizationId)
+          .in("id", packageIds);
+        for (const item of historyPackages || []) packageMap.set(String(item.id), item);
+      }
+
+      for (const row of historyEnrollments || []) {
+        enrollmentPeriodMap.set(String(row.id), {
+          ...row,
+          package: row.package_id ? packageMap.get(String(row.package_id)) || null : null,
+        });
+      }
+    }
 
     const activePayments = enrollment?.id
       ? allPayments.filter((row: any) => row.enrollment_id === enrollment.id)
@@ -100,39 +140,9 @@ export async function GET(request: NextRequest) {
       (sum: number, row: any) => sum + amount(row.amount),
       0,
     );
-    const totalAmount = amount(
-      packageInfo?.price ??
-        packageInfo?.amount ??
-        packageInfo?.package_price ??
-        packageInfo?.sale_price ??
-        enrollment?.package_price ??
-        0,
-    );
-    const remainingPayment = Math.max(0, totalAmount - totalReceived);
 
-    let paymentPlan: any = null;
-    let installments: any[] = [];
-    let planSchemaReady = true;
-    if (enrollment?.id) {
-      const planResult = await supabase
-        .from("student_payment_plans")
-        .select("id,total_amount,installment_count,status,note,created_at")
-        .eq("organization_id", organizationId)
-        .eq("enrollment_id", enrollment.id)
-        .maybeSingle();
-      if (planResult.error) {
-        planSchemaReady = false;
-      } else if (planResult.data) {
-        paymentPlan = planResult.data;
-        const installmentsResult = await supabase
-          .from("student_payment_installments")
-          .select("id,sequence_no,due_date,amount,paid_amount,status")
-          .eq("plan_id", planResult.data.id)
-          .order("sequence_no");
-        if (installmentsResult.error) planSchemaReady = false;
-        else installments = installmentsResult.data || [];
-      }
-    }
+    const totalAmount = amount(packageInfo?.price ?? enrollment?.package_price ?? 0);
+    const remainingPayment = Math.max(0, totalAmount - totalReceived);
 
     return NextResponse.json({
       ok: true,
@@ -140,27 +150,35 @@ export async function GET(request: NextRequest) {
       enrollment: enrollment
         ? {
             id: enrollment.id,
-            paymentDueDate:
-              enrollment.payment_due_date || enrollment.start_date || null,
+            startDate: enrollment.start_date || null,
+            plannedEndDate: enrollment.planned_end_date || null,
+            paymentDueDate: enrollment.payment_due_date || enrollment.start_date || null,
             packageName: packageInfo?.name || null,
+            lessonCount: Number(enrollment.total_lessons || packageInfo?.lesson_count || 0),
             totalAmount,
             totalReceived,
             remainingPayment,
           }
         : null,
-      payments: allPayments.map((row: any) => ({
-        id: row.id,
-        enrollmentId: row.enrollment_id || null,
-        amount: amount(row.amount),
-        method: row.payment_method || "other",
-        description: row.description || null,
-        receivedAt: row.received_at || row.created_at || null,
-        status: row.payment_status || "received",
-        cashHandoverStatus: row.cash_handover_status || null,
-      })),
-      paymentPlan,
-      installments,
-      planSchemaReady,
+      payments: allPayments.map((row: any) => {
+        const period = row.enrollment_id
+          ? enrollmentPeriodMap.get(String(row.enrollment_id)) || null
+          : null;
+        return {
+          id: row.id,
+          enrollmentId: row.enrollment_id || null,
+          amount: amount(row.amount),
+          method: row.payment_method || "other",
+          description: row.description || null,
+          receivedAt: row.received_at || row.created_at || null,
+          status: row.payment_status || "received",
+          cashHandoverStatus: row.cash_handover_status || null,
+          periodStartDate: period?.start_date || null,
+          periodEndDate: period?.planned_end_date || null,
+          packageName: period?.package?.name || null,
+          packagePrice: amount(period?.package?.price),
+        };
+      }),
     });
   } catch (error: any) {
     return NextResponse.json(
