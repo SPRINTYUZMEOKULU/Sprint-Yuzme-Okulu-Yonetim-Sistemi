@@ -7,7 +7,15 @@ import AttendanceClient from "./AttendanceClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const params = await searchParams;
+  const requestedGroupId = params.groupId || "";
+  const requestedScheduleId = params.scheduleId || "";
+
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -172,6 +180,25 @@ export default async function AttendancePage() {
     );
   }
 
+  const groups = [...(groupsResult.data || [])];
+  const schedules = [...(schedulesResult.data || [])];
+
+  if (requestedGroupId) {
+    groups.sort((a, b) => {
+      if (a.id === requestedGroupId) return -1;
+      if (b.id === requestedGroupId) return 1;
+      return 0;
+    });
+  }
+
+  if (requestedScheduleId) {
+    schedules.sort((a, b) => {
+      if (a.id === requestedScheduleId) return -1;
+      if (b.id === requestedScheduleId) return 1;
+      return 0;
+    });
+  }
+
   return (
     <main
       style={{
@@ -189,8 +216,8 @@ export default async function AttendancePage() {
         }}
       >
         <AttendanceClient
-          groups={groupsResult.data || []}
-          schedules={schedulesResult.data || []}
+          groups={groups}
+          schedules={schedules}
           memberships={membershipsResult.data || []}
           students={studentsResult.data || []}
           enrollments={enrollmentsResult.data || []}
