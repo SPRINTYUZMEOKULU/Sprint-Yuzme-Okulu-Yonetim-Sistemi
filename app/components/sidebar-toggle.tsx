@@ -8,12 +8,16 @@ const STORAGE_KEY = "sprintos-sidebar-collapsed";
 const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = {
   "/on-kayitlar": [
     { label: "Yeni Ön Kayıt", href: "/on-kayit" },
-    { label: "Ön Kayıt Listesi", href: "/on-kayitlar" },
+    { label: "Ön Kayıt Merkezi", href: "/on-kayitlar" },
+    { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
+    { label: "Ön Kayıt Form Ayarları", href: "/ayarlar/on-kayit-formu" },
   ],
   "/ogrenciler": [
     { label: "Öğrenci Merkezi", href: "/ogrenciler" },
+    { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
     { label: "Aktif Öğrenciler", href: "/ogrenciler?durum=active" },
     { label: "Pasif / Arşiv", href: "/ogrenciler?durum=passive" },
+    { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
   ],
   "/veliler": [
     { label: "Veli Merkezi", href: "/veliler" },
@@ -22,61 +26,81 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
   "/subeler": [
     { label: "Şube Merkezi", href: "/subeler" },
     { label: "Gruplar", href: "/gruplar" },
+    { label: "Ders Programı", href: "/ders-programi" },
   ],
   "/gruplar": [
     { label: "Grup Merkezi", href: "/gruplar" },
     { label: "Ders Programı", href: "/ders-programi" },
+    { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
   ],
   "/ders-programi": [
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Operasyon Planı", href: "/operasyon-plani" },
+    { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+    { label: "Yoklama", href: "/yoklama" },
   ],
   "/operasyon-plani": [
     { label: "Operasyon Planı", href: "/operasyon-plani" },
+    { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Yoklama", href: "/yoklama" },
   ],
   "/yoklama": [
     { label: "Yoklama Merkezi", href: "/yoklama" },
     { label: "Ders Programı", href: "/ders-programi" },
+    { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
   ],
   "/paketler": [
     { label: "Paket Yönetimi", href: "/paketler" },
     { label: "Ödemeler", href: "/odemeler" },
+    { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
   ],
   "/kasa": [
     { label: "Günlük Kasa", href: "/kasa" },
-    { label: "Ödemeler", href: "/odemeler" },
+    { label: "Ödeme Merkezi", href: "/odemeler" },
   ],
   "/odemeler": [
     { label: "Ödeme Merkezi", href: "/odemeler" },
     { label: "Günlük Kasa", href: "/kasa" },
     { label: "Paketler", href: "/paketler" },
+    { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
   ],
   "/hazir-mesajlar": [
     { label: "Hazır Mesajlar", href: "/hazir-mesajlar" },
     { label: "Bildirimler", href: "/bildirimler" },
+    { label: "Mesaj Ayarları", href: "/ayarlar/mesajlar" },
   ],
   "/bildirimler": [
     { label: "Bildirim Merkezi", href: "/bildirimler" },
     { label: "Uyarılar", href: "/uyarilar" },
+    { label: "Bildirim Ayarları", href: "/ayarlar/bildirimler" },
   ],
   "/uyarilar": [
     { label: "Uyarı Merkezi", href: "/uyarilar" },
+    { label: "Bildirim Merkezi", href: "/bildirimler" },
     { label: "Onay Merkezi", href: "/onay-merkezi" },
   ],
   "/onay-merkezi": [
     { label: "Onay Merkezi", href: "/onay-merkezi" },
+    { label: "Onay Kuralları", href: "/ayarlar/onay-merkezi" },
+    { label: "Değişiklik ve Denetim", href: "/denetim-merkezi" },
     { label: "Kullanıcılar ve Yetkiler", href: "/kullanicilar-ve-yetkiler" },
   ],
   "/kullanicilar-ve-yetkiler": [
     { label: "Kullanıcılar ve Yetkiler", href: "/kullanicilar-ve-yetkiler" },
     { label: "Değişiklik ve Denetim", href: "/denetim-merkezi" },
+    { label: "Onay Merkezi", href: "/onay-merkezi" },
   ],
-  "/raporlar": [{ label: "Rapor Merkezi", href: "/raporlar" }],
+  "/raporlar": [
+    { label: "Rapor Merkezi", href: "/raporlar" },
+    { label: "Değişiklik ve Denetim", href: "/denetim-merkezi" },
+  ],
   "/ayarlar": [
     { label: "Ayarlar Merkezi", href: "/ayarlar" },
-    { label: "Mesaj ve Bildirim Ayarları", href: "/ayarlar/mesajlar" },
+    { label: "Ön Kayıt Formu", href: "/ayarlar/on-kayit-formu" },
+    { label: "Mesaj Ayarları", href: "/ayarlar/mesajlar" },
+    { label: "Bildirim Ayarları", href: "/ayarlar/bildirimler" },
+    { label: "Onay Kuralları", href: "/ayarlar/onay-merkezi" },
   ],
 };
 
@@ -87,7 +111,6 @@ export default function SidebarToggle() {
 
   useEffect(() => {
     setMounted(true);
-
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY) === "true";
       setCollapsed(saved);
@@ -95,7 +118,6 @@ export default function SidebarToggle() {
     } catch {
       setCollapsed(false);
     }
-
     return () => {
       document.documentElement.classList.remove("sprintSidebarMobileOpen");
     };
@@ -146,7 +168,6 @@ export default function SidebarToggle() {
         event.preventDefault();
         event.stopPropagation();
         const next = childBox.hidden;
-
         document
           .querySelectorAll<HTMLElement>(".proSidebar .sidebarBranchChildren:not([hidden])")
           .forEach((box) => {
@@ -157,7 +178,6 @@ export default function SidebarToggle() {
               ?.querySelector<HTMLElement>(".sidebarBranchToggle")
               ?.setAttribute("aria-expanded", "false");
           });
-
         setOpen(next);
       };
 
@@ -188,7 +208,6 @@ export default function SidebarToggle() {
 
   function handleToggle() {
     const isMobile = window.matchMedia("(max-width: 820px)").matches;
-
     if (isMobile) {
       if (mobileOpen) closeMobileMenu();
       else openMobileMenu();
@@ -198,12 +217,9 @@ export default function SidebarToggle() {
     const nextCollapsed = !collapsed;
     setCollapsed(nextCollapsed);
     document.documentElement.classList.toggle("sprintSidebarCollapsed", nextCollapsed);
-
     try {
       window.localStorage.setItem(STORAGE_KEY, String(nextCollapsed));
-    } catch {
-      // Depolama kapalı olsa bile menü çalışmaya devam eder.
-    }
+    } catch {}
   }
 
   return (
@@ -221,23 +237,11 @@ export default function SidebarToggle() {
         <span />
       </button>
 
-      {mounted &&
-        mobileOpen &&
+      {mounted && mobileOpen &&
         createPortal(
           <>
-            <button
-              type="button"
-              className="sprintMobileMenuOverlay"
-              onClick={closeMobileMenu}
-              aria-label="Menüyü kapat"
-            />
-            <button
-              type="button"
-              className="sprintMobileMenuClose"
-              onClick={closeMobileMenu}
-              aria-label="Sol menüyü kapat"
-              title="Menüyü Kapat"
-            >
+            <button type="button" className="sprintMobileMenuOverlay" onClick={closeMobileMenu} aria-label="Menüyü kapat" />
+            <button type="button" className="sprintMobileMenuClose" onClick={closeMobileMenu} aria-label="Sol menüyü kapat" title="Menüyü Kapat">
               <span />
               <span />
             </button>
@@ -251,7 +255,6 @@ export default function SidebarToggle() {
         .sprintSidebarToggle:focus-visible,.sprintMobileMenuClose:focus-visible{outline:3px solid rgba(23,105,232,.3);outline-offset:3px}
         .sprintSidebarToggle span{display:block;width:19px;height:2px;border-radius:999px;background:currentColor}
         .sprintMobileMenuOverlay,.sprintMobileMenuClose{display:none}
-
         .proSidebar .proNavItem.hasBranchMenu{position:relative;padding-right:42px}
         .proSidebar .sidebarBranchToggle{position:absolute;right:7px;top:50%;width:32px;height:34px;display:grid;place-items:center;transform:translateY(-50%);border-radius:9px;color:#8fa4c2;font-size:18px;font-weight:950;line-height:1;cursor:pointer;transition:background .16s ease,color .16s ease,transform .16s ease}
         .proSidebar .sidebarBranchToggle:hover{background:rgba(255,255,255,.08);color:#fff}
@@ -263,7 +266,6 @@ export default function SidebarToggle() {
         .proSidebar .sidebarBranchChild i{width:5px;height:5px;border-radius:999px;background:#4e78ad;box-shadow:0 0 0 3px rgba(78,120,173,.11)}
         .proSidebar .sidebarBranchChild b{color:#607da2;font-size:11px;text-align:right}
         @keyframes sprintBranchOpen{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-
         html.sprintSidebarCollapsed .proShell{grid-template-columns:86px minmax(0,1fr)}
         html.sprintSidebarCollapsed .proSidebar{padding-left:10px;padding-right:10px}
         html.sprintSidebarCollapsed .proBrand{justify-content:center;padding-left:0;padding-right:0}
@@ -275,7 +277,6 @@ export default function SidebarToggle() {
         html.sprintSidebarCollapsed .proUser{display:flex;justify-content:center;padding-left:0;padding-right:0}
         html.sprintSidebarCollapsed .proUser>div:nth-child(2),html.sprintSidebarCollapsed .proUser>a{display:none}
         .proShell,.proSidebar{transition:grid-template-columns 220ms ease,width 220ms ease,transform 220ms ease,padding 220ms ease}
-
         @media(max-width:820px){
           html .proShell{display:block}
           html .proSidebar{position:fixed;z-index:8000;top:0;left:0;width:min(86vw,310px);height:100dvh;min-height:100dvh;padding:20px 16px;overflow-y:auto;overscroll-behavior:contain;transform:translateX(-105%);box-shadow:18px 0 50px rgba(3,15,36,.32)}
