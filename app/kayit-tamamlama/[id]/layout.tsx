@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import WhatsAppGroupPolicy from "./whatsapp-group-policy";
 import BirthAgeEnhancer from "./birth-age-enhancer";
+import RegistrationMobileCohesion from "./registration-mobile-cohesion";
 
 export default function RegistrationCompletionLayout({
   children,
@@ -12,6 +13,7 @@ export default function RegistrationCompletionLayout({
       <WhatsAppGroupPolicy />
       {children}
       <BirthAgeEnhancer />
+      <RegistrationMobileCohesion />
     </>
   );
 }
