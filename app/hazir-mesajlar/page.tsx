@@ -16,15 +16,16 @@ export default async function ReadyMessagesPage() {
     process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
   );
 
-  const [branchesRes, groupsRes, schedulesRes, studentsRes, membershipsRes] = await Promise.all([
+  const [branchesRes, groupsRes, schedulesRes, studentsRes, membershipsRes, plansRes] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id",organizationId).eq("is_active",true).order("name"),
     supabase.from("training_groups").select("id,name,branch_id,course_type,is_active").eq("organization_id",organizationId).eq("is_active",true).order("name"),
     supabase.from("lesson_schedules").select("id,group_id,branch_id,weekday,start_time,end_time,is_active").eq("organization_id",organizationId).eq("is_active",true).order("weekday").order("start_time"),
     supabase.from("students").select("id,first_name,last_name,phone,guardian_phone,branch_id,preferred_group_id,status").eq("organization_id",organizationId).eq("status","active").order("first_name"),
     supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id",organizationId).eq("is_active",true),
+    supabase.from("student_attendance_plans").select("student_id,group_id,selected_weekdays,is_active").eq("organization_id",organizationId).eq("is_active",true),
   ]);
 
-  const loadError = branchesRes.error || groupsRes.error || schedulesRes.error || studentsRes.error || membershipsRes.error;
+  const loadError = branchesRes.error || groupsRes.error || schedulesRes.error || studentsRes.error || membershipsRes.error || plansRes.error;
 
   return (
     <main className={styles.shell}>
@@ -46,6 +47,7 @@ export default async function ReadyMessagesPage() {
           schedules={schedulesRes.data || []}
           students={studentsRes.data || []}
           memberships={membershipsRes.data || []}
+          attendancePlans={plansRes.data || []}
           whatsappApiReady={whatsappApiReady}
         />
       )}
