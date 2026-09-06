@@ -8,11 +8,13 @@ type ProfileLite = {
   phone: string | null;
 };
 
-type PendingSend = {
+type SavedPassword = {
   password: string;
   fullName: string;
   phone: string;
-  popup: Window | null;
+};
+
+type PendingSave = SavedPassword & {
   startedAt: number;
 };
 
@@ -35,7 +37,6 @@ function buildMessage(options: {
   origin: string;
 }) {
   const name = options.fullName || "Değerli Kullanıcımız";
-
   return [
     `Merhaba ${name},`,
     "",
@@ -51,22 +52,16 @@ function buildMessage(options: {
   ].join("\n");
 }
 
-export default function PasswordWhatsAppBridge({
-  profiles,
-}: {
-  profiles: ProfileLite[];
-}) {
+export default function PasswordWhatsAppBridge({ profiles }: { profiles: ProfileLite[] }) {
   useEffect(() => {
-    let pending: PendingSend | null = null;
+    let pending: PendingSave | null = null;
+    let saved: SavedPassword | null = null;
     let timer: number | null = null;
 
-    const clearPending = (closePopup = false) => {
-      if (timer) window.clearTimeout(timer);
-      timer = null;
-      if (closePopup && pending?.popup && !pending.popup.closed) {
-        pending.popup.close();
-      }
-      pending = null;
+    const findPanel = () => document.querySelector<HTMLElement>("[data-password-panel]");
+
+    const removeExtras = () => {
+      document.querySelector("[data-password-whatsapp-actions]")?.remove();
     };
 
     const findSelectedProfile = () => {
@@ -74,115 +69,104 @@ export default function PasswordWhatsAppBridge({
       const heading = header?.querySelector("h2");
       const selectedName = normalizeText(heading?.textContent);
       if (!selectedName) return null;
-
       const headerText = normalizeText(header?.textContent);
-      const sameName = profiles.filter(
-        (profile) => normalizeText(profile.full_name) === selectedName
-      );
-
+      const sameName = profiles.filter((profile) => normalizeText(profile.full_name) === selectedName);
       if (sameName.length === 1) return sameName[0];
+      return sameName.find((profile) => {
+        const digits = String(profile.phone || "").replace(/\D/g, "");
+        const last10 = digits.slice(-10);
+        return Boolean(last10 && headerText.replace(/\D/g, "").includes(last10));
+      }) || sameName[0] || null;
+    };
 
-      return (
-        sameName.find((profile) => {
-          const digits = String(profile.phone || "").replace(/\D/g, "");
-          const last10 = digits.slice(-10);
-          const headerDigits = headerText.replace(/\D/g, "");
-          return Boolean(last10 && headerDigits.includes(last10));
-        }) || sameName[0] || null
-      );
+    const renderActions = (state: "created" | "sent" | "no-phone") => {
+      removeExtras();
+      const panel = findPanel();
+      if (!panel || !saved) return;
+
+      const wrap = document.createElement("div");
+      wrap.dataset.passwordWhatsappActions = "true";
+      wrap.style.cssText = "display:grid;gap:10px;grid-column:1/-1;width:100%;margin-top:2px";
+
+      const status = document.createElement("div");
+      status.style.cssText = `padding:12px 14px;border-radius:14px;font-weight:800;font-size:13px;border:1px solid ${state === "no-phone" ? "#fed7aa" : "#bbf7d0"};background:${state === "no-phone" ? "#fff7ed" : "#f0fdf4"};color:${state === "no-phone" ? "#9a3412" : "#166534"}`;
+      status.textContent = state === "sent"
+        ? "✓ Şifre oluşturuldu · WhatsApp mesajı hazırlandı"
+        : state === "no-phone"
+          ? "✓ Şifre oluşturuldu · Kullanıcının kayıtlı telefonu bulunmuyor"
+          : "✓ Şifre oluşturuldu · WhatsApp gönderimine hazır";
+      wrap.appendChild(status);
+
+      if (state !== "no-phone") {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.sendPasswordWhatsapp = "true";
+        button.textContent = state === "sent" ? "📲 WhatsApp Mesajını Tekrar Aç" : "📲 Şifreyi WhatsApp’tan Gönder";
+        button.style.cssText = "width:100%;min-height:52px;border:0;border-radius:14px;background:#16a34a;color:#fff;font-weight:900;font-size:15px;box-shadow:0 8px 20px rgba(22,163,74,.18);cursor:pointer";
+        wrap.appendChild(button);
+      }
+      panel.appendChild(wrap);
+    };
+
+    const clearPending = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = null;
+      pending = null;
     };
 
     const onClick = (event: MouseEvent) => {
-      const button = (event.target as Element | null)?.closest("button");
+      const button = (event.target as Element | null)?.closest<HTMLButtonElement>("button");
       if (!button) return;
-      if (normalizeText(button.textContent) !== "Şifreyi Değiştir") return;
 
+      if (button.dataset.sendPasswordWhatsapp === "true") {
+        if (!saved?.phone) return;
+        const message = buildMessage({ fullName: saved.fullName, password: saved.password, origin: window.location.origin });
+        const url = `https://wa.me/${saved.phone}?text=${encodeURIComponent(message)}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+        renderActions("sent");
+        return;
+      }
+
+      if (normalizeText(button.textContent) !== "Şifreyi Değiştir") return;
       const panel = button.closest("[data-password-panel]");
-      const input = panel?.querySelector<HTMLInputElement>(
-        'input[autocomplete="new-password"], input[type="password"]'
-      );
+      const input = panel?.querySelector<HTMLInputElement>('input[autocomplete="new-password"], input[type="password"]');
       const password = input?.value || "";
       if (password.length < 8) return;
 
       const profile = findSelectedProfile();
-      const phone = cleanPhone(profile?.phone);
-      if (!profile || !phone) return;
-
-      clearPending(true);
-
-      // Mobil tarayıcıların gecikmeli window.open çağrılarını engellememesi için
-      // sekmeyi doğrudan kullanıcı tıklaması sırasında açıyoruz; şifre işlemi
-      // başarıyla tamamlanınca bu sekmeyi WhatsApp taslağına yönlendiriyoruz.
-      const popup = window.open("about:blank", "_blank");
-      if (popup) {
-        try {
-          popup.document.title = "WhatsApp hazırlanıyor…";
-          popup.document.body.innerHTML =
-            '<div style="font-family:system-ui;padding:24px;color:#0f172a">Şifre kaydediliyor, WhatsApp mesajı hazırlanıyor…</div>';
-        } catch {}
-      }
-
+      if (!profile) return;
+      removeExtras();
+      saved = null;
       pending = {
         password,
         fullName: normalizeText(profile.full_name),
-        phone,
-        popup,
+        phone: cleanPhone(profile.phone),
         startedAt: Date.now(),
       };
-
-      timer = window.setTimeout(() => clearPending(true), 15000);
+      timer = window.setTimeout(clearPending, 15000);
     };
 
     const observer = new MutationObserver(() => {
       if (!pending) return;
-      if (Date.now() - pending.startedAt > 15000) {
-        clearPending(true);
-        return;
-      }
-
+      if (Date.now() - pending.startedAt > 15000) return clearPending();
       const pageText = document.body.innerText;
-      const success =
-        pageText.includes("✓ Yeni şifre başarıyla tanımlandı.") ||
-        pageText.includes("Yeni şifre başarıyla tanımlandı.");
-      const failed =
-        pageText.includes("⚠ Şifre") ||
-        pageText.includes("Şifre değiştirilemedi") ||
-        pageText.includes("Şifre en az 8 karakter olmalıdır");
-
-      if (failed && !success) {
-        clearPending(true);
-        return;
-      }
-
+      const success = pageText.includes("✓ Yeni şifre başarıyla tanımlandı.") || pageText.includes("Yeni şifre başarıyla tanımlandı.");
+      const failed = pageText.includes("Şifre değiştirilemedi") || pageText.includes("Şifre en az 8 karakter olmalıdır");
+      if (failed && !success) return clearPending();
       if (!success) return;
 
-      const message = buildMessage({
-        fullName: pending.fullName,
-        password: pending.password,
-        origin: window.location.origin,
-      });
-      const url = `https://wa.me/${pending.phone}?text=${encodeURIComponent(message)}`;
-
-      if (pending.popup && !pending.popup.closed) {
-        pending.popup.location.href = url;
-      } else {
-        window.location.href = url;
-      }
-
-      clearPending(false);
+      saved = { password: pending.password, fullName: pending.fullName, phone: pending.phone };
+      clearPending();
+      renderActions(saved.phone ? "created" : "no-phone");
     });
 
     document.addEventListener("click", onClick, true);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     return () => {
       document.removeEventListener("click", onClick, true);
       observer.disconnect();
-      clearPending(true);
+      clearPending();
+      removeExtras();
     };
   }, [profiles]);
 
