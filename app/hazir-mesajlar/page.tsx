@@ -11,16 +11,22 @@ export default async function ReadyMessagesPage() {
   const organizationId = profile.organization_id;
   if (!organizationId) throw new Error("Organizasyon bilgisi bulunamadı.");
   const supabase = await createClient();
+  const canDirectWhatsApp = ["owner","admin","branch_manager","registration_staff"].includes(profile.role);
+  const whatsappApiReady = canDirectWhatsApp && Boolean(
+    process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
+    process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
+  );
 
-  const [branchesRes, groupsRes, schedulesRes, studentsRes, membershipsRes] = await Promise.all([
+  const [branchesRes, groupsRes, schedulesRes, studentsRes, membershipsRes, plansRes] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id",organizationId).eq("is_active",true).order("name"),
     supabase.from("training_groups").select("id,name,branch_id,course_type,is_active").eq("organization_id",organizationId).eq("is_active",true).order("name"),
     supabase.from("lesson_schedules").select("id,group_id,branch_id,weekday,start_time,end_time,is_active").eq("organization_id",organizationId).eq("is_active",true).order("weekday").order("start_time"),
     supabase.from("students").select("id,first_name,last_name,phone,guardian_phone,branch_id,preferred_group_id,status").eq("organization_id",organizationId).eq("status","active").order("first_name"),
     supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id",organizationId).eq("is_active",true),
+    supabase.from("student_attendance_plans").select("student_id,group_id,selected_weekdays,is_active").eq("organization_id",organizationId).eq("is_active",true),
   ]);
 
-  const loadError = branchesRes.error || groupsRes.error || schedulesRes.error || studentsRes.error || membershipsRes.error;
+  const loadError = branchesRes.error || groupsRes.error || schedulesRes.error || studentsRes.error || membershipsRes.error || plansRes.error;
 
   return (
     <main className={styles.shell}>
@@ -28,7 +34,7 @@ export default async function ReadyMessagesPage() {
         <div>
           <p className={styles.eyebrow}>SPRİNT YÜZME OKULU · İLETİŞİM MERKEZİ</p>
           <h1>Hazır Mesajlar & Toplu İletişim</h1>
-          <p>Şube, grup ve seans bazlı toplu mesaj hazırlayın; afiş ekleyin, WhatsApp görünümünü önizleyin ve hediye dersleri tek merkezden yönetin.</p>
+          <p>Şube, grup ve seans bazlı toplu mesaj hazırlayın; tüm operasyonlarda aynı akıllı mesaj dilini kullanın, afiş ekleyin ve WhatsApp gönderimlerini tek merkezden yönetin.</p>
         </div>
         <Link href="/" className={styles.back}>Yönetim paneline dön</Link>
       </section>
@@ -42,6 +48,8 @@ export default async function ReadyMessagesPage() {
           schedules={schedulesRes.data || []}
           students={studentsRes.data || []}
           memberships={membershipsRes.data || []}
+          attendancePlans={plansRes.data || []}
+          whatsappApiReady={whatsappApiReady}
         />
       )}
     </main>
