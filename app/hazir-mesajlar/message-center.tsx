@@ -14,7 +14,8 @@ type Group = { id:string; name:string; branch_id:string; course_type?:string|nul
 type Schedule = { id:string; group_id:string; branch_id:string; weekday:number; start_time:string; end_time:string; is_active:boolean };
 type Student = { id:string; first_name:string; last_name:string; phone?:string|null; guardian_phone?:string|null; branch_id?:string|null; preferred_group_id?:string|null; status:string };
 type Membership = { student_id:string; group_id:string; is_active:boolean };
-type Props = { branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; whatsappApiReady?:boolean };
+type AttendancePlan = { student_id:string; group_id?:string|null; selected_weekdays?:number[]|null; is_active:boolean };
+type Props = { branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
 type QueueItem = { studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
 
 const DAYS:Record<number,string> = {1:"Pzt",2:"Sal",3:"Çar",4:"Per",5:"Cum",6:"Cmt",7:"Paz"};
@@ -29,7 +30,7 @@ function cleanPhone(v?:string|null){
   return digits;
 }
 
-export default function MessageCenter({branches,groups,schedules,students,memberships,whatsappApiReady=false}:Props){
+export default function MessageCenter({branches,groups,schedules,students,memberships,attendancePlans,whatsappApiReady=false}:Props){
   const [tab,setTab] = useState<"compose"|"templates"|"media"|"history"|"gift">("compose");
   const [branchId,setBranchId] = useState("");
   const [groupId,setGroupId] = useState("");
@@ -53,19 +54,30 @@ export default function MessageCenter({branches,groups,schedules,students,member
     return map;
   },[memberships]);
 
+  const attendancePlanMap = useMemo(()=>{
+    const map = new Map<string,AttendancePlan>();
+    attendancePlans.forEach(p=>{ if(!map.has(p.student_id)) map.set(p.student_id,p); });
+    return map;
+  },[attendancePlans]);
+
   const visibleGroups = useMemo(()=>groups.filter(g=>!branchId || g.branch_id===branchId),[groups,branchId]);
   const visibleSchedules = useMemo(()=>schedules.filter(s=>(!groupId||s.group_id===groupId)&&(!branchId||s.branch_id===branchId)),[schedules,groupId,branchId]);
+  const selectedSchedule = schedules.find(s=>s.id===scheduleId);
   const audience = useMemo(()=>students.filter(s=>{
     if (branchId && s.branch_id!==branchId) return false;
     if (groupId && !(membershipMap.get(s.id)||[]).includes(groupId) && s.preferred_group_id!==groupId) return false;
+    if (selectedSchedule) {
+      const plan=attendancePlanMap.get(s.id);
+      if (plan?.group_id && plan.group_id!==selectedSchedule.group_id) return false;
+      if (Array.isArray(plan?.selected_weekdays) && plan!.selected_weekdays!.length && !plan!.selected_weekdays!.map(Number).includes(Number(selectedSchedule.weekday))) return false;
+    }
     return true;
-  }),[students,branchId,groupId,membershipMap]);
+  }),[students,branchId,groupId,membershipMap,attendancePlanMap,selectedSchedule]);
 
-  const activeIds = selected.length ? selected : audience.map(s=>s.id);
+  const activeIds = selected.length ? selected.filter(id=>audience.some(s=>s.id===id)) : audience.map(s=>s.id);
   const activeStudents = audience.filter(s=>activeIds.includes(s.id));
   const selectedBranch = branches.find(b=>b.id===branchId);
   const selectedGroup = groups.find(g=>g.id===groupId);
-  const selectedSchedule = schedules.find(s=>s.id===scheduleId);
   const programText = selectedSchedule
     ? `${DAYS[selectedSchedule.weekday]} ${selectedSchedule.start_time.slice(0,5)}-${selectedSchedule.end_time.slice(0,5)}`
     : visibleSchedules.map(s=>`${DAYS[s.weekday]} ${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}`).join(" / ") || "Program seçilmedi";
@@ -172,13 +184,13 @@ export default function MessageCenter({branches,groups,schedules,students,member
           <div className={styles.filters}>
             <label>Şube<select value={branchId} onChange={e=>{setBranchId(e.target.value);setGroupId("");setScheduleId("");setSelected([]);setQueue([]);}}><option value="">Tüm şubeler</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
             <label>Grup<select value={groupId} onChange={e=>{setGroupId(e.target.value);setScheduleId("");setSelected([]);setQueue([]);}}><option value="">Tüm gruplar</option>{visibleGroups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
-            <label>Seans<select value={scheduleId} onChange={e=>{setScheduleId(e.target.value);setQueue([]);}}><option value="">Tüm seanslar</option>{visibleSchedules.map(s=><option key={s.id} value={s.id}>{DAYS[s.weekday]} {s.start_time.slice(0,5)}-{s.end_time.slice(0,5)}</option>)}</select></label>
+            <label>Seans<select value={scheduleId} onChange={e=>{setScheduleId(e.target.value);setSelected([]);setQueue([]);}}><option value="">Tüm seanslar</option>{visibleSchedules.map(s=><option key={s.id} value={s.id}>{DAYS[s.weekday]} {s.start_time.slice(0,5)}-{s.end_time.slice(0,5)}</option>)}</select></label>
           </div>
-          <div className={styles.summaryBox}><span>Toplam <b>{activeIds.length}</b></span><span>WhatsApp hazır <b>{sendableCount}</b></span><span>Telefon eksik <b>{missingPhoneCount}</b></span></div>
-          <div className={styles.audienceHead}><span>Aktif kursiyerler</span><div><button onClick={()=>setSelected(audience.map(s=>s.id))}>Tümünü seç</button><button onClick={()=>setSelected([])}>Seçimi temizle</button></div></div>
+          <div className={styles.summaryBox}><span>Hedef kitle <b>{activeIds.length}</b></span><span>WhatsApp hazır <b>{sendableCount}</b></span><span>Telefon eksik <b>{missingPhoneCount}</b></span></div>
+          <div className={styles.audienceHead}><span>Aktif kursiyerler · seçim yoksa filtredeki herkes</span><div><button onClick={()=>setSelected(audience.map(s=>s.id))}>Tümünü işaretle</button><button onClick={()=>setSelected([])}>Filtredeki herkesi kullan</button></div></div>
           <div className={styles.people}>
             {audience.slice(0,120).map(s=><label key={s.id} className={styles.person}><input type="checkbox" checked={selected.includes(s.id)} onChange={()=>toggleStudent(s.id)}/><div><b>{studentName(s)}</b><small>{s.guardian_phone||s.phone||"Telefon eksik"}</small></div></label>)}
-            {!audience.length && <p className={styles.muted}>Bu filtrede aktif kursiyer bulunamadı.</p>}
+            {!audience.length && <p className={styles.muted}>Bu şube / grup / seans filtresinde aktif kursiyer bulunamadı.</p>}
           </div>
         </div>
 
