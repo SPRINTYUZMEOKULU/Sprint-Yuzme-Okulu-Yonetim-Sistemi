@@ -11,33 +11,6 @@ function cleanText(element: Element | null) {
     .toLocaleLowerCase("tr-TR");
 }
 
-function dispatchRoutedClick(element: HTMLElement) {
-  const event = new MouseEvent("click", {
-    bubbles: true,
-    cancelable: true,
-    view: window,
-  }) as RoutedMouseEvent;
-  event.__sprintRouted = true;
-  element.dispatchEvent(event);
-}
-
-function findQuickAction(label: string) {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(
-      ".fileCommandActions button, .fileCommandActions a",
-    ),
-  ).find((item) => cleanText(item).includes(label));
-}
-
-function openSection(sectionId: string) {
-  const nextHash = `#${sectionId}`;
-  if (window.location.hash === nextHash) {
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  } else {
-    window.location.hash = sectionId;
-  }
-}
-
 function isRenewalAction(element: HTMLElement | null) {
   if (!element) return false;
   const text = cleanText(element);
@@ -87,33 +60,25 @@ export default function StudentActionRouter() {
       if (quickAction) {
         const text = cleanText(quickAction);
 
-        if (text.includes("ödeme al")) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          const paymentTrigger = findQuickAction("ödeme al");
-          if (paymentTrigger) dispatchRoutedClick(paymentTrigger);
+        // Ödeme Al, Ödeme Geçmişi ve Vade Belirle aksiyonlarının tamamı
+        // StudentFinanceCenter tarafından yönetilir. Burada ikinci bir ödeme
+        // yönlendirmesi yapmıyoruz; böylece tüm ekranlar aynı finans modülünü açar.
+        if (
+          text.includes("ödeme al") ||
+          text.includes("ödeme geçmişi") ||
+          text.includes("vade")
+        ) {
           return;
         }
 
-        if (text.includes("ödeme geçmişi")) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          openSection("odeme");
-          return;
-        }
-
-        if (text.includes("bilgileri düzenle")) {
-          return;
-        }
+        if (text.includes("bilgileri düzenle")) return;
 
         if (isRenewalAction(quickAction)) {
           event.preventDefault();
           event.stopImmediatePropagation();
           if (Date.now() - renewalTapAt < 1200) return;
           hardOpenRenewal();
-          return;
         }
-
         return;
       }
 
@@ -131,15 +96,8 @@ export default function StudentActionRouter() {
           ? alertAction.getAttribute("href") || ""
           : "";
 
-      if (href === "#odeme" || cardText.includes("ödeme")) {
-        const paymentTrigger = findQuickAction("ödeme al");
-        if (paymentTrigger) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          dispatchRoutedClick(paymentTrigger);
-        }
-        return;
-      }
+      // Finans uyarıları da aynı StudentFinanceCenter tarafından yakalanır.
+      if (href === "#odeme" || cardText.includes("ödeme")) return;
 
       if (
         href === "#genel-bilgiler" ||
