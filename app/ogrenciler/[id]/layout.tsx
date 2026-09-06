@@ -41,7 +41,7 @@ export default async function StudentFileLayout({
       <StudentProfileCenter />
       <GeneralInfoSummary />
       <StudentRenewalCenter />
-      <StudentFinanceCenter />
+      <StudentFinanceCenter studentId={id} />
       <StudentFinanceHistoryEnhancer />
       <StudentActionRouter />
       <StudentActionFeedback />

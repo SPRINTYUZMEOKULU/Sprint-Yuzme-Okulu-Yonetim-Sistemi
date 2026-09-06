@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -52,6 +53,15 @@ const ALLOWED_METHODS: PaymentMethod[] = [
   "eft",
   "other",
 ];
+
+function createPaymentAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 async function getAuthorizedProfile() {
   return requireProfile([...ALLOWED_ROLES]);
@@ -293,7 +303,9 @@ export async function createStudentPayment(
       };
     }
 
-    const supabase = await createClient();
+    // Kullanıcı yetkisi ve kurum requireProfile ile doğrulandıktan sonra ödeme
+    // sunucuda yazılır; böylece RLS farkları geçerli tahsilatı sessizce engellemez.
+    const supabase = createPaymentAdminClient();
 
     /*
      * ÖĞRENCİ DOĞRULAMA

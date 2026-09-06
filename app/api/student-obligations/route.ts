@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { requireProfile } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
 
 const ROLES = ["owner", "admin", "branch_manager", "registration_staff", "accounting"] as const;
 const TYPES = new Set(["equipment", "service", "installment", "other"]);
@@ -12,6 +12,15 @@ function amount(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : null;
 }
 
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const profile = await requireProfile([...ROLES]);
@@ -19,7 +28,7 @@ export async function GET(request: NextRequest) {
     if (!studentId || !profile.organization_id) {
       return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 400 });
     }
-    const supabase = await createClient();
+    const supabase = adminClient();
     const { data, error } = await supabase
       .from("student_financial_obligation_summary")
       .select("*")
@@ -52,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase = adminClient();
     const { data: student } = await supabase
       .from("students")
       .select("id,first_name,last_name")
@@ -129,7 +138,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Geçerli tahsilat tutarı giriniz." }, { status: 400 });
     }
 
-    const supabase = await createClient();
+    const supabase = adminClient();
     const { data: current } = await supabase
       .from("student_financial_obligations")
       .select("*")

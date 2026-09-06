@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createStudentPayment,
@@ -91,15 +91,8 @@ function normalizePhone(value?: string | null) {
   return phone;
 }
 
-export default function StudentFinanceCenter() {
+export default function StudentFinanceCenter({ studentId }: { studentId: string }) {
   const router = useRouter();
-  const studentId = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? ""
-        : window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "",
-    [],
-  );
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("payment");
@@ -138,6 +131,9 @@ export default function StudentFinanceCenter() {
       const debtPayload = await obligationsResponse.json();
       if (!financeResponse.ok || !finance.ok) {
         throw new Error(finance.error || "Finans bilgileri alınamadı.");
+      }
+      if (!obligationsResponse.ok) {
+        throw new Error(debtPayload?.error || "Borç bilgileri alınamadı.");
       }
       setData(finance);
       setObligations(debtPayload.obligations || []);
@@ -197,7 +193,12 @@ export default function StudentFinanceCenter() {
   }, [studentId]);
 
   async function collectPackagePayment() {
-    if (!data?.enrollment?.id || busy) return;
+    if (busy) return;
+    if (!data?.enrollment?.id) {
+      setError(true);
+      setMessage("Öğrencinin aktif paket kaydı yüklenemedi. Sayfayı yenileyip tekrar deneyiniz.");
+      return;
+    }
     const amount = parseAmount(amountValue);
     if (!Number.isFinite(amount) || amount <= 0) {
       setError(true);
