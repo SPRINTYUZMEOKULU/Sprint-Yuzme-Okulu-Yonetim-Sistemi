@@ -1,4 +1,5 @@
 import { requireProfile } from "@/lib/auth/profile";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import StudentsClient, {
   type StudentListItem,
@@ -6,6 +7,19 @@ import StudentsClient, {
 import "../dashboard.css";
 
 export const dynamic = "force-dynamic";
+
+function createFinanceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase finans bağlantısı yapılandırılmamış.");
+  }
+
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 type BranchRow = {
   id: string;
@@ -76,6 +90,7 @@ export default async function StudentsPage() {
   ]);
 
   const supabase = await createClient();
+  const financeSupabase = createFinanceClient();
   const organizationId = profile.organization_id;
 
   if (!organizationId) {
@@ -198,9 +213,10 @@ export default async function StudentsPage() {
           .select("*")
           .in("student_id", studentIds),
 
-        supabase
+        financeSupabase
           .from("student_payment_summary")
           .select("*")
+          .eq("organization_id", organizationId)
           .in("student_id", studentIds),
 
         supabase
