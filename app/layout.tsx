@@ -24,12 +24,12 @@ export const metadata: Metadata = {
 
   applicationName: "SprintOS",
 
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest.webmanifest?v=4",
 
   icons: {
     icon: [
       {
-        url: "/icon",
+        url: "/icon?v=4",
         sizes: "512x512",
         type: "image/png",
       },
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 
     apple: [
       {
-        url: "/apple-icon",
+        url: "/apple-icon?v=4",
         sizes: "180x180",
         type: "image/png",
       },
