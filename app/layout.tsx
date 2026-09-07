@@ -9,6 +9,7 @@ import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
 import DashboardLiveOperations from "./components/dashboard-live-operations";
 import DashboardAttendanceLinks from "./components/dashboard-attendance-links";
+import DashboardHomeEnhancer from "./components/dashboard-home-enhancer";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 
@@ -77,6 +78,7 @@ export default function RootLayout({
       <body>
         {children}
 
+        <DashboardHomeEnhancer />
         <DashboardLiveOperations />
         <DashboardAttendanceLinks />
         <ModuleNavigationFeedback />
