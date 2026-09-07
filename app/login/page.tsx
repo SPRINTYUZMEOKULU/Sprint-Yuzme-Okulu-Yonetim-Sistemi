@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Suspense } from "react";
 import LoginForm from "./login-form";
+import GuardianOtpLogin from "./guardian-otp-login";
 
 const featureItems = [
   { icon: "shield", title: "Güvenli Yönetim" },
@@ -44,7 +45,10 @@ export default function LoginPage() {
 
       <section className="v2FormPanel">
         <div className="v2LoginCard compactLoginCard">
-          <Suspense fallback={<div className="v2Loading">Giriş ekranı hazırlanıyor…</div>}><LoginForm/></Suspense>
+          <Suspense fallback={<div className="v2Loading">Giriş ekranı hazırlanıyor…</div>}>
+            <LoginForm/>
+            <GuardianOtpLogin/>
+          </Suspense>
         </div>
       </section>
     </main>
