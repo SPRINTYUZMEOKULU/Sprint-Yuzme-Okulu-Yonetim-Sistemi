@@ -404,30 +404,17 @@ function daysUntil(value?: string | null) {
 
 function paymentLabel(student: StudentListItem) {
   const outstanding = numberValue(student.payment_outstanding);
-  const raw = normalizeText(student.payment_status);
 
   if (outstanding > 0) {
     return {
-      text: "Ödeme Bekliyor",
+      text: "Ödeme Bekleniyor",
       className: "paymentWarn",
     };
   }
 
-  if (
-    raw.includes("paid") ||
-    raw.includes("ödendi") ||
-    raw.includes("odendi") ||
-    numberValue(student.payment_total_received) > 0
-  ) {
-    return {
-      text: "Ödeme Kaydı Var",
-      className: "paymentOk",
-    };
-  }
-
   return {
-    text: "Ödeme Kaydı Yok",
-    className: "paymentNeutral",
+    text: "Borç Yok",
+    className: "paymentOk",
   };
 }
 
@@ -2599,9 +2586,17 @@ function closeLessonAction() {
 
                 <div>
                   <span>Ödeme</span>
-                  <strong className={payment.className}>
+                  <button
+                    type="button"
+                    className={`paymentStatusButton ${payment.className}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      router.push(`/ogrenciler/${student.id}#odeme`);
+                    }}
+                    aria-label={`${student.first_name} ${student.last_name} ödeme sayfasını aç`}
+                  >
                     {payment.text}
-                  </strong>
+                  </button>
                 </div>
               </div>
 
@@ -4970,6 +4965,37 @@ function closeLessonAction() {
 
 .paymentNeutral {
   color: #64748b !important;
+}
+
+.paymentStatusButton {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.paymentStatusButton:hover {
+  transform: translateY(-1px);
+}
+
+.paymentStatusButton.paymentWarn {
+  color: #ffffff !important;
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 6px 14px rgba(220, 38, 38, .18);
+}
+
+.paymentStatusButton.paymentOk {
+  color: #087443 !important;
+  background: #ecfdf3;
+  border-color: #bbf7d0;
 }
 
 .summaryCard.alertCard {
