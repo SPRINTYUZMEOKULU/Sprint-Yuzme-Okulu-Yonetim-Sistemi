@@ -12,7 +12,7 @@ function adminClient() {
   return createAdminClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-export async function createGuardianActivationLink(studentIdValue: string) {
+export async function sendGuardianActivation(studentIdValue: string) {
   const profile = await requireProfile([...roles]);
   const organizationId = profile.organization_id;
   const studentId = String(studentIdValue || "").trim();
@@ -42,26 +42,24 @@ export async function createGuardianActivationLink(studentIdValue: string) {
     return {
       ok: false as const,
       code: "email_required" as const,
-      message: "Güvenli aktivasyon bağlantısı oluşturmak için veli e-posta adresi gerekli.",
+      message: "Güvenli aktivasyon için veli e-posta adresi gerekli.",
     };
   }
 
   const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
   const redirectTo = siteUrl ? `${siteUrl}/auth/callback?next=/veli-paneli` : undefined;
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "recovery",
+  const { error } = await admin.auth.resetPasswordForEmail(
     email,
-    options: redirectTo ? { redirectTo } : undefined,
-  });
+    redirectTo ? { redirectTo } : undefined,
+  );
 
-  if (error || !data?.properties?.action_link) {
-    return { ok: false as const, message: error?.message || "Aktivasyon bağlantısı oluşturulamadı." };
+  if (error) {
+    return { ok: false as const, message: error.message || "Aktivasyon e-postası gönderilemedi." };
   }
 
   return {
     ok: true as const,
-    message: "Tek kullanımlık veli aktivasyon bağlantısı hazırlandı.",
-    activationUrl: data.properties.action_link,
+    message: "Veliye güvenli şifre belirleme bağlantısı e-posta ile gönderildi.",
     guardian: {
       fullName: guardian.full_name || "Değerli Velimiz",
       email,
