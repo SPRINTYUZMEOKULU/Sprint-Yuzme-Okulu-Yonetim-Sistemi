@@ -44,10 +44,15 @@ function polishEmoji(card:HTMLElement){
   }
 }
 
+function polishVisibleCards(){
+  document.querySelectorAll<HTMLElement>(".studentCard").forEach(polishEmoji);
+}
+
 export default function StudentCardInsightsEnhancer(){
   useEffect(()=>{
     if(window.location.pathname!=="/ogrenciler") return;
     let cancelled=false;
+    let frame=0;
 
     async function run(){
       const cards=Array.from(document.querySelectorAll<HTMLElement>(".studentCard"));
@@ -106,9 +111,26 @@ export default function StudentCardInsightsEnhancer(){
       }
     }
 
+    const observer=new MutationObserver(()=>{
+      if(cancelled) return;
+      if(frame) window.cancelAnimationFrame(frame);
+      frame=window.requestAnimationFrame(()=>{
+        frame=0;
+        polishVisibleCards();
+      });
+    });
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+
+    polishVisibleCards();
     const t1=window.setTimeout(()=>void run(),80);
     const t2=window.setTimeout(()=>void run(),700);
-    return()=>{cancelled=true;window.clearTimeout(t1);window.clearTimeout(t2);};
+    return()=>{
+      cancelled=true;
+      observer.disconnect();
+      if(frame) window.cancelAnimationFrame(frame);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
   },[]);
 
   return <style jsx global>{`
