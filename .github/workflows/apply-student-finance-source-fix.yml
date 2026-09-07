@@ -1,0 +1,65 @@
+name: Apply student finance source fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-student-finance-source-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Patch student finance source
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/ogrenciler/page.tsx')
+          text = path.read_text()
+
+          old_import = 'import { createClient } from "@/lib/supabase/server";\n'
+          new_import = 'import { createClient as createAdminClient } from "@supabase/supabase-js";\nimport { createClient } from "@/lib/supabase/server";\n'
+          if text.count(old_import) != 1:
+              raise SystemExit(f'import match count: {text.count(old_import)}')
+          text = text.replace(old_import, new_import, 1)
+
+          old_dynamic = 'export const dynamic = "force-dynamic";\n'
+          new_dynamic = '''export const dynamic = "force-dynamic";\n\nfunction createFinanceClient() {\n  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;\n  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;\n\n  if (!url || !key) {\n    throw new Error("Supabase finans bağlantısı yapılandırılmamış.");\n  }\n\n  return createAdminClient(url, key, {\n    auth: { persistSession: false, autoRefreshToken: false },\n  });\n}\n'''
+          if text.count(old_dynamic) != 1:
+              raise SystemExit(f'dynamic match count: {text.count(old_dynamic)}')
+          text = text.replace(old_dynamic, new_dynamic, 1)
+
+          old_client = '''  const supabase = await createClient();\n  const organizationId = profile.organization_id;'''
+          new_client = '''  const supabase = await createClient();\n  const financeSupabase = createFinanceClient();\n  const organizationId = profile.organization_id;'''
+          if text.count(old_client) != 1:
+              raise SystemExit(f'client match count: {text.count(old_client)}')
+          text = text.replace(old_client, new_client, 1)
+
+          old_query = '''        supabase\n          .from("student_payment_summary")\n          .select("*")\n          .in("student_id", studentIds),'''
+          new_query = '''        financeSupabase\n          .from("student_payment_summary")\n          .select("*")\n          .eq("organization_id", organizationId)\n          .in("student_id", studentIds),'''
+          if text.count(old_query) != 1:
+              raise SystemExit(f'payment summary query match count: {text.count(old_query)}')
+          text = text.replace(old_query, new_query, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/ogrenciler/page.tsx
+          git diff --cached --check
+          git commit -m "Use central finance source in student list"
+          git push origin main
