@@ -1,0 +1,139 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/browser";
+
+function localPhone(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("0090")) digits = digits.slice(4);
+  if (digits.startsWith("90") && digits.length === 12) digits = digits.slice(2);
+  if (digits.startsWith("0") && digits.length === 11) digits = digits.slice(1);
+  return digits.length === 10 && digits.startsWith("5") ? digits : "";
+}
+
+function displayPhone(value: string) {
+  const p = localPhone(value);
+  return p ? `0${p.slice(0,3)} ${p.slice(3,6)} ${p.slice(6,8)} ${p.slice(8)}` : value;
+}
+
+export default function GuardianOtpLogin() {
+  const searchParams = useSearchParams();
+  const [active, setActive] = useState(true);
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const formatted = useMemo(() => displayPhone(phone), [phone]);
+
+  useEffect(() => {
+    const sync = () => {
+      const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".v2RoleTab"));
+      const guardian = tabs.find((tab) => tab.textContent?.includes("Veli Girişi"));
+      const isGuardian = guardian?.getAttribute("aria-selected") === "true" || guardian?.classList.contains("active") || false;
+      setActive(isGuardian);
+      document.querySelector<HTMLElement>(".v2LoginForm")?.style.setProperty("display", isGuardian ? "none" : "");
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
+    document.addEventListener("click", sync, true);
+    sync();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("click", sync, true);
+      document.querySelector<HTMLElement>(".v2LoginForm")?.style.removeProperty("display");
+    };
+  }, []);
+
+  async function sendCode(event?: FormEvent) {
+    event?.preventDefault();
+    if (busy) return;
+    setError(""); setInfo("");
+    const local = localPhone(phone);
+    if (!local) { setError("Telefon numaranızı 05XX XXX XX XX şeklinde yazın."); return; }
+    setBusy(true);
+    try {
+      const prepare = await fetch("/api/auth/guardian-otp/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ phone: local }),
+      });
+      const prepared = await prepare.json().catch(() => null);
+      if (!prepare.ok || !prepared?.ok || !prepared?.phone) throw new Error(prepared?.message || "Veli hesabı doğrulanamadı.");
+
+      const supabase = createClient();
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: prepared.phone,
+        options: { shouldCreateUser: false },
+      });
+      if (otpError) {
+        const msg = String(otpError.message || "");
+        if (/provider|sms|twilio|messagebird|vonage/i.test(msg)) throw new Error("SMS doğrulama servisi henüz aktif değil. Yönetici SMS sağlayıcısını yapılandırmalıdır.");
+        throw new Error(msg || "Doğrulama kodu gönderilemedi.");
+      }
+      setSent(true);
+      setInfo(`6 haneli doğrulama kodu ${displayPhone(prepared.phone)} numarasına gönderildi.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kod gönderilemedi.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    const local = localPhone(phone);
+    const token = otp.replace(/\D/g, "");
+    if (!local || token.length !== 6) { setError("Telefonunuza gelen 6 haneli kodu giriniz."); return; }
+    setBusy(true); setError(""); setInfo("");
+    try {
+      const supabase = createClient();
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({ phone: `+90${local}`, token, type: "sms" });
+      if (verifyError || !data.user || !data.session) throw new Error("Doğrulama kodu geçersiz veya süresi dolmuş.");
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id,role,is_active")
+        .eq("id", data.user.id)
+        .single();
+      if (profileError || !profile || profile.role !== "guardian" || profile.is_active === false) {
+        await supabase.auth.signOut();
+        throw new Error("Bu telefon numarası aktif bir veli hesabına bağlı değil.");
+      }
+      try { await supabase.from("profiles").update({ last_sign_in_at: new Date().toISOString() }).eq("id", data.user.id); } catch {}
+      const rawNext = searchParams.get("next");
+      const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/veli-paneli";
+      window.location.assign(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kod doğrulanamadı.");
+      setBusy(false);
+    }
+  }
+
+  if (!active) return null;
+
+  return <section className="guardianOtpBox">
+    <div className="guardianOtpHead"><span>VELİ PORTALI</span><h2>Telefon ile güvenli giriş</h2><p>Şifreye gerek yok. Kayıtlı cep telefonunuza gönderilen tek kullanımlık SMS koduyla giriş yapın.</p></div>
+    {!sent ? <form onSubmit={sendCode} className="guardianOtpForm">
+      <label><span>Cep telefonu</span><input value={phone} onChange={(e)=>{setPhone(e.target.value);setError("");}} type="tel" inputMode="tel" autoComplete="tel" placeholder="05XX XXX XX XX" required/></label>
+      {formatted && localPhone(phone) ? <small>Doğrulanacak numara: <strong>{formatted}</strong></small> : null}
+      <button disabled={busy}>{busy ? "Kod gönderiliyor…" : "SMS Doğrulama Kodu Gönder"}</button>
+    </form> : <form onSubmit={verifyCode} className="guardianOtpForm">
+      <div className="guardianOtpSent"><strong>{formatted}</strong><span>numarasına kod gönderildi.</span></div>
+      <label><span>6 haneli doğrulama kodu</span><input value={otp} onChange={(e)=>setOtp(e.target.value.replace(/\D/g,"").slice(0,6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" maxLength={6} required/></label>
+      <button disabled={busy || otp.length !== 6}>{busy ? "Doğrulanıyor…" : "Kodu Doğrula ve Giriş Yap"}</button>
+      <button type="button" className="guardianOtpSecondary" disabled={busy} onClick={()=>{setSent(false);setOtp("");setInfo("");setError("");}}>Telefon numarasını değiştir</button>
+      <button type="button" className="guardianOtpLink" disabled={busy} onClick={()=>void sendCode()}>{busy ? "Lütfen bekleyin…" : "Kodu yeniden gönder"}</button>
+    </form>}
+    {info ? <div className="guardianOtpInfo">{info}</div> : null}
+    {error ? <div className="guardianOtpError">{error}</div> : null}
+    <div className="guardianOtpFoot">SMS yalnızca SprintOS'ta kayıtlı veli telefonuna gönderilir. Yönetici ve eğitmen girişleri mevcut şifre sistemiyle devam eder.</div>
+    <style jsx>{`
+      .guardianOtpBox{padding:30px 32px 28px}.guardianOtpHead span{display:block;color:#1769e8;font-size:10px;font-weight:950;letter-spacing:.14em}.guardianOtpHead h2{margin:6px 0 7px;color:#10213a;font-size:25px}.guardianOtpHead p{margin:0 0 22px;color:#64748b;font-size:13px;line-height:1.55}.guardianOtpForm{display:grid;gap:13px}.guardianOtpForm label{display:grid;gap:7px}.guardianOtpForm label>span{font-size:12px;font-weight:850;color:#334155}.guardianOtpForm input{width:100%;min-height:52px;padding:0 14px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#10213a;font-size:16px;outline:none}.guardianOtpForm input:focus{border-color:#1769e8;box-shadow:0 0 0 4px rgba(23,105,232,.1)}.guardianOtpForm>button:not(.guardianOtpSecondary):not(.guardianOtpLink){min-height:52px;border:0;border-radius:12px;background:linear-gradient(135deg,#0e63dd,#1674f5);color:#fff;font-weight:900;cursor:pointer;box-shadow:0 10px 22px rgba(23,105,232,.22)}.guardianOtpSecondary{min-height:46px;border:1px solid #d5e0ec;border-radius:12px;background:#fff;color:#294866;font-weight:850;cursor:pointer}.guardianOtpLink{border:0;background:transparent;color:#1769e8;font-weight:850;cursor:pointer;padding:4px}.guardianOtpForm button:disabled{opacity:.58;cursor:wait}.guardianOtpForm small{color:#64748b}.guardianOtpSent{padding:11px 13px;border-radius:11px;background:#effaf3;color:#176a40;font-size:12px}.guardianOtpSent strong,.guardianOtpSent span{display:block}.guardianOtpSent span{margin-top:2px}.guardianOtpInfo,.guardianOtpError{margin-top:13px;padding:11px 13px;border-radius:11px;font-size:12px;font-weight:800}.guardianOtpInfo{background:#effaf3;color:#176a40}.guardianOtpError{background:#fff1f1;color:#a33b41}.guardianOtpFoot{margin-top:17px;padding-top:14px;border-top:1px solid #e7edf4;color:#718198;font-size:11px;line-height:1.5}@media(max-width:600px){.guardianOtpBox{padding:23px 20px 24px}.guardianOtpHead h2{font-size:22px}.guardianOtpForm input{font-size:16px}}
+    `}</style>
+  </section>;
+}
