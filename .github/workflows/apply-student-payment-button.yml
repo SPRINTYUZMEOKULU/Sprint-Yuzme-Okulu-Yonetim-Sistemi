@@ -1,0 +1,156 @@
+name: Apply student payment button patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-student-payment-button.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Patch student payment field
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/ogrenciler/students-client.tsx')
+          text = path.read_text()
+
+          old_fn = '''function paymentLabel(student: StudentListItem) {
+            const outstanding = numberValue(student.payment_outstanding);
+            const raw = normalizeText(student.payment_status);
+
+            if (outstanding > 0) {
+              return {
+                text: "Ödeme Bekliyor",
+                className: "paymentWarn",
+              };
+            }
+
+            if (
+              raw.includes("paid") ||
+              raw.includes("ödendi") ||
+              raw.includes("odendi") ||
+              numberValue(student.payment_total_received) > 0
+            ) {
+              return {
+                text: "Ödeme Kaydı Var",
+                className: "paymentOk",
+              };
+            }
+
+            return {
+              text: "Ödeme Kaydı Yok",
+              className: "paymentNeutral",
+            };
+          }'''
+
+          new_fn = '''function paymentLabel(student: StudentListItem) {
+            const outstanding = numberValue(student.payment_outstanding);
+
+            if (outstanding > 0) {
+              return {
+                text: "Ödeme Bekleniyor",
+                className: "paymentWarn",
+              };
+            }
+
+            return {
+              text: "Borç Yok",
+              className: "paymentOk",
+            };
+          }'''
+
+          old_cell = '''                <div>
+                  <span>Ödeme</span>
+                  <strong className={payment.className}>
+                    {payment.text}
+                  </strong>
+                </div>'''
+
+          new_cell = '''                <div>
+                  <span>Ödeme</span>
+                  <button
+                    type="button"
+                    className={`paymentStatusButton ${payment.className}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      router.push(`/ogrenciler/${student.id}#odeme`);
+                    }}
+                    aria-label={`${student.first_name} ${student.last_name} ödeme sayfasını aç`}
+                  >
+                    {payment.text}
+                  </button>
+                </div>'''
+
+          old_css = '''.paymentNeutral {
+  color: #64748b !important;
+}'''
+
+          new_css = '''.paymentNeutral {
+  color: #64748b !important;
+}
+
+.paymentStatusButton {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.paymentStatusButton:hover {
+  transform: translateY(-1px);
+}
+
+.paymentStatusButton.paymentWarn {
+  color: #ffffff !important;
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 6px 14px rgba(220, 38, 38, .18);
+}
+
+.paymentStatusButton.paymentOk {
+  color: #087443 !important;
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+}'''
+
+          for label, old, new in [
+            ('paymentLabel', old_fn, new_fn),
+            ('payment cell', old_cell, new_cell),
+            ('payment css', old_css, new_css),
+          ]:
+            count = text.count(old)
+            if count != 1:
+              raise SystemExit(f'{label}: expected 1 match, found {count}')
+            text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/ogrenciler/students-client.tsx
+          git diff --cached --check
+          git commit -m "Make student payment status actionable"
+          git push origin main
