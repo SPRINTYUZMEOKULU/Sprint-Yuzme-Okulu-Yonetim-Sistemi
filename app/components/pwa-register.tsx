@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type PushState =
   | "checking"
@@ -33,10 +34,18 @@ function getDeviceName() {
 }
 
 export default function PWARegister() {
+  const pathname = usePathname();
   const [state, setState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
   const [dismissed, setDismissed] = useState(true);
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+
+  // Giriş ve dışarıya açık ön kayıt ekranlarında bildirim kartı hiçbir zaman
+  // gösterilmez. Push altyapısı arka planda kayıtlı izni korumaya devam eder.
+  const hidePromptOnThisRoute =
+    pathname === "/login" ||
+    pathname === "/on-kayit" ||
+    pathname?.startsWith("/auth/");
 
   const supported = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -146,9 +155,15 @@ export default function PWARegister() {
     }
   }
 
-  // Bildirimler zaten açıksa ekranda hiçbir sabit kutu göstermiyoruz.
-  // Yönetim Ayarlar > Bildirimler bölümünden yapılır.
-  if (state === "checking" || state === "unsupported" || state === "on" || dismissed) return null;
+  // Bildirimler açıksa veya halka açık giriş/ön kayıt ekranındaysak sabit kart gösterme.
+  // Bildirim yönetimi Ayarlar > Bildirimler ekranından yapılır.
+  if (
+    hidePromptOnThisRoute ||
+    state === "checking" ||
+    state === "unsupported" ||
+    state === "on" ||
+    dismissed
+  ) return null;
 
   return (
     <div className="sprintPushControl">
