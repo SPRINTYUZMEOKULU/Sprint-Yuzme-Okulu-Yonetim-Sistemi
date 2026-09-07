@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteGuardianPortalAccount } from "./actions";
+import { deleteGuardianPortalAccount } from "./delete-actions";
 
 export default function DeleteGuardianButton({ guardianId, name }: { guardianId: string; name: string }) {
   return <form action={deleteGuardianPortalAccount} onSubmit={(e) => {
