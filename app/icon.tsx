@@ -25,10 +25,10 @@ export default function Icon() {
           src="https://sprintyuzmekursu.com/sprint-logo.png"
           alt="Sprint Yüzme Okulu"
           style={{
-            width: "100%",
-            height: "100%",
+            width: "155%",
+            height: "155%",
             objectFit: "contain",
-            transform: "scale(1.62)",
+            flexShrink: 0,
           }}
         />
       </div>
