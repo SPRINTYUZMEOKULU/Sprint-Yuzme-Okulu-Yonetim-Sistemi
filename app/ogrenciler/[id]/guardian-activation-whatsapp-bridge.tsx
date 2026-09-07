@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { getGuardianPhoneContact } from "./guardian-phone-actions";
-import { resetGuardianPortalPassword } from "./profile-center-actions";
+import { getGuardianPhoneContact, setGuardianPortalPasswordAndGetContact } from "./guardian-phone-actions";
 
 function cleanPhone(value?: string | null) {
   let digits = String(value || "").replace(/\D/g, "");
@@ -12,17 +11,22 @@ function cleanPhone(value?: string | null) {
   return digits.length === 10 ? `90${digits}` : digits;
 }
 
-function buildMessage(name: string, phone: string, password: string, origin: string) {
+function buildMessage(name: string, phone: string, email: string, password: string, origin: string) {
+  const loginRows = [
+    phone ? `Telefon: ${phone}` : "",
+    email ? `E-posta: ${email}` : "",
+  ].filter(Boolean);
+
   return [
     `Merhaba ${name || "Değerli Velimiz"},`,
     "",
-    "SPRİNT YÜZME OKULU Veli / Kursiyer Portalı hesabınız oluşturulmuştur.",
+    "SPRİNT YÜZME OKULU Veli / Kursiyer Portalı hesabınız hazırdır.",
     "",
-    `Giriş adresi: ${origin}/login`,
-    `Kullanıcı telefonu: ${phone}`,
+    `Portal giriş adresi: ${origin}/login`,
+    ...loginRows,
     `Geçici giriş şifresi: ${password}`,
     "",
-    "Giriş ekranında Veli Girişi bölümünü seçerek telefon numaranız ve şifreniz ile giriş yapabilirsiniz.",
+    "Giriş ekranında Veli Girişi bölümünü seçerek kayıtlı telefon numaranız veya e-posta adresiniz ve şifreniz ile giriş yapabilirsiniz.",
     "",
     "Güvenliğiniz için giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.",
     "",
@@ -33,20 +37,56 @@ function buildMessage(name: string, phone: string, password: string, origin: str
 
 export default function GuardianActivationWhatsAppBridge({ studentId }: { studentId: string }) {
   useEffect(() => {
-    const render = () => {
-      const connected = document.querySelector<HTMLElement>(".profileCenterPanel .portalConnected");
-      if (!connected || connected.querySelector("[data-guardian-activation]")) return;
+    let rendering = false;
+
+    const openProfileCenter = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      const clickable = target?.closest<HTMLElement>("button,a,[role='button']");
+      if (!clickable) return;
+      if (clickable.matches("[data-open-profile-center='1']")) return;
+      const text = clickable.textContent?.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR") || "";
+      if (!text.includes("bilgileri düzenle")) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.dataset.openProfileCenter = "1";
+      trigger.style.display = "none";
+      document.body.appendChild(trigger);
+      trigger.click();
+      trigger.remove();
+    };
+
+    document.addEventListener("click", openProfileCenter, true);
+
+    const render = async () => {
+      if (rendering) return;
+      const section = document.querySelector<HTMLElement>(".profileCenterPanel .portalSection");
+      if (!section || section.querySelector("[data-guardian-activation]")) return;
+      rendering = true;
+
+      const contact = await getGuardianPhoneContact(studentId).catch(() => null);
+      if (!contact?.ok) {
+        rendering = false;
+        return;
+      }
 
       const box = document.createElement("div");
       box.dataset.guardianActivation = "1";
-      box.style.cssText = "display:grid;gap:10px;padding:14px;border:1px solid #bbf7d0;border-radius:13px;background:#f0fdf4";
+      box.style.cssText = "display:grid;gap:10px;margin-top:12px;padding:14px;border:1px solid #bbf7d0;border-radius:13px;background:#f0fdf4";
 
       const title = document.createElement("strong");
-      title.textContent = "Portal şifresi ve WhatsApp giriş bilgisi";
+      title.textContent = "Portal şifresi oluştur ve WhatsApp’tan gönder";
       title.style.cssText = "color:#166534;font-size:13px";
 
+      const account = document.createElement("small");
+      account.textContent = `Bağlı hesap: ${contact.guardian.fullName}${contact.guardian.phone ? ` · ${contact.guardian.phone}` : ""}${contact.guardian.email ? ` · ${contact.guardian.email}` : ""}`;
+      account.style.cssText = "color:#4b6b58;line-height:1.45";
+
       const note = document.createElement("small");
-      note.textContent = "Veli veya kursiyer için en az 8 karakterlik bir şifre belirleyin. Şifre kaydedildikten sonra giriş bilgileri WhatsApp mesajı olarak hazırlanır.";
+      note.textContent = "En az 8 karakterlik portal şifresi belirleyin. Kaydedildiğinde veli/kursiyerin giriş bilgileri WhatsApp mesajı olarak açılır.";
       note.style.cssText = "color:#4b6b58;line-height:1.45";
 
       const controls = document.createElement("div");
@@ -97,7 +137,7 @@ export default function GuardianActivationWhatsAppBridge({ studentId }: { studen
         button.textContent = "Kaydediliyor…";
         status.style.display = "none";
 
-        const saved = await resetGuardianPortalPassword(studentId, password);
+        const saved = await setGuardianPortalPasswordAndGetContact(studentId, password);
         if (!saved.ok) {
           status.style.display = "block";
           status.style.background = "#fff1f2";
@@ -110,43 +150,24 @@ export default function GuardianActivationWhatsAppBridge({ studentId }: { studen
           return;
         }
 
-        const result = await getGuardianPhoneContact(studentId);
-        if (!result.ok) {
-          status.style.display = "block";
-          status.style.background = "#fff7ed";
-          status.style.color = "#9a5a13";
-          status.textContent = `${saved.message} Ancak WhatsApp iletişim bilgisi hazırlanamadı.`;
-          button.disabled = false;
-          input.disabled = false;
-          showButton.disabled = false;
-          button.textContent = "Tekrar Dene";
-          return;
-        }
-
-        const phone = cleanPhone(result.guardian.phone);
+        const phone = cleanPhone(saved.guardian.phone);
         if (!phone) {
           status.style.display = "block";
           status.style.background = "#fff7ed";
           status.style.color = "#9a5a13";
-          status.textContent = "Şifre kaydedildi. WhatsApp göndermek için veli/kursiyer telefon numarası eklenmelidir.";
-          button.disabled = false;
-          input.disabled = false;
-          showButton.disabled = false;
-          button.textContent = "Tekrar Dene";
-          return;
+          status.textContent = "Şifre kaydedildi. WhatsApp göndermek için telefon numarası eklenmelidir.";
+        } else {
+          const message = buildMessage(saved.guardian.fullName, saved.guardian.phone, saved.guardian.email, password, window.location.origin);
+          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+          status.style.display = "block";
+          status.style.background = "#dcfce7";
+          status.style.color = "#166534";
+          status.textContent = "✓ Portal şifresi kaydedildi. WhatsApp giriş mesajı hazırlandı.";
         }
-
-        const displayPhone = String(result.guardian.phone || "");
-        const message = buildMessage(result.guardian.fullName, displayPhone, password, window.location.origin);
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
 
         input.value = "";
         input.type = "password";
         showButton.textContent = "Göster";
-        status.style.display = "block";
-        status.style.background = "#dcfce7";
-        status.style.color = "#166534";
-        status.textContent = "✓ Portal şifresi kaydedildi. WhatsApp giriş mesajı hazırlandı.";
         button.disabled = false;
         input.disabled = false;
         showButton.disabled = false;
@@ -155,15 +176,18 @@ export default function GuardianActivationWhatsAppBridge({ studentId }: { studen
 
       inputWrap.append(input, showButton);
       controls.append(inputWrap, button);
-      box.append(title, note, controls, status);
-      connected.appendChild(box);
+      box.append(title, account, note, controls, status);
+      section.appendChild(box);
+      rendering = false;
     };
 
-    const observer = new MutationObserver(render);
+    const observer = new MutationObserver(() => { void render(); });
     observer.observe(document.body, { childList: true, subtree: true });
-    render();
+    void render();
+
     return () => {
       observer.disconnect();
+      document.removeEventListener("click", openProfileCenter, true);
       document.querySelector("[data-guardian-activation]")?.remove();
     };
   }, [studentId]);
