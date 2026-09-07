@@ -16,13 +16,13 @@
   ],
   "icons": [
     {
-      "src": "/icon",
+      "src": "/icon?v=4",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon",
+      "src": "/icon?v=4",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
