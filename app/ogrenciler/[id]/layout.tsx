@@ -11,6 +11,7 @@ import StudentHeroEnhancer from "./student-hero-enhancer";
 import RenewalApprovalOpenBridge from "./renewal-approval-open-bridge";
 import RenewalMobilePolish from "./renewal-mobile-polish";
 import AdminCorrectionLauncher from "./admin-correction-launcher";
+import GuardianActivationWhatsAppBridge from "./guardian-activation-whatsapp-bridge";
 import "./student-file-tabs.css";
 import "./student-crm-polish.css";
 import "./student-finance-center.css";
@@ -38,6 +39,7 @@ export default async function StudentFileLayout({
       {children}
       <StudentFileTabs />
       <StudentProfileCenter />
+      <GuardianActivationWhatsAppBridge studentId={id} />
       <GeneralInfoSummary />
       <StudentRenewalCenter />
       <StudentFinanceCenter studentId={id} />
