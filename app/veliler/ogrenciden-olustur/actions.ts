@@ -37,12 +37,13 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
   const profile = await requireProfile([...roles]);
   const organizationId = profile.organization_id;
   const studentId = String(formData.get("student_id") || "").trim();
+  const requestedMode = String(formData.get("account_mode") || "guardian").trim() === "self" ? "self" : "guardian";
   if (!organizationId || !studentId) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Öğrenci bulunamadı.")}`);
 
   const admin = adminClient();
   const { data: student, error: studentError } = await admin
     .from("students")
-    .select("id,first_name,last_name,guardian_name,guardian_phone,guardian_email")
+    .select("id,first_name,last_name,phone,guardian_name,guardian_phone,guardian_email")
     .eq("id", studentId)
     .eq("organization_id", organizationId)
     .eq("is_deleted", false)
@@ -50,13 +51,23 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
 
   if (studentError || !student) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(studentError?.message || "Öğrenci bulunamadı.")}`);
 
-  const guardianName = String(student.guardian_name || "").trim();
-  const guardianEmail = String(student.guardian_email || "").trim().toLowerCase();
-  const phone = normalizePhone(student.guardian_phone);
   const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+  const guardianName = String(student.guardian_name || "").trim();
+  const guardianPhone = normalizePhone(student.guardian_phone);
+  const studentPhone = normalizePhone(student.phone);
+  const useSelf = requestedMode === "self" || (!guardianName && !guardianPhone && Boolean(studentPhone));
+  const accountName = useSelf ? studentName : guardianName;
+  const accountPhone = useSelf ? studentPhone : guardianPhone;
+  const accountEmail = useSelf ? "" : String(student.guardian_email || "").trim().toLowerCase();
+  const relationship = useSelf ? "Kendisi" : "Veli";
 
-  if (!guardianName) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`${studentName} için veli adı eksik.`)}&student=${studentId}`);
-  if (!phone) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`${studentName} için geçerli veli telefonu eksik.`)}&student=${studentId}`);
+  if (!accountName) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`${studentName} için hesap sahibi adı eksik.`)}&student=${studentId}`);
+  if (!accountPhone) {
+    const message = useSelf
+      ? `${studentName} için kursiyerin kendi telefon numarası eksik veya geçersiz.`
+      : `${studentName} için geçerli veli telefonu eksik.`;
+    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(message)}&student=${studentId}`);
+  }
 
   const { data: existingLink } = await admin
     .from("guardian_students")
@@ -72,13 +83,13 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
       .eq("id", existingLink.guardian_id)
       .maybeSingle();
     if (linkedGuardian?.organization_id === organizationId && linkedGuardian?.role === "guardian") {
-      redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage("Öğrenci zaten bir veli hesabına bağlı.")}&guardian=${linkedGuardian.id}&student=${studentId}`);
+      redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage("Öğrenci zaten bir portal hesabına bağlı.")}&guardian=${linkedGuardian.id}&student=${studentId}`);
     }
-    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Öğrencide geçersiz/eski bir veli bağlantısı bulundu. Önce bağlantı kaydı düzeltilmelidir.")}&student=${studentId}`);
+    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Öğrencide geçersiz/eski bir portal bağlantısı bulundu. Önce bağlantı kaydı düzeltilmelidir.")}&student=${studentId}`);
   }
 
   let guardian: any = null;
-  const candidates = phoneCandidates(phone);
+  const candidates = phoneCandidates(accountPhone);
   const { data: byPhone, error: phoneLookupError } = await admin
     .from("profiles")
     .select("id,full_name,email,phone,role,is_active")
@@ -90,13 +101,13 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
   if (phoneLookupError) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(phoneLookupError.message)}&student=${studentId}`);
   guardian = byPhone;
 
-  if (!guardian && guardianEmail) {
+  if (!guardian && accountEmail) {
     const { data: byEmail } = await admin
       .from("profiles")
       .select("id,full_name,email,phone,role,is_active")
       .eq("organization_id", organizationId)
       .eq("role", "guardian")
-      .eq("email", guardianEmail)
+      .eq("email", accountEmail)
       .limit(1)
       .maybeSingle();
     guardian = byEmail;
@@ -107,25 +118,25 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
 
   if (guardianId) {
     const { data: authData, error: authLookupError } = await admin.auth.admin.getUserById(guardianId);
-    if (authLookupError || !authData.user) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut veli hesabının kimlik kaydı bulunamadı.")}&student=${studentId}`);
+    if (authLookupError || !authData.user) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut portal hesabının kimlik kaydı bulunamadı.")}&student=${studentId}`);
 
-    if (authData.user.phone !== phone) {
+    if (authData.user.phone !== accountPhone) {
       const { error: phoneUpdateError } = await admin.auth.admin.updateUserById(guardianId, {
-        phone,
+        phone: accountPhone,
         user_metadata: {
           ...(authData.user.user_metadata || {}),
-          full_name: guardianName,
+          full_name: accountName,
           role: "guardian",
           organization_id: organizationId,
         },
       });
-      if (phoneUpdateError) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Veli telefonu Auth hesabına bağlanamadı: ${phoneUpdateError.message}`)}&student=${studentId}`);
+      if (phoneUpdateError) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Telefon Auth hesabına bağlanamadı: ${phoneUpdateError.message}`)}&student=${studentId}`);
     }
 
     const { error: profileUpdateError } = await admin.from("profiles").update({
-      phone,
-      full_name: guardian.full_name || guardianName,
-      email: guardian.email || guardianEmail || null,
+      phone: accountPhone,
+      full_name: guardian.full_name || accountName,
+      email: guardian.email || accountEmail || null,
       is_active: true,
       updated_at: new Date().toISOString(),
     }).eq("id", guardianId).eq("organization_id", organizationId);
@@ -133,16 +144,16 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
   } else {
     const temporarySecret = `Sprint-${crypto.randomUUID()}-A9!`;
     const { data: createdUser, error: createError } = await admin.auth.admin.createUser({
-      phone,
+      phone: accountPhone,
       password: temporarySecret,
       user_metadata: {
-        full_name: guardianName,
+        full_name: accountName,
         role: "guardian",
         organization_id: organizationId,
       },
     });
     if (createError || !createdUser.user) {
-      const message = createError?.message || "Veli hesabı oluşturulamadı.";
+      const message = createError?.message || "Portal hesabı oluşturulamadı.";
       redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(message)}&student=${studentId}`);
     }
     guardianId = createdUser.user.id;
@@ -151,9 +162,9 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
     const { error: profileError } = await admin.from("profiles").upsert({
       id: guardianId,
       organization_id: organizationId,
-      full_name: guardianName,
-      phone,
-      email: guardianEmail || null,
+      full_name: accountName,
+      phone: accountPhone,
+      email: accountEmail || null,
       role: "guardian",
       is_active: true,
       last_sign_in_at: null,
@@ -161,14 +172,14 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
     }, { onConflict: "id" });
     if (profileError) {
       await admin.auth.admin.deleteUser(guardianId);
-      redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Veli profili oluşturulamadı: ${profileError.message}`)}&student=${studentId}`);
+      redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Portal profili oluşturulamadı: ${profileError.message}`)}&student=${studentId}`);
     }
   }
 
   const { error: linkError } = await admin.from("guardian_students").upsert({
     guardian_id: guardianId,
     student_id: studentId,
-    relationship: "Veli",
+    relationship,
     is_primary: true,
     is_payment_contact: true,
     receives_messages: true,
@@ -177,16 +188,16 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
 
   if (linkError) {
     if (created) await admin.auth.admin.deleteUser(guardianId);
-    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Veli öğrenciye bağlanamadı: ${linkError.message}`)}&student=${studentId}`);
+    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Portal hesabı öğrenciye bağlanamadı: ${linkError.message}`)}&student=${studentId}`);
   }
 
   try {
     await admin.from("student_activity_logs").insert({
       organization_id: organizationId,
       student_id: studentId,
-      activity_type: "guardian_portal_created_from_student",
-      title: created ? "Veli portal hesabı oluşturuldu" : "Mevcut veli hesabı bağlandı",
-      description: `${guardianName} öğrenci üzerinden veli portalına bağlandı.`,
+      activity_type: useSelf ? "student_self_portal_created" : "guardian_portal_created_from_student",
+      title: created ? (useSelf ? "Kursiyer portal hesabı oluşturuldu" : "Veli portal hesabı oluşturuldu") : "Mevcut portal hesabı bağlandı",
+      description: `${accountName} öğrenci üzerinden portal hesabına bağlandı.`,
       source_type: "guardian_creation_wizard",
       source_id: guardianId,
       performed_at: new Date().toISOString(),
@@ -199,7 +210,11 @@ export async function createOrLinkGuardianFromStudent(formData: FormData) {
   revalidatePath(`/veliler/${guardianId}`);
 
   const saved = created
-    ? "Veli hesabı oluşturuldu ve öğrenciye bağlandı. Telefon doğrulaması için hazır."
-    : "Mevcut veli hesabı bulundu ve öğrenciye bağlandı.";
+    ? useSelf
+      ? "Kursiyerin kendi portal hesabı oluşturuldu ve öğrenci kaydına bağlandı. Telefon doğrulaması için hazır."
+      : "Veli hesabı oluşturuldu ve öğrenciye bağlandı. Telefon doğrulaması için hazır."
+    : useSelf
+      ? "Kursiyerin mevcut portal hesabı bulundu ve öğrenci kaydına bağlandı."
+      : "Mevcut veli hesabı bulundu ve öğrenciye bağlandı.";
   redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage(saved)}&guardian=${guardianId}&student=${studentId}`);
 }
