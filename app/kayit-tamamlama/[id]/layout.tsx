@@ -3,6 +3,7 @@ import WhatsAppGroupPolicy from "./whatsapp-group-policy";
 import BirthAgeEnhancer from "./birth-age-enhancer";
 import RegistrationMobileCohesion from "./registration-mobile-cohesion";
 import DueConfirmationEnhancer from "./due-confirmation-enhancer";
+import ScheduleTimeEnhancer from "./schedule-time-enhancer";
 
 export default function RegistrationCompletionLayout({
   children,
@@ -16,6 +17,7 @@ export default function RegistrationCompletionLayout({
       <BirthAgeEnhancer />
       <RegistrationMobileCohesion />
       <DueConfirmationEnhancer />
+      <ScheduleTimeEnhancer />
     </>
   );
 }
