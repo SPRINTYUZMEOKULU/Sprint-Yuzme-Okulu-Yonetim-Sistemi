@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { bulkTransferStudents } from "../bulk-actions";
@@ -51,6 +51,17 @@ type Props = {
   groups: GroupOption[];
   schedules: ScheduleOption[];
 };
+
+type FileTab =
+  | "general"
+  | "registration"
+  | "finance"
+  | "attendance"
+  | "lessons"
+  | "health"
+  | "notes"
+  | "messages"
+  | "history";
 
 const DAYS: Record<number, string> = {
   1: "Pazartesi",
@@ -179,6 +190,44 @@ export default function StudentFileOperations({
 
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [activeTab, setActiveTab] = useState<FileTab>("general");
+
+  useEffect(() => {
+    document.querySelector<HTMLElement>(".studentFilePage")?.setAttribute(
+      "data-active-file-tab",
+      activeTab,
+    );
+  }, [activeTab]);
+
+  useEffect(() => {
+    function openAlertTab(event: MouseEvent) {
+      const trigger = (event.target as Element | null)?.closest<HTMLElement>(
+        "[data-open-file-tab]",
+      );
+      const tab = trigger?.dataset.openFileTab as FileTab | undefined;
+      if (!trigger || !tab) return;
+
+      event.preventDefault();
+      document.querySelector<HTMLElement>(".studentFilePage")?.setAttribute(
+        "data-active-file-tab",
+        tab,
+      );
+      setActiveTab(tab);
+
+      const targetId = trigger.dataset.targetId;
+      if (targetId) {
+        window.requestAnimationFrame(() => {
+          document.getElementById(targetId)?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      }
+    }
+
+    document.addEventListener("click", openAlertTab);
+    return () => document.removeEventListener("click", openAlertTab);
+  }, []);
 
   const targetGroups = useMemo(
     () =>
@@ -208,11 +257,19 @@ export default function StudentFileOperations({
   const phone =
     normalizePhone(student.guardian_phone) || normalizePhone(student.phone);
 
-  function jumpTo(id: string) {
-    document.getElementById(id)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+  function selectTab(tab: FileTab, targetId?: string) {
+    const page = document.querySelector<HTMLElement>(".studentFilePage");
+    page?.setAttribute("data-active-file-tab", tab);
+    setActiveTab(tab);
+
+    if (targetId) {
+      window.requestAnimationFrame(() => {
+        document.getElementById(targetId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    }
   }
 
   function openMessage() {
@@ -441,7 +498,7 @@ export default function StudentFileOperations({
             </span>
           </button>
 
-          <button type="button" onClick={() => jumpTo("duzenle")}>
+          <button type="button" onClick={() => selectTab("general", "duzenle")}>
             <FileIcon name="edit" /> Bilgileri Düzenle
           </button>
 
@@ -496,32 +553,36 @@ export default function StudentFileOperations({
         </div>
       </section>
 
-      <nav className="fileSectionNav" aria-label="Kursiyer dosyası bölümleri">
-        <button type="button" onClick={() => jumpTo("genel-bilgiler")}>
+      <nav
+        className="fileSectionNav"
+        aria-label="Kursiyer dosyası bölümleri"
+        role="tablist"
+      >
+        <button type="button" role="tab" aria-selected={activeTab === "general"} className={activeTab === "general" ? "active" : ""} onClick={() => selectTab("general")}>
           Genel Bilgiler
         </button>
-        <button type="button" onClick={() => jumpTo("kurs-kaydi")}>
+        <button type="button" role="tab" aria-selected={activeTab === "registration"} className={activeTab === "registration" ? "active" : ""} onClick={() => selectTab("registration")}>
           Kayıt & Program
         </button>
-        <button type="button" onClick={() => jumpTo("odeme")}>
+        <button type="button" role="tab" aria-selected={activeTab === "finance"} className={activeTab === "finance" ? "active" : ""} onClick={() => selectTab("finance")}>
           Ödeme & Kasa
         </button>
-        <button type="button" onClick={() => jumpTo("yoklama")}>
+        <button type="button" role="tab" aria-selected={activeTab === "attendance"} className={activeTab === "attendance" ? "active" : ""} onClick={() => selectTab("attendance")}>
           Yoklama
         </button>
-        <button type="button" onClick={() => jumpTo("ders-hareketleri")}>
+        <button type="button" role="tab" aria-selected={activeTab === "lessons"} className={activeTab === "lessons" ? "active" : ""} onClick={() => selectTab("lessons")}>
           Ders & Telafi
         </button>
-        <button type="button" onClick={() => jumpTo("saglik")}>
-          Sağlık
+        <button type="button" role="tab" aria-selected={activeTab === "health"} className={activeTab === "health" ? "active" : ""} onClick={() => selectTab("health")}>
+          Sağlık & Beyanlar
         </button>
-        <button type="button" onClick={() => jumpTo("notlar")}>
+        <button type="button" role="tab" aria-selected={activeTab === "notes"} className={activeTab === "notes" ? "active" : ""} onClick={() => selectTab("notes")}>
           Notlar
         </button>
-        <button type="button" onClick={() => jumpTo("mesajlar")}>
+        <button type="button" role="tab" aria-selected={activeTab === "messages"} className={activeTab === "messages" ? "active" : ""} onClick={() => selectTab("messages")}>
           Mesajlar
         </button>
-        <button type="button" onClick={() => jumpTo("islem-gecmisi")}>
+        <button type="button" role="tab" aria-selected={activeTab === "history"} className={activeTab === "history" ? "active" : ""} onClick={() => selectTab("history")}>
           İşlem Geçmişi
         </button>
       </nav>
@@ -1067,6 +1128,13 @@ export default function StudentFileOperations({
           border-color: #bdd6f1;
           background: #edf6ff;
           color: #0b60bd;
+        }
+
+        .fileSectionNav button.active {
+          color: #ffffff;
+          background: linear-gradient(135deg, #0b315b, #146db4);
+          border-color: transparent;
+          box-shadow: 0 8px 18px rgba(14, 77, 132, 0.2);
         }
 
         .fileOpsOverlay {
