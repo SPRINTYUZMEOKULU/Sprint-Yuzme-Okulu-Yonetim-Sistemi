@@ -10,20 +10,27 @@ function cleanPhone(value: string) {
   return digits.length === 10 ? `90${digits}` : digits;
 }
 
-function buildMessage(name: string) {
+function buildMessage(name: string, phone: string) {
+  const displayPhone = phone.startsWith("90") ? `+${phone}` : phone;
   return [
+    "*SPRİNT YÜZME OKULU*",
+    "",
     `Merhaba ${name || "Değerli Velimiz"},`,
     "",
-    "SPRİNT YÜZME OKULU veli portalı hesabınız hazırdır.",
+    "SprintOS Veli / Kursiyer Portalı hesabınız hazırdır.",
     "",
-    "Portal girişinde şifre kullanmanıza gerek yoktur. Kayıtlı cep telefonu numaranızı girip SMS ile gönderilen 6 haneli doğrulama kodunu kullanarak güvenli şekilde giriş yapabilirsiniz.",
+    `📱 Kayıtlı telefon: ${displayPhone}`,
+    `🔗 Portal giriş adresi: ${window.location.origin}/login`,
     "",
-    `Portal giriş adresi: ${window.location.origin}/login`,
+    "Portal girişinde *Veli / Kursiyer Girişi* bölümünü seçerek kayıtlı telefon/e-posta adresiniz ve size tanımlanan portal şifreniz ile giriş yapabilirsiniz.",
     "",
-    "Veli Girişi bölümünü seçin → telefon numaranızı yazın → SMS Doğrulama Kodu Gönder seçeneğine dokunun.",
+    "Şifreniz henüz size iletilmediyse veya yeni şifre gerekiyorsa Sprint Yüzme Okulu ile iletişime geçebilirsiniz.",
     "",
-    "SPRİNT YÜZME OKULU",
-    "Bilgilendirme Hattı: 0551 896 83 19",
+    "☎️ *SPRİNT BİLGİLENDİRME HATTI*",
+    "+90 (551) 896 83 19",
+    "",
+    "Bilginize sunar, iyi günler dileriz.",
+    "*SPRİNT YÜZME OKULU*",
   ].join("\n");
 }
 
@@ -36,7 +43,7 @@ export default function GuardianCenterEnhancer() {
       const lastSignIn = card.dataset.lastSignIn === "1";
       const status = card.querySelector<HTMLElement>("[data-portal-status]");
       if (status) {
-        status.textContent = !active ? "Portal Pasif" : lastSignIn ? "Portal Aktif" : "Telefon Doğrulama Bekliyor";
+        status.textContent = !active ? "Portal Pasif" : lastSignIn ? "Portal Aktif" : "İlk Giriş Bekleniyor";
         if (active && !lastSignIn) status.classList.add("waiting");
       }
       const actions = card.querySelector<HTMLElement>(".guardianCardActions");
@@ -49,9 +56,9 @@ export default function GuardianCenterEnhancer() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "guardianActivationButton";
-      button.textContent = lastSignIn ? "Veli Giriş Mesajını WhatsApp’tan Gönder" : "Telefonla Giriş Bilgisini WhatsApp’tan Gönder";
+      button.textContent = lastSignIn ? "Portal Giriş Bilgisini WhatsApp’tan Gönder" : "Portal Giriş Bilgisini WhatsApp’tan Gönder";
       button.onclick = () => {
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildMessage(name))}`, "_blank", "noopener,noreferrer");
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildMessage(name, phone))}`, "_blank", "noopener,noreferrer");
         button.textContent = "✓ WhatsApp Mesajını Tekrar Aç";
       };
       actions.appendChild(button);
