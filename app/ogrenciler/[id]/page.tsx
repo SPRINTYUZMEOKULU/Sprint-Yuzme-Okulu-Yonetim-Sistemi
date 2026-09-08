@@ -691,7 +691,7 @@ export default async function StudentFile({
   }>;
 
   return (
-    <main className="studentFilePage">
+    <main className="studentFilePage" data-active-file-tab="general">
       {/* =====================================================
           ÜST KART
           ===================================================== */}
@@ -789,6 +789,14 @@ export default async function StudentFile({
                 key={`${alert.title}-${alert.target}`}
                 href={`#${alert.target}`}
                 className={alert.tone}
+                data-open-file-tab={
+                  alert.target === "genel-bilgiler"
+                    ? "general"
+                    : alert.target === "kurs-kaydi"
+                      ? "registration"
+                      : "lessons"
+                }
+                data-target-id={alert.target}
               >
                 <i>{alert.tone === "danger" ? "!" : "•"}</i>
                 <span>
@@ -811,7 +819,7 @@ export default async function StudentFile({
           DERS ÖZETİ
           ===================================================== */}
 
-      <section className="metricGrid">
+      <section className="metricGrid" data-file-panel="registration">
         <article>
           <span>Normal Ders</span>
           <strong>{normalTotal}</strong>
@@ -853,7 +861,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn" id="genel-bilgiler">
-        <section className="panel" id="duzenle">
+        <section className="panel" id="duzenle" data-file-panel="general">
           <div className="panelHead">
             <div>
               <p>GENEL BİLGİLER</p>
@@ -925,7 +933,7 @@ export default async function StudentFile({
           </form>
         </section>
 
-        <aside className="panel courseCard" id="kurs-kaydi">
+        <aside className="panel courseCard" id="kurs-kaydi" data-file-panel="registration">
           <div className="panelHead">
             <div>
               <p>KURS ÖZETİ</p>
@@ -996,7 +1004,7 @@ export default async function StudentFile({
           SAĞLIK
           ===================================================== */}
 
-      <section className="panel" id="saglik">
+      <section className="panel" id="saglik" data-file-panel="health">
         <div className="panelHead">
           <div>
             <p>SAĞLIK BİLGİLERİ</p>
@@ -1106,7 +1114,7 @@ export default async function StudentFile({
           ÖDEME
           ===================================================== */}
 
-      <section className="panel" id="odeme">
+      <section className="panel" id="odeme" data-file-panel="finance">
         <div className="panelHead">
           <div>
             <p>FİNANS</p>
@@ -1144,7 +1152,7 @@ export default async function StudentFile({
           YOKLAMA / KATILDIĞI DERSLER
           ===================================================== */}
 
-      <section className="panel" id="yoklama">
+      <section className="panel" id="yoklama" data-file-panel="attendance">
         <div className="panelHead">
           <div>
             <p>YOKLAMA GEÇMİŞİ</p>
@@ -1222,7 +1230,7 @@ export default async function StudentFile({
           TELAFİ / DERS HAREKETLERİ
           ===================================================== */}
 
-      <section className="panel" id="ders-hareketleri">
+      <section className="panel" id="ders-hareketleri" data-file-panel="lessons">
         <div className="panelHead">
           <div>
             <p>DERS HAREKETLERİ</p>
@@ -1262,7 +1270,7 @@ export default async function StudentFile({
           ANTRENÖR RAPORLARI
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" data-file-panel="lessons">
         <div className="panelHead">
           <div>
             <p>ANTRENÖR RAPORLARI</p>
@@ -1296,7 +1304,7 @@ export default async function StudentFile({
           KAYIT / YENİLEME GEÇMİŞİ
           ===================================================== */}
 
-      <section className="panel">
+      <section className="panel" data-file-panel="registration">
         <div className="panelHead">
           <div>
             <p>KAYIT GEÇMİŞİ</p>
@@ -1387,7 +1395,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn">
-        <section className="panel" id="notlar">
+        <section className="panel" id="notlar" data-file-panel="notes">
           <div className="panelHead">
             <div>
               <p>NOTLAR</p>
@@ -1532,7 +1540,7 @@ export default async function StudentFile({
           </div>
         </section>
 
-        <section className="panel" id="islem-gecmisi">
+        <section className="panel" id="islem-gecmisi" data-file-panel="history">
           <div className="panelHead">
             <div>
               <p>İŞLEM GEÇMİŞİ</p>
@@ -1582,7 +1590,7 @@ export default async function StudentFile({
           ===================================================== */}
 
       <div className="twoColumn">
-        <section className="panel" id="mesajlar">
+        <section className="panel" id="mesajlar" data-file-panel="messages">
           <div className="panelHead">
             <div>
               <p>MESAJ GEÇMİŞİ</p>
@@ -1635,7 +1643,7 @@ export default async function StudentFile({
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" data-file-panel="registration">
           <div className="panelHead">
             <div>
               <p>KAYIT DURUMU</p>
