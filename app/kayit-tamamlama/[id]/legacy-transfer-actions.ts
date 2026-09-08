@@ -7,12 +7,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 const managerRoles = ["owner", "admin"] as const;
-const registrationRoles = [
-  "owner",
-  "admin",
-  "branch_manager",
-  "registration_staff",
-] as const;
+const registrationRoles = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -50,13 +45,46 @@ function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function extendByLessonDays(baseDate: string, weekdays: number[], count: number) {
+  if (!validDate(baseDate) || !weekdays.length || count < 1) return baseDate || null;
+
+  const selected = new Set(weekdays);
+  const cursor = new Date(`${baseDate}T12:00:00`);
+  let added = 0;
+  let guard = 0;
+
+  while (added < count && guard < 730) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (selected.has(cursor.getDay())) added += 1;
+    guard += 1;
+  }
+
+  return cursor.toISOString().slice(0, 10);
+}
+
+function formDraft(formData: FormData) {
+  const totalLessons = Number(formData.get("total_lessons") || 0);
+  return {
+    branch_id: nullableText(formData, "branch_id"),
+    group_id: nullableText(formData, "group_id"),
+    package_id: nullableText(formData, "package_id"),
+    coach_id: nullableText(formData, "coach_id"),
+    start_date: nullableText(formData, "start_date"),
+    planned_end_date: nullableText(formData, "planned_end_date"),
+    lesson_weekdays: weekdaysFrom(formData),
+    total_lessons: Number.isInteger(totalLessons) && totalLessons > 0 ? totalLessons : null,
+    payment_due_date: nullableText(formData, "payment_due_date"),
+    whatsapp_opened: bool(formData, "whatsapp_opened"),
+  };
+}
+
 async function addCompensation(params: {
   organizationId: string;
   studentId: string;
   count: number;
   performedBy: string;
 }) {
-  if (params.count < 1) return;
+  if (params.count < 1) return { previous: 0, next: 0 };
 
   const supabase = await createClient();
   const { data: current } = await supabase
@@ -69,22 +97,12 @@ async function addCompensation(params: {
   const previous = Math.max(0, Number(current?.compensation_lesson_balance || 0));
   const next = previous + params.count;
 
-  if (current) {
-    const { error } = await supabase
-      .from("student_lesson_balance")
-      .update({ compensation_lesson_balance: next })
-      .eq("student_id", params.studentId);
+  const { error } = await supabase
+    .from("student_lesson_balance")
+    .update({ compensation_lesson_balance: next })
+    .eq("student_id", params.studentId);
 
-    if (error) throw new Error(`Telafi bakiyesi güncellenemedi: ${error.message}`);
-  } else {
-    const { error } = await supabase.from("student_lesson_balance").insert({
-      student_id: params.studentId,
-      normal_lesson_balance: 0,
-      compensation_lesson_balance: next,
-    });
-
-    if (error) throw new Error(`Telafi bakiyesi oluşturulamadı: ${error.message}`);
-  }
+  if (error) throw new Error(`Telafi bakiyesi güncellenemedi: ${error.message}`);
 
   await supabase.from("student_activity_logs").insert({
     organization_id: params.organizationId,
@@ -99,23 +117,22 @@ async function addCompensation(params: {
     performed_by: params.performedBy,
     performed_at: new Date().toISOString(),
   });
+
+  return { previous, next };
 }
 
 export async function addLegacyTransferCompensation(formData: FormData) {
   const profile = await requireProfile([...registrationRoles]);
+  const organizationId = profile.organization_id;
   const studentId = studentIdFrom(formData);
   const count = compensationCount(formData);
 
-  if (!profile.organization_id || !studentId) {
+  if (!organizationId || !studentId) {
     redirect(`/on-kayitlar?error=${encodeURIComponent("Öğrenci bilgisi bulunamadı.")}`);
   }
 
   if (count < 1) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Eklenecek telafi sayısını 1-100 arasında giriniz."
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Eklenecek telafi sayısını 1-100 arasında giriniz.")}#onaylar`);
   }
 
   const supabase = await createClient();
@@ -123,35 +140,77 @@ export async function addLegacyTransferCompensation(formData: FormData) {
     .from("students")
     .select("id")
     .eq("id", studentId)
-    .eq("organization_id", profile.organization_id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
 
   if (!student) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Öğrenci bulunamadı.")}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Öğrenci bulunamadı.")}#onaylar`);
   }
 
+  const currentDraft = formDraft(formData);
+  const weekdays = currentDraft.lesson_weekdays;
+  const formEndDate = currentDraft.planned_end_date || "";
+
+  const { data: checklist } = await supabase
+    .from("registration_completion_checklists")
+    .select("draft_data")
+    .eq("organization_id", organizationId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  const previousDraft =
+    checklist?.draft_data && typeof checklist.draft_data === "object"
+      ? (checklist.draft_data as Record<string, unknown>)
+      : {};
+
+  const previousCompensationEnd = String(previousDraft.legacy_compensation_planned_end_date || "");
+  const baseEndDate = validDate(previousCompensationEnd) ? previousCompensationEnd : formEndDate;
+  const newCompensationEnd = extendByLessonDays(baseEndDate, weekdays, count);
+  const previousAdded = Math.max(0, Number(previousDraft.legacy_compensation_added_count || 0));
+  const now = new Date().toISOString();
+
   try {
-    await addCompensation({
-      organizationId: profile.organization_id,
-      studentId,
-      count,
-      performedBy: profile.id,
-    });
+    await addCompensation({ organizationId, studentId, count, performedBy: profile.id });
   } catch (error) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        error instanceof Error ? error.message : "Telafi eklenemedi."
-      )}#onaylar`
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(error instanceof Error ? error.message : "Telafi eklenemedi.")}#onaylar`);
+  }
+
+  const { error: draftError } = await supabase
+    .from("registration_completion_checklists")
+    .upsert(
+      {
+        organization_id: organizationId,
+        student_id: studentId,
+        draft_data: {
+          ...previousDraft,
+          ...currentDraft,
+          legacy_compensation_added_count: previousAdded + count,
+          legacy_compensation_planned_end_date: newCompensationEnd,
+          legacy_compensation_updated_at: now,
+        },
+        draft_saved_at: now,
+        payment_due_date: currentDraft.payment_due_date || currentDraft.start_date || null,
+        payment_due_date_manual: bool(formData, "payment_due_date_manual"),
+        payment_note: nullableText(formData, "payment_note"),
+        message_draft: nullableText(formData, "message_body"),
+        message_prepared: Boolean(text(formData, "message_body")),
+        swim_cap_delivered: bool(formData, "swim_cap_delivered"),
+        updated_by: profile.id,
+        updated_at: now,
+      },
+      { onConflict: "student_id" }
     );
+
+  if (draftError) {
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(`Telafi eklendi ancak ekran bilgileri korunamadı: ${draftError.message}`)}#onaylar`);
   }
 
   revalidatePath(`/kayit-tamamlama/${studentId}`);
   revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/ogrenciler");
 
-  redirect(`/kayit-tamamlama/${studentId}?legacy_compensation_added=${count}#onaylar`);
+  const endQuery = newCompensationEnd ? `&legacy_compensation_end=${encodeURIComponent(newCompensationEnd)}` : "";
+  redirect(`/kayit-tamamlama/${studentId}?legacy_compensation_added=${count}${endQuery}#onaylar`);
 }
 
 export async function managerConfirmLegacyTransfer(formData: FormData) {
@@ -180,49 +239,41 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
   }
 
   if (count < 0) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Telafi sayısı 0-100 arasında olmalıdır."
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Telafi sayısı 0-100 arasında olmalıdır.")}#onaylar`);
   }
 
-  if (
-    !branchId ||
-    !groupId ||
-    !startDate ||
-    !plannedEndDate ||
-    !weekdays.length ||
-    !Number.isInteger(totalLessons) ||
-    totalLessons < 1 ||
-    totalLessons > 100 ||
-    !paymentDueDate ||
-    !validDate(paymentDueDate)
-  ) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        "Yönetici teyidinden önce şube, grup, başlangıç tarihi, katılım günleri, vade ve ders sayısı doldurulmalıdır."
-      )}#kayit-plani`
-    );
+  if (!branchId || !groupId || !startDate || !plannedEndDate || !weekdays.length || !Number.isInteger(totalLessons) || totalLessons < 1 || totalLessons > 100 || !paymentDueDate || !validDate(paymentDueDate)) {
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Yönetici teyidinden önce şube, grup, başlangıç tarihi, katılım günleri, vade ve ders sayısı doldurulmalıdır.")}#kayit-plani`);
   }
 
   const supabase = await createClient();
-  const { data: student } = await supabase
-    .from("students")
-    .select("id,first_name,last_name,status,branch_id")
-    .eq("id", studentId)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
+  const [{ data: student }, { data: checklist }] = await Promise.all([
+    supabase
+      .from("students")
+      .select("id,first_name,last_name,status,branch_id")
+      .eq("id", studentId)
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
+    supabase
+      .from("registration_completion_checklists")
+      .select("draft_data")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .maybeSingle(),
+  ]);
 
   if (!student) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Öğrenci bulunamadı.")}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Öğrenci bulunamadı.")}#onaylar`);
   }
 
+  const savedDraft =
+    checklist?.draft_data && typeof checklist.draft_data === "object"
+      ? (checklist.draft_data as Record<string, unknown>)
+      : {};
+  const savedCompensationEnd = String(savedDraft.legacy_compensation_planned_end_date || "");
+  const initialCompensationEnd = validDate(savedCompensationEnd) ? savedCompensationEnd : plannedEndDate;
   const now = new Date().toISOString();
 
-  /* Bu idari teyit veli/öğrenci elektronik kabulü değildir. Ayrı kaynak sürümüyle saklanır. */
   const { data: existingConsent } = await supabase
     .from("registration_consents")
     .select("id,rules_accepted,health_declaration")
@@ -255,15 +306,10 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     });
 
     if (consentError) {
-      redirect(
-        `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-          `Yönetici teyidi kaydedilemedi: ${consentError.message}`
-        )}#onaylar`
-      );
+      redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(`Yönetici teyidi kaydedilemedi: ${consentError.message}`)}#onaylar`);
     }
   }
 
-  /* Eski aktif kaydı varsa kapat; yeni aktarım kaydı tek aktif kayıt olsun. */
   await supabase
     .from("student_enrollments")
     .update({ status: "completed" })
@@ -290,11 +336,7 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     .single();
 
   if (enrollmentError || !enrollment) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        enrollmentError?.message || "Aktarım kaydı oluşturulamadı."
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(enrollmentError?.message || "Aktarım kaydı oluşturulamadı.")}#onaylar`);
   }
 
   await supabase
@@ -303,23 +345,17 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     .eq("student_id", studentId)
     .eq("is_active", true);
 
-  const { error: membershipError } = await supabase
-    .from("student_group_memberships")
-    .insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      group_id: groupId,
-      started_at: startDate,
-      is_active: true,
-    });
+  const { error: membershipError } = await supabase.from("student_group_memberships").insert({
+    organization_id: organizationId,
+    student_id: studentId,
+    group_id: groupId,
+    started_at: startDate,
+    is_active: true,
+  });
 
   if (membershipError) {
     await supabase.from("student_enrollments").delete().eq("id", enrollment.id);
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        `Grup üyeliği oluşturulamadı: ${membershipError.message}`
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(`Grup üyeliği oluşturulamadı: ${membershipError.message}`)}#onaylar`);
   }
 
   await supabase
@@ -328,30 +364,24 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     .eq("student_id", studentId)
     .eq("is_active", true);
 
-  const { error: attendanceError } = await supabase
-    .from("student_attendance_plans")
-    .insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      enrollment_id: enrollment.id,
-      group_id: groupId,
-      selected_weekdays: isoWeekdays,
-      weekly_frequency: isoWeekdays.length,
-      package_lesson_count: totalLessons,
-      start_date: startDate,
-      normal_planned_end_date: plannedEndDate,
-      compensation_planned_end_date: plannedEndDate,
-      is_active: true,
-      created_by: profile.id,
-      updated_by: profile.id,
-    });
+  const { error: attendanceError } = await supabase.from("student_attendance_plans").insert({
+    organization_id: organizationId,
+    student_id: studentId,
+    enrollment_id: enrollment.id,
+    group_id: groupId,
+    selected_weekdays: isoWeekdays,
+    weekly_frequency: isoWeekdays.length,
+    package_lesson_count: totalLessons,
+    start_date: startDate,
+    normal_planned_end_date: plannedEndDate,
+    compensation_planned_end_date: initialCompensationEnd,
+    is_active: true,
+    created_by: profile.id,
+    updated_by: profile.id,
+  });
 
   if (attendanceError) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        `Katılım planı oluşturulamadı: ${attendanceError.message}`
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(`Katılım planı oluşturulamadı: ${attendanceError.message}`)}#onaylar`);
   }
 
   const { data: updatedStudent, error: studentError } = await supabase
@@ -370,14 +400,11 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     .single();
 
   if (studentError || !updatedStudent) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        studentError?.message || "Öğrenci aktif hale getirilemedi."
-      )}#onaylar`
-    );
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(studentError?.message || "Öğrenci aktif hale getirilemedi.")}#onaylar`);
   }
 
   const draftData = {
+    ...savedDraft,
     branch_id: branchId,
     group_id: groupId,
     package_id: packageId,
@@ -387,6 +414,7 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     lesson_weekdays: weekdays,
     total_lessons: totalLessons,
     payment_due_date: paymentDueDate,
+    legacy_compensation_planned_end_date: initialCompensationEnd,
     legacy_manager_confirmation: {
       status: "confirmed",
       confirmed_by: profile.id,
@@ -439,6 +467,7 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
       total_lessons: totalLessons,
       start_date: startDate,
       planned_end_date: plannedEndDate,
+      compensation_planned_end_date: initialCompensationEnd,
       payment_due_date: paymentDueDate,
       manager_override: true,
     },
@@ -452,18 +481,9 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
 
   if (count > 0) {
     try {
-      await addCompensation({
-        organizationId,
-        studentId,
-        count,
-        performedBy: profile.id,
-      });
+      await addCompensation({ organizationId, studentId, count, performedBy: profile.id });
     } catch (error) {
-      redirect(
-        `/ogrenciler/${studentId}?saved=legacy_transfer&warning=${encodeURIComponent(
-          error instanceof Error ? error.message : "Kayıt aktarıldı ancak telafi eklenemedi."
-        )}`
-      );
+      redirect(`/ogrenciler/${studentId}?saved=legacy_transfer&warning=${encodeURIComponent(error instanceof Error ? error.message : "Kayıt aktarıldı ancak telafi eklenemedi.")}`);
     }
   }
 
