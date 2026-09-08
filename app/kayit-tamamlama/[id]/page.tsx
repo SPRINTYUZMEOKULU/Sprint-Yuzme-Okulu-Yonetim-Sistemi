@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 import RegistrationWizard from "./registration-wizard";
+import LegacyTransferControls from "./legacy-transfer-controls";
 import "./registration-completion.css";
 
 export const dynamic = "force-dynamic";
@@ -25,39 +26,22 @@ export default async function RegistrationCompletionPage({
 
   const { id } = await params;
   const query = await searchParams;
-
   const supabase = await createClient();
 
   const [
     { data: student },
-
     { data: branches },
-
     { data: rawGroups },
-
     { data: schedules },
-
     { data: packages },
-
     { data: coaches },
-
     { data: templateRow },
-
     { data: consent },
-
     { data: draft },
-
     { data: activeEnrollment },
-
     { data: payments },
-
     { data: notes },
   ] = await Promise.all([
-    /*
-     * =====================================================
-     * ÖĞRENCİ
-     * =====================================================
-     */
     supabase
       .from("students")
       .select(`
@@ -81,21 +65,10 @@ export default async function RegistrationCompletionPage({
         birth_date,
         created_at
       `)
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
+      .eq("id", id)
+      .eq("organization_id", profile.organization_id)
       .single(),
 
-    /*
-     * =====================================================
-     * ŞUBELER
-     * =====================================================
-     */
     supabase
       .from("branches")
       .select(`
@@ -105,21 +78,10 @@ export default async function RegistrationCompletionPage({
         contact_phone,
         material_list
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
       .order("name"),
 
-    /*
-     * =====================================================
-     * GRUPLAR
-     * =====================================================
-     */
     supabase
       .from("training_groups")
       .select(`
@@ -129,21 +91,10 @@ export default async function RegistrationCompletionPage({
         course_type,
         primary_coach_id
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
       .order("name"),
 
-    /*
-     * =====================================================
-     * DERS PROGRAMI
-     * =====================================================
-     */
     supabase
       .from("lesson_schedules")
       .select(`
@@ -152,24 +103,10 @@ export default async function RegistrationCompletionPage({
         start_time,
         end_time
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
       .order("weekday"),
 
-    /*
-     * =====================================================
-     * PAKETLER
-     *
-     * course_type özellikle eklenmiştir.
-     * Seçilen grubun kurs türüne göre paket filtreleyeceğiz.
-     * =====================================================
-     */
     supabase
       .from("course_packages")
       .select(`
@@ -179,71 +116,29 @@ export default async function RegistrationCompletionPage({
         price,
         course_type
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
       .order("lesson_count"),
 
-    /*
-     * =====================================================
-     * ANTRENÖRLER
-     * =====================================================
-     */
     supabase
       .from("profiles")
       .select(`
         id,
         full_name
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "role",
-        "coach"
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("role", "coach")
+      .eq("is_active", true)
       .order("full_name"),
 
-    /*
-     * =====================================================
-     * KAYIT TAMAMLANDI MESAJ ŞABLONU
-     * =====================================================
-     */
     supabase
       .from("message_templates")
       .select("body")
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "template_key",
-        "registration_completed"
-      )
-      .eq(
-        "is_active",
-        true
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("template_key", "registration_completed")
+      .eq("is_active", true)
       .maybeSingle(),
 
-    /*
-     * =====================================================
-     * ÖN KAYIT ELEKTRONİK ONAYI
-     *
-     * Sağlık / kurallar artık manuel checkbox olmayacak.
-     * Gerçek ön kayıt kaydından okunacak.
-     * =====================================================
-     */
     supabase
       .from("registration_consents")
       .select(`
@@ -259,80 +154,37 @@ export default async function RegistrationCompletionPage({
         accepted_at,
         form_snapshot
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        id
-      )
-      .order(
-        "accepted_at",
-        {
-          ascending: false,
-        }
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .order("accepted_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
 
-    /*
-     * =====================================================
-     * KAYIT TAMAMLAMA TASLAĞI
-     *
-     * Bir bölümü doldurup Kaydet dediğimizde
-     * buradan tekrar devam edebileceğiz.
-     * =====================================================
-     */
     supabase
-      .from(
-        "registration_completion_checklists"
-      )
+      .from("registration_completion_checklists")
       .select(`
         student_id,
         enrollment_id,
-
         payment_received,
-
         health_declaration_received,
         rules_accepted,
-
         message_prepared,
         message_sent,
         location_sent,
-
         swim_cap_delivered,
         receipt_created,
-
         draft_data,
         draft_saved_at,
-
         payment_due_date,
         payment_due_date_manual,
         payment_note,
-
         message_draft,
-
         updated_at
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        id
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
       .maybeSingle(),
 
-    /*
-     * =====================================================
-     * AKTİF ENROLLMENT
-     *
-     * Vadenin gerçek kaynağı:
-     * student_enrollments.payment_due_date
-     * =====================================================
-     */
     supabase
       .from("student_enrollments")
       .select(`
@@ -349,35 +201,13 @@ export default async function RegistrationCompletionPage({
         status,
         created_at
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        id
-      )
-      .eq(
-        "status",
-        "active"
-      )
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        }
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
 
-    /*
-     * =====================================================
-     * GERÇEK ÖDEME HAREKETLERİ
-     *
-     * Manuel "ödeme alındı" checkboxı kullanmayacağız.
-     * student_payments üzerinden hesaplanacak.
-     * =====================================================
-     */
     supabase
       .from("student_payments")
       .select(`
@@ -393,26 +223,10 @@ export default async function RegistrationCompletionPage({
         cash_handover_status,
         cancelled_at
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        id
-      )
-      .order(
-        "received_at",
-        {
-          ascending: false,
-        }
-      ),
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .order("received_at", { ascending: false }),
 
-    /*
-     * =====================================================
-     * KAYIT NOTLARI + HATIRLATMALAR
-     * =====================================================
-     */
     supabase
       .from("student_activity_logs")
       .select(`
@@ -427,129 +241,57 @@ export default async function RegistrationCompletionPage({
         reminder_completed_at,
         performed_by
       `)
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq(
-        "student_id",
-        id
-      )
-      .eq(
-        "activity_type",
-        "registration_note"
-      )
-      .order(
-        "performed_at",
-        {
-          ascending: false,
-        }
-      )
+      .eq("organization_id", profile.organization_id)
+      .eq("student_id", id)
+      .eq("activity_type", "registration_note")
+      .order("performed_at", { ascending: false })
       .limit(50),
   ]);
 
-  if (!student) {
-    notFound();
-  }
+  if (!student) notFound();
 
-  /*
-   * =====================================================
-   * GRUP + DERS PROGRAMI
-   * =====================================================
-   */
-
-  const groups =
-    (rawGroups || []).map(
-      (group) => ({
-        ...group,
-
-        schedules:
-          (schedules || []).filter(
-            (item) =>
-              item.group_id ===
-              group.id
-          ),
-      })
-    );
-
-  /*
-   * =====================================================
-   * FALLBACK WHATSAPP ŞABLONU
-   *
-   * Ayarlar -> Mesaj Şablonları kaydı varsa
-   * bu kullanılmayacak.
-   * =====================================================
-   */
+  const groups = (rawGroups || []).map((group) => ({
+    ...group,
+    schedules: (schedules || []).filter((item) => item.group_id === group.id),
+  }));
 
   const fallbackTemplate =
     "Sayın {{veli_adi}},\n\n" +
-
     "{{ogrenci_adi}} adına Sprint Yüzme Okulu kayıt işleminiz başarıyla tamamlanmıştır.\n\n" +
-
     "Öğrenci No: {{ogrenci_no}}\n" +
-
     "Şube: {{sube}}\n" +
-
     "Kurs Türü: {{kurs_turu}}\n" +
-
     "Grup: {{grup}}\n" +
-
     "Günler: {{gunler}}\n" +
-
     "Saat: {{saat}}\n" +
-
     "Paket: {{paket}}\n" +
-
     "Ders Sayısı: {{ders_sayisi}}\n" +
-
     "Başlangıç: {{baslangic}}\n" +
-
     "Planlanan Bitiş: {{bitis}}\n" +
-
     "Ödeme Vadesi: {{vade_tarihi}}\n\n" +
-
     "{{malzemeler}}\n\n" +
-
     "Konum: {{konum}}\n" +
-
     "İletişim: {{telefon}}\n\n" +
-
     "Keyifli dersler dileriz.\n" +
-
     "Sprint Yüzme Okulu";
+
+  const missingElectronicConsent =
+    !consent?.rules_accepted || !consent?.health_declaration;
+  const canManagerConfirm = profile.role === "owner" || profile.role === "admin";
 
   return (
     <main className="completionPage">
-
-      {/*
-       * ===================================================
-       * ÜST BAŞLIK
-       * ===================================================
-       */}
-
       <header className="completionHeader">
-
         <div className="headerIdentity">
-
-          <div className="headerKicker">
-            SPRİNTOS · KESİN KAYIT OPERASYONU
-          </div>
-
-          <h1>
-            Kesin Kayıt Merkezi
-          </h1>
-
+          <div className="headerKicker">SPRİNTOS · KESİN KAYIT OPERASYONU</div>
+          <h1>Kesin Kayıt Merkezi</h1>
           <p>
             <strong>
-              {student.first_name}{" "}
-              {student.last_name}
+              {student.first_name} {student.last_name}
             </strong>
-
             {" · "}
-
             {student.student_number ||
               "Öğrenci numarası kayıt tamamlandığında hazır olacak"}
-
             {student.birth_date ? (
               <>
                 {" · Doğum Tarihi: "}
@@ -561,112 +303,56 @@ export default async function RegistrationCompletionPage({
               </>
             ) : null}
           </p>
-
         </div>
-
-        {/*
-         * =================================================
-         * ÜST NAVİGASYON
-         * =================================================
-         */}
 
         <div className="headerLinks">
-
-          <Link href="/">
-            Ana Sayfa
-          </Link>
-
-          <Link
-            href={
-              `/on-kayitlar?student=${student.id}`
-            }
-          >
-            Ön Kaydı Gör
-          </Link>
-
-          <Link href="/on-kayitlar">
-            Ön Kayıtlara Dön
-          </Link>
-
+          <Link href="/">Ana Sayfa</Link>
+          <Link href={`/on-kayitlar?student=${student.id}`}>Ön Kaydı Gör</Link>
+          <Link href="/on-kayitlar">Ön Kayıtlara Dön</Link>
         </div>
-
       </header>
 
-      {/*
-       * ===================================================
-       * DURUM MESAJLARI
-       * ===================================================
-       */}
-
-      {query.error ? (
-        <div className="errorBanner">
-          {query.error}
-        </div>
-      ) : null}
+      {query.error ? <div className="errorBanner">{query.error}</div> : null}
 
       {query.saved ? (
-        <div className="successBanner">
-          Taslak bilgiler kaydedildi.
-        </div>
+        <div className="successBanner">Taslak bilgiler kaydedildi.</div>
       ) : null}
 
       {query.note_saved ? (
+        <div className="successBanner">Not ve hatırlatma kaydedildi.</div>
+      ) : null}
+
+      {query.legacy_manager_confirmed ? (
         <div className="successBanner">
-          Not ve hatırlatma kaydedildi.
+          Yönetici teyidi kaydedildi. Aktarım kontrolleri yönetici onayıyla tamamlandı.
         </div>
       ) : null}
 
-      {/*
-       * ===================================================
-       * KESİN KAYIT CLIENT
-       * ===================================================
-       */}
+      {query.legacy_compensation_added ? (
+        <div className="successBanner">
+          {query.legacy_compensation_added} adet aktarım telafisi öğrenciye eklendi.
+        </div>
+      ) : null}
 
       <RegistrationWizard
         student={student}
-
-        branches={
-          branches || []
-        }
-
-        groups={
-          groups
-        }
-
-        packages={
-          packages || []
-        }
-
-        coaches={
-          coaches || []
-        }
-
-        template={
-          templateRow?.body ||
-          fallbackTemplate
-        }
-
-        consent={
-          consent || null
-        }
-
-        draft={
-          draft || null
-        }
-
-        activeEnrollment={
-          activeEnrollment || null
-        }
-
-        payments={
-          payments || []
-        }
-
-        notes={
-          notes || []
-        }
+        branches={branches || []}
+        groups={groups}
+        packages={packages || []}
+        coaches={coaches || []}
+        template={templateRow?.body || fallbackTemplate}
+        consent={consent || null}
+        draft={draft || null}
+        activeEnrollment={activeEnrollment || null}
+        payments={payments || []}
+        notes={notes || []}
       />
 
+      <LegacyTransferControls
+        studentId={student.id}
+        visible={missingElectronicConsent}
+        canManagerConfirm={canManagerConfirm}
+      />
     </main>
   );
 }
