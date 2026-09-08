@@ -43,6 +43,18 @@ const panelToTab: Record<string, TabId> = {
   history: "islem-gecmisi",
 };
 
+const tabToLegacyPanel: Record<TabId, string> = {
+  "genel-bilgiler": "general",
+  "kurs-kaydi": "registration",
+  odeme: "finance",
+  yoklama: "attendance",
+  "ders-hareketleri": "lessons",
+  saglik: "health",
+  notlar: "notes",
+  mesajlar: "messages",
+  "islem-gecmisi": "history",
+};
+
 function tabForHash(hash: string): TabId {
   return targetToTab[hash.replace(/^#/, "")] ?? "genel-bilgiler";
 }
@@ -77,10 +89,6 @@ function tabForElement(element: HTMLElement): TabId | null {
 }
 
 function classifySections(root: HTMLElement) {
-  /*
-   * Sayfanın server-render edilen data-file-panel işaretlerini ana kaynak kabul ediyoruz.
-   * Böylece sekmeye basıldığında içerik navigasyonun hemen altında kesin olarak görünür.
-   */
   for (const panel of Array.from(
     root.querySelectorAll<HTMLElement>("[data-file-panel]"),
   )) {
@@ -127,6 +135,12 @@ function classifySections(root: HTMLElement) {
 
 function applyVisibility(root: HTMLElement, tab: TabId) {
   root.dataset.activeTab = tab;
+  /*
+   * Sayfada eski data-file-panel görünürlük CSS'i de hâlâ kullanılıyor.
+   * Yeni sekme ile bu state birlikte ilerlemezse içerik DOM'da açık olsa bile
+   * eski CSS tarafından gizleniyor. İki görünürlük kaynağını burada eşitliyoruz.
+   */
+  root.dataset.activeFileTab = tabToLegacyPanel[tab];
 
   for (const element of Array.from(
     root.querySelectorAll<HTMLElement>("[data-file-tab]"),
