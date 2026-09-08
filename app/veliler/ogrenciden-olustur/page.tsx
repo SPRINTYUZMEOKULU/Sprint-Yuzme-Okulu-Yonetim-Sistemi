@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createOrLinkGuardianFromStudent } from "./actions";
+import BulkAccountManager, { type GuardianBulkCandidate } from "./bulk-account-manager";
 import "./wizard.css";
 
 export const dynamic = "force-dynamic";
@@ -38,17 +39,20 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const organizationId = profile.organization_id!;
   const admin = adminClient();
 
-  const [studentsRes, linksRes, guardiansRes, branchesRes] = await Promise.all([
+  const [studentsRes, linksRes, guardiansRes, guardianRecordsRes, branchesRes] = await Promise.all([
     admin.from("students").select("id,student_number,first_name,last_name,status,phone,guardian_name,guardian_phone,guardian_email,branch_id").eq("organization_id", organizationId).eq("is_deleted", false).order("first_name").limit(5000),
     admin.from("guardian_students").select("guardian_id,student_id,relationship,is_primary").limit(5000),
     admin.from("profiles").select("id,full_name,phone,email,is_active,last_sign_in_at").eq("organization_id", organizationId).eq("role", "guardian").limit(5000),
+    admin.from("guardians").select("id,auth_user_id,full_name,phone,email,is_active,login_enabled").eq("organization_id", organizationId).limit(5000),
     admin.from("branches").select("id,name").eq("organization_id", organizationId),
   ]);
 
   const students = studentsRes.data || [];
   const guardians = guardiansRes.data || [];
-  const guardianIds = new Set(guardians.map((g: any) => g.id));
-  const links = (linksRes.data || []).filter((l: any) => guardianIds.has(l.guardian_id));
+  const guardianRecords = guardianRecordsRes.data || [];
+  const guardianRecordById = new Map(guardianRecords.map((g: any) => [g.id, g]));
+  const guardianRecordIds = new Set(guardianRecords.map((g: any) => g.id));
+  const links = (linksRes.data || []).filter((l: any) => guardianRecordIds.has(l.guardian_id));
   const linkByStudent = new Map(links.map((l: any) => [l.student_id, l]));
   const guardianById = new Map(guardians.map((g: any) => [g.id, g]));
   const branchMap = new Map((branchesRes.data || []).map((b: any) => [b.id, b.name]));
@@ -63,7 +67,8 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const filter = query.filter || "unlinked";
   const rows = students.map((student: any) => {
     const link: any = linkByStudent.get(student.id);
-    const linkedGuardian: any = link ? guardianById.get(link.guardian_id) : null;
+    const guardianRecord: any = link ? guardianRecordById.get(link.guardian_id) : null;
+    const linkedGuardian: any = guardianRecord?.auth_user_id ? guardianById.get(guardianRecord.auth_user_id) : null;
     const guardianPhone = normalizePhone(student.guardian_phone);
     const studentPhone = normalizePhone(student.phone);
     const guardianName = String(student.guardian_name || "").trim();
@@ -96,6 +101,30 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const readyCount = derived.filter((s: any) => !linkByStudent.has(s.id) && s.ready).length;
   const missingCount = derived.filter((s: any) => !linkByStudent.has(s.id) && !s.ready).length;
 
+  const candidateMap = new Map<string, GuardianBulkCandidate>();
+  for (const student of students as any[]) {
+    const link: any = linkByStudent.get(student.id);
+    const guardianRecord: any = link ? guardianRecordById.get(link.guardian_id) : null;
+    const linkedProfile: any = guardianRecord?.auth_user_id ? guardianById.get(guardianRecord.auth_user_id) : null;
+    const guardianPhone = normalizePhone(linkedProfile?.phone || guardianRecord?.phone || student.guardian_phone);
+    const ownPhone = normalizePhone(student.phone);
+    const guardianName = String(linkedProfile?.full_name || guardianRecord?.full_name || student.guardian_name || "").trim();
+    const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    const phone = guardianPhone || ownPhone;
+    const fullName = guardianName || studentName;
+    if (!phone || !fullName) continue;
+    const state: GuardianBulkCandidate["state"] = linkedProfile ? (linkedProfile.last_sign_in_at ? "active" : "pending") : "new";
+    const existing = candidateMap.get(phone);
+    if (existing) {
+      existing.studentIds.push(student.id);
+      existing.studentNames.push(studentName);
+      if (state === "active") existing.state = "active";
+    } else {
+      candidateMap.set(phone, { key: phone, fullName, phone, studentIds: [student.id], studentNames: [studentName], state });
+    }
+  }
+  const bulkCandidates = [...candidateMap.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, "tr"));
+
   return <><UstGezinme/><main className="guardianWizardPage"><div className="guardianWizardWrap">
     <header className="wizardHero"><div><small>SPRİNTOS · PORTAL HESABI OLUŞTURMA</small><h1>Öğrenciden Portal Hesabı Oluştur</h1><p>Çocuk kursiyerlerde veli bilgisi kullanılır. Yetişkin kursiyerlerde veli zorunlu değildir; kursiyerin kendi telefon numarasıyla kendi portal hesabı oluşturulabilir.</p></div><Link href="/veliler">Veli Merkezine Dön</Link></header>
 
@@ -103,6 +132,8 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     {query.error ? <div className="wizardNotice error"><strong>İşlem tamamlanamadı</strong><span>{query.error}</span>{query.student ? <Link href={`/ogrenciler/${query.student}`}>Öğrenci bilgilerini düzenle</Link> : null}</div> : null}
 
     <section className="wizardStats"><Link href="?filter=unlinked"><span>Bağlantı Bekleyen</span><strong>{unlinkedCount}</strong></Link><Link href="?filter=ready"><span>Oluşturmaya Hazır</span><strong>{readyCount}</strong></Link><Link href="?filter=missing"><span>Bilgisi Eksik</span><strong>{missingCount}</strong></Link><Link href="?filter=linked"><span>Bağlı Öğrenci</span><strong>{links.length}</strong></Link></section>
+
+    <BulkAccountManager candidates={bulkCandidates}/>
 
     <form className="wizardSearch"><input name="q" defaultValue={query.q || ""} placeholder="Öğrenci, veli veya telefon ara"/><select name="filter" defaultValue={filter}><option value="unlinked">Bağlantı bekleyenler</option><option value="ready">Oluşturmaya hazır</option><option value="missing">Bilgisi eksik</option><option value="linked">Zaten bağlı</option><option value="all">Tüm öğrenciler</option></select><button>Filtrele</button></form>
 
