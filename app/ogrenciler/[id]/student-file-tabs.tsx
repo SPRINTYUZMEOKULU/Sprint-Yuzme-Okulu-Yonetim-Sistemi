@@ -16,6 +16,7 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
+type TabMeta = Partial<Record<TabId, { count?: number; ready?: boolean }>>;
 
 const targetToTab: Record<string, TabId> = {
   "genel-bilgiler": "genel-bilgiler",
@@ -85,29 +86,69 @@ function applyVisibility(root: HTMLElement, tab: TabId) {
   }
 }
 
+function articleCount(root: HTMLElement, selector: string) {
+  return root.querySelectorAll(`${selector} article`).length;
+}
+
+function readTabMeta(root: HTMLElement): TabMeta {
+  const health = root.querySelector<HTMLElement>("#saglik");
+  const healthReady = Boolean(
+    health?.querySelector<HTMLInputElement>('input[name="health_declaration"]:checked') ||
+      health?.querySelector<HTMLInputElement>('input[name="rules_accepted"]:checked') ||
+      health?.querySelector<HTMLTextAreaElement>('textarea[name="health_note"]')?.value.trim(),
+  );
+
+  const registrationCount =
+    root.querySelectorAll('[data-file-panel="registration"] .list article').length ||
+    (root.querySelector("#kurs-kaydi") ? 1 : 0);
+
+  return {
+    "genel-bilgiler": { ready: Boolean(root.querySelector("#genel-bilgiler")) },
+    "kurs-kaydi": { count: registrationCount, ready: Boolean(root.querySelector("#kurs-kaydi")) },
+    odeme: { count: articleCount(root, "#odeme") },
+    yoklama: { count: articleCount(root, "#yoklama") },
+    "ders-hareketleri": { count: articleCount(root, "#ders-hareketleri") },
+    saglik: { ready: healthReady },
+    notlar: { count: articleCount(root, "#notlar") },
+    mesajlar: { count: articleCount(root, "#mesajlar") },
+    "islem-gecmisi": { count: articleCount(root, "#islem-gecmisi") },
+  };
+}
+
 export default function StudentFileTabs() {
   const [activeTab, setActiveTab] = useState<TabId>("genel-bilgiler");
   const [host, setHost] = useState<HTMLElement | null>(null);
+  const [meta, setMeta] = useState<TabMeta>({});
+
   const nav = useMemo(() => (
     <nav className="studentFileTabs" aria-label="Öğrenci dosyası bölümleri">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={activeTab === tab.id ? "active" : ""}
-          aria-current={activeTab === tab.id ? "page" : undefined}
-          onClick={() => {
-            const root = document.querySelector<HTMLElement>(".studentFilePage");
-            setActiveTab(tab.id);
-            if (root) applyVisibility(root, tab.id);
-            window.history.replaceState(null, "", `#${tab.id}`);
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const item = meta[tab.id];
+        const hasCount = typeof item?.count === "number";
+        const badge = hasCount ? String(item?.count ?? 0) : item?.ready ? "✓" : null;
+
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            className={activeTab === tab.id ? "active" : ""}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+            onClick={() => {
+              const root = document.querySelector<HTMLElement>(".studentFilePage");
+              setActiveTab(tab.id);
+              if (root) applyVisibility(root, tab.id);
+              window.history.replaceState(null, "", `#${tab.id}`);
+            }}
+          >
+            <span>{tab.label}</span>
+            {badge !== null ? (
+              <em className={hasCount && Number(item?.count || 0) === 0 ? "empty" : "filled"}>{badge}</em>
+            ) : null}
+          </button>
+        );
+      })}
     </nav>
-  ), [activeTab]);
+  ), [activeTab, meta]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".studentFilePage");
@@ -115,6 +156,7 @@ export default function StudentFileTabs() {
 
     classifySections(root);
     root.classList.add("tabsReady");
+    setMeta(readTabMeta(root));
 
     const portalHost = document.createElement("div");
     portalHost.className = "studentFileTabsHost";
@@ -124,9 +166,13 @@ export default function StudentFileTabs() {
     if (!portalHost.parentElement) root.prepend(portalHost);
     setHost(portalHost);
 
+    const observer = new MutationObserver(() => setMeta(readTabMeta(root)));
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["checked"] });
+
     const applyTab = (tab: TabId, scrollTarget?: string) => {
       setActiveTab(tab);
       applyVisibility(root, tab);
+      setMeta(readTabMeta(root));
       if (scrollTarget) {
         window.requestAnimationFrame(() => {
           document.getElementById(scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -143,6 +189,7 @@ export default function StudentFileTabs() {
     window.addEventListener("hashchange", syncFromHash);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("hashchange", syncFromHash);
       root.classList.remove("tabsReady");
       delete root.dataset.activeTab;
