@@ -163,10 +163,12 @@ export async function addLegacyTransferCompensation(formData: FormData) {
       ? (checklist.draft_data as Record<string, unknown>)
       : {};
 
-  const previousCompensationEnd = String(previousDraft.legacy_compensation_planned_end_date || "");
-  const baseEndDate = validDate(previousCompensationEnd) ? previousCompensationEnd : formEndDate;
-  const newCompensationEnd = extendByLessonDays(baseEndDate, weekdays, count);
   const previousAdded = Math.max(0, Number(previousDraft.legacy_compensation_added_count || 0));
+  const totalAdded = previousAdded + count;
+  // Telafi bitişi her zaman normal planlanan bitiş tarihinden ve toplam telafi
+  // adedinden yeniden hesaplanır. Böylece eski/stale bir telafi bitiş tarihi
+  // yeni eklemelerde tekrar taban alınarak tarihin ileri doğru sürüklenmesi önlenir.
+  const newCompensationEnd = extendByLessonDays(formEndDate, weekdays, totalAdded);
   const now = new Date().toISOString();
 
   try {
@@ -184,7 +186,7 @@ export async function addLegacyTransferCompensation(formData: FormData) {
         draft_data: {
           ...previousDraft,
           ...currentDraft,
-          legacy_compensation_added_count: previousAdded + count,
+          legacy_compensation_added_count: totalAdded,
           legacy_compensation_planned_end_date: newCompensationEnd,
           legacy_compensation_updated_at: now,
         },
@@ -270,8 +272,12 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     checklist?.draft_data && typeof checklist.draft_data === "object"
       ? (checklist.draft_data as Record<string, unknown>)
       : {};
-  const savedCompensationEnd = String(savedDraft.legacy_compensation_planned_end_date || "");
-  const initialCompensationEnd = validDate(savedCompensationEnd) ? savedCompensationEnd : plannedEndDate;
+  const savedAdded = Math.max(0, Number(savedDraft.legacy_compensation_added_count || 0));
+  const totalCompensationAdded = savedAdded + count;
+  const initialCompensationEnd =
+    totalCompensationAdded > 0
+      ? extendByLessonDays(plannedEndDate, weekdays, totalCompensationAdded)
+      : plannedEndDate;
   const now = new Date().toISOString();
 
   const { data: existingConsent } = await supabase
@@ -414,6 +420,7 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
     lesson_weekdays: weekdays,
     total_lessons: totalLessons,
     payment_due_date: paymentDueDate,
+    legacy_compensation_added_count: totalCompensationAdded,
     legacy_compensation_planned_end_date: initialCompensationEnd,
     legacy_manager_confirmation: {
       status: "confirmed",
