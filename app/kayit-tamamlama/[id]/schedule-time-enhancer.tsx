@@ -23,32 +23,33 @@ function hhmm(value: string) {
   return value ? value.slice(0, 5) : "--:--";
 }
 
-function localDateValue(date: Date) {
+function toLocalDateValue(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function startOfToday() {
+function todayLocal() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 function parseLocalDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
+  const parts = value.split("-").map(Number);
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function nextEligibleDate(weekdays: number[], from = startOfToday()) {
+function nextEligibleDate(weekdays: number[]) {
   if (!weekdays.length) return "";
-  const allowed = new Set(weekdays);
-  const cursor = new Date(from.getFullYear(), from.getMonth(), from.getDate());
 
-  for (let offset = 0; offset < 14; offset += 1) {
-    if (allowed.has(cursor.getDay())) return localDateValue(cursor);
+  const allowed = new Set(weekdays);
+  const cursor = todayLocal();
+
+  for (let i = 0; i < 14; i += 1) {
+    if (allowed.has(cursor.getDay())) return toLocalDateValue(cursor);
     cursor.setDate(cursor.getDate() + 1);
   }
 
@@ -56,81 +57,93 @@ function nextEligibleDate(weekdays: number[], from = startOfToday()) {
 }
 
 function setReactInputValue(input: HTMLInputElement, value: string) {
-  if (input.value === value) return;
+  if (!value || input.value === value) return;
 
-  const setter = Object.getOwnPropertyDescriptor(
+  const descriptor = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value"
-  )?.set;
+  );
 
-  setter?.call(input, value);
+  if (descriptor?.set) {
+    descriptor.set.call(input, value);
+  } else {
+    input.value = value;
+  }
+
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 export default function ScheduleTimeEnhancer() {
   useEffect(() => {
-    const form = document.querySelector<HTMLFormElement>("form.registrationShell");
-    const groupSelect = form?.querySelector<HTMLSelectElement>('select[name="group_id"]');
-    const startDateInput = form?.querySelector<HTMLInputElement>('input[name="start_date"]');
-    const activeEnrollmentInput = form?.querySelector<HTMLInputElement>('input[name="active_enrollment_id"]');
-    const dayPicker = form?.querySelector<HTMLElement>(".dayPicker");
+    const foundForm = document.querySelector<HTMLFormElement>("form.registrationShell");
+    if (!foundForm) return;
 
-    if (!form || !groupSelect || !startDateInput || !dayPicker) return;
+    const foundGroupSelect = foundForm.querySelector<HTMLSelectElement>(
+      'select[name="group_id"]'
+    );
+    const foundStartDateInput = foundForm.querySelector<HTMLInputElement>(
+      'input[name="start_date"]'
+    );
+    const foundActiveEnrollmentInput = foundForm.querySelector<HTMLInputElement>(
+      'input[name="active_enrollment_id"]'
+    );
+    const foundDayPicker = foundForm.querySelector<HTMLElement>(".dayPicker");
+
+    if (!foundGroupSelect || !foundStartDateInput || !foundDayPicker) return;
+
+    const form = foundForm;
+    const groupSelect = foundGroupSelect;
+    const startDateInput = foundStartDateInput;
+    const dayPicker = foundDayPicker;
+    const activeEnrollmentInput = foundActiveEnrollmentInput;
 
     let schedules: ScheduleItem[] = [];
-    let requestId = 0;
-    const listeners: Array<() => void> = [];
+    let requestToken = 0;
 
-    const getCheckboxes = () =>
+    const style = document.createElement("style");
+    style.dataset.scheduleTimeEnhancer = "true";
+    style.textContent = `
+      .dayPicker label .scheduleTimeBadge{display:block;margin-top:4px;font-size:11px;font-weight:800;line-height:1.15;color:#176fe8;white-space:nowrap}
+      .dayPicker label.selected .scheduleTimeBadge{color:inherit}
+      .scheduleTransferSummary{display:grid;gap:5px;margin-top:14px;padding:12px 14px;border:1px solid #cfe0f7;border-radius:14px;background:#f7fbff;color:#17365d}
+      .scheduleTransferSummary strong{font-size:13px;font-weight:900}
+      .scheduleTransferSummary span{font-size:13px;font-weight:800}
+      .scheduleTransferSummary small{color:#5d7390;font-size:11px;line-height:1.45}
+    `;
+    document.head.appendChild(style);
+
+    const checkboxes = () =>
       Array.from(
-        form.querySelectorAll<HTMLInputElement>('input[name="lesson_weekdays"][type="checkbox"]')
+        form.querySelectorAll<HTMLInputElement>(
+          'input[name="lesson_weekdays"][type="checkbox"]'
+        )
       );
 
-    const getCheckedWeekdays = () =>
-      getCheckboxes()
+    const checkedWeekdays = () =>
+      checkboxes()
         .filter((input) => input.checked)
         .map((input) => Number(input.value))
-        .filter((day) => Number.isInteger(day));
+        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
 
-    function scheduleTextForDay(day: number) {
-      const items = schedules.filter((item) => item.weekday === day);
+    const scheduleTextForDay = (day: number) => {
+      const items = schedules.filter((item) => Number(item.weekday) === day);
       if (!items.length) return "Program saati yok";
+
       return items
         .map((item) => `${hhmm(item.start_time)}–${hhmm(item.end_time)}`)
         .join(" / ");
-    }
+    };
 
-    function renderScheduleSummary() {
-      let summary = dayPicker.querySelector<HTMLElement>(".scheduleTransferSummary");
-      if (!summary) {
-        summary = document.createElement("div");
-        summary.className = "scheduleTransferSummary";
-        dayPicker.appendChild(summary);
+    const render = () => {
+      const heading = dayPicker.firstElementChild;
+      if (heading instanceof HTMLElement) {
+        heading.textContent = "Öğrencinin gerçekten katılacağı gün ve saatler";
       }
 
-      const selectedDays = getCheckedWeekdays();
-      if (!selectedDays.length) {
-        summary.innerHTML = "<strong>Aktarılacak seans:</strong> Katılım günü seçiniz.";
-        return;
-      }
-
-      summary.innerHTML = `
-        <strong>Otomatik aktarılacak program</strong>
-        <span>${selectedDays
-          .map((day) => `${dayNames[day] || day}: ${scheduleTextForDay(day)}`)
-          .join(" · ")}</span>
-        <small>Kesin kayıtta öğrenci seçilen gruba ve grubun bu saatlerdeki seanslarına bağlanır.</small>
-      `;
-    }
-
-    function decorateDayTimes() {
-      const heading = dayPicker.querySelector<HTMLElement>(":scope > span");
-      if (heading) heading.textContent = "Öğrencinin gerçekten katılacağı gün ve saatler";
-
-      getCheckboxes().forEach((input) => {
+      checkboxes().forEach((input) => {
         const label = input.closest("label");
-        if (!label) return;
+        if (!(label instanceof HTMLLabelElement)) return;
 
         label.querySelector(".scheduleTimeBadge")?.remove();
 
@@ -140,31 +153,59 @@ export default function ScheduleTimeEnhancer() {
         label.appendChild(badge);
       });
 
-      renderScheduleSummary();
-    }
+      let summary = dayPicker.querySelector<HTMLElement>(".scheduleTransferSummary");
+      if (!summary) {
+        summary = document.createElement("div");
+        summary.className = "scheduleTransferSummary";
+        dayPicker.appendChild(summary);
+      }
 
-    function alignStartDate(weekdays: number[], force = false) {
-      if (!weekdays.length) return;
+      const selected = checkedWeekdays();
+      if (!selected.length) {
+        summary.textContent = "Katılım günü seçildiğinde aktarılacak seans burada gösterilir.";
+        return;
+      }
 
-      const today = startOfToday();
+      summary.replaceChildren();
+
+      const title = document.createElement("strong");
+      title.textContent = "Otomatik aktarılacak program";
+
+      const detail = document.createElement("span");
+      detail.textContent = selected
+        .map((day) => `${dayNames[day]}: ${scheduleTextForDay(day)}`)
+        .join(" · ");
+
+      const note = document.createElement("small");
+      note.textContent =
+        "Kesin kayıtta öğrenci seçilen grubun bu gün ve saatlerindeki seanslarına bağlanır.";
+
+      summary.append(title, detail, note);
+    };
+
+    const alignStartDate = (days: number[], force: boolean) => {
+      if (!days.length) return;
+
+      const today = todayLocal();
       const current = parseLocalDate(startDateInput.value);
-      const currentIsUsable =
-        current &&
+      const currentValid =
+        current !== null &&
         current.getTime() >= today.getTime() &&
-        weekdays.includes(current.getDay());
+        days.includes(current.getDay());
 
-      if (!force && currentIsUsable) return;
+      if (!force && currentValid) return;
 
-      const next = nextEligibleDate(weekdays, today);
-      if (next) setReactInputValue(startDateInput, next);
-    }
+      const next = nextEligibleDate(days);
+      setReactInputValue(startDateInput, next);
+    };
 
-    async function refresh(groupId: string, forceAlign: boolean) {
-      const currentRequest = ++requestId;
+    const refresh = async (forceAlign: boolean) => {
+      const groupId = groupSelect.value;
+      const token = ++requestToken;
 
       if (!groupId) {
         schedules = [];
-        decorateDayTimes();
+        render();
         return;
       }
 
@@ -174,97 +215,53 @@ export default function ScheduleTimeEnhancer() {
           { cache: "no-store" }
         );
         const payload = (await response.json()) as {
-          ok?: boolean;
           schedules?: ScheduleItem[];
         };
 
-        if (currentRequest !== requestId) return;
+        if (token !== requestToken) return;
+
         schedules = Array.isArray(payload.schedules) ? payload.schedules : [];
+        render();
 
-        window.setTimeout(() => {
-          decorateDayTimes();
-          const selected = getCheckedWeekdays();
-          const scheduleDays = [
-            ...new Set(schedules.map((item) => Number(item.weekday))),
-          ].filter((day) => Number.isInteger(day));
+        const selected = checkedWeekdays();
+        const scheduleDays = Array.from(
+          new Set(schedules.map((item) => Number(item.weekday)))
+        ).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
 
-          alignStartDate(selected.length ? selected : scheduleDays, forceAlign);
-        }, 0);
+        alignStartDate(selected.length ? selected : scheduleDays, forceAlign);
       } catch {
-        if (currentRequest !== requestId) return;
+        if (token !== requestToken) return;
         schedules = [];
-        decorateDayTimes();
+        render();
       }
-    }
+    };
 
     const onGroupChange = () => {
-      void refresh(groupSelect.value, true);
+      window.setTimeout(() => {
+        void refresh(true);
+      }, 0);
     };
-    groupSelect.addEventListener("change", onGroupChange);
-    listeners.push(() => groupSelect.removeEventListener("change", onGroupChange));
 
-    getCheckboxes().forEach((input) => {
-      const onDayChange = () => {
-        window.setTimeout(() => {
-          renderScheduleSummary();
-          alignStartDate(getCheckedWeekdays(), false);
-        }, 0);
-      };
-      input.addEventListener("change", onDayChange);
-      listeners.push(() => input.removeEventListener("change", onDayChange));
-    });
+    const onDayChange = () => {
+      window.setTimeout(() => {
+        render();
+        alignStartDate(checkedWeekdays(), false);
+      }, 0);
+    };
+
+    groupSelect.addEventListener("change", onGroupChange);
+    checkboxes().forEach((input) => input.addEventListener("change", onDayChange));
 
     const hasActiveEnrollment = Boolean(activeEnrollmentInput?.value);
-    void refresh(groupSelect.value, !hasActiveEnrollment);
+    void refresh(!hasActiveEnrollment);
 
     return () => {
-      requestId += 1;
-      listeners.forEach((remove) => remove());
+      requestToken += 1;
+      groupSelect.removeEventListener("change", onGroupChange);
+      checkboxes().forEach((input) => input.removeEventListener("change", onDayChange));
+      style.remove();
     };
   }, []);
 
-  return (
-    <style jsx global>{`
-      .dayPicker label .scheduleTimeBadge {
-        display: block;
-        margin-top: 4px;
-        font-size: 11px;
-        font-weight: 800;
-        line-height: 1.15;
-        color: #176fe8;
-        white-space: nowrap;
-      }
-
-      .dayPicker label.selected .scheduleTimeBadge {
-        color: inherit;
-      }
-
-      .scheduleTransferSummary {
-        display: grid;
-        gap: 5px;
-        margin-top: 14px;
-        padding: 12px 14px;
-        border: 1px solid #cfe0f7;
-        border-radius: 14px;
-        background: #f7fbff;
-        color: #17365d;
-      }
-
-      .scheduleTransferSummary strong {
-        font-size: 13px;
-        font-weight: 900;
-      }
-
-      .scheduleTransferSummary span {
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .scheduleTransferSummary small {
-        color: #5d7390;
-        font-size: 11px;
-        line-height: 1.45;
-      }
-    `}</style>
-  );
+  return null;
 }
