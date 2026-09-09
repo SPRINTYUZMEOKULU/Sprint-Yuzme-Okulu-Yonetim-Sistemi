@@ -135,11 +135,6 @@ function classifySections(root: HTMLElement) {
 
 function applyVisibility(root: HTMLElement, tab: TabId) {
   root.dataset.activeTab = tab;
-  /*
-   * Sayfada eski data-file-panel görünürlük CSS'i de hâlâ kullanılıyor.
-   * Yeni sekme ile bu state birlikte ilerlemezse içerik DOM'da açık olsa bile
-   * eski CSS tarafından gizleniyor. İki görünürlük kaynağını burada eşitliyoruz.
-   */
   root.dataset.activeFileTab = tabToLegacyPanel[tab];
 
   for (const element of Array.from(
@@ -162,6 +157,26 @@ function articleCount(root: HTMLElement, selector: string) {
   return root.querySelectorAll(`${selector} article`).length;
 }
 
+function paymentStatusCount(root: HTMLElement) {
+  const alertsText = (root.querySelector<HTMLElement>(".smartAlertPanel")?.textContent || "")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR");
+  const financeText = (root.querySelector<HTMLElement>("#odeme")?.textContent || "")
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR");
+
+  const hasOpenDebt =
+    alertsText.includes("açık borç") ||
+    alertsText.includes("ödeme bekliyor") ||
+    alertsText.includes("vadesi geçti") ||
+    financeText.includes("açık borç") ||
+    financeText.includes("ödeme bekliyor") ||
+    financeText.includes("vadesi geçti");
+
+  if (hasOpenDebt) return 1;
+  return articleCount(root, "#odeme");
+}
+
 function readTabMeta(root: HTMLElement): TabMeta {
   const health = root.querySelector<HTMLElement>("#saglik");
   const healthReady = Boolean(
@@ -180,7 +195,7 @@ function readTabMeta(root: HTMLElement): TabMeta {
       count: registrationCount,
       ready: Boolean(root.querySelector("#kurs-kaydi")),
     },
-    odeme: { count: articleCount(root, "#odeme") },
+    odeme: { count: paymentStatusCount(root) },
     yoklama: { count: articleCount(root, "#yoklama") },
     "ders-hareketleri": { count: articleCount(root, "#ders-hareketleri") },
     saglik: { ready: healthReady },
@@ -264,6 +279,7 @@ export default function StudentFileTabs() {
       childList: true,
       subtree: true,
       attributes: true,
+      characterData: true,
       attributeFilter: ["checked"],
     });
 
