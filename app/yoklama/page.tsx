@@ -4,46 +4,9 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 import AttendanceClient from "./AttendanceClient";
-import AttendanceQuickNav from "./attendance-quick-nav";
-import AttendanceSessionPicker from "./attendance-session-picker";
 import "./yoklama-professional.css";
 
 export const dynamic = "force-dynamic";
-
-function todayWeekdayTR() {
-  const value = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Istanbul",
-    weekday: "short",
-  }).format(new Date());
-  const map: Record<string, number> = {
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-    Sun: 7,
-  };
-  return map[value] || 1;
-}
-
-function nowMinutesTR() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Istanbul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
-  return hour * 60 + minute;
-}
-
-function timeMinutes(value?: string | null) {
-  if (!value) return 9999;
-  const [hour, minute] = value.slice(0, 5).split(":").map(Number);
-  return hour * 60 + minute;
-}
 
 export default async function AttendancePage({
   searchParams,
@@ -51,7 +14,6 @@ export default async function AttendancePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const requestedBranchId = params.branchId || "";
   const requestedGroupId = params.groupId || "";
   const requestedScheduleId = params.scheduleId || "";
 
@@ -82,7 +44,6 @@ export default async function AttendancePage({
   }
 
   const [
-    branchesResult,
     groupsResult,
     schedulesResult,
     membershipsResult,
@@ -90,12 +51,6 @@ export default async function AttendancePage({
     enrollmentsResult,
     compensationResult,
   ] = await Promise.all([
-    supabase
-      .from("branches")
-      .select("id, name, short_name")
-      .eq("organization_id", organizationId)
-      .eq("is_active", true)
-      .order("name", { ascending: true }),
     supabase
       .from("training_groups")
       .select("id, organization_id, branch_id, name, course_type, capacity, primary_coach_id")
@@ -133,7 +88,6 @@ export default async function AttendancePage({
   ]);
 
   const loadError =
-    branchesResult.error ||
     groupsResult.error ||
     schedulesResult.error ||
     membershipsResult.error ||
@@ -155,57 +109,20 @@ export default async function AttendancePage({
     );
   }
 
-  const allGroups = [...(groupsResult.data || [])];
-  const allSchedules = [...(schedulesResult.data || [])];
-  const todayWeekday = todayWeekdayTR();
-  const now = nowMinutesTR();
+  // Yoklama artık yalnızca "bugünün" gruplarına daraltılmaz.
+  // Böylece tarih geri/ileri alındığında, aylık görünümde ve geçmişte
+  // aynı gerçek grup/seans verileri kullanılmaya devam eder.
+  const groups = [...(groupsResult.data || [])];
+  const schedules = [...(schedulesResult.data || [])];
 
-  const todaySchedules = allSchedules
-    .filter((schedule) => Number(schedule.weekday) === todayWeekday)
-    .sort((a, b) => {
-      const aMinutes = timeMinutes(a.start_time);
-      const bMinutes = timeMinutes(b.start_time);
-      const aPast = aMinutes < now;
-      const bPast = bMinutes < now;
-      if (aPast !== bPast) return aPast ? 1 : -1;
-      return aMinutes - bMinutes;
-    });
-
-  const todayGroupIds = new Set(todaySchedules.map((schedule) => schedule.group_id).filter(Boolean));
-
-  let groups = allGroups.filter((group) => todayGroupIds.has(group.id));
-  let schedules = todaySchedules;
-
-  if (requestedBranchId) {
-    groups = groups.filter((group) => group.branch_id === requestedBranchId);
-    schedules = schedules.filter((schedule) => schedule.branch_id === requestedBranchId);
-  }
-
+  // Dışarıdan belirli bir grup veya seansla gelinmişse onu ilk sıraya al.
+  // AttendanceClient ilk grubu başlangıç seçimi olarak kullandığı için
+  // mevcut deep-link davranışını bozmadan tek ekranlı akışı koruruz.
   if (requestedGroupId) {
     groups.sort((a, b) => {
       if (a.id === requestedGroupId) return -1;
       if (b.id === requestedGroupId) return 1;
-      const aNext = Math.min(...schedules.filter((s) => s.group_id === a.id).map((s) => {
-        const value = timeMinutes(s.start_time);
-        return value >= now ? value : value + 1440;
-      }));
-      const bNext = Math.min(...schedules.filter((s) => s.group_id === b.id).map((s) => {
-        const value = timeMinutes(s.start_time);
-        return value >= now ? value : value + 1440;
-      }));
-      return aNext - bNext;
-    });
-  } else {
-    groups.sort((a, b) => {
-      const aNext = Math.min(...schedules.filter((s) => s.group_id === a.id).map((s) => {
-        const value = timeMinutes(s.start_time);
-        return value >= now ? value : value + 1440;
-      }));
-      const bNext = Math.min(...schedules.filter((s) => s.group_id === b.id).map((s) => {
-        const value = timeMinutes(s.start_time);
-        return value >= now ? value : value + 1440;
-      }));
-      return aNext - bNext;
+      return 0;
     });
   }
 
@@ -220,25 +137,6 @@ export default async function AttendancePage({
   return (
     <main data-attendance-page>
       <div data-attendance-shell>
-        <header data-attendance-hero>
-          <span data-attendance-kicker>SPRİNTOS · YOKLAMA</span>
-          <h1>Yoklama &amp; Ders Yönetimi</h1>
-          <p>
-            Günlük yoklama alın, ders katılımını takip edin ve kayıt yenileme uyarılarını tek ekrandan yönetin.
-          </p>
-        </header>
-
-        <AttendanceQuickNav />
-
-        <AttendanceSessionPicker
-          branches={branchesResult.data || []}
-          groups={allGroups}
-          schedules={allSchedules}
-          selectedBranchId={requestedBranchId}
-          selectedGroupId={requestedGroupId}
-          selectedScheduleId={requestedScheduleId}
-        />
-
         <div data-attendance-client>
           <AttendanceClient
             groups={groups}
