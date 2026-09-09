@@ -14,6 +14,7 @@ import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 import GlobalMobileNav from "./components/global-mobile-nav";
 import AttendanceAutomationCenter from "./components/attendance-automation-center";
+import PaymentInfoShortcut from "./components/payment-info-shortcut";
 
 export const metadata: Metadata = {
   title: {
@@ -82,6 +83,7 @@ export default function RootLayout({
         <ModuleNavigationFeedback />
         <SidebarBranchClickFix />
         <AttendanceAutomationCenter />
+        <PaymentInfoShortcut />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
