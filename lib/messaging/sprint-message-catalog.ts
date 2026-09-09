@@ -5,6 +5,7 @@ export type SprintMessageKey =
   | "compensation"
   | "absence"
   | "payment"
+  | "bank_info"
   | "lesson_ending"
   | "lesson_finished"
   | "program"
@@ -100,6 +101,22 @@ export const SPRINT_MESSAGE_TEMPLATES: SprintMessageTemplate[] = [
       "Değerli Velimiz,\n\n*{ogrenci_adi}* öğrencimizin ödeme durumuna ilişkin güncel bilgi aşağıdadır.\n\n" +
       "💳 *Kalan ödeme:* {kalan_odeme}\n📅 *Vade tarihi:* {vade_tarihi}\n🏊 *Şube:* {sube}\n👥 *Grup:* {grup}\n\n" +
       "Ödeme yaptıysanız bu mesajı dikkate almayabilirsiniz. Detaylı bilgi için bize ulaşabilirsiniz.\n\n*SPRİNT YÜZME OKULU*\n0551 896 83 19",
+  },
+  {
+    key: "bank_info",
+    title: "IBAN / Ödeme Bilgileri",
+    icon: "🏦",
+    category: "payment",
+    body:
+      "*SPRİNT YÜZME OKULU | ÖDEME BİLGİLERİ*\n\n" +
+      "Değerli Kursiyerimiz,\n\n" +
+      "Ödemenizi gerçekleştirebilmeniz için banka hesap bilgilerimizi aşağıda paylaşıyoruz.\n\n" +
+      "🏦 *Banka:* VakıfBank\n" +
+      "👤 *Hesap Sahibi:* Nuran Uçar\n" +
+      "💳 *IBAN:* TR14 0001 5001 5800 7357 4815 06\n\n" +
+      "Ödemenizi tamamladıktan sonra ayrıca bir işlem yapmanız gerekmemektedir. Dilerseniz ödeme dekontunuzu bu WhatsApp hattı üzerinden bizimle paylaşabilirsiniz.\n\n" +
+      "Sorularınız için bize her zaman ulaşabilirsiniz.\n\n" +
+      "*SPRİNT YÜZME OKULU*\nBilgilendirme Hattı: 0551 896 83 19",
   },
   {
     key: "lesson_ending",
