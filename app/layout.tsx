@@ -13,6 +13,7 @@ import DashboardHomeEnhancer from "./components/dashboard-home-enhancer";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 import GlobalMobileNav from "./components/global-mobile-nav";
+import AttendanceAutomationCenter from "./components/attendance-automation-center";
 
 export const metadata: Metadata = {
   title: {
@@ -80,6 +81,7 @@ export default function RootLayout({
         <DashboardAttendanceLinks />
         <ModuleNavigationFeedback />
         <SidebarBranchClickFix />
+        <AttendanceAutomationCenter />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
