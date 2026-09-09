@@ -1,7 +1,7 @@
-import Link from "next/link";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
+import FinanceQuickNav from "@/app/components/finance-quick-nav";
 import { requireProfile } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
 
 import KasaClient, {
   type CashPaymentRow,
@@ -16,6 +16,45 @@ type AnyRow = Record<string, any>;
 function toNumber(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function createFinanceAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase finans bağlantısı yapılandırılmamış.");
+  }
+
+  return createAdminClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function getIstanbulTodayBounds() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+
+  // Türkiye kalıcı olarak UTC+03:00 kullanıyor. Kasa günü İstanbul yerel
+  // saatine göre 00:00–24:00 aralığında hesaplanır; Vercel sunucu saatine bağlı kalmaz.
+  const start = new Date(Date.UTC(year, month - 1, day, -3, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, day + 1, -3, 0, 0, 0));
+
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
 }
 
 export default async function CashPage() {
@@ -43,27 +82,46 @@ export default async function CashPage() {
     );
   }
 
-  const supabase = await createClient();
+  let supabase;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  try {
+    // Sayfaya erişim önce requireProfile ile yetkilendirilir. Finans verisi daha
+    // sonra sunucudan service-role ile okunur; RLS yüzünden sessizce boş liste
+    // dönmesi engellenir ve Ödeme Merkezi ile aynı gerçek kayıtlar kullanılır.
+    supabase = createFinanceAdminClient();
+  } catch (error) {
+    return (
+      <main className="operationPage">
+        <header className="operationHeader">
+          <div>
+            <p>SPRİNTOS · FİNANS VE KASA</p>
+            <h1>Günlük Kasa</h1>
+            <span>Günlük tahsilat ve kasa teslim hareketleri.</span>
+          </div>
+        </header>
 
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+        <section className="operationCard">
+          <div className="tableEmpty">
+            Günlük Kasa bağlantısı kurulamadı:{" "}
+            {error instanceof Error ? error.message : "Bilinmeyen hata"}
+          </div>
+        </section>
+      </main>
+    );
+  }
 
-  const [
-    paymentsResult,
-    studentsResult,
-    profilesResult,
-  ] = await Promise.all([
+  const { startIso, endIso } = getIstanbulTodayBounds();
+
+  const [paymentsResult, studentsResult, profilesResult] = await Promise.all([
     supabase
       .from("student_payments")
       .select("*")
       .eq("organization_id", organizationId)
-      .gte("received_at", today.toISOString())
-      .lt("received_at", tomorrow.toISOString())
+      .gte("received_at", startIso)
+      .lt("received_at", endIso)
       .order("received_at", {
         ascending: false,
+        nullsFirst: false,
       }),
 
     supabase
@@ -78,15 +136,10 @@ export default async function CashPage() {
   ]);
 
   const loadError =
-    paymentsResult.error ||
-    studentsResult.error ||
-    profilesResult.error;
+    paymentsResult.error || studentsResult.error || profilesResult.error;
 
   if (loadError) {
-    console.error(
-      "Günlük Kasa yükleme hatası:",
-      loadError
-    );
+    console.error("Günlük Kasa yükleme hatası:", loadError);
 
     return (
       <main className="operationPage">
@@ -94,117 +147,60 @@ export default async function CashPage() {
           <div>
             <p>SPRİNTOS · FİNANS VE KASA</p>
             <h1>Günlük Kasa</h1>
-            <span>
-              Günlük tahsilat ve kasa teslim hareketleri.
-            </span>
+            <span>Günlük tahsilat ve kasa teslim hareketleri.</span>
           </div>
         </header>
 
+        <FinanceQuickNav />
+
         <section className="operationCard">
           <div className="tableEmpty">
-            Günlük Kasa yüklenemedi:{" "}
-            {loadError.message}
+            Günlük Kasa yüklenemedi: {loadError.message}
           </div>
         </section>
       </main>
     );
   }
 
-  const students =
-    (studentsResult.data || []) as AnyRow[];
-
-  const profiles =
-    (profilesResult.data || []) as AnyRow[];
+  const students = (studentsResult.data || []) as AnyRow[];
+  const profiles = (profilesResult.data || []) as AnyRow[];
 
   const studentMap = new Map(
-    students.map((student) => [
-      student.id,
-      student,
-    ])
+    students.map((student) => [student.id, student]),
   );
 
   const profileMap = new Map(
-    profiles.map((userProfile) => [
-      userProfile.id,
-      userProfile,
-    ])
+    profiles.map((userProfile) => [userProfile.id, userProfile]),
   );
 
   const rows: CashPaymentRow[] = (
     (paymentsResult.data || []) as AnyRow[]
   ).map((payment) => {
-    const student =
-      studentMap.get(payment.student_id);
-
-    const receiver =
-      profileMap.get(payment.received_by);
+    const student = studentMap.get(payment.student_id);
+    const receiver = profileMap.get(payment.received_by);
 
     return {
       id: String(payment.id),
-
-      student_id:
-        payment.student_id || null,
-
-      student_number:
-        student?.student_number || null,
-
+      student_id: payment.student_id || null,
+      student_number: student?.student_number || null,
       student_name:
-        `${student?.first_name || ""} ${
-          student?.last_name || ""
-        }`.trim() || "Öğrenci bilgisi yok",
-
-      contact_phone:
-        student?.guardian_phone ||
-        student?.phone ||
-        null,
-
-      amount:
-        toNumber(payment.amount),
-
-      currency:
-        payment.currency || "TRY",
-
-      payment_method:
-        payment.payment_method || null,
-
-      payment_status:
-        payment.payment_status || null,
-
-      description:
-        payment.description || null,
-
-      received_at:
-        payment.received_at || null,
-
-      received_by:
-        payment.received_by || null,
-
-      received_by_name:
-        receiver?.full_name ||
-        receiver?.email ||
-        null,
-
-      cash_handover_status:
-        payment.cash_handover_status ||
-        null,
-
-      cash_handover_requested_at:
-        payment.cash_handover_requested_at ||
-        null,
-
-      cash_handover_approved_by:
-        payment.cash_handover_approved_by ||
-        null,
-
-      cash_handover_approved_at:
-        payment.cash_handover_approved_at ||
-        null,
-
-      cancelled_at:
-        payment.cancelled_at || null,
-
-      cancellation_reason:
-        payment.cancellation_reason || null,
+        `${student?.first_name || ""} ${student?.last_name || ""}`.trim() ||
+        "Öğrenci bilgisi yok",
+      contact_phone: student?.guardian_phone || student?.phone || null,
+      amount: toNumber(payment.amount),
+      currency: payment.currency || "TRY",
+      payment_method: payment.payment_method || null,
+      payment_status: payment.payment_status || null,
+      description: payment.description || null,
+      received_at: payment.received_at || null,
+      received_by: payment.received_by || null,
+      received_by_name: receiver?.full_name || receiver?.email || null,
+      cash_handover_status: payment.cash_handover_status || null,
+      cash_handover_requested_at: payment.cash_handover_requested_at || null,
+      cash_handover_approved_by: payment.cash_handover_approved_by || null,
+      cash_handover_approved_at: payment.cash_handover_approved_at || null,
+      cancelled_at: payment.cancelled_at || null,
+      cancellation_reason: payment.cancellation_reason || null,
     };
   });
 
@@ -213,104 +209,17 @@ export default async function CashPage() {
       <header className="operationHeader">
         <div>
           <p>SPRİNTOS · FİNANS VE KASA</p>
-
           <h1>Günlük Kasa</h1>
-
           <span>
-            Bugün alınan ödemeleri, ödeme yöntemlerini,
-            personeldeki nakdi ve ana kasa teslim durumunu
-            tek ekrandan yönetin.
+            Bugün alınan ödemeleri, ödeme yöntemlerini, personeldeki nakdi ve
+            ana kasa teslim durumunu tek ekrandan yönetin.
           </span>
         </div>
       </header>
 
-      <nav
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-          marginBottom: 18,
-        }}
-      >
-        <Link
-          href="/"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#156ff5",
-            color: "#fff",
-            fontWeight: 800,
-            textDecoration: "none",
-          }}
-        >
-          🏠 Ana Sayfa
-        </Link>
+      <FinanceQuickNav />
 
-        <Link
-          href="/odemeler"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#fff",
-            color: "#10213a",
-            border: "1px solid #dbe5f1",
-            fontWeight: 800,
-            textDecoration: "none",
-          }}
-        >
-          💳 Ödeme Merkezi
-        </Link>
-
-        <Link
-          href="/ogrenciler"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#fff",
-            color: "#10213a",
-            border: "1px solid #dbe5f1",
-            fontWeight: 800,
-            textDecoration: "none",
-          }}
-        >
-          👤 Öğrenciler
-        </Link>
-
-        <Link
-          href="/yoklama"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#fff",
-            color: "#10213a",
-            border: "1px solid #dbe5f1",
-            fontWeight: 800,
-            textDecoration: "none",
-          }}
-        >
-          ✅ Yoklama
-        </Link>
-
-        <Link
-          href="/onay-merkezi"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#fff",
-            color: "#10213a",
-            border: "1px solid #dbe5f1",
-            fontWeight: 800,
-            textDecoration: "none",
-          }}
-        >
-          🛡️ Onay Merkezi
-        </Link>
-      </nav>
-
-      <KasaClient
-        rows={rows}
-        currentProfileId={profile.id}
-      />
+      <KasaClient rows={rows} currentProfileId={profile.id} />
     </main>
   );
 }
