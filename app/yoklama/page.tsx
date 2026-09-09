@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 import AttendanceClient from "./AttendanceClient";
+import "./yoklama-professional.css";
 
 export const dynamic = "force-dynamic";
 
@@ -200,29 +201,27 @@ export default async function AttendancePage({
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "28px",
-        background:
-          "linear-gradient(180deg,#f5f8fc 0%,#eef3f9 100%)",
-        color: "#10213a",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1500,
-          margin: "0 auto",
-        }}
-      >
-        <AttendanceClient
-          groups={groups}
-          schedules={schedules}
-          memberships={membershipsResult.data || []}
-          students={studentsResult.data || []}
-          enrollments={enrollmentsResult.data || []}
-          compensationLessons={compensationResult.data || []}
-        />
+    <main data-attendance-page>
+      <div data-attendance-shell>
+        <header data-attendance-hero>
+          <span data-attendance-kicker>SPRİNTOS · YOKLAMA</span>
+          <h1>Yoklama &amp; Ders Yönetimi</h1>
+          <p>
+            Günlük yoklama alın, ders katılımını takip edin ve kayıt yenileme
+            uyarılarını tek ekrandan yönetin.
+          </p>
+        </header>
+
+        <div data-attendance-client>
+          <AttendanceClient
+            groups={groups}
+            schedules={schedules}
+            memberships={membershipsResult.data || []}
+            students={studentsResult.data || []}
+            enrollments={enrollmentsResult.data || []}
+            compensationLessons={compensationResult.data || []}
+          />
+        </div>
       </div>
     </main>
   );
