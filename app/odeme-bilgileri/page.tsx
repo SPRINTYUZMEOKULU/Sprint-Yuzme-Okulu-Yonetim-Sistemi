@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PaymentInformationPage() {
   await requireProfile(["owner","admin","branch_manager","registration_staff","accounting"]);
-  const template = SPRINT_MESSAGE_TEMPLATE_MAP.iban_payment;
+  const template = SPRINT_MESSAGE_TEMPLATE_MAP.bank_info;
 
   return (
     <main style={{maxWidth:900,margin:"0 auto",padding:"28px 16px 80px"}}>
