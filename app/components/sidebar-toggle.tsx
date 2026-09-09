@@ -15,6 +15,7 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
   "/ogrenciler": [
     { label: "Öğrenci Merkezi", href: "/ogrenciler" },
     { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
+    { label: "Başlayacak Kursiyerler", href: "/baslayacak-kursiyerler" },
     { label: "Kayıt Yenileme Merkezi", href: "/kayit-yenilemeleri" },
     { label: "Aktif Öğrenciler", href: "/ogrenciler?durum=active" },
     { label: "Pasif / Arşiv", href: "/ogrenciler?durum=passive" },
