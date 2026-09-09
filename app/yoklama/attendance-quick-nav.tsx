@@ -5,7 +5,7 @@ import Link from "next/link";
 function triggerLegacy(label: string) {
   const buttons = Array.from(
     document.querySelectorAll<HTMLButtonElement>(
-      "[data-attendance-client] nav[data-legacy-attendance-nav] button"
+      "[data-attendance-client] nav button"
     )
   );
 
