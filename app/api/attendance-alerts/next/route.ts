@@ -1,0 +1,11 @@
+// @ts-nocheck
+import { NextResponse } from "next/server";
+import { requireProfile } from "@/lib/auth/profile";
+import { createClient } from "@/lib/supabase/server";
+export const dynamic="force-dynamic";
+const ROLES=["owner","admin","branch_manager","registration_staff","accounting","coach"] as const;
+function trNow(){const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date());const g=(t:string)=>p.find(x=>x.type===t)?.value||"0";return{date:`${g("year")}-${g("month")}-${g("day")}`,minutes:Number(g("hour"))*60+Number(g("minute"))};}
+function shift(date:string,n:number){const d=new Date(`${date}T12:00:00+03:00`);d.setDate(d.getDate()+n);return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);}
+function wd(date:string){const n=new Date(`${date}T12:00:00+03:00`).getDay();return n===0?7:n;}
+function mins(v:any){const [h,m]=String(v||"00:00").slice(0,5).split(":").map(Number);return(h||0)*60+(m||0);}
+export async function GET(){try{const p=await requireProfile([...ROLES]);if(!p.organization_id)return NextResponse.json({ok:true,next:null});const s=await createClient();const {data,error}=await s.from("lesson_schedules").select("id,group_id,branch_id,weekday,start_time,end_time,is_active").eq("organization_id",p.organization_id).eq("is_active",true);if(error)return NextResponse.json({ok:false,error:error.message},{status:500});const now=trNow();const candidates:any[]=[];for(let offset=0;offset<8;offset++){const date=shift(now.date,offset);for(const row of data||[]){if(Number(row.weekday)!==wd(date))continue;const start=mins(row.start_time);if(offset===0&&start<now.minutes)continue;candidates.push({...row,date,offset,start});}if(candidates.length)break;}candidates.sort((a,b)=>a.offset-b.offset||a.start-b.start);const next=candidates[0]||null;return NextResponse.json({ok:true,next:next?{date:next.date,groupId:next.group_id,scheduleId:next.id,startTime:String(next.start_time||"").slice(0,5),endTime:String(next.end_time||"").slice(0,5)}:null});}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Yaklaşan ders bulunamadı."},{status:500});}}
