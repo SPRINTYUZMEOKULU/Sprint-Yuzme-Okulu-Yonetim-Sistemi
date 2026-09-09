@@ -1,0 +1,12 @@
+.filter{margin:0 0 12px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #d9e5f3;border-radius:16px;box-shadow:0 7px 20px rgba(15,42,76,.04)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.headText{min-width:0}
+.head strong{display:block;color:#173b63;font-size:13px;font-weight:900}
+.head small{display:block;margin-top:2px;color:#7b8da5;font-size:10px;font-weight:700;line-height:1.35}
+.badge{flex:0 0 auto;padding:5px 8px;border-radius:999px;background:#eef5ff;color:#176ee9;font-size:10px;font-weight:900}
+.buttons{display:flex;gap:7px;overflow-x:auto;padding-bottom:1px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.buttons::-webkit-scrollbar{display:none}
+.button{appearance:none;flex:0 0 auto;min-height:38px;padding:8px 12px;border:1px solid #d7e3f0;border-radius:11px;background:#f8fbff;color:#315577;font:inherit;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer;transition:transform .14s ease,box-shadow .14s ease,background .14s ease,border-color .14s ease}
+.button:active{transform:scale(.985)}
+.active{background:#0b6ff4;color:#fff;border-color:#0b6ff4;box-shadow:0 7px 16px rgba(11,111,244,.18)}
+@media(max-width:760px){.filter{padding:10px;border-radius:14px}.head{align-items:flex-start;margin-bottom:8px}.head small{max-width:245px}.button{min-height:36px;padding:7px 10px;font-size:10px}}
