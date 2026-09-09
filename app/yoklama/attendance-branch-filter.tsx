@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import styles from "./attendance-branch-filter.module.css";
 
 export type AttendanceBranchOption = {
   id: string;
@@ -24,7 +25,6 @@ export default function AttendanceBranchFilter({
     if (branchId) params.set("branchId", branchId);
     else params.delete("branchId");
 
-    // Şube değiştiğinde eski grubu/seansı taşımıyoruz.
     params.delete("groupId");
     params.delete("scheduleId");
 
@@ -33,19 +33,21 @@ export default function AttendanceBranchFilter({
   }
 
   return (
-    <section className="attendanceBranchFilter" aria-label="Yoklama şube seçimi">
-      <div className="attendanceBranchFilterHead">
-        <div>
+    <section className={styles.filter} aria-label="Yoklama şube seçimi">
+      <div className={styles.head}>
+        <div className={styles.headText}>
           <strong>Şube Seçimi</strong>
-          <small>İstersen tüm şubeleri gör, istersen tek şubeye geç.</small>
+          <small>Yakın dersler önce gelir. İstersen tek şubeye geçebilirsin.</small>
         </div>
-        <span>{selectedBranchId ? "1 şube" : `${branches.length} şube`}</span>
+        <span className={styles.badge}>
+          {selectedBranchId ? "1 şube" : `${branches.length} şube`}
+        </span>
       </div>
 
-      <div className="attendanceBranchButtons">
+      <div className={styles.buttons}>
         <button
           type="button"
-          className={!selectedBranchId ? "active" : ""}
+          className={`${styles.button} ${!selectedBranchId ? styles.active : ""}`}
           onClick={() => changeBranch("")}
         >
           Tüm Şubeler
@@ -55,7 +57,7 @@ export default function AttendanceBranchFilter({
           <button
             key={branch.id}
             type="button"
-            className={selectedBranchId === branch.id ? "active" : ""}
+            className={`${styles.button} ${selectedBranchId === branch.id ? styles.active : ""}`}
             onClick={() => changeBranch(branch.id)}
           >
             {branch.short_name || branch.name || "Şube"}
