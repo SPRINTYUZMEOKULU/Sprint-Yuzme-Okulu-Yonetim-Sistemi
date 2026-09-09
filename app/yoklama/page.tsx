@@ -8,6 +8,62 @@ import "./yoklama-professional.css";
 
 export const dynamic = "force-dynamic";
 
+function todayWeekdayTR() {
+  const value = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Istanbul",
+    weekday: "short",
+  }).format(new Date());
+
+  const map: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+
+  return map[value] || 1;
+}
+
+function nowMinutesTR() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
+function timeMinutes(value?: string | null) {
+  if (!value) return 24 * 60;
+  const [hour, minute] = value.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function minutesUntilNextLesson(
+  weekday: number | null | undefined,
+  startTime: string | null | undefined,
+  todayWeekday: number,
+  nowMinutes: number
+) {
+  const targetWeekday = Number(weekday || 0);
+  if (targetWeekday < 1 || targetWeekday > 7) return Number.MAX_SAFE_INTEGER;
+
+  let dayOffset = targetWeekday - todayWeekday;
+  if (dayOffset < 0) dayOffset += 7;
+
+  const start = timeMinutes(startTime);
+  if (dayOffset === 0 && start < nowMinutes) dayOffset = 7;
+
+  return dayOffset * 1440 + start - nowMinutes;
+}
+
 export default async function AttendancePage({
   searchParams,
 }: {
@@ -44,6 +100,7 @@ export default async function AttendancePage({
   }
 
   const [
+    branchesResult,
     groupsResult,
     schedulesResult,
     membershipsResult,
@@ -51,6 +108,12 @@ export default async function AttendancePage({
     enrollmentsResult,
     compensationResult,
   ] = await Promise.all([
+    supabase
+      .from("branches")
+      .select("id, name, short_name")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order("name", { ascending: true }),
     supabase
       .from("training_groups")
       .select("id, organization_id, branch_id, name, course_type, capacity, primary_coach_id")
@@ -88,6 +151,7 @@ export default async function AttendancePage({
   ]);
 
   const loadError =
+    branchesResult.error ||
     groupsResult.error ||
     schedulesResult.error ||
     membershipsResult.error ||
@@ -109,30 +173,78 @@ export default async function AttendancePage({
     );
   }
 
-  // Yoklama artık yalnızca "bugünün" gruplarına daraltılmaz.
-  // Böylece tarih geri/ileri alındığında, aylık görünümde ve geçmişte
-  // aynı gerçek grup/seans verileri kullanılmaya devam eder.
-  const groups = [...(groupsResult.data || [])];
+  const branchMap = new Map(
+    (branchesResult.data || []).map((branch) => [
+      branch.id,
+      branch.short_name || branch.name || "Şube",
+    ])
+  );
+
+  const todayWeekday = todayWeekdayTR();
+  const nowMinutes = nowMinutesTR();
   const schedules = [...(schedulesResult.data || [])];
 
-  // Dışarıdan belirli bir grup veya seansla gelinmişse onu ilk sıraya al.
-  // AttendanceClient ilk grubu başlangıç seçimi olarak kullandığı için
-  // mevcut deep-link davranışını bozmadan tek ekranlı akışı koruruz.
-  if (requestedGroupId) {
-    groups.sort((a, b) => {
-      if (a.id === requestedGroupId) return -1;
-      if (b.id === requestedGroupId) return 1;
-      return 0;
-    });
-  }
-
-  if (requestedScheduleId) {
-    schedules.sort((a, b) => {
+  // En yakın gelecek ders önce görünür. Aynı gün içindeki yaklaşan seanslar
+  // geçmiş saatlerden önce gelir; sonra takip eden günler sıralanır.
+  schedules.sort((a, b) => {
+    if (requestedScheduleId) {
       if (a.id === requestedScheduleId) return -1;
       if (b.id === requestedScheduleId) return 1;
-      return 0;
-    });
-  }
+    }
+
+    return (
+      minutesUntilNextLesson(a.weekday, a.start_time, todayWeekday, nowMinutes) -
+      minutesUntilNextLesson(b.weekday, b.start_time, todayWeekday, nowMinutes)
+    );
+  });
+
+  const nearestByGroup = new Map<string, number>();
+  schedules.forEach((schedule) => {
+    if (!schedule.group_id) return;
+    const distance = minutesUntilNextLesson(
+      schedule.weekday,
+      schedule.start_time,
+      todayWeekday,
+      nowMinutes
+    );
+    const current = nearestByGroup.get(schedule.group_id);
+    if (current === undefined || distance < current) {
+      nearestByGroup.set(schedule.group_id, distance);
+    }
+  });
+
+  // Grup seçimini kolaylaştırmak için şube adını grubun başına ekliyoruz.
+  // Böylece tek açılır listede önce şube, ardından gerçek grup/seans adı okunur.
+  const groups = (groupsResult.data || []).map((group) => {
+    const branchName = group.branch_id ? branchMap.get(group.branch_id) : null;
+    const originalName = group.name || "İsimsiz grup";
+
+    return {
+      ...group,
+      name: branchName && !originalName.toLocaleLowerCase("tr-TR").includes(branchName.toLocaleLowerCase("tr-TR"))
+        ? `${branchName} · ${originalName}`
+        : originalName,
+    };
+  });
+
+  groups.sort((a, b) => {
+    if (requestedGroupId) {
+      if (a.id === requestedGroupId) return -1;
+      if (b.id === requestedGroupId) return 1;
+    }
+
+    const aDistance = nearestByGroup.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bDistance = nearestByGroup.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+
+    if (aDistance !== bDistance) return aDistance - bDistance;
+
+    const aBranch = a.branch_id ? branchMap.get(a.branch_id) || "" : "";
+    const bBranch = b.branch_id ? branchMap.get(b.branch_id) || "" : "";
+    const branchCompare = aBranch.localeCompare(bBranch, "tr");
+    if (branchCompare !== 0) return branchCompare;
+
+    return (a.name || "").localeCompare(b.name || "", "tr");
+  });
 
   return (
     <main data-attendance-page>
