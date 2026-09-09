@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
+import AttendanceBranchFilter from "./attendance-branch-filter";
 import AttendanceClient from "./AttendanceClient";
 import "./yoklama-professional.css";
 
@@ -70,6 +71,7 @@ export default async function AttendancePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
+  const requestedBranchId = params.branchId || "";
   const requestedGroupId = params.groupId || "";
   const requestedScheduleId = params.scheduleId || "";
 
@@ -173,8 +175,9 @@ export default async function AttendancePage({
     );
   }
 
+  const branches = branchesResult.data || [];
   const branchMap = new Map(
-    (branchesResult.data || []).map((branch) => [
+    branches.map((branch) => [
       branch.id,
       branch.short_name || branch.name || "Şube",
     ])
@@ -182,10 +185,16 @@ export default async function AttendancePage({
 
   const todayWeekday = todayWeekdayTR();
   const nowMinutes = nowMinutesTR();
-  const schedules = [...(schedulesResult.data || [])];
 
-  // En yakın gelecek ders önce görünür. Aynı gün içindeki yaklaşan seanslar
-  // geçmiş saatlerden önce gelir; sonra takip eden günler sıralanır.
+  let schedules = [...(schedulesResult.data || [])];
+  let rawGroups = [...(groupsResult.data || [])];
+
+  if (requestedBranchId) {
+    schedules = schedules.filter((schedule) => schedule.branch_id === requestedBranchId);
+    rawGroups = rawGroups.filter((group) => group.branch_id === requestedBranchId);
+  }
+
+  // Yaklaşan ders önce: bugünün kalan seansları, sonra yarın ve devam eden günler.
   schedules.sort((a, b) => {
     if (requestedScheduleId) {
       if (a.id === requestedScheduleId) return -1;
@@ -201,29 +210,32 @@ export default async function AttendancePage({
   const nearestByGroup = new Map<string, number>();
   schedules.forEach((schedule) => {
     if (!schedule.group_id) return;
+
     const distance = minutesUntilNextLesson(
       schedule.weekday,
       schedule.start_time,
       todayWeekday,
       nowMinutes
     );
+
     const current = nearestByGroup.get(schedule.group_id);
     if (current === undefined || distance < current) {
       nearestByGroup.set(schedule.group_id, distance);
     }
   });
 
-  // Grup seçimini kolaylaştırmak için şube adını grubun başına ekliyoruz.
-  // Böylece tek açılır listede önce şube, ardından gerçek grup/seans adı okunur.
-  const groups = (groupsResult.data || []).map((group) => {
+  // Açılır listede şube bilgisi kaybolmasın; tek bakışta grup ayırt edilsin.
+  const groups = rawGroups.map((group) => {
     const branchName = group.branch_id ? branchMap.get(group.branch_id) : null;
     const originalName = group.name || "İsimsiz grup";
 
     return {
       ...group,
-      name: branchName && !originalName.toLocaleLowerCase("tr-TR").includes(branchName.toLocaleLowerCase("tr-TR"))
-        ? `${branchName} · ${originalName}`
-        : originalName,
+      name:
+        branchName &&
+        !originalName.toLocaleLowerCase("tr-TR").includes(branchName.toLocaleLowerCase("tr-TR"))
+          ? `${branchName} · ${originalName}`
+          : originalName,
     };
   });
 
@@ -249,6 +261,11 @@ export default async function AttendancePage({
   return (
     <main data-attendance-page>
       <div data-attendance-shell>
+        <AttendanceBranchFilter
+          branches={branches}
+          selectedBranchId={requestedBranchId}
+        />
+
         <div data-attendance-client>
           <AttendanceClient
             groups={groups}
