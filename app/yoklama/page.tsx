@@ -8,6 +8,83 @@ import "./yoklama-professional.css";
 
 export const dynamic = "force-dynamic";
 
+type ScheduleRow = {
+  id: string;
+  group_id?: string | null;
+  weekday?: number | null;
+  start_time?: string | null;
+};
+
+function istanbulNow() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value || "";
+
+  const weekdayMap: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+
+  const hour = Number(part("hour")) || 0;
+  const minute = Number(part("minute")) || 0;
+
+  return {
+    weekday: weekdayMap[part("weekday")] || 1,
+    minutes: hour * 60 + minute,
+  };
+}
+
+function scheduleStartMinutes(value?: string | null) {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return hour * 60 + minute;
+}
+
+function findNearestTodaySchedule(schedules: ScheduleRow[]) {
+  const now = istanbulNow();
+
+  const todaySchedules = schedules
+    .filter(
+      (schedule) =>
+        Number(schedule.weekday) === now.weekday &&
+        !!schedule.group_id
+    )
+    .sort(
+      (a, b) =>
+        scheduleStartMinutes(a.start_time) -
+        scheduleStartMinutes(b.start_time)
+    );
+
+  if (!todaySchedules.length) return null;
+
+  return (
+    todaySchedules.find(
+      (schedule) =>
+        scheduleStartMinutes(schedule.start_time) >= now.minutes
+    ) || todaySchedules[0]
+  );
+}
+
 export default async function AttendancePage({
   searchParams,
 }: {
@@ -184,18 +261,35 @@ export default async function AttendancePage({
   const groups = [...(groupsResult.data || [])];
   const schedules = [...(schedulesResult.data || [])];
 
-  if (requestedGroupId) {
+  /*
+   * Kullanıcı belirli bir grup / seans bağlantısından gelmediyse,
+   * İstanbul saatine göre bugünün ilk yaklaşan dersini öne alıyoruz.
+   * Böylece Yoklama ana sayfadan açıldığında kullanıcı doğrudan sıradaki
+   * seansa gelir; isterse grup ve ders seçicilerinden manuel değiştirebilir.
+   */
+  const nearestSchedule =
+    !requestedGroupId && !requestedScheduleId
+      ? findNearestTodaySchedule(schedules as ScheduleRow[])
+      : null;
+
+  const preferredGroupId =
+    requestedGroupId || nearestSchedule?.group_id || "";
+
+  const preferredScheduleId =
+    requestedScheduleId || nearestSchedule?.id || "";
+
+  if (preferredGroupId) {
     groups.sort((a, b) => {
-      if (a.id === requestedGroupId) return -1;
-      if (b.id === requestedGroupId) return 1;
+      if (a.id === preferredGroupId) return -1;
+      if (b.id === preferredGroupId) return 1;
       return 0;
     });
   }
 
-  if (requestedScheduleId) {
+  if (preferredScheduleId) {
     schedules.sort((a, b) => {
-      if (a.id === requestedScheduleId) return -1;
-      if (b.id === requestedScheduleId) return 1;
+      if (a.id === preferredScheduleId) return -1;
+      if (b.id === preferredScheduleId) return 1;
       return 0;
     });
   }
