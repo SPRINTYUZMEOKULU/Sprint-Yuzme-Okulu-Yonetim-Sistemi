@@ -17,6 +17,7 @@ export type CurrentProfile = {
   full_name: string | null;
   email: string | null;
   role: UserRole;
+  base_role: UserRole;
   organization_id: string | null;
   is_super_user: boolean;
 };
@@ -58,6 +59,20 @@ async function getSuperUserState(userId: string, role: UserRole) {
   );
 }
 
+function resolveEffectiveRole(
+  baseRole: UserRole,
+  isSuperUser: boolean,
+  allowedRoles?: UserRole[]
+): UserRole {
+  if (!isSuperUser || baseRole === "owner") return baseRole;
+
+  // Eğitmen kendi rolünün izinli olduğu bir ekrandaysa eğitmen davranışını koru.
+  if (allowedRoles?.includes(baseRole)) return baseRole;
+
+  // Süper kullanıcı yönetim ekranlarında yönetici gibi davranır.
+  return "admin";
+}
+
 export async function requireProfile(allowedRoles?: UserRole[]): Promise<CurrentProfile> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -72,22 +87,32 @@ export async function requireProfile(allowedRoles?: UserRole[]): Promise<Current
 
   if (error || !profile) redirect("/yetkisiz");
 
-  const role = profile.role as UserRole;
+  const baseRole = profile.role as UserRole;
 
-  if (role === "pending") redirect("/yetkisiz?reason=pending");
+  if (baseRole === "pending") redirect("/yetkisiz?reason=pending");
 
-  const isSuperUser = await getSuperUserState(user.id, role);
+  const isSuperUser = await getSuperUserState(user.id, baseRole);
+  const effectiveRole = resolveEffectiveRole(
+    baseRole,
+    isSuperUser,
+    allowedRoles
+  );
 
   if (
     allowedRoles &&
-    !allowedRoles.includes(role) &&
+    !allowedRoles.includes(baseRole) &&
     !isSuperUser
   ) {
     redirect("/yetkisiz");
   }
 
   return {
-    ...(profile as Omit<CurrentProfile, "is_super_user">),
+    id: String(profile.id),
+    full_name: profile.full_name,
+    email: profile.email,
+    role: effectiveRole,
+    base_role: baseRole,
+    organization_id: profile.organization_id,
     is_super_user: isSuperUser,
   };
 }
