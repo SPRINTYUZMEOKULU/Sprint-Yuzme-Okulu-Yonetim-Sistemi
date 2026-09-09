@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import AttendanceBranchFilter from "./attendance-branch-filter";
 import AttendanceClient from "./AttendanceClient";
+import AttendanceDateFilter from "./attendance-date-filter";
 import "./yoklama-professional.css";
 
 export const dynamic = "force-dynamic";
@@ -264,6 +265,11 @@ export default async function AttendancePage({
         <AttendanceBranchFilter
           branches={branches}
           selectedBranchId={requestedBranchId}
+        />
+
+        <AttendanceDateFilter
+          groups={groups}
+          schedules={schedules}
         />
 
         <div data-attendance-client>
