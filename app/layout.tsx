@@ -12,6 +12,7 @@ import DashboardAttendanceLinks from "./components/dashboard-attendance-links";
 import DashboardHomeEnhancer from "./components/dashboard-home-enhancer";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
+import GlobalMobileNav from "./components/global-mobile-nav";
 
 export const metadata: Metadata = {
   title: {
@@ -71,6 +72,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body>
+        <GlobalMobileNav />
         {children}
 
         <DashboardHomeEnhancer />
