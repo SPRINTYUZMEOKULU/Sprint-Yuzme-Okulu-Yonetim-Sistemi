@@ -5,6 +5,7 @@ import LessonOperationsClient from "./lesson-operations-client";
 import OperationSelectionHydrator from "./operation-selection-hydrator";
 import OperationSelectionCookieGuard from "./operation-selection-cookie-guard";
 import "../dashboard.css";
+import "./lesson-operations-professional.css";
 
 export const dynamic = "force-dynamic";
 
@@ -94,17 +95,26 @@ export default async function LessonOperationsPage({
   const selectedMode = selectedStudentIds.length > 0;
 
   return (
-    <main style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
+    <main className="lessonOpsPage" style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
       <OperationSelectionCookieGuard selectedMode={selectedMode} />
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <Link href="/ogrenciler" style={{ padding: "10px 14px", borderRadius: 10, background: "#fff", border: "1px solid #dbe4f0", textDecoration: "none", color: "#17345c", fontWeight: 800 }}>← Öğrenci Merkezi</Link>
-          <Link href="/yoklama" style={{ padding: "10px 14px", borderRadius: 10, background: "#fff", border: "1px solid #dbe4f0", textDecoration: "none", color: "#17345c", fontWeight: 800 }}>Yoklama</Link>
-          <Link href="/" style={{ padding: "10px 14px", borderRadius: 10, background: "#1671e8", textDecoration: "none", color: "#fff", fontWeight: 800 }}>Ana Sayfa</Link>
-        </div>
+        <nav className="lessonOpsTopNav" aria-label="Ders operasyonu hızlı menü">
+          <Link href="/ogrenciler">
+            <span className="navIcon">←</span>
+            <span>Öğrenci Merkezi</span>
+          </Link>
+          <Link href="/yoklama">
+            <span className="navIcon">✓</span>
+            <span>Yoklama</span>
+          </Link>
+          <Link href="/" className="active">
+            <span className="navIcon">⌂</span>
+            <span>Ana Sayfa</span>
+          </Link>
+        </nav>
 
         {selectedMode ? (
-          <section style={{ marginBottom: 16, padding: 16, borderRadius: 16, border: "1px solid #bfd6f2", background: "#eef6ff", color: "#17345c" }}>
+          <section className="lessonOpsSelectionBanner">
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
               <div>
                 <strong style={{ display: "block", fontSize: 16 }}>{selectedStudentIds.length} seçili kursiyer operasyon merkezine aktarıldı</strong>
