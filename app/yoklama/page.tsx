@@ -36,19 +36,20 @@ export default async function AttendancePage({
     );
   }
 
-  const [branches, groups, schedules, memberships, students, enrollments, compensation, profiles, levels] = await Promise.all([
+  const [branches, groups, schedules, memberships, students, enrollments, compensation, profiles, levels, attendanceHistory] = await Promise.all([
     supabase.from("branches").select("id,name,short_name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("training_groups").select("id,branch_id,level_id,name,course_type,capacity,primary_coach_id,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
     supabase.from("student_group_memberships").select("student_id,group_id,level_id,is_active").eq("organization_id", organizationId).eq("is_active", true),
     supabase.from("students").select("id,first_name,last_name,student_number,phone,guardian_phone,swimming_level,medical_note,general_note").eq("organization_id", organizationId).eq("is_deleted", false).order("first_name"),
-    supabase.from("student_enrollments").select("id,student_id,group_id,total_lessons,used_lessons,planned_end_date,status").eq("organization_id", organizationId).eq("status", "active"),
+    supabase.from("student_enrollments").select("id,student_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status").eq("organization_id", organizationId).eq("status", "active"),
     supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("status", "planned"),
     supabase.from("profiles").select("id,full_name").eq("organization_id", organizationId),
     supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).order("sort_order"),
+    supabase.from("attendance_records").select("student_id,group_id,lesson_date,status").eq("organization_id", organizationId).order("lesson_date", { ascending: false }).limit(3000),
   ]);
 
-  const error = branches.error || groups.error || schedules.error || memberships.error || students.error || enrollments.error || compensation.error || profiles.error || levels.error;
+  const error = branches.error || groups.error || schedules.error || memberships.error || students.error || enrollments.error || compensation.error || profiles.error || levels.error || attendanceHistory.error;
 
   if (error) {
     return (
@@ -72,6 +73,7 @@ export default async function AttendancePage({
       compensationLessons={compensation.data || []}
       profiles={profiles.data || []}
       levels={levels.data || []}
+      attendanceHistory={attendanceHistory.data || []}
       initialBranchId={params.branchId || ""}
     />
   );
