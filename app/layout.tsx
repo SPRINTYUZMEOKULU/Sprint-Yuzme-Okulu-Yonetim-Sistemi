@@ -21,6 +21,7 @@ import StudentPaymentStatusEnhancer from "./components/student-payment-status-en
 import StudentMessageHistoryEnhancer from "./components/student-message-history-enhancer";
 import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
 import FirstLessonStartEnhancer from "./components/first-lesson-start-enhancer";
+import FutureStartStudentEnhancer from "./components/future-start-student-enhancer";
 
 export const metadata: Metadata = {
   title: {
@@ -96,6 +97,7 @@ export default function RootLayout({
         <StudentPaymentStatusEnhancer />
         <StudentMessageHistoryEnhancer />
         <FirstLessonStartEnhancer />
+        <FutureStartStudentEnhancer />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
