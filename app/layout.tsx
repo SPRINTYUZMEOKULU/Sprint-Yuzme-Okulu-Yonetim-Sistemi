@@ -2,6 +2,7 @@ import type {
   Metadata,
   Viewport,
 } from "next";
+import { Suspense } from "react";
 
 import "./globals.css";
 
@@ -30,41 +31,19 @@ export const metadata: Metadata = {
     default: "SprintOS",
     template: "%s | SprintOS",
   },
-
-  description:
-    "Sprint Yüzme Okulu Yönetim Sistemi",
-
+  description: "Sprint Yüzme Okulu Yönetim Sistemi",
   applicationName: "SprintOS",
-
   manifest: "/manifest.webmanifest?v=5",
-
   icons: {
-    icon: [
-      {
-        url: "/icons/icon-512.png?v=5",
-        sizes: "512x512",
-        type: "image/png",
-      },
-    ],
-
-    apple: [
-      {
-        url: "/icons/apple-touch-icon.png?v=5",
-        sizes: "180x180",
-        type: "image/png",
-      },
-    ],
+    icon: [{ url: "/icons/icon-512.png?v=5", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png?v=5", sizes: "180x180", type: "image/png" }],
   },
-
   appleWebApp: {
     capable: true,
     title: "SprintOS",
     statusBarStyle: "default",
   },
-
-  formatDetection: {
-    telephone: false,
-  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -75,11 +54,7 @@ export const viewport: Viewport = {
   themeColor: "#03132f",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="tr">
       <body>
@@ -101,7 +76,9 @@ export default function RootLayout({
         <FirstLessonStartEnhancer />
         <FutureStartStudentEnhancer />
         <PassiveCenterNavEnhancer />
-        <RenewalDecisionCenter />
+        <Suspense fallback={null}>
+          <RenewalDecisionCenter />
+        </Suspense>
         <PWARegister />
         <LiveNotificationCenter />
       </body>
