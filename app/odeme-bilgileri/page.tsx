@@ -28,15 +28,30 @@ export default async function PaymentInformationPage({ searchParams }: { searchP
 
   let studentName = "";
   let recipientPhone = "";
+  let lastSentAt = "";
 
   if (organizationId && studentId) {
     const supabase = await createClient();
-    const { data: student } = await supabase
-      .from("students")
-      .select("id,first_name,last_name,phone,guardian_phone,preferred_group_id")
-      .eq("organization_id", organizationId)
-      .eq("id", studentId)
-      .maybeSingle();
+    const [{ data: student }, { data: latestMessage }] = await Promise.all([
+      supabase
+        .from("students")
+        .select("id,first_name,last_name,phone,guardian_phone,preferred_group_id")
+        .eq("organization_id", organizationId)
+        .eq("id", studentId)
+        .maybeSingle(),
+      supabase
+        .from("message_logs")
+        .select("sent_at,prepared_at,status")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("template_key", "bank_info")
+        .eq("status", "sent")
+        .order("sent_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    lastSentAt = latestMessage?.sent_at || latestMessage?.prepared_at || "";
 
     if (student) {
       studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
@@ -94,8 +109,10 @@ export default async function PaymentInformationPage({ searchParams }: { searchP
           <PaymentActions
             message={message}
             qrUrl="/payment/vakifbank-qr.jpg"
+            studentId={studentId}
             recipientPhone={recipientPhone}
             studentName={studentName}
+            initialLastSentAt={lastSentAt}
           />
 
           <details style={{marginTop:18,paddingTop:16,borderTop:"1px solid #e5edf4"}}>
