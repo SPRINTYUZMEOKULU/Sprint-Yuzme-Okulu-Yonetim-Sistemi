@@ -5,8 +5,10 @@ import { useMemo, useState, type ReactNode } from "react";
 type Props = {
   message: string;
   qrUrl: string;
+  studentId?: string | null;
   recipientPhone?: string | null;
   studentName?: string | null;
+  initialLastSentAt?: string | null;
 };
 
 type IconName = "copy" | "message" | "whatsapp" | "share" | "qr" | "close";
@@ -45,9 +47,31 @@ function normalizePhone(value?: string | null) {
   return digits;
 }
 
-export default function PaymentActions({ message, qrUrl, recipientPhone, studentName }: Props) {
+function formatSentAt(value?: string | null) {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("tr-TR", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Europe/Istanbul",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+export default function PaymentActions({
+  message,
+  qrUrl,
+  studentId,
+  recipientPhone,
+  studentName,
+  initialLastSentAt,
+}: Props) {
   const [status, setStatus] = useState("");
   const [qrOpen, setQrOpen] = useState(false);
+  const [lastSentAt, setLastSentAt] = useState(initialLastSentAt || "");
+  const [savingSend, setSavingSend] = useState(false);
 
   const iban = useMemo(() => {
     const match = message.match(/TR(?:\s*\d){24}/i);
@@ -65,9 +89,42 @@ export default function PaymentActions({ message, qrUrl, recipientPhone, student
     }
   }
 
-  function openWhatsApp() {
+  async function recordSend(method: "whatsapp" | "qr_share") {
+    if (!studentId) return null;
+    setSavingSend(true);
+    try {
+      const response = await fetch("/api/payment-info-sent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId,
+          recipient: whatsappPhone || null,
+          message,
+          method,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Gönderim kaydı oluşturulamadı.");
+      const sentAt = String(data?.sentAt || new Date().toISOString());
+      setLastSentAt(sentAt);
+      return sentAt;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Gönderim kaydı oluşturulamadı.");
+      return null;
+    } finally {
+      setSavingSend(false);
+    }
+  }
+
+  async function openWhatsApp() {
     const base = whatsappPhone ? `https://wa.me/${whatsappPhone}` : "https://wa.me/";
-    window.open(`${base}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    const popup = window.open(`${base}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    if (!popup && whatsappPhone) {
+      setStatus("WhatsApp penceresi açılamadı. Tarayıcı açılır pencereyi engelliyor olabilir.");
+      return;
+    }
+    const sentAt = await recordSend("whatsapp");
+    if (sentAt) setStatus(`Ödeme bilgilendirmesi ${formatSentAt(sentAt)} tarihinde gönderim kaydına işlendi.`);
   }
 
   async function shareQr() {
@@ -83,7 +140,8 @@ export default function PaymentActions({ message, qrUrl, recipientPhone, student
           text: "VakıfBank QR ödeme bilgisi",
           files: [file],
         });
-        setStatus("QR paylaşım ekranı açıldı.");
+        const sentAt = await recordSend("qr_share");
+        setStatus(sentAt ? `QR ödeme bilgilendirmesi ${formatSentAt(sentAt)} tarihinde işlem geçmişine işlendi.` : "QR paylaşım ekranı açıldı.");
         return;
       }
 
@@ -105,6 +163,14 @@ export default function PaymentActions({ message, qrUrl, recipientPhone, student
         </div>
       ) : null}
 
+      {lastSentAt ? (
+        <div className="sentHistory" role="status">
+          <b>Ödeme bilgilendirmesi gönderildi</b>
+          <span>{formatSentAt(lastSentAt)}</span>
+          <small>IBAN / QR bilgilendirmesi Mesajlar ve İşlem Geçmişi kayıtlarına işlendi.</small>
+        </div>
+      ) : null}
+
       <div className="actionGrid">
         <button type="button" onClick={() => iban && copyText(iban, "IBAN kopyalandı.")} disabled={!iban}>
           <span className="icon"><Icon name="copy" /></span><b>IBAN Kopyala</b><small>Tek dokunuşla panoya al</small>
@@ -114,12 +180,12 @@ export default function PaymentActions({ message, qrUrl, recipientPhone, student
           <span className="icon"><Icon name="message" /></span><b>Mesajı Kopyala</b><small>Hazır ödeme metnini al</small>
         </button>
 
-        <button type="button" onClick={openWhatsApp} className="primary">
-          <span className="icon"><Icon name="whatsapp" /></span><b>WhatsApp'ta Gönder</b><small>{whatsappPhone ? "Kursiyer / veli numarasını aç" : "WhatsApp alıcısını seç"}</small>
+        <button type="button" onClick={openWhatsApp} className="primary" disabled={savingSend}>
+          <span className="icon"><Icon name="whatsapp" /></span><b>{savingSend ? "Kaydediliyor…" : "WhatsApp'ta Gönder"}</b><small>{lastSentAt ? `Son gönderim: ${formatSentAt(lastSentAt)}` : whatsappPhone ? "Kursiyer / veli numarasını aç" : "WhatsApp alıcısını seç"}</small>
         </button>
 
-        <button type="button" onClick={shareQr}>
-          <span className="icon"><Icon name="share" /></span><b>QR Görselini Gönder</b><small>Telefon paylaşım ekranını aç</small>
+        <button type="button" onClick={shareQr} disabled={savingSend}>
+          <span className="icon"><Icon name="share" /></span><b>QR Görselini Gönder</b><small>{lastSentAt ? `Son bilgilendirme: ${formatSentAt(lastSentAt)}` : "Telefon paylaşım ekranını aç"}</small>
         </button>
 
         <button type="button" onClick={() => setQrOpen(true)}>
@@ -150,10 +216,14 @@ export default function PaymentActions({ message, qrUrl, recipientPhone, student
         .recipientCard span { font-size:11px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:#6b8195; }
         .recipientCard strong { font-size:14px; }
         .recipientCard small { margin-left:auto; color:#60758a; font-size:11px; }
+        .sentHistory { display:grid; gap:3px; margin-bottom:14px; padding:13px 15px; border:1px solid #b9dfc4; border-radius:14px; background:#eff9f2; color:#205f35; }
+        .sentHistory b { font-size:13px; }
+        .sentHistory span { font-size:12px; font-weight:900; }
+        .sentHistory small { color:#4f765d; font-size:10px; }
         .actionGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
         .actionGrid button { min-height:82px; display:grid; grid-template-columns:42px 1fr; grid-template-rows:auto auto; align-items:center; column-gap:11px; padding:13px 14px; border-radius:15px; border:1px solid #d6e3ee; background:#fff; color:#123a5d; cursor:pointer; text-align:left; font:inherit; box-shadow:0 5px 16px rgba(12,49,89,.05); transition:.16s ease; }
         .actionGrid button:hover { transform:translateY(-1px); border-color:#b8cedf; }
-        .actionGrid button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+        .actionGrid button:disabled { opacity:.55; cursor:not-allowed; transform:none; }
         .icon { grid-row:1 / span 2; display:grid; place-items:center; width:42px; height:42px; border-radius:12px; background:#edf5fb; color:#0a5da8; }
         .actionGrid b { font-size:13px; line-height:1.2; }
         .actionGrid small { margin-top:3px; font-size:10px; line-height:1.25; color:#70859a; }
