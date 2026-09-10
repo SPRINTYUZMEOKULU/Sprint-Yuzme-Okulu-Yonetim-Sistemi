@@ -59,8 +59,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="tr">
       <body>
         <WhatsAppSafeOpen />
-        <GlobalMobileNav />
-        <GlobalDesktopNav />
+        <Suspense fallback={null}>
+          <GlobalMobileNav />
+          <GlobalDesktopNav />
+        </Suspense>
         {children}
 
         <DashboardHomeEnhancer />
