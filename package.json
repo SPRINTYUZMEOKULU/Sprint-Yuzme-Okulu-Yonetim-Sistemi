@@ -17,7 +17,8 @@
     "next": "15.5.18",
     "react": "19.0.6",
     "react-dom": "19.0.6",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
