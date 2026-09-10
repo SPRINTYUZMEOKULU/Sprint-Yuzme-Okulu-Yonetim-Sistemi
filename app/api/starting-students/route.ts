@@ -24,11 +24,18 @@ function addDays(date:string,days:number){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
 }
 
+function daysBetween(from:string,to:string){
+  const a=new Date(`${from}T12:00:00+03:00`).getTime();
+  const b=new Date(`${to}T12:00:00+03:00`).getTime();
+  if(!Number.isFinite(a)||!Number.isFinite(b))return 0;
+  return Math.max(0,Math.round((b-a)/86400000));
+}
+
 export async function GET(){
   try{
     const profile=await requireProfile([...ROLES]);
     const organizationId=profile.organization_id;
-    if(!organizationId)return NextResponse.json({ok:true,count:0,students:[]});
+    if(!organizationId)return NextResponse.json({ok:true,count:0,waitingToStart:0,waitingFirstAttendance:0,students:[]});
     const supabase=await createClient();
 
     const [studentsResult,enrollmentsResult,attendanceResult,groupsResult,branchesResult,schedulesResult]=await Promise.all([
@@ -71,7 +78,9 @@ export async function GET(){
       if(!enrollment)return [];
       const group=groupMap.get(String(enrollment.group_id||""));
       const branchId=String(group?.branch_id||enrollment.branch_id||"");
-      const next=nextLesson(String(enrollment.group_id||""),enrollment.start_date);
+      const startDate=enrollment.start_date||null;
+      const phase=startDate&&startDate>today?"waiting_start":"waiting_first_attendance";
+      const next=nextLesson(String(enrollment.group_id||""),startDate);
       return [{
         id:student.id,
         name:`${student.first_name||""} ${student.last_name||""}`.trim(),
@@ -79,18 +88,23 @@ export async function GET(){
         groupId:enrollment.group_id||null,
         groupName:group?.name||"Grup bilgisi yok",
         branchName:branchMap.get(branchId)||"Şube bilgisi yok",
-        startDate:enrollment.start_date||null,
+        startDate,
+        phase,
+        daysUntilStart:startDate&&startDate>today?daysBetween(today,startDate):0,
         nextLesson:next,
         phone:student.guardian_phone||student.phone||null,
         guardianName:student.guardian_name||null,
       }];
     }).sort((a:any,b:any)=>{
+      if(a.phase!==b.phase)return a.phase==="waiting_first_attendance"?-1:1;
       const ad=a.nextLesson?.date||"9999-12-31"; const bd=b.nextLesson?.date||"9999-12-31";
       if(ad!==bd)return ad.localeCompare(bd);
       return String(a.nextLesson?.startTime||"").localeCompare(String(b.nextLesson?.startTime||""));
     });
 
-    return NextResponse.json({ok:true,count:students.length,students});
+    const waitingToStart=students.filter((s:any)=>s.phase==="waiting_start").length;
+    const waitingFirstAttendance=students.filter((s:any)=>s.phase==="waiting_first_attendance").length;
+    return NextResponse.json({ok:true,count:students.length,waitingToStart,waitingFirstAttendance,students});
   }catch(error){
     return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Başlayacak kursiyerler yüklenemedi."},{status:500});
   }
