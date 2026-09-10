@@ -4,6 +4,7 @@ import LessonOperationCommandAction from "./lesson-operation-command-action";
 import StudentCardInsightsEnhancer from "./student-card-insights-enhancer";
 import StartingStudentsPanel from "./starting-students-panel";
 import ImportedStudentBadgeEnhancer from "./imported-student-badge-enhancer";
+import DataCorrectionEntry from "./data-correction-entry";
 import "./students-professional.css";
 
 export default function StudentsLayout({ children }: { children: ReactNode }) {
@@ -11,6 +12,7 @@ export default function StudentsLayout({ children }: { children: ReactNode }) {
     <>
       <DefaultStudentSort />
       <StartingStudentsPanel />
+      <DataCorrectionEntry />
       {children}
       <LessonOperationCommandAction />
       <StudentCardInsightsEnhancer />
