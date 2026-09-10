@@ -16,6 +16,7 @@ import GlobalMobileNav from "./components/global-mobile-nav";
 import AttendanceAutomationCenter from "./components/attendance-automation-center";
 import PaymentInfoShortcut from "./components/payment-info-shortcut";
 import StudentPaymentStatusEnhancer from "./components/student-payment-status-enhancer";
+import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
 
 export const metadata: Metadata = {
   title: {
@@ -75,6 +76,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body>
+        <WhatsAppSafeOpen />
         <GlobalMobileNav />
         {children}
 
