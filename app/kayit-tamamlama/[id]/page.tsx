@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
 import RegistrationWizard from "./registration-wizard";
+import RegistrationMessageAutoSync from "./registration-message-auto-sync";
 import LegacyTransferControls from "./legacy-transfer-controls";
 import "./registration-completion.css";
 
@@ -346,6 +347,8 @@ export default async function RegistrationCompletionPage({
           {query.legacy_compensation_added} adet aktarım telafisi öğrenciye eklendi.
         </div>
       ) : null}
+
+      <RegistrationMessageAutoSync />
 
       <RegistrationWizard
         student={student}
