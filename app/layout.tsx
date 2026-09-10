@@ -22,6 +22,7 @@ import StudentMessageHistoryEnhancer from "./components/student-message-history-
 import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
 import FirstLessonStartEnhancer from "./components/first-lesson-start-enhancer";
 import FutureStartStudentEnhancer from "./components/future-start-student-enhancer";
+import PassiveCenterNavEnhancer from "./components/passive-center-nav-enhancer";
 
 export const metadata: Metadata = {
   title: {
@@ -98,6 +99,7 @@ export default function RootLayout({
         <StudentMessageHistoryEnhancer />
         <FirstLessonStartEnhancer />
         <FutureStartStudentEnhancer />
+        <PassiveCenterNavEnhancer />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
