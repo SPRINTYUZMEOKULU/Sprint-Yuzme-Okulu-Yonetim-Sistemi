@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import SessionAttendanceClient from "./session-attendance-client";
 import "./session-attendance.css";
 import "./session-attendance-nav.css";
+import "./session-attendance-alerts.css";
 
 export const dynamic = "force-dynamic";
 
@@ -37,19 +38,7 @@ export default async function AttendancePage({
     );
   }
 
-  const [
-    branches,
-    groups,
-    schedules,
-    memberships,
-    students,
-    enrollments,
-    compensation,
-    profiles,
-    levels,
-    attendanceHistory,
-    staffAssignments,
-  ] = await Promise.all([
+  const [branches,groups,schedules,memberships,students,enrollments,compensation,profiles,levels,attendanceHistory,staffAssignments] = await Promise.all([
     supabase.from("branches").select("id,name,short_name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("training_groups").select("id,branch_id,level_id,name,course_type,capacity,primary_coach_id,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
@@ -63,18 +52,13 @@ export default async function AttendancePage({
     supabase.from("lesson_staff_assignments").select("schedule_id,group_id,coach_id,sort_order,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
   ]);
 
-  const error =
-    branches.error || groups.error || schedules.error || memberships.error || students.error ||
-    enrollments.error || compensation.error || profiles.error || levels.error ||
-    attendanceHistory.error || staffAssignments.error;
+  const error = branches.error || groups.error || schedules.error || memberships.error || students.error || enrollments.error || compensation.error || profiles.error || levels.error || attendanceHistory.error || staffAssignments.error;
 
   if (error) {
     return (
       <main style={{ minHeight: "100vh", padding: 32, background: "#f4f7fb", color: "#10213a" }}>
         <h1>Yoklama</h1>
-        <div style={{ marginTop: 18, padding: 18, background: "#fff", border: "1px solid #fecaca", borderRadius: 14, color: "#991b1b" }}>
-          Veriler yüklenemedi: {error.message}
-        </div>
+        <div style={{ marginTop: 18, padding: 18, background: "#fff", border: "1px solid #fecaca", borderRadius: 14, color: "#991b1b" }}>Veriler yüklenemedi: {error.message}</div>
       </main>
     );
   }
@@ -82,20 +66,11 @@ export default async function AttendancePage({
   return (
     <>
       <nav className="saTopNav" aria-label="Yoklama hızlı erişim">
-        <Link href="/operasyon-plani" className="saTopNavItem">
-          <span className="saTopNavIcon">←</span><span><b>Geri</b><small>Operasyon Planı</small></span>
-        </Link>
-        <Link href="/yoklama" className="saTopNavItem active">
-          <span className="saTopNavIcon">✓</span><span><b>Bugün</b><small>Günlük Yoklama</small></span>
-        </Link>
-        <Link href="/raporlar" className="saTopNavItem">
-          <span className="saTopNavIcon">▦</span><span><b>Tüm Ayı Gör</b><small>Aylık Yoklama</small></span>
-        </Link>
-        <Link href="/raporlar" className="saTopNavItem">
-          <span className="saTopNavIcon">↶</span><span><b>Geçmiş</b><small>Ders Kayıtları</small></span>
-        </Link>
+        <Link href="/operasyon-plani" className="saTopNavItem"><span className="saTopNavIcon">←</span><span><b>Geri</b><small>Operasyon Planı</small></span></Link>
+        <Link href="/yoklama" className="saTopNavItem active"><span className="saTopNavIcon">✓</span><span><b>Bugün</b><small>Günlük Yoklama</small></span></Link>
+        <Link href="/raporlar" className="saTopNavItem"><span className="saTopNavIcon">▦</span><span><b>Tüm Ayı Gör</b><small>Aylık Yoklama</small></span></Link>
+        <Link href="/raporlar" className="saTopNavItem"><span className="saTopNavIcon">↶</span><span><b>Geçmiş</b><small>Ders Kayıtları</small></span></Link>
       </nav>
-
       <SessionAttendanceClient
         branches={branches.data || []}
         groups={groups.data || []}
