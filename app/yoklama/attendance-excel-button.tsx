@@ -2,10 +2,13 @@
 
 type ExportRow = {
   date: string;
+  time?: string;
   student: string;
   branch: string;
   group: string;
   status: string;
+  note?: string;
+  renewal?: string;
 };
 
 type Props = {
@@ -14,16 +17,16 @@ type Props = {
   label?: string;
 };
 
-function csvCell(value: string) {
+function csvCell(value?: string) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-export default function AttendanceExcelButton({ rows, fileName, label = "Excel'e Aktar" }: Props) {
+export default function AttendanceExcelButton({ rows, fileName, label = "Excel Raporu" }: Props) {
   function download() {
-    const header = ["Tarih", "Öğrenci", "Şube", "Grup", "Durum"];
+    const header = ["Tarih", "Saat", "Öğrenci", "Şube", "Grup", "Durum", "Antrenör Notu", "Kayıt Yenileme"];
     const lines = [
       header.map(csvCell).join(";"),
-      ...rows.map((row) => [row.date, row.student, row.branch, row.group, row.status].map(csvCell).join(";")),
+      ...rows.map((row) => [row.date, row.time, row.student, row.branch, row.group, row.status, row.note, row.renewal].map(csvCell).join(";")),
     ];
     const blob = new Blob(["\ufeff", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -37,7 +40,7 @@ export default function AttendanceExcelButton({ rows, fileName, label = "Excel'e
   }
 
   return (
-    <button type="button" className="ahExcelButton" onClick={download} title="Excel ile açılabilen yoklama dosyasını indir">
+    <button type="button" className="ahExcelButton" onClick={download} title="Filtrelenmiş yoklama raporunu Excel ile açılabilen yatay tablo olarak indir">
       <span aria-hidden="true">▦</span>
       {label}
     </button>
