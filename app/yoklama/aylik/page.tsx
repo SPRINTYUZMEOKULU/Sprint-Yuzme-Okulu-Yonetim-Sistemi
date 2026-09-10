@@ -3,8 +3,10 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import AttendancePrintButton from "../print-button";
 import AttendanceExcelButton from "../attendance-excel-button";
+import HistoricalAttendancePanel from "./historical-attendance-panel";
 import "../history.css";
 import "../history-polish.css";
+import "./historical-attendance-panel.css";
 
 export const dynamic="force-dynamic";
 const tr=(v:string)=>new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${v}T12:00:00`));
@@ -58,6 +60,8 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  return <main className="ahRoot">
   <header className="ahHead"><div><small>SPRINTOS · YOKLAMA RAPORLARI</small><h1>{reportTitle}</h1><p>Şube, saat ve ay bazında yoklama; antrenör notları ve kayıt yenileme hareketleri tek raporda.</p></div><div className="ahHeadActions"><AttendanceExcelButton rows={exportRows} fileName={fileName} label="Excel Raporu"/><AttendancePrintButton label="Yazdır / PDF"/></div></header>
   <nav className="ahTabs" aria-label="Yoklama görünümü"><Link href="/yoklama">Günlük Yoklama</Link><Link className="active" href={`/yoklama/aylik?month=${month}${branchId?`&branchId=${branchId}`:""}`}>Tüm Ay</Link><Link href="/yoklama/gecmis">Geçmiş Kayıtlar</Link></nav>
+
+  <HistoricalAttendancePanel month={month}/>
 
   <form className="ahFilter ahReportFilter">
    <label>Ay<input type="month" name="month" defaultValue={month}/></label>
