@@ -19,7 +19,7 @@ const SEEN_KEY = "sprintos-live-notification-seen";
 function readSeen() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
-    return new Set<string>(Array.isArray(parsed) ? parsed.slice(-200) : []);
+    return new Set<string>(Array.isArray(parsed) ? parsed.slice(-300) : []);
   } catch {
     return new Set<string>();
   }
@@ -27,12 +27,16 @@ function readSeen() {
 
 function saveSeen(seen: Set<string>) {
   try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(seen).slice(-200)));
+    localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(seen).slice(-300)));
   } catch {}
 }
 
 function logicalKey(item: LiveNotification) {
-  return item.dedupeKey || item.id;
+  if (item.dedupeKey) return item.dedupeKey;
+  if (item.eventKey === "legacy_transfer_completed" || item.title === "Aktarılan öğrenci kaydı tamamlandı") {
+    return `legacy-transfer:${item.targetPath || item.body}`;
+  }
+  return item.id;
 }
 
 export default function LiveNotificationCenter() {
@@ -64,13 +68,7 @@ export default function LiveNotificationCenter() {
   }, []);
 
   const check = useCallback(async () => {
-    if (
-      checkingRef.current ||
-      currentRef.current ||
-      document.visibilityState !== "visible"
-    ) {
-      return;
-    }
+    if (checkingRef.current || currentRef.current || document.visibilityState !== "visible") return;
 
     checkingRef.current = true;
     try {
@@ -105,7 +103,6 @@ export default function LiveNotificationCenter() {
         } catch {}
       }
     } catch {
-      // Oturum açılmamış sayfalarda sessizce tekrar denenir.
     } finally {
       checkingRef.current = false;
     }
@@ -132,18 +129,17 @@ export default function LiveNotificationCenter() {
     if (closing || navigating) return;
     setClosing(true);
     rememberHandled(logicalKey(current));
-    await markRead(current.id);
     currentRef.current = null;
     setCurrent(null);
     setClosing(false);
-    window.setTimeout(() => void check(), 100);
+    void markRead(current.id);
   };
 
   const go = async () => {
     if (navigating || closing) return;
     setNavigating(true);
     rememberHandled(logicalKey(current));
-    await markRead(current.id);
+    void markRead(current.id);
     window.location.assign(current.targetPath || "/bildirimler");
   };
 
@@ -159,31 +155,15 @@ export default function LiveNotificationCenter() {
         <strong>{current.title}</strong>
         <p>{current.body}</p>
         <div className="liveNotificationActions">
-          <button
-            type="button"
-            className="open"
-            disabled={navigating || closing}
-            onClick={go}
-          >
+          <button type="button" className="open" disabled={navigating || closing} onClick={go}>
             {navigating ? "İşleme gidiliyor…" : "İşleme Git"}
           </button>
-          <button
-            type="button"
-            className="dismiss"
-            disabled={navigating || closing}
-            onClick={close}
-          >
+          <button type="button" className="dismiss" disabled={navigating || closing} onClick={close}>
             {closing ? "Kapatılıyor…" : "Kapat"}
           </button>
         </div>
       </div>
-      <button
-        type="button"
-        className="x"
-        aria-label="Bildirimi kapat"
-        disabled={navigating || closing}
-        onClick={close}
-      >×</button>
+      <button type="button" className="x" aria-label="Bildirimi kapat" disabled={navigating || closing} onClick={close}>×</button>
       <style jsx>{`
         .liveNotificationToast{position:fixed;right:18px;bottom:18px;z-index:99999;width:min(430px,calc(100vw - 28px));display:flex;gap:12px;padding:16px;border:1px solid #cfdbea;border-radius:18px;background:#fff;box-shadow:0 22px 60px rgba(7,31,63,.24);color:#14304d;pointer-events:auto;touch-action:manipulation}
         .liveNotificationToast.success{border-color:#b8dfc9}.liveNotificationToast.warning{border-color:#f0d08b}.liveNotificationToast.error,.liveNotificationToast.critical{border-color:#efb7b7}
