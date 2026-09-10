@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import SessionAttendanceClient from "./session-attendance-client";
 import "./session-attendance.css";
+import "./session-attendance-nav.css";
 
 export const dynamic = "force-dynamic";
 
@@ -86,14 +87,6 @@ export default async function AttendancePage({
     );
   }
 
-  /*
-   * Operasyon Planı aynı seans/gruba birden fazla eğitmen atayabiliyor.
-   * SessionAttendanceClient zaten aynı grup+saatteki schedule satırlarının
-   * coach_id değerlerini tek eğitmen listesinde birleştiriyor. Bu nedenle
-   * lesson_staff_assignments kayıtlarını yalnızca görünüm amaçlı sanal
-   * schedule satırları olarak ekliyoruz. İlk gerçek schedule satırı aynen
-   * korunduğu için yoklama kayıt anahtarı ve saveAttendance akışı değişmez.
-   */
   const baseSchedules = schedules.data || [];
   const scheduleById = new Map(baseSchedules.map((item) => [item.id, item]));
   const assignmentSchedules = (staffAssignments.data || [])
