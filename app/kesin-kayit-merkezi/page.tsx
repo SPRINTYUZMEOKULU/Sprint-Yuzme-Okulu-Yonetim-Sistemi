@@ -1,7 +1,9 @@
 import Link from "next/link";
+import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import RegistrationCenterFeedback from "./registration-center-feedback";
+import { deactivateRegistrationCandidate } from "./actions";
 import "../dashboard.css";
 import "./registration-center-professional.css";
 
@@ -30,11 +32,7 @@ export default async function DefinitiveRegistrationCenter({
   const supabase = await createClient();
 
   if (!profile.organization_id) {
-    return (
-      <main className="registrationPage">
-        <section className="registrationCard">Organizasyon bilgisi bulunamadı.</section>
-      </main>
-    );
+    return <><UstGezinme/><main className="registrationPage"><section className="registrationCard">Organizasyon bilgisi bulunamadı.</section></main></>;
   }
 
   const { data, error } = await supabase
@@ -48,17 +46,8 @@ export default async function DefinitiveRegistrationCenter({
   const allRows = data || [];
   const rows = allRows.filter((student: any) => {
     if (!search) return true;
-    const haystack = [
-      student.student_number,
-      student.first_name,
-      student.last_name,
-      student.phone,
-      student.guardian_name,
-      student.guardian_phone,
-    ]
-      .map(text)
-      .join(" ")
-      .toLocaleLowerCase("tr-TR");
+    const haystack = [student.student_number,student.first_name,student.last_name,student.phone,student.guardian_name,student.guardian_phone]
+      .map(text).join(" ").toLocaleLowerCase("tr-TR");
     return haystack.includes(search);
   });
 
@@ -69,100 +58,76 @@ export default async function DefinitiveRegistrationCenter({
   };
 
   return (
-    <main data-registration-center>
-      <RegistrationCenterFeedback />
-      <section data-registration-shell>
-        <header className="registrationHero">
-          <span className="registrationEyebrow">SPRİNTOS · KAYIT OPERASYONU</span>
-          <h1>Kesin Kayıt Merkezi</h1>
-          <p>
-            Ön kayıttan kesin kayda geçecek kursiyerleri bulun, ödeme-vade ve
-            program bilgilerini tamamlayarak kayıt dosyasını açın.
-          </p>
-
-          <div className="registrationCountRow">
-            <span className="registrationCount">
-              Kesin kayıt bekleyen: {allRows.length} öğrenci
-            </span>
-            {search ? (
-              <span className="registrationSearchCount">
-                Arama sonucu: {rows.length} öğrenci
-              </span>
-            ) : null}
-          </div>
-        </header>
-
-        <nav className="registrationNav" aria-label="Kayıt merkezi bağlantıları">
-          <Link data-action-feedback="default" href="/on-kayitlar">
-            Ön Kayıt Merkezi
-          </Link>
-          <Link data-action-feedback="default" href="/ogrenciler">
-            Öğrenci Merkezi
-          </Link>
-        </nav>
-
-        <form method="get" className="registrationSearch">
-          <input
-            name="q"
-            defaultValue={query.q || ""}
-            placeholder="Kursiyer, veli, telefon veya öğrenci numarası ara..."
-          />
-          <button data-action-feedback="default" type="submit">
-            Ara
-          </button>
-        </form>
-
-        {error ? (
-          <div className="registrationError">
-            Kayıt adayları alınamadı: {error.message}
-          </div>
-        ) : null}
-
-        <div className="registrationList">
-          {rows.map((student: any) => {
-            const fullName =
-              `${student.first_name || ""} ${student.last_name || ""}`.trim() ||
-              "İsimsiz Kursiyer";
-            return (
-              <article key={student.id} className="registrationStudentCard">
-                <div className="registrationAvatar" aria-hidden="true">
-                  {initials(student.first_name, student.last_name)}
-                </div>
-
-                <div className="registrationStudentMain">
-                  <div className="registrationStudentTop">
-                    <strong>{fullName}</strong>
-                    <span className="registrationBadge">
-                      {statusLabels[student.status] || student.status}
-                    </span>
-                  </div>
-                  <div className="registrationMeta">
-                    <span>No: {student.student_number || "Henüz yok"}</span>
-                    <span>Veli: {student.guardian_name || "—"}</span>
-                    <span>Tel: {student.guardian_phone || student.phone || "—"}</span>
-                  </div>
-                </div>
-
-                <Link
-                  data-action-feedback="open-registration"
-                  href={`/kayit-tamamlama/${student.id}`}
-                  className="registrationOpen"
-                >
-                  Kesin Kaydı Aç →
-                </Link>
-              </article>
-            );
-          })}
-
-          {!rows.length && !error ? (
-            <div className="registrationEmpty">
-              {search
-                ? "Aramanızla eşleşen kesin kayıt adayı bulunamadı."
-                : "Kesin kayıt bekleyen kursiyer bulunmuyor."}
+    <>
+      <UstGezinme />
+      <main data-registration-center>
+        <RegistrationCenterFeedback />
+        <section data-registration-shell>
+          <header className="registrationHero">
+            <span className="registrationEyebrow">SPRİNTOS · KAYIT OPERASYONU</span>
+            <h1>Kesin Kayıt Merkezi</h1>
+            <p>Ön kayıttan kesin kayda geçecek kursiyerleri bulun, ödeme-vade ve program bilgilerini tamamlayarak kayıt dosyasını açın.</p>
+            <div className="registrationCountRow">
+              <span className="registrationCount">Kesin kayıt bekleyen: {allRows.length} öğrenci</span>
+              {search ? <span className="registrationSearchCount">Arama sonucu: {rows.length} öğrenci</span> : null}
             </div>
-          ) : null}
-        </div>
-      </section>
-    </main>
+          </header>
+
+          <nav className="registrationNav" aria-label="Kayıt merkezi bağlantıları">
+            <Link data-action-feedback="default" href="/on-kayitlar">Ön Kayıt Merkezi</Link>
+            <Link data-action-feedback="default" href="/ogrenciler">Öğrenci Merkezi</Link>
+          </nav>
+
+          <form method="get" className="registrationSearch">
+            <input name="q" defaultValue={query.q || ""} placeholder="Kursiyer, veli, telefon veya öğrenci numarası ara..." />
+            <button data-action-feedback="default" type="submit">Ara</button>
+          </form>
+
+          {query.passive === "1" ? <div className="registrationSuccess"><strong>✓ Kayıt pasife alındı.</strong><span>Kesin kayıt süreci durduruldu; gerekçe ve işlem geçmişi korundu.</span></div> : null}
+          {query.error ? <div className="registrationError">{query.error}</div> : null}
+          {error ? <div className="registrationError">Kayıt adayları alınamadı: {error.message}</div> : null}
+
+          <div className="registrationList">
+            {rows.map((student: any) => {
+              const fullName = `${student.first_name || ""} ${student.last_name || ""}`.trim() || "İsimsiz Kursiyer";
+              return (
+                <article key={student.id} className="registrationStudentCard">
+                  <div className="registrationAvatar" aria-hidden="true">{initials(student.first_name, student.last_name)}</div>
+                  <div className="registrationStudentMain">
+                    <div className="registrationStudentTop">
+                      <strong>{fullName}</strong>
+                      <span className="registrationBadge">{statusLabels[student.status] || student.status}</span>
+                    </div>
+                    <div className="registrationMeta">
+                      <span>No: {student.student_number || "Henüz yok"}</span>
+                      <span>Veli: {student.guardian_name || "—"}</span>
+                      <span>Tel: {student.guardian_phone || student.phone || "—"}</span>
+                    </div>
+                  </div>
+
+                  <div className="registrationActions">
+                    <Link data-action-feedback="open-registration" href={`/kayit-tamamlama/${student.id}`} className="registrationOpen">Kesin Kaydı Aç →</Link>
+                    <details className="passiveDetails">
+                      <summary>Kaydı Pasife Al</summary>
+                      <form action={deactivateRegistrationCandidate} className="passiveForm">
+                        <input type="hidden" name="student_id" value={student.id} />
+                        <label>
+                          <span>Pasife alma gerekçesi</span>
+                          <textarea name="reason" minLength={5} maxLength={500} required placeholder="Örn: Kursiyer kesin kayıttan vazgeçti." />
+                        </label>
+                        <small>Bu işlem kaydı silmez. Kursiyer geçmişi ve denetim kaydı korunur.</small>
+                        <button data-action-feedback="default" type="submit">Gerekçeyle Pasife Al</button>
+                      </form>
+                    </details>
+                  </div>
+                </article>
+              );
+            })}
+
+            {!rows.length && !error ? <div className="registrationEmpty">{search ? "Aramanızla eşleşen kesin kayıt adayı bulunamadı." : "Kesin kayıt bekleyen kursiyer bulunmuyor."}</div> : null}
+          </div>
+        </section>
+      </main>
+    </>
   );
 }
