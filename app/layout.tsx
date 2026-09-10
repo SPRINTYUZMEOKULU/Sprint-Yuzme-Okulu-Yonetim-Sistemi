@@ -19,6 +19,7 @@ import PaymentInfoShortcut from "./components/payment-info-shortcut";
 import StudentPaymentStatusEnhancer from "./components/student-payment-status-enhancer";
 import StudentMessageHistoryEnhancer from "./components/student-message-history-enhancer";
 import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
+import FirstLessonStartEnhancer from "./components/first-lesson-start-enhancer";
 
 export const metadata: Metadata = {
   title: {
@@ -92,6 +93,7 @@ export default function RootLayout({
         <PaymentInfoShortcut />
         <StudentPaymentStatusEnhancer />
         <StudentMessageHistoryEnhancer />
+        <FirstLessonStartEnhancer />
         <PWARegister />
         <LiveNotificationCenter />
       </body>
