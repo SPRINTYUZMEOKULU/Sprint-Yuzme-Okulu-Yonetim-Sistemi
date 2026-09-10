@@ -1,0 +1,15 @@
+@media (max-width: 600px){
+  .saFilterbar{overflow:hidden}
+  .saChips{display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;width:100%;gap:7px;padding:2px 2px 7px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+  .saChips::-webkit-scrollbar{display:none}
+  .saChips button{flex:0 0 auto;white-space:nowrap;min-height:36px;padding:8px 13px;border-radius:999px;scroll-snap-align:start}
+  .saActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;width:100%}
+  .saActions a,.saActions button{display:flex;align-items:center;justify-content:center;min-width:0;width:100%;min-height:42px;padding:7px 5px;box-sizing:border-box;text-align:center;line-height:1.15}
+  .saActions .warn,.saActions .danger{grid-column:1/-1}
+  .saStatus{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .saStatus button{min-height:46px}
+  .saTableWrap tr{gap:10px 10px;padding:14px}
+  .saEnrollment{gap:4px}
+  .saEnrollment b{font-size:12px}
+  .saEnrollment small{font-size:10px!important;line-height:1.35}
+}
