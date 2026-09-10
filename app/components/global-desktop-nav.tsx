@@ -24,6 +24,7 @@ const MANAGEMENT_PREFIXES = [
   "/yoklama",
   "/odemeler",
   "/kasa",
+  "/onay-merkezi",
   "/raporlar",
   "/mesajlar",
   "/ayarlar",
