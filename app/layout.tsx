@@ -10,6 +10,7 @@ import LiveNotificationCenter from "./components/live-notification-center";
 import DashboardLiveOperations from "./components/dashboard-live-operations";
 import DashboardAttendanceLinks from "./components/dashboard-attendance-links";
 import DashboardHomeEnhancer from "./components/dashboard-home-enhancer";
+import DashboardHomeCleanup from "./components/dashboard-home-cleanup";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 import GlobalMobileNav from "./components/global-mobile-nav";
@@ -85,6 +86,7 @@ export default function RootLayout({
         {children}
 
         <DashboardHomeEnhancer />
+        <DashboardHomeCleanup />
         <DashboardLiveOperations />
         <DashboardAttendanceLinks />
         <ModuleNavigationFeedback />
