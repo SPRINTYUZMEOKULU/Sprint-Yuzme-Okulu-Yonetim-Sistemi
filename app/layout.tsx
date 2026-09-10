@@ -24,7 +24,7 @@ import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
 import FirstLessonStartEnhancer from "./components/first-lesson-start-enhancer";
 import FutureStartStudentEnhancer from "./components/future-start-student-enhancer";
 import PassiveCenterNavEnhancer from "./components/passive-center-nav-enhancer";
-import PassiveStudentReactivateEnhancer from "./components/passive-student-reactivate-enhancer";
+import PassiveReactivationWorkflow from "./components/passive-reactivation-workflow";
 import RenewalDecisionCenter from "./components/renewal-decision-center";
 
 export const metadata: Metadata = {
@@ -67,7 +67,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <FirstLessonStartEnhancer />
         <FutureStartStudentEnhancer />
         <PassiveCenterNavEnhancer />
-        <PassiveStudentReactivateEnhancer />
+        <PassiveReactivationWorkflow />
         <Suspense fallback={null}><RenewalDecisionCenter /></Suspense>
         <PWARegister />
         <LiveNotificationCenter />
