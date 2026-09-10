@@ -256,6 +256,7 @@ export default async function RegistrationCompletionPage({
   }));
 
   const fallbackTemplate =
+    "🏊 SPRİNT YÜZME OKULU’NA HOŞ GELDİNİZ\n\n" +
     "Sayın {{veli_adi}},\n\n" +
     "{{ogrenci_adi}} adına Sprint Yüzme Okulu kayıt işleminiz başarıyla tamamlanmıştır.\n\n" +
     "Öğrenci No: {{ogrenci_no}}\n" +
@@ -272,12 +273,16 @@ export default async function RegistrationCompletionPage({
     "{{malzemeler}}\n\n" +
     "Konum: {{konum}}\n" +
     "İletişim: {{telefon}}\n\n" +
-    "Keyifli dersler dileriz.\n" +
-    "Sprint Yüzme Okulu";
+    "Keyifli ve başarılı bir yüzme dönemi dileriz.\n" +
+    "SPRİNT YÜZME OKULU\n" +
+    "Bilgilendirme Hattı: 0551 896 83 19";
 
   const missingElectronicConsent =
     !consent?.rules_accepted || !consent?.health_declaration;
   const canManagerConfirm = profile.role === "owner" || profile.role === "admin";
+  const attendanceHref = activeEnrollment?.group_id && query.scheduleId && query.date
+    ? `/yoklama?groupId=${encodeURIComponent(activeEnrollment.group_id)}&scheduleId=${encodeURIComponent(query.scheduleId)}&date=${encodeURIComponent(query.date)}`
+    : "/yoklama";
 
   return (
     <main className="completionPage">
@@ -306,11 +311,19 @@ export default async function RegistrationCompletionPage({
         </div>
 
         <div className="headerLinks">
+          {query.arrival === "1" ? <Link href={attendanceHref}>✓ Öğrenci Geldi · Yoklama</Link> : null}
+          <Link href={`/ogrenciler/${student.id}?portal=1`}>Portal Şifresi + WhatsApp</Link>
           <Link href="/">Ana Sayfa</Link>
           <Link href={`/on-kayitlar?student=${student.id}`}>Ön Kaydı Gör</Link>
           <Link href="/on-kayitlar">Ön Kayıtlara Dön</Link>
         </div>
       </header>
+
+      {query.arrival === "1" ? (
+        <div className="successBanner">
+          İlk ders karşılama akışı açık. Kayıt mesajını WhatsApp’tan gönderebilir, portal şifresini hazırlayabilir ve öğrenciyi yoklamada “Geldi” olarak işleyebilirsiniz.
+        </div>
+      ) : null}
 
       {query.error ? <div className="errorBanner">{query.error}</div> : null}
 
