@@ -13,6 +13,7 @@ import DashboardHomeEnhancer from "./components/dashboard-home-enhancer";
 import ModuleNavigationFeedback from "./components/module-navigation-feedback";
 import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 import GlobalMobileNav from "./components/global-mobile-nav";
+import GlobalDesktopNav from "./components/global-desktop-nav";
 import AttendanceAutomationCenter from "./components/attendance-automation-center";
 import PaymentInfoShortcut from "./components/payment-info-shortcut";
 import StudentPaymentStatusEnhancer from "./components/student-payment-status-enhancer";
@@ -79,6 +80,7 @@ export default function RootLayout({
       <body>
         <WhatsAppSafeOpen />
         <GlobalMobileNav />
+        <GlobalDesktopNav />
         {children}
 
         <DashboardHomeEnhancer />
