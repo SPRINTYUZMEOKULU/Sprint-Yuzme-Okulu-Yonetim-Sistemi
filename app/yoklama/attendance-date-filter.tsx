@@ -75,15 +75,17 @@ export default function AttendanceDateFilter({
     const root = document.querySelector<HTMLElement>("[data-attendance-client]");
     if (!root) return;
 
+    // TypeScript, iç içe callback'lerde null kontrolünü korumayabildiği için
+    // null olmadığı kesinleşmiş DOM referansını ayrı sabit olarak kullanıyoruz.
+    const attendanceRoot: HTMLElement = root;
     let disposed = false;
 
     function sync() {
       if (disposed) return;
 
-      const dateInput = root.querySelector<HTMLInputElement>('input[type="date"]');
-      const selects = Array.from(root.querySelectorAll<HTMLSelectElement>("select"));
+      const dateInput = attendanceRoot.querySelector<HTMLInputElement>('input[type="date"]');
+      const selects = Array.from(attendanceRoot.querySelectorAll<HTMLSelectElement>("select"));
       const groupSelect = selects[0];
-      const scheduleSelect = selects[1];
 
       if (!dateInput || !groupSelect) return;
 
@@ -121,7 +123,9 @@ export default function AttendanceDateFilter({
       }
 
       window.setTimeout(() => {
-        const currentSelects = Array.from(root.querySelectorAll<HTMLSelectElement>("select"));
+        const currentSelects = Array.from(
+          attendanceRoot.querySelectorAll<HTMLSelectElement>("select")
+        );
         const currentScheduleSelect = currentSelects[1];
         if (!currentScheduleSelect) return;
 
@@ -160,8 +164,8 @@ export default function AttendanceDateFilter({
       }, 0);
     }
 
-    const dateInput = root.querySelector<HTMLInputElement>('input[type="date"]');
-    const selects = Array.from(root.querySelectorAll<HTMLSelectElement>("select"));
+    const dateInput = attendanceRoot.querySelector<HTMLInputElement>('input[type="date"]');
+    const selects = Array.from(attendanceRoot.querySelectorAll<HTMLSelectElement>("select"));
     const groupSelect = selects[0];
 
     const onDateChange = () => window.setTimeout(sync, 0);
@@ -170,10 +174,10 @@ export default function AttendanceDateFilter({
 
     dateInput?.addEventListener("change", onDateChange);
     groupSelect?.addEventListener("change", onGroupChange);
-    root.addEventListener("click", onClick);
+    attendanceRoot.addEventListener("click", onClick);
 
     const observer = new MutationObserver(() => window.setTimeout(sync, 0));
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(attendanceRoot, { childList: true, subtree: true });
 
     sync();
 
@@ -181,7 +185,7 @@ export default function AttendanceDateFilter({
       disposed = true;
       dateInput?.removeEventListener("change", onDateChange);
       groupSelect?.removeEventListener("change", onGroupChange);
-      root.removeEventListener("click", onClick);
+      attendanceRoot.removeEventListener("click", onClick);
       observer.disconnect();
     };
   }, [date, schedules]);
