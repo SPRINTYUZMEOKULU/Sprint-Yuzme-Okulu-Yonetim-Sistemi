@@ -20,6 +20,18 @@ function cleanPhone(value?: string | null) {
   return digits;
 }
 
+function getMessageTitle(templateKey?: string | null) {
+  const key = String(templateKey || "general").toLocaleLowerCase("tr-TR");
+  if (key.includes("payment") || key.includes("odeme") || key.includes("bank") || key.includes("iban")) return "Ödeme bilgilendirmesi gönderildi";
+  if (key.includes("renew") || key.includes("yenile")) return "Kayıt yenileme mesajı gönderildi";
+  if (key.includes("welcome") || key.includes("hosgeld")) return "Hoş geldiniz mesajı gönderildi";
+  if (key.includes("password") || key.includes("portal") || key.includes("sifre")) return "Portal giriş bilgileri gönderildi";
+  if (key.includes("compensation") || key.includes("telafi")) return "Telafi bilgilendirmesi gönderildi";
+  if (key.includes("schedule") || key.includes("seans") || key.includes("program")) return "Program bilgilendirmesi gönderildi";
+  if (key.includes("branch") || key.includes("sube") || key.includes("group") || key.includes("grup")) return "Grup / şube bilgilendirmesi gönderildi";
+  return "Akıllı mesaj gönderildi";
+}
+
 async function graphSend(options: {
   phoneNumberId: string;
   token: string;
@@ -77,6 +89,8 @@ export async function POST(request: Request) {
     mediaUrl?: string | null;
   } | null;
 
+  const templateKey = String(body?.templateKey || "general");
+  const messageTitle = getMessageTitle(templateKey);
   const messages = Array.isArray(body?.messages) ? body!.messages!.slice(0, MAX_RECIPIENTS) : [];
   const mediaUrl = typeof body?.mediaUrl === "string" && /^https:\/\//i.test(body.mediaUrl.trim())
     ? body.mediaUrl.trim()
@@ -167,6 +181,7 @@ export async function POST(request: Request) {
 
       const providerMessageId = (textResult.data as any)?.messages?.[0]?.id || null;
       const error = textResult.ok ? undefined : String((textResult.data as any)?.error?.message || "Mesaj gönderilemedi.");
+      const sentAt = new Date().toISOString();
 
       results.push({
         studentId: item.studentId,
@@ -177,44 +192,114 @@ export async function POST(request: Request) {
         error,
       });
 
-      await supabase.from("message_logs").insert({
-        organization_id: organizationId,
-        student_id: item.studentId,
-        template_key: body?.templateKey || "general",
-        channel: "whatsapp",
-        recipient: item.recipient,
-        subject: "Hazır Mesajlar / Toplu İletişim",
-        message_body: item.message,
-        status: textResult.ok ? "sent" : "failed",
-        prepared_by: profile.id,
-        metadata: {
-          provider: "meta_whatsapp_cloud_api",
-          provider_message_id: providerMessageId,
-          media_url: mediaUrl,
-          http_status: textResult.status,
-          error: error || null,
-        },
-      });
+      const status = textResult.ok ? "sent" : "failed";
+      const metadata = {
+        source: "smart_ready_messages",
+        provider: "meta_whatsapp_cloud_api",
+        provider_message_id: providerMessageId,
+        media_url: mediaUrl,
+        http_status: textResult.status,
+        error: error || null,
+        template_key: templateKey,
+      };
+
+      await Promise.all([
+        supabase.from("message_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          template_key: templateKey,
+          channel: "whatsapp",
+          recipient: item.recipient,
+          subject: messageTitle,
+          message_body: item.message,
+          status,
+          prepared_by: profile.id,
+          sent_by: textResult.ok ? profile.id : null,
+          prepared_at: sentAt,
+          sent_at: textResult.ok ? sentAt : null,
+          metadata,
+        }),
+        supabase.from("student_contact_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          contact_type: templateKey || "smart_message",
+          channel: "whatsapp",
+          recipient_phone: item.recipient,
+          message_text: item.message,
+          status,
+          handled_by: profile.id,
+          prepared_at: sentAt,
+          sent_at: textResult.ok ? sentAt : null,
+          confirmed_at: textResult.ok ? sentAt : null,
+        }),
+        supabase.from("student_activity_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          activity_type: textResult.ok ? "smart_message_sent" : "smart_message_failed",
+          title: textResult.ok ? messageTitle : "Akıllı mesaj gönderilemedi",
+          description: textResult.ok
+            ? `WhatsApp üzerinden ${messageTitle.toLocaleLowerCase("tr-TR")}.`
+            : `WhatsApp mesajı gönderilemedi${error ? `: ${error}` : "."}`,
+          new_value: {
+            channel: "whatsapp",
+            template_key: templateKey,
+            recipient: item.recipient,
+            sent_at: textResult.ok ? sentAt : null,
+            provider_message_id: providerMessageId,
+            status,
+          },
+          source_type: "smart_ready_messages",
+          source_id: providerMessageId || item.studentId,
+          performed_by: profile.id,
+          performed_at: sentAt,
+        }),
+      ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Beklenmeyen WhatsApp API hatası.";
+      const failedAt = new Date().toISOString();
       results.push({
         studentId: item.studentId,
         recipient: item.recipient,
         ok: false,
         error: message,
       });
-      await supabase.from("message_logs").insert({
-        organization_id: organizationId,
-        student_id: item.studentId,
-        template_key: body?.templateKey || "general",
-        channel: "whatsapp",
-        recipient: item.recipient,
-        subject: "Hazır Mesajlar / Toplu İletişim",
-        message_body: item.message,
-        status: "failed",
-        prepared_by: profile.id,
-        metadata: { provider:"meta_whatsapp_cloud_api", media_url:mediaUrl, error:message },
-      });
+      await Promise.all([
+        supabase.from("message_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          template_key: templateKey,
+          channel: "whatsapp",
+          recipient: item.recipient,
+          subject: "Akıllı mesaj gönderilemedi",
+          message_body: item.message,
+          status: "failed",
+          prepared_by: profile.id,
+          prepared_at: failedAt,
+          metadata: { source:"smart_ready_messages", provider:"meta_whatsapp_cloud_api", media_url:mediaUrl, error:message },
+        }),
+        supabase.from("student_contact_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          contact_type: templateKey || "smart_message",
+          channel: "whatsapp",
+          recipient_phone: item.recipient,
+          message_text: item.message,
+          status: "failed",
+          handled_by: profile.id,
+          prepared_at: failedAt,
+        }),
+        supabase.from("student_activity_logs").insert({
+          organization_id: organizationId,
+          student_id: item.studentId,
+          activity_type: "smart_message_failed",
+          title: "Akıllı mesaj gönderilemedi",
+          description: message,
+          source_type: "smart_ready_messages",
+          source_id: item.studentId,
+          performed_by: profile.id,
+          performed_at: failedAt,
+        }),
+      ]);
     }
   }
 
@@ -233,7 +318,7 @@ export async function POST(request: Request) {
         ? `${sent} WhatsApp mesajı başarıyla gönderildi.`
         : `${sent} mesaj gönderildi, ${failed} mesaj başarısız${rejectedCount ? `, ${rejectedCount} alıcı güvenlik doğrulamasından geçmedi` : ""}.${firstFailure ? ` İlk hata: ${firstFailure}` : ""}`,
     results,
-    templateKey: body?.templateKey || null,
+    templateKey,
     performedBy: profile.id,
   }, { status: sent > 0 ? 200 : 422 });
 }
