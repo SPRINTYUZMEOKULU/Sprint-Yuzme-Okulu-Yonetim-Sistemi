@@ -6,6 +6,7 @@ import AttendanceExcelButton from "../attendance-excel-button";
 import HistoricalAttendancePanel from "./historical-attendance-panel";
 import "../history.css";
 import "../history-polish.css";
+import "../session-attendance-nav.css";
 import "./historical-attendance-panel.css";
 
 export const dynamic="force-dynamic";
@@ -14,6 +15,7 @@ const trTime=(v?:string|null)=>v?.slice(0,5)||"—";
 const monthLabel=(v:string)=>new Intl.DateTimeFormat("tr-TR",{month:"long",year:"numeric"}).format(new Date(`${v}-01T12:00:00`));
 const statusLabel=(status?:string|null)=>status==="present"?"Katıldı":status==="absent"?"Katılmadı":status==="excused"?"İzinli":status==="compensation"?"Telafi":"Belirsiz";
 const safeSlug=(v:string)=>v.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/ı/g,"i").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+const Icon=({name}:{name:"back"|"today"|"month"|"history"})=>{const common={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.9,strokeLinecap:"round" as const,strokeLinejoin:"round" as const,"aria-hidden":true};if(name==="back")return <svg {...common}><path d="M15 18l-6-6 6-6"/><path d="M9 12h10"/></svg>;if(name==="today")return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M9 15l2 2 4-4"/></svg>;if(name==="month")return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>;return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>};
 
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
  const p=await searchParams;
@@ -57,7 +59,9 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const exportRows=filteredRows.map((r:any)=>{const renewal=renewalMap.get(r.student_id);return{date:tr(r.lesson_date),time:trTime(scheduleMap.get(r.schedule_id)?.start_time),student:sm.get(r.student_id)?.name||"Kursiyer",branch:bm.get(r.branch_id)||"Şube",group:gm.get(r.group_id)||"Grup",status:statusLabel(r.status),note:r.coach_note||"",renewal:renewal?`Yenilendi · ${tr(String(renewal.created_at).slice(0,10))}${renewal.note?` · ${renewal.note}`:""}`:""}});
  const fileName=`sprintos-${safeSlug(selectedBranch)}-${month}${time?`-${time.replace(":","")}`:""}-yoklama`;
 
- return <main className="ahRoot">
+ return <>
+  <nav className="saTopNav" aria-label="Yoklama hızlı erişim"><Link href="/operasyon-plani" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="back"/></span><span><b>Geri</b><small>Operasyon</small></span></Link><Link href="/yoklama" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="today"/></span><span><b>Bugün</b><small>Günlük yoklama</small></span></Link><Link href={`/yoklama/aylik?month=${month}${branchId?`&branchId=${branchId}`:""}`} className="saTopNavItem active"><span className="saTopNavIcon"><Icon name="month"/></span><span><b>Tüm Ay</b><small>Aylık görünüm</small></span></Link><Link href="/yoklama/gecmis" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="history"/></span><span><b>Geçmiş</b><small>Ders kayıtları</small></span></Link></nav>
+  <main className="ahRoot">
   <header className="ahHead"><div><small>SPRINTOS · YOKLAMA RAPORLARI</small><h1>{reportTitle}</h1><p>Şube, saat ve ay bazında yoklama; antrenör notları ve kayıt yenileme hareketleri tek raporda.</p></div><div className="ahHeadActions"><AttendanceExcelButton rows={exportRows} fileName={fileName} label="Excel Raporu"/><AttendancePrintButton label="Yazdır / PDF"/></div></header>
   <nav className="ahTabs" aria-label="Yoklama görünümü"><Link href="/yoklama">Günlük Yoklama</Link><Link className="active" href={`/yoklama/aylik?month=${month}${branchId?`&branchId=${branchId}`:""}`}>Tüm Ay</Link><Link href="/yoklama/gecmis">Geçmiş Kayıtlar</Link></nav>
 
@@ -78,4 +82,5 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
 
   <div className="ahDays">{[...byDate.entries()].map(([date,list])=><section className="ahDay" key={date}><header><strong>{tr(date)}</strong><span>{list.length} kayıt</span></header>{list.map((r:any,i:number)=>{const schedule=scheduleMap.get(r.schedule_id);const renewal=renewalMap.get(r.student_id);return <div className="ahRow ahRichRow" key={`${r.student_id}-${r.schedule_id||"x"}-${i}`}><div className="ahRowMain"><b>{sm.get(r.student_id)?.name||"Kursiyer"}</b><small>{bm.get(r.branch_id)||"Şube"} · {gm.get(r.group_id)||"Grup"} · {trTime(schedule?.start_time)}{schedule?.end_time?`–${trTime(schedule.end_time)}`:""}</small><div className="ahRecordFlags">{r.coach_note&&<span className="ahNoteFlag">Not: {r.coach_note}</span>}{renewal&&<span className="ahRenewalFlag">✓ Kayıt yenilendi · {tr(String(renewal.created_at).slice(0,10))}</span>}</div></div><span className={`st ${r.status}`}>{r.status==="present"?"✓ Katıldı":r.status==="absent"?"✕ Katılmadı":r.status==="excused"?"○ İzinli":"T Telafi"}</span></div>})}</section>)}{!byDate.size&&<div className="ahEmpty">Bu filtrelere uygun yoklama kaydı bulunamadı.</div>}</div>
  </main>
+ </>
 }
