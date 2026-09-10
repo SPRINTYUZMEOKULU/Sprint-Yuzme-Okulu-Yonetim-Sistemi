@@ -27,10 +27,12 @@ export default function RenewalDecisionCenter() {
   const [items, setItems] = useState<Item[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const visiblePage = pathname === "/" || pathname === "/ogrenciler" || pathname === "/kayit-yenilemeleri";
 
   useEffect(() => {
     if (!visiblePage) return;
+    setDismissed(window.sessionStorage.getItem("sprint:renewal-decision-dismissed") === "1");
     let cancelled = false;
     setLoading(true);
     fetch("/api/renewal-decision-queue", { cache: "no-store" })
@@ -71,11 +73,17 @@ export default function RenewalDecisionCenter() {
     return () => window.clearTimeout(timer);
   }, [pathname, searchParams]);
 
-  if (!visiblePage || loading || !items.length) return null;
+  function dismiss() {
+    setDismissed(true);
+    window.sessionStorage.setItem("sprint:renewal-decision-dismissed", "1");
+  }
+
+  if (!visiblePage || loading || !items.length || dismissed) return null;
   const current = items[Math.min(index, items.length - 1)];
 
   return (
     <aside className="renewalDecision" role="status" aria-live="polite">
+      <button type="button" className="rdClose" aria-label="Kapat" title="Bu oturum için kapat" onClick={dismiss}>×</button>
       <div className="rdIcon">!</div>
       <div className="rdMain">
         <div className="rdTop"><span>KAYIT KARARI GEREKİYOR</span><b>{items.length} kursiyer</b></div>
@@ -86,11 +94,11 @@ export default function RenewalDecisionCenter() {
           <a className="renew" href={`/ogrenciler/${current.studentId}?renewal=1`}>↻ Kayıt Yenile</a>
           <a className="passive" href={`/ogrenciler/pasif-merkezi?studentId=${current.studentId}`}>{current.passiveRequestPending ? "Pasife Alma Onay Bekliyor" : "Pasife Al"}</a>
           {items.length > 1 ? <button type="button" onClick={() => setIndex((i) => (i + 1) % items.length)}>Sonraki →</button> : null}
-          <a className="all" href="/kayit-yenilemeleri">Tümünü Gör</a>
+          <a className="all" href="/kayit-kararlari">Tümünü Gör</a>
         </div>
       </div>
       <style jsx>{`
-        .renewalDecision{position:fixed;right:22px;bottom:22px;z-index:1450;width:min(520px,calc(100vw - 28px));display:flex;gap:13px;padding:16px;border:1px solid #f0c36a;border-radius:18px;background:#fffaf0;box-shadow:0 18px 55px rgba(42,51,67,.18);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17345b}.rdIcon{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:12px;background:#fff0cc;color:#9a6100;font-size:19px;font-weight:950}.rdMain{min-width:0;flex:1}.rdTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.rdTop span{font-size:9px;letter-spacing:.11em;font-weight:950;color:#9a6100}.rdTop b{font-size:10px;color:#7d5c1c}.rdMain h3{margin:5px 0 3px;font-size:15px}.rdMain p{margin:0;color:#665d4a;font-size:11px;line-height:1.45}.rdMain small{display:block;margin-top:5px;color:#8a7b61;font-size:10px}.rdActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rdActions a,.rdActions button{min-height:36px;padding:0 11px;border-radius:10px;border:1px solid #d7e1ec;background:#fff;color:#355b7d;text-decoration:none;font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.rdActions .renew{background:#1769e0;border-color:#1769e0;color:#fff}.rdActions .passive{background:#fff1f0;border-color:#efc0bb;color:#b42318}.rdActions .all{margin-left:auto}@media(max-width:640px){.renewalDecision{right:12px;bottom:12px;padding:13px}.rdActions a,.rdActions button{flex:1 1 calc(50% - 5px)}.rdActions .all{margin-left:0}}
+        .renewalDecision{position:fixed;right:22px;bottom:22px;z-index:1450;width:min(520px,calc(100vw - 28px));display:flex;gap:13px;padding:16px 44px 16px 16px;border:1px solid #f0c36a;border-radius:18px;background:#fffaf0;box-shadow:0 18px 55px rgba(42,51,67,.18);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17345b}.rdClose{position:absolute;right:12px;top:10px;width:28px;height:28px;border:0;border-radius:9px;background:#fff;color:#7f6b48;font-size:20px;line-height:1;cursor:pointer;font-weight:700}.rdClose:hover{background:#fff2d7;color:#9a6100}.rdIcon{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:12px;background:#fff0cc;color:#9a6100;font-size:19px;font-weight:950}.rdMain{min-width:0;flex:1}.rdTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.rdTop span{font-size:9px;letter-spacing:.11em;font-weight:950;color:#9a6100}.rdTop b{font-size:10px;color:#7d5c1c}.rdMain h3{margin:5px 0 3px;font-size:15px}.rdMain p{margin:0;color:#665d4a;font-size:11px;line-height:1.45}.rdMain small{display:block;margin-top:5px;color:#8a7b61;font-size:10px}.rdActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rdActions a,.rdActions button{min-height:36px;padding:0 11px;border-radius:10px;border:1px solid #d7e1ec;background:#fff;color:#355b7d;text-decoration:none;font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.rdActions .renew{background:#1769e0;border-color:#1769e0;color:#fff}.rdActions .passive{background:#fff1f0;border-color:#efc0bb;color:#b42318}.rdActions .all{margin-left:auto}@media(max-width:640px){.renewalDecision{right:12px;bottom:12px;padding:13px 42px 13px 13px}.rdActions a,.rdActions button{flex:1 1 calc(50% - 5px)}.rdActions .all{margin-left:0}}
       `}</style>
     </aside>
   );
