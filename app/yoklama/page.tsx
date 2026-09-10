@@ -54,7 +54,7 @@ export default async function AttendancePage({
     supabase.from("training_groups").select("id,branch_id,level_id,name,course_type,capacity,primary_coach_id,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
     supabase.from("student_group_memberships").select("student_id,group_id,level_id,is_active").eq("organization_id", organizationId).eq("is_active", true),
-    supabase.from("students").select("id,first_name,last_name,student_number,phone,guardian_phone,swimming_level,medical_note,general_note").eq("organization_id", organizationId).eq("is_deleted", false).order("first_name"),
+    supabase.from("students").select("id,first_name,last_name,student_number,phone,guardian_name,guardian_phone,swimming_level,medical_note,general_note").eq("organization_id", organizationId).eq("is_deleted", false).order("first_name"),
     supabase.from("student_enrollments").select("id,student_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status").eq("organization_id", organizationId).eq("status", "active"),
     supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("status", "planned"),
     supabase.from("profiles").select("id,full_name").eq("organization_id", organizationId),
@@ -64,17 +64,9 @@ export default async function AttendancePage({
   ]);
 
   const error =
-    branches.error ||
-    groups.error ||
-    schedules.error ||
-    memberships.error ||
-    students.error ||
-    enrollments.error ||
-    compensation.error ||
-    profiles.error ||
-    levels.error ||
-    attendanceHistory.error ||
-    staffAssignments.error;
+    branches.error || groups.error || schedules.error || memberships.error || students.error ||
+    enrollments.error || compensation.error || profiles.error || levels.error ||
+    attendanceHistory.error || staffAssignments.error;
 
   if (error) {
     return (
@@ -87,48 +79,27 @@ export default async function AttendancePage({
     );
   }
 
-  const baseSchedules = schedules.data || [];
-  const scheduleById = new Map(baseSchedules.map((item) => [item.id, item]));
-  const assignmentSchedules = (staffAssignments.data || [])
-    .map((assignment, index) => {
-      const source = scheduleById.get(assignment.schedule_id);
-      if (!source || !assignment.coach_id) return null;
-      return {
-        ...source,
-        id: `${source.id}__staff__${assignment.coach_id}__${index}`,
-        group_id: assignment.group_id || source.group_id,
-        coach_id: assignment.coach_id,
-      };
-    })
-    .filter(Boolean);
-
-  const visibleSchedules = [...baseSchedules, ...assignmentSchedules];
-
   return (
     <>
       <nav className="saTopNav" aria-label="Yoklama hızlı erişim">
         <Link href="/operasyon-plani" className="saTopNavItem">
-          <span className="saTopNavIcon">←</span>
-          <span><b>Geri</b><small>Operasyon Planı</small></span>
+          <span className="saTopNavIcon">←</span><span><b>Geri</b><small>Operasyon Planı</small></span>
         </Link>
         <Link href="/yoklama" className="saTopNavItem active">
-          <span className="saTopNavIcon">✓</span>
-          <span><b>Bugün</b><small>Günlük Yoklama</small></span>
+          <span className="saTopNavIcon">✓</span><span><b>Bugün</b><small>Günlük Yoklama</small></span>
         </Link>
         <Link href="/raporlar" className="saTopNavItem">
-          <span className="saTopNavIcon">▦</span>
-          <span><b>Tüm Ayı Gör</b><small>Aylık Yoklama</small></span>
+          <span className="saTopNavIcon">▦</span><span><b>Tüm Ayı Gör</b><small>Aylık Yoklama</small></span>
         </Link>
         <Link href="/raporlar" className="saTopNavItem">
-          <span className="saTopNavIcon">↶</span>
-          <span><b>Geçmiş</b><small>Ders Kayıtları</small></span>
+          <span className="saTopNavIcon">↶</span><span><b>Geçmiş</b><small>Ders Kayıtları</small></span>
         </Link>
       </nav>
 
       <SessionAttendanceClient
         branches={branches.data || []}
         groups={groups.data || []}
-        schedules={visibleSchedules as any}
+        schedules={schedules.data || []}
         memberships={memberships.data || []}
         students={students.data || []}
         enrollments={enrollments.data || []}
@@ -136,6 +107,7 @@ export default async function AttendancePage({
         profiles={profiles.data || []}
         levels={levels.data || []}
         attendanceHistory={attendanceHistory.data || []}
+        staffAssignments={staffAssignments.data || []}
         initialBranchId={params.branchId || ""}
       />
     </>
