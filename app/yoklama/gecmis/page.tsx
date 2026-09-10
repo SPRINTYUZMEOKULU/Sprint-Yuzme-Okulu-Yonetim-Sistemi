@@ -22,6 +22,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const time=p.time||"";
  const from=p.from||"";
  const to=p.to||"";
+ const sort=p.sort||"newest";
 
  const [{data:rows},{data:students},{data:groups},{data:branches},{data:schedules}]=await Promise.all([
   s.from("attendance_records").select("id,student_id,group_id,branch_id,schedule_id,lesson_date,status,coach_note").eq("organization_id",profile.organization_id).order("lesson_date",{ascending:false}).limit(3000),
@@ -38,7 +39,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const branchGroups=(groups||[]).filter((g:any)=>!branchId||g.branch_id===branchId);
  const availableTimes=Array.from(new Set((rows||[]).filter((r:any)=>!branchId||r.branch_id===branchId).map((r:any)=>timeLabel(scm.get(r.schedule_id)?.start_time)).filter(Boolean))).sort();
 
- const filtered=(rows||[]).filter((r:any)=>{
+ let filtered=(rows||[]).filter((r:any)=>{
   const rowTime=timeLabel(scm.get(r.schedule_id)?.start_time);
   if(branchId&&r.branch_id!==branchId)return false;
   if(groupId&&r.group_id!==groupId)return false;
@@ -49,9 +50,17 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   return true;
  });
 
+ filtered=[...filtered].sort((a:any,b:any)=>{
+  if(sort==="oldest")return String(a.lesson_date).localeCompare(String(b.lesson_date));
+  if(sort==="name")return (sm.get(a.student_id)?.name||"").localeCompare(sm.get(b.student_id)?.name||"","tr");
+  if(sort==="name-desc")return (sm.get(b.student_id)?.name||"").localeCompare(sm.get(a.student_id)?.name||"","tr");
+  return String(b.lesson_date).localeCompare(String(a.lesson_date));
+ });
+
  const dates=new Map<string,any[]>();
  for(const r of filtered){const a=dates.get(r.lesson_date)||[];a.push(r);dates.set(r.lesson_date,a)}
  const exportRows=filtered.map((r:any)=>{const student=sm.get(r.student_id);return{date:tr(r.lesson_date),time:timeLabel(scm.get(r.schedule_id)?.start_time),student:student?.name||"Kursiyer",studentPhone:student?.phone||"",guardian:student?.guardianName||"",guardianPhone:student?.guardianPhone||"",branch:bm.get(r.branch_id)||"Şube",group:gm.get(r.group_id)?.name||"Grup",status:statusLabel(r.status),note:r.coach_note||"",renewal:""}});
+ const qs=(extra:Record<string,string>)=>{const q=new URLSearchParams();if(branchId)q.set("branchId",branchId);if(groupId)q.set("groupId",groupId);if(time)q.set("time",time);if(from)q.set("from",from);if(to)q.set("to",to);if(sort)q.set("sort",sort);Object.entries(extra).forEach(([k,v])=>v?q.set(k,v):q.delete(k));return `/yoklama/gecmis?${q.toString()}`};
 
  return <main className="ahRoot">
   <header className="ahHead"><div><small>SPRINTOS · YOKLAMA</small><h1>Yoklama Geçmişi</h1><p>Geçmiş dersleri şube, grup, saat ve durum bazında filtreleyin; kursiyer dosyasına veya ilgili yoklama gününe tek dokunuşla geçin.</p></div><div className="ahHeadActions"><AttendanceExcelButton rows={exportRows} fileName="sprintos-yoklama-gecmisi" label="Excel Raporu"/><Link href="/yoklama">+ Yeni Yoklama</Link></div></header>
@@ -63,13 +72,15 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
    <label>Grup<select name="groupId" defaultValue={groupId}><option value="">Tüm Gruplar</option>{branchGroups.map((g:any)=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
    <label>Saat<select name="time" defaultValue={time}><option value="">Tüm Saatler</option>{availableTimes.map(item=><option key={item} value={item}>{item}</option>)}</select></label>
    <label>Durum<select name="status" defaultValue={status}><option value="">Tüm Durumlar</option><option value="present">Katıldı</option><option value="absent">Katılmadı</option><option value="excused">İzinli</option><option value="compensation">Telafi</option></select></label>
+   <label>Sıralama<select name="sort" defaultValue={sort}><option value="newest">En yeni → eski</option><option value="oldest">En eski → yeni</option><option value="name">İsim A → Z</option><option value="name-desc">İsim Z → A</option></select></label>
    <label>Başlangıç<input type="date" name="from" defaultValue={from}/></label>
    <label>Bitiş<input type="date" name="to" defaultValue={to}/></label>
    <button>Filtrele</button><Link href="/yoklama/gecmis">Temizle</Link>
   </form>
 
-  <div className="ahHistoryQuick"><Link href="/yoklama">Bugünün Yoklaması</Link><Link href="/yoklama/aylik">Aylık Rapor</Link><Link href="/yoklama/gecmis?status=absent">Katılmayanlar</Link><Link href="/yoklama/gecmis?status=excused">İzinliler</Link></div>
-  <div className="ahPeriodHint">{filtered.length} kayıt gösteriliyor · tarih sırasına göre en yeniden eskiye</div>
+  <div className="ahHistoryQuick"><Link className={!status?"active":""} href={qs({status:""})}>Tümü</Link><Link className={status==="present"?"active present":"present"} href={qs({status:"present"})}>✓ Katıldı</Link><Link className={status==="absent"?"active absent":"absent"} href={qs({status:"absent"})}>✕ Katılmadı</Link><Link className={status==="excused"?"active excused":"excused"} href={qs({status:"excused"})}>○ İzinli</Link><Link className={status==="compensation"?"active compensation":"compensation"} href={qs({status:"compensation"})}>T Telafi</Link></div>
+  <div className="ahHistoryQuick"><Link className={sort==="newest"?"active":""} href={qs({sort:"newest",status})}>↓ En Yeni</Link><Link className={sort==="oldest"?"active":""} href={qs({sort:"oldest",status})}>↑ En Eski</Link><Link className={sort==="name"?"active":""} href={qs({sort:"name",status})}>A–Z</Link><Link className={sort==="name-desc"?"active":""} href={qs({sort:"name-desc",status})}>Z–A</Link></div>
+  <div className="ahPeriodHint">{filtered.length} kayıt gösteriliyor · {sort==="oldest"?"en eskiden yeniye":sort==="name"?"isme göre A–Z":sort==="name-desc"?"isme göre Z–A":"en yeniden eskiye"}</div>
 
   <div className="ahDays">{[...dates.entries()].map(([date,list])=><section className="ahDay" key={date}><header><strong>{tr(date)}</strong><div className="ahDayHeadActions"><span>{list.length} kayıt</span><Link href={`/yoklama?date=${date}`} className="ahDayButton">Bu Güne Git</Link></div></header>{list.map((r:any,i:number)=>{const schedule=scm.get(r.schedule_id);const group=gm.get(r.group_id);const student=sm.get(r.student_id);const preferredPhone=student?.guardianPhone||student?.phone||"";return <div className="ahRow ahHistoryRow" key={`${r.id||r.student_id}-${i}`}><div className="ahRowMain"><b>{student?.name||"Kursiyer"}</b><small>{bm.get(r.branch_id)||"Şube"} · {group?.name||"Grup"}{timeLabel(schedule?.start_time)?` · ${timeLabel(schedule.start_time)}${schedule?.end_time?`–${timeLabel(schedule.end_time)}`:""}`:""}</small>{(student?.phone||student?.guardianPhone)&&<div className="ahPhoneLine">{student?.phone&&<span>Öğrenci: {student.phone}</span>}{student?.guardianPhone&&<span>{student.guardianName?`${student.guardianName}: `:"Veli: "}{student.guardianPhone}</span>}</div>}{r.coach_note&&<span className="ahNoteFlag">Not: {r.coach_note}</span>}<div className="ahInlineActions"><Link href={`/ogrenciler/${r.student_id}`}>Öğrenci Dosyası</Link><Link href={`/yoklama?date=${r.lesson_date}&branchId=${r.branch_id||""}`}>Yoklamayı Aç</Link>{preferredPhone&&<a href={`tel:${phoneDigits(preferredPhone)}`}>Ara</a>}{preferredPhone&&<a href={`https://wa.me/${waPhone(preferredPhone)}`} target="_blank" rel="noreferrer">WhatsApp</a>}</div></div><span className={`st ${r.status}`}>{r.status==="present"?"✓ Katıldı":r.status==="absent"?"✕ Katılmadı":r.status==="excused"?"○ İzinli":"T Telafi"}</span></div>})}</section>)}{!dates.size&&<div className="ahEmpty">Bu filtrelere uygun geçmiş yoklama kaydı bulunamadı.</div>}</div>
  </main>
