@@ -24,13 +24,11 @@ import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
 import FirstLessonStartEnhancer from "./components/first-lesson-start-enhancer";
 import FutureStartStudentEnhancer from "./components/future-start-student-enhancer";
 import PassiveCenterNavEnhancer from "./components/passive-center-nav-enhancer";
+import PassiveStudentReactivateEnhancer from "./components/passive-student-reactivate-enhancer";
 import RenewalDecisionCenter from "./components/renewal-decision-center";
 
 export const metadata: Metadata = {
-  title: {
-    default: "SprintOS",
-    template: "%s | SprintOS",
-  },
+  title: { default: "SprintOS", template: "%s | SprintOS" },
   description: "Sprint Yüzme Okulu Yönetim Sistemi",
   applicationName: "SprintOS",
   manifest: "/manifest.webmanifest?v=5",
@@ -38,20 +36,12 @@ export const metadata: Metadata = {
     icon: [{ url: "/icons/icon-512.png?v=5", sizes: "512x512", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png?v=5", sizes: "180x180", type: "image/png" }],
   },
-  appleWebApp: {
-    capable: true,
-    title: "SprintOS",
-    statusBarStyle: "default",
-  },
+  appleWebApp: { capable: true, title: "SprintOS", statusBarStyle: "default" },
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  viewportFit: "cover",
-  themeColor: "#03132f",
+  width: "device-width", initialScale: 1, maximumScale: 1, viewportFit: "cover", themeColor: "#03132f",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -64,7 +54,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <GlobalDesktopNav />
         </Suspense>
         {children}
-
         <DashboardHomeEnhancer />
         <DashboardHomeCleanup />
         <DashboardLiveOperations />
@@ -78,9 +67,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <FirstLessonStartEnhancer />
         <FutureStartStudentEnhancer />
         <PassiveCenterNavEnhancer />
-        <Suspense fallback={null}>
-          <RenewalDecisionCenter />
-        </Suspense>
+        <PassiveStudentReactivateEnhancer />
+        <Suspense fallback={null}><RenewalDecisionCenter /></Suspense>
         <PWARegister />
         <LiveNotificationCenter />
       </body>
