@@ -36,7 +36,19 @@ export default async function AttendancePage({
     );
   }
 
-  const [branches, groups, schedules, memberships, students, enrollments, compensation, profiles, levels, attendanceHistory] = await Promise.all([
+  const [
+    branches,
+    groups,
+    schedules,
+    memberships,
+    students,
+    enrollments,
+    compensation,
+    profiles,
+    levels,
+    attendanceHistory,
+    staffAssignments,
+  ] = await Promise.all([
     supabase.from("branches").select("id,name,short_name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("training_groups").select("id,branch_id,level_id,name,course_type,capacity,primary_coach_id,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
@@ -47,9 +59,21 @@ export default async function AttendancePage({
     supabase.from("profiles").select("id,full_name").eq("organization_id", organizationId),
     supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).order("sort_order"),
     supabase.from("attendance_records").select("student_id,group_id,lesson_date,status").eq("organization_id", organizationId).order("lesson_date", { ascending: false }).limit(3000),
+    supabase.from("lesson_staff_assignments").select("schedule_id,group_id,coach_id,sort_order,is_active").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
   ]);
 
-  const error = branches.error || groups.error || schedules.error || memberships.error || students.error || enrollments.error || compensation.error || profiles.error || levels.error || attendanceHistory.error;
+  const error =
+    branches.error ||
+    groups.error ||
+    schedules.error ||
+    memberships.error ||
+    students.error ||
+    enrollments.error ||
+    compensation.error ||
+    profiles.error ||
+    levels.error ||
+    attendanceHistory.error ||
+    staffAssignments.error;
 
   if (error) {
     return (
@@ -62,19 +86,65 @@ export default async function AttendancePage({
     );
   }
 
+  /*
+   * Operasyon Planı aynı seans/gruba birden fazla eğitmen atayabiliyor.
+   * SessionAttendanceClient zaten aynı grup+saatteki schedule satırlarının
+   * coach_id değerlerini tek eğitmen listesinde birleştiriyor. Bu nedenle
+   * lesson_staff_assignments kayıtlarını yalnızca görünüm amaçlı sanal
+   * schedule satırları olarak ekliyoruz. İlk gerçek schedule satırı aynen
+   * korunduğu için yoklama kayıt anahtarı ve saveAttendance akışı değişmez.
+   */
+  const baseSchedules = schedules.data || [];
+  const scheduleById = new Map(baseSchedules.map((item) => [item.id, item]));
+  const assignmentSchedules = (staffAssignments.data || [])
+    .map((assignment, index) => {
+      const source = scheduleById.get(assignment.schedule_id);
+      if (!source || !assignment.coach_id) return null;
+      return {
+        ...source,
+        id: `${source.id}__staff__${assignment.coach_id}__${index}`,
+        group_id: assignment.group_id || source.group_id,
+        coach_id: assignment.coach_id,
+      };
+    })
+    .filter(Boolean);
+
+  const visibleSchedules = [...baseSchedules, ...assignmentSchedules];
+
   return (
-    <SessionAttendanceClient
-      branches={branches.data || []}
-      groups={groups.data || []}
-      schedules={schedules.data || []}
-      memberships={memberships.data || []}
-      students={students.data || []}
-      enrollments={enrollments.data || []}
-      compensationLessons={compensation.data || []}
-      profiles={profiles.data || []}
-      levels={levels.data || []}
-      attendanceHistory={attendanceHistory.data || []}
-      initialBranchId={params.branchId || ""}
-    />
+    <>
+      <nav className="saTopNav" aria-label="Yoklama hızlı erişim">
+        <Link href="/operasyon-plani" className="saTopNavItem">
+          <span className="saTopNavIcon">←</span>
+          <span><b>Geri</b><small>Operasyon Planı</small></span>
+        </Link>
+        <Link href="/yoklama" className="saTopNavItem active">
+          <span className="saTopNavIcon">✓</span>
+          <span><b>Bugün</b><small>Günlük Yoklama</small></span>
+        </Link>
+        <Link href="/raporlar" className="saTopNavItem">
+          <span className="saTopNavIcon">▦</span>
+          <span><b>Tüm Ayı Gör</b><small>Aylık Yoklama</small></span>
+        </Link>
+        <Link href="/raporlar" className="saTopNavItem">
+          <span className="saTopNavIcon">↶</span>
+          <span><b>Geçmiş</b><small>Ders Kayıtları</small></span>
+        </Link>
+      </nav>
+
+      <SessionAttendanceClient
+        branches={branches.data || []}
+        groups={groups.data || []}
+        schedules={visibleSchedules as any}
+        memberships={memberships.data || []}
+        students={students.data || []}
+        enrollments={enrollments.data || []}
+        compensationLessons={compensation.data || []}
+        profiles={profiles.data || []}
+        levels={levels.data || []}
+        attendanceHistory={attendanceHistory.data || []}
+        initialBranchId={params.branchId || ""}
+      />
+    </>
   );
 }
