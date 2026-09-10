@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import RegistrationWizard from "./registration-wizard";
-import RegistrationMessageAutoSync from "./registration-message-auto-sync";
 import LegacyTransferControls from "./legacy-transfer-controls";
 import "./registration-completion.css";
 
@@ -55,7 +54,6 @@ export default async function RegistrationCompletionPage({ params, searchParams 
     {query.note_saved ? <div className="successBanner">Not ve hatırlatma kaydedildi.</div> : null}
     {query.legacy_manager_confirmed ? <div className="successBanner">Yönetici teyidi kaydedildi. Aktarım kontrolleri yönetici onayıyla tamamlandı.</div> : null}
     {query.legacy_compensation_added ? <div className="successBanner">{query.legacy_compensation_added} adet aktarım telafisi öğrenciye eklendi.</div> : null}
-    <RegistrationMessageAutoSync />
     <RegistrationWizard student={student} branches={branches || []} groups={groups} packages={packages || []} coaches={coaches || []} template={templateRow?.body || fallbackTemplate} consent={consent || null} draft={draft || null} activeEnrollment={activeEnrollment || null} payments={payments || []} notes={notes || []} />
     <LegacyTransferControls studentId={student.id} visible={missingElectronicConsent} canManagerConfirm={canManagerConfirm} />
   </main>;
