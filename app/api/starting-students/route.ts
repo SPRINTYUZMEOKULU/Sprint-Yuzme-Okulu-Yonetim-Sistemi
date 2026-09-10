@@ -32,7 +32,7 @@ export async function GET(){
     const supabase=await createClient();
 
     const [studentsResult,enrollmentsResult,attendanceResult,groupsResult,branchesResult,schedulesResult]=await Promise.all([
-      supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false),
+      supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status,registration_source").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false).eq("registration_source","web_form"),
       supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
       supabase.from("attendance_records").select("student_id").eq("organization_id",organizationId),
       supabase.from("training_groups").select("id,name,branch_id").eq("organization_id",organizationId).eq("is_active",true),
