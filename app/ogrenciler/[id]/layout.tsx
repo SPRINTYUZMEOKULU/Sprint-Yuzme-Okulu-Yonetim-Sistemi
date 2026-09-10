@@ -13,6 +13,7 @@ import RenewalMobilePolish from "./renewal-mobile-polish";
 import AdminCorrectionLauncher from "./admin-correction-launcher";
 import GuardianActivationWhatsAppBridge from "./guardian-activation-whatsapp-bridge";
 import RegistrationGuardianAutoBridge from "./registration-guardian-auto-bridge";
+import PortalAutoOpen from "./portal-auto-open";
 import "./student-file-tabs.css";
 import "./student-crm-polish.css";
 import "./student-finance-center.css";
@@ -40,6 +41,7 @@ export default async function StudentFileLayout({
       {children}
       <StudentFileTabs />
       <StudentProfileCenter />
+      <PortalAutoOpen />
       <GuardianActivationWhatsAppBridge studentId={id} />
       <RegistrationGuardianAutoBridge studentId={id} />
       <GeneralInfoSummary />
