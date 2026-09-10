@@ -39,6 +39,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
   const savedSessions = (schedulesResult.data || [])
     .filter((schedule) => schedule.group_id === savedEnrollment?.group_id && selectedDays.has(Number(schedule.weekday)))
     .map((schedule) => `${DAYS[Number(schedule.weekday)] || "Ders"} ${shortTime(schedule.start_time)}-${shortTime(schedule.end_time)}`);
+  const savedProgramLabel = savedSessions.length ? savedSessions.join(" · ") : (savedGroup?.name || "—");
 
   return (
     <main className="correctionPage">
@@ -58,14 +59,14 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
             <strong>✓ Düzeltme uygulandı.</strong>
             <span>Eski ve yeni değerler öğrenci işlem geçmişine kilitli denetim kaydı olarak eklendi.</span>
             <div className="savedSummary" aria-label="Kaydedilen güncel bilgiler">
-              <div><small>Şube</small><b>{savedBranch?.name || "—"}</b></div><div><small>Grup</small><b>{savedGroup?.name || "—"}</b></div><div><small>Paket</small><b>{savedPackage?.name || "—"}</b></div><div><small>Toplam Ders</small><b>{savedEnrollment?.total_lessons ?? "—"}</b></div><div><small>Başlangıç</small><b>{savedEnrollment?.start_date || "—"}</b></div><div><small>Planlanan Bitiş</small><b>{savedEnrollment?.planned_end_date || "—"}</b></div><div><small>Ödeme Vadesi</small><b>{savedEnrollment?.payment_due_date || "—"}</b></div>
+              <div><small>Şube</small><b>{savedBranch?.name || "—"}</b></div><div><small>Grup / Seanslar</small><b>{savedProgramLabel}</b></div><div><small>Paket</small><b>{savedPackage?.name || "—"}</b></div><div><small>Toplam Ders</small><b>{savedEnrollment?.total_lessons ?? "—"}</b></div><div><small>Başlangıç</small><b>{savedEnrollment?.start_date || "—"}</b></div><div><small>Planlanan Bitiş</small><b>{savedEnrollment?.planned_end_date || "—"}</b></div><div><small>Ödeme Vadesi</small><b>{savedEnrollment?.payment_due_date || "—"}</b></div>
             </div>
             <CorrectionWhatsapp
               studentName={`${student.first_name || ""} ${student.last_name || ""}`.trim()}
               phone={student.phone}
               guardianPhone={student.guardian_phone}
               branchName={savedBranch?.name}
-              groupName={savedGroup?.name}
+              groupName={savedProgramLabel}
               packageName={savedPackage?.name}
               totalLessons={savedEnrollment?.total_lessons}
               startDate={savedEnrollment?.start_date}
