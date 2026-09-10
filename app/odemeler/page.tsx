@@ -411,6 +411,8 @@ export default async function PaymentsPage({
     };
   });
 
+  const paymentRefreshKey = `payments-${validPayments.length}-${validPayments[0]?.id || "none"}`;
+
   return (
     <main className="operationPage">
       <header className="operationHeader">
@@ -427,6 +429,7 @@ export default async function PaymentsPage({
       <FinanceQuickNav />
 
       <PaymentsClient
+        key={paymentRefreshKey}
         students={preparedStudents}
         payments={validPayments}
         currentProfileId={profile.id}
