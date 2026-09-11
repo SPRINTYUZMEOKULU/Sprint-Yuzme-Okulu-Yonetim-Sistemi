@@ -1,0 +1,48 @@
+/* SprintOS permission affordance: denied actions stay visible, but clearly locked. */
+[data-permission-guard="denied"]{
+  position:relative!important;
+  opacity:.56!important;
+  filter:grayscale(.18) saturate(.72)!important;
+  box-shadow:inset 0 0 0 1px rgba(148,163,184,.34)!important;
+  cursor:not-allowed!important;
+  user-select:none;
+}
+
+[data-permission-guard="denied"]::after{
+  content:"🔒";
+  position:absolute;
+  top:6px;
+  right:7px;
+  z-index:3;
+  width:22px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:rgba(241,245,249,.96);
+  border:1px solid rgba(148,163,184,.5);
+  box-shadow:0 2px 7px rgba(15,23,42,.12);
+  font-size:11px;
+  line-height:1;
+  pointer-events:none;
+}
+
+[data-permission-guard="denied"]:where(a){
+  text-decoration:none!important;
+}
+
+@media(max-width:640px){
+  [data-permission-guard="denied"]::after{
+    top:5px;
+    right:5px;
+    width:20px;
+    height:20px;
+    font-size:10px;
+  }
+}
+
+@media(prefers-reduced-motion:no-preference){
+  [data-permission-guard="denied"]{
+    transition:opacity .16s ease,filter .16s ease,box-shadow .16s ease;
+  }
+}
