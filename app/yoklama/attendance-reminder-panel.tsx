@@ -1,0 +1,44 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+type Student={id:string;first_name?:string|null;last_name?:string|null;student_number?:string|null};
+type Reminder={id:string;title:string;description:string|null;priority:string;status:string;source_id:string|null;action_url:string|null;due_at:string|null;created_at:string|null;assigned_to:string|null};
+
+type Props={students:Student[]};
+
+function fmt(value?:string|null){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"}).format(d)}
+function nameOf(s:Student){return`${s.first_name||""} ${s.last_name||""}`.trim()||"Kursiyer"}
+
+export default function AttendanceReminderPanel({students}:Props){
+  const [items,setItems]=useState<Reminder[]>([]),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[studentId,setStudentId]=useState(""),[note,setNote]=useState(""),[priority,setPriority]=useState("normal"),[dueDate,setDueDate]=useState(""),[message,setMessage]=useState("");
+  const studentOptions=useMemo(()=>[...students].sort((a,b)=>nameOf(a).localeCompare(nameOf(b),"tr")),[students]);
+
+  async function load(){setLoading(true);try{const r=await fetch("/api/attendance-reminders",{cache:"no-store"});const j=await r.json();if(r.ok&&j?.ok)setItems(Array.isArray(j.items)?j.items:[])}catch{}finally{setLoading(false)}}
+  useEffect(()=>{void load()},[]);
+
+  async function submit(e:React.FormEvent){e.preventDefault();if(note.trim().length<3){setMessage("Kısa bir açıklama yazın.");return}setSaving(true);setMessage("");try{const r=await fetch("/api/attendance-reminders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({studentId:studentId||null,note:note.trim(),priority,dueDate:dueDate||null})});const j=await r.json();if(!r.ok||!j?.ok){setMessage(j?.error||"Hatırlatma kaydedilemedi.");return}setNote("");setStudentId("");setPriority("normal");setDueDate("");setMessage("Hatırlatma kaydedildi. Ana sayfadaki Yapılacak İşlemler alanına ve Uyarılar merkezine eklendi.");await load()}catch{setMessage("Bağlantı hatası oluştu.")}finally{setSaving(false)}}
+
+  async function complete(id:string){try{const r=await fetch("/api/attendance-reminders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});if(r.ok){setItems(v=>v.filter(x=>x.id!==id));setMessage("Hatırlatma tamamlandı olarak işaretlendi.")}}catch{setMessage("İşlem tamamlanamadı.")}}
+
+  return <section className="attendanceReminderPanel">
+    <div className="arpHead"><div><span>YOKLAMA NOTLARI</span><h2>Not ve Hatırlatma</h2><p>Listede görünmeyen öğrenci, hatalı işlem veya daha sonra kontrol edilmesi gereken konuları buraya yazın. Kaydedilen not ana sayfada Yapılacak İşlemler sayacına eklenir.</p></div><Link href="/uyarilar">Yapılacak İşlemler →</Link></div>
+
+    <form className="arpForm" onSubmit={submit}>
+      <div className="arpField student"><label>İlgili öğrenci <small>opsiyonel</small></label><select value={studentId} onChange={e=>setStudentId(e.target.value)}><option value="">Genel yoklama notu</option>{studentOptions.map(s=><option key={s.id} value={s.id}>{nameOf(s)}{s.student_number?` · ${s.student_number}`:""}</option>)}</select></div>
+      <div className="arpField priority"><label>Öncelik</label><select value={priority} onChange={e=>setPriority(e.target.value)}><option value="low">Düşük</option><option value="normal">Normal</option><option value="high">Önemli</option><option value="critical">Acil</option></select></div>
+      <div className="arpField date"><label>Hatırlatma tarihi <small>opsiyonel</small></label><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></div>
+      <div className="arpField note"><label>Not / yapılacak işlem</label><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Örn. Öğrenci listede görünmüyor; kayıt ve grup aktarımını kontrol et. veya yanlış yoklama işlendi, düzeltme yapılacak." rows={3}/></div>
+      <button className="arpSave" disabled={saving}>{saving?"Kaydediliyor…":"＋ Hatırlatma Ekle"}</button>
+    </form>
+
+    {message?<div className="arpMessage">{message}</div>:null}
+
+    <div className="arpOpen"><div className="arpOpenHead"><strong>Açık hatırlatmalar</strong><span>{items.length} işlem</span></div>{loading?<div className="arpEmpty">Hatırlatmalar yükleniyor…</div>:items.length?<div className="arpList">{items.map(item=><article key={item.id} className={`priority-${item.priority}`}><i/><div><div className="arpMeta"><b>{item.title}</b><small>{item.due_at?`Hatırlatma: ${fmt(item.due_at)}`:`Eklendi: ${fmt(item.created_at)}`}</small></div><p>{item.description}</p></div><div className="arpActions">{item.action_url?<Link href={item.action_url}>Aç</Link>:null}<button type="button" onClick={()=>void complete(item.id)}>✓ Tamamlandı</button></div></article>)}</div>:<div className="arpEmpty">Açık yoklama hatırlatması yok.</div>}</div>
+
+    <style jsx>{`
+      .attendanceReminderPanel{max-width:1500px;margin:18px auto 44px;padding:18px;border:1px solid #dce6f1;border-radius:20px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.05);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10284d}.arpHead{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px}.arpHead span{display:block;color:#2f80ed;font-size:9px;font-weight:950;letter-spacing:.12em}.arpHead h2{margin:4px 0 4px;font-size:20px}.arpHead p{margin:0;max-width:760px;color:#71839a;font-size:11px;line-height:1.5}.arpHead a{min-height:40px;padding:0 12px;border:1px solid #d8e5f3;border-radius:11px;display:inline-flex;align-items:center;color:#1769d2;text-decoration:none;font-size:10px;font-weight:900;white-space:nowrap}.arpForm{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(130px,.55fr) minmax(160px,.65fr);gap:9px;padding:13px;border:1px solid #e4ebf3;border-radius:15px;background:#f9fbfd}.arpField{display:grid;gap:5px}.arpField label{font-size:9px;font-weight:900;color:#657990;text-transform:uppercase;letter-spacing:.04em}.arpField label small{font-weight:700;text-transform:none;letter-spacing:0;color:#9aa7b6}.arpField select,.arpField input,.arpField textarea{width:100%;border:1px solid #d6e1ec;border-radius:11px;background:#fff;color:#183652;font:inherit;font-size:12px;outline:none}.arpField select,.arpField input{height:42px;padding:0 10px}.arpField textarea{padding:10px;resize:vertical;min-height:78px}.arpField.note{grid-column:1/-1}.arpSave{justify-self:end;grid-column:1/-1;min-height:42px;padding:0 16px;border:0;border-radius:11px;background:#1769df;color:#fff;font-size:11px;font-weight:900;cursor:pointer}.arpSave:disabled{opacity:.55}.arpMessage{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef7ff;color:#24558b;font-size:11px;font-weight:800}.arpOpen{margin-top:14px}.arpOpenHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.arpOpenHead strong{font-size:12px}.arpOpenHead span{padding:5px 8px;border-radius:999px;background:#eef5ff;color:#1769d2;font-size:9px;font-weight:900}.arpList{display:grid;gap:8px}.arpList article{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border:1px solid #e4ebf3;border-radius:13px;background:#fff}.arpList article>i{width:7px;height:7px;border-radius:50%;background:#3b82f6}.arpList article.priority-high>i{background:#f59e0b}.arpList article.priority-critical>i{background:#ef4444}.arpList article.priority-low>i{background:#94a3b8}.arpMeta{display:flex;align-items:center;justify-content:space-between;gap:10px}.arpMeta b{font-size:11px}.arpMeta small{color:#8b99aa;font-size:9px}.arpList p{margin:4px 0 0;color:#5f7186;font-size:10px;line-height:1.4}.arpActions{display:flex;gap:6px}.arpActions a,.arpActions button{min-height:34px;padding:0 9px;border:1px solid #d8e3ed;border-radius:9px;background:#fff;color:#355a7d;text-decoration:none;font-size:9px;font-weight:900;display:inline-flex;align-items:center;justify-content:center}.arpActions button{background:#ecfdf3;color:#167552;border-color:#bde7cd}.arpEmpty{padding:18px;border:1px dashed #d8e3ed;border-radius:12px;text-align:center;color:#7f8fa3;font-size:10px;background:#fbfcfe}@media(max-width:700px){.attendanceReminderPanel{margin:14px 10px 34px;padding:14px}.arpHead{flex-direction:column}.arpHead a{width:100%;justify-content:center}.arpForm{grid-template-columns:1fr}.arpField.note,.arpSave{grid-column:auto}.arpSave{width:100%}.arpList article{grid-template-columns:8px minmax(0,1fr)}.arpActions{grid-column:2;justify-content:flex-start}.arpMeta{align-items:flex-start;flex-direction:column;gap:2px}}
+    `}</style>
+  </section>
+}
