@@ -26,6 +26,7 @@ import FutureStartStudentEnhancer from "./components/future-start-student-enhanc
 import PassiveCenterNavEnhancer from "./components/passive-center-nav-enhancer";
 import PassiveReactivationWorkflow from "./components/passive-reactivation-workflow";
 import RenewalDecisionCenter from "./components/renewal-decision-center";
+import PermissionUiGuard from "./components/permission-ui-guard";
 
 export const metadata: Metadata = {
   title: { default: "SprintOS", template: "%s | SprintOS" },
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <PassiveCenterNavEnhancer />
         <PassiveReactivationWorkflow />
         <Suspense fallback={null}><RenewalDecisionCenter /></Suspense>
+        <Suspense fallback={null}><PermissionUiGuard /></Suspense>
         <PWARegister />
         <LiveNotificationCenter />
       </body>
