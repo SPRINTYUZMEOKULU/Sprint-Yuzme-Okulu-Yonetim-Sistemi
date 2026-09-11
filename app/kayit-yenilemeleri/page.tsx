@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import RenewalStatusCenterClient, { type CenterItem, type RenewalHistory } from "./renewal-status-center-client";
+import RenewalStatusCenterClient, { type CenterItem, type RenewalApproval, type RenewalHistory } from "./renewal-status-center-client";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function RenewalOperationsPage(){
   const organizationId=profile.organization_id;
   const supabase=await createClient();
 
-  const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult]=await Promise.all([
+  const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult,approvalResult]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
@@ -29,6 +29,7 @@ export default async function RenewalOperationsPage(){
     supabase.from("student_lesson_balance").select("student_id,compensation_lesson_balance"),
     supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_activity_logs").select("id,student_id,title,description,new_value,performed_at").eq("organization_id",organizationId).eq("activity_type","registration_renewed").order("performed_at",{ascending:false}).limit(250),
+    supabase.from("approval_requests").select("id,student_id,status,new_values,metadata,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).eq("request_type","registration_custom_lesson_count").order("created_at",{ascending:false}).limit(250),
   ]);
 
   const branches=new Map(((branchesRes.data||[]) as any[]).map(x=>[x.id,x.name]));
@@ -72,5 +73,12 @@ export default async function RenewalOperationsPage(){
   const studentMap=new Map(((studentsRes.data||[]) as any[]).map(x=>[x.id,`${x.first_name||""} ${x.last_name||""}`.trim()||"Öğrenci"]));
   const history:RenewalHistory[]=((activityResult.data||[]) as any[]).map(row=>{const next=asObject(row.new_value);return {id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",lessonCount:Number(next.lesson_count||next.total_lessons||0)||null,performedAt:row.performed_at||null,description:row.description||row.title||null}});
 
-  return <><UstGezinme/><RenewalStatusCenterClient items={items} history={history} canApprove={["owner","admin"].includes(profile.role)}/></>;
+  const approvals:RenewalApproval[]=((approvalResult.data||[]) as any[]).flatMap(row=>{
+    const metadata=asObject(row.metadata);if(metadata.source!=="student_renewal_center")return[];
+    const isOpen=row.status==="pending"||(row.status==="approved"&&!metadata.consumed_at);if(!isOpen)return[];
+    const next=asObject(row.new_values);
+    return [{id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",status:row.status==="approved"?"approved":"pending",lessonCount:Number(next.total_lessons||0)||null,requestedAt:row.requested_at||row.created_at||null,reviewedAt:row.reviewed_at||null}];
+  });
+
+  return <><UstGezinme/><RenewalStatusCenterClient items={items} history={history} approvals={approvals} canApprove={["owner","admin"].includes(profile.role)}/></>;
 }
