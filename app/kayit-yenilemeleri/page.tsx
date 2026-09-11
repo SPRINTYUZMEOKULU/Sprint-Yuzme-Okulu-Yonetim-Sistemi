@@ -46,7 +46,7 @@ export default async function RenewalOperationsPage(){
 
   const today=isoDateInIstanbul();
   const soonDate=addDays(today,14);
-  const items:CenterItem[]=((studentsRes.data||[]) as any[]).map(student=>{
+  const items:CenterItem[]=((studentsRes.data||[]) as any[]).map((student):CenterItem=>{
     const enrollment=enrollments.get(student.id);
     const total=Number(enrollment?.total_lessons||0);
     const used=Number(enrollment?.used_lessons||0);
@@ -59,9 +59,10 @@ export default async function RenewalOperationsPage(){
     const endedByDate=student.status==="active"&&Boolean(endDate&&endDate<=today);
     const endingSoon=student.status==="active"&&!endedByRights&&!endedByDate&&((total>0&&remaining<=3)||Boolean(endDate&&endDate<=soonDate));
     const category:CenterItem["category"]=student.status==="passive"?"passive":endedByRights||endedByDate?"action":endingSoon?"soon":"active";
+    const status:CenterItem["status"]=student.status==="passive"?"passive":"active";
     const reason=student.status==="passive"?"Pasif öğrenci":endedByRights?"Ders hakkı tamamlandı":endedByDate?"Kayıt dönemi sona erdi":endingSoon?"Kayıt yenilemesi yaklaşıyor":"Aktif kayıt";
     return {
-      id:student.id,studentNumber:student.student_number||null,name:`${student.first_name||""} ${student.last_name||""}`.trim()||"Kursiyer",status:student.status==="passive"?"passive":"active",
+      id:student.id,studentNumber:student.student_number||null,name:`${student.first_name||""} ${student.last_name||""}`.trim()||"Kursiyer",status,
       branchName:student.branch_id?branches.get(student.branch_id)||null:null,groupName:membership?.group_id?groups.get(membership.group_id)||null:null,totalLessons:total,usedLessons:used,remainingLessons:remaining,plannedEndDate:endDate,reason,category,
       passiveRequestPending:statusRequest?.request_type==="deactivate"&&statusRequest?.status==="pending",passiveReason:student.status==="passive"?(statusRequest?.reason||null):null,passiveAt:student.status==="passive"?(statusRequest?.applied_at||statusRequest?.reviewed_at||statusRequest?.created_at||null):null,lastRenewedAt:lastRenewed.get(student.id)||null,
     };
@@ -73,11 +74,12 @@ export default async function RenewalOperationsPage(){
   const studentMap=new Map(((studentsRes.data||[]) as any[]).map(x=>[x.id,`${x.first_name||""} ${x.last_name||""}`.trim()||"Öğrenci"]));
   const history:RenewalHistory[]=((activityResult.data||[]) as any[]).map(row=>{const next=asObject(row.new_value);return {id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",lessonCount:Number(next.lesson_count||next.total_lessons||0)||null,performedAt:row.performed_at||null,description:row.description||row.title||null}});
 
-  const approvals:RenewalApproval[]=((approvalResult.data||[]) as any[]).flatMap(row=>{
+  const approvals:RenewalApproval[]=((approvalResult.data||[]) as any[]).flatMap((row):RenewalApproval[]=>{
     const metadata=asObject(row.metadata);if(metadata.source!=="student_renewal_center")return[];
     const isOpen=row.status==="pending"||(row.status==="approved"&&!metadata.consumed_at);if(!isOpen)return[];
     const next=asObject(row.new_values);
-    return [{id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",status:row.status==="approved"?"approved":"pending",lessonCount:Number(next.total_lessons||0)||null,requestedAt:row.requested_at||row.created_at||null,reviewedAt:row.reviewed_at||null}];
+    const status:RenewalApproval["status"]=row.status==="approved"?"approved":"pending";
+    return [{id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",status,lessonCount:Number(next.total_lessons||0)||null,requestedAt:row.requested_at||row.created_at||null,reviewedAt:row.reviewed_at||null}];
   });
 
   return <><UstGezinme/><RenewalStatusCenterClient items={items} history={history} approvals={approvals} canApprove={["owner","admin"].includes(profile.role)}/></>;
