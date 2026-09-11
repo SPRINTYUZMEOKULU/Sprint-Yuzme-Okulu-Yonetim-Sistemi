@@ -5,6 +5,7 @@ import type {
 import { Suspense } from "react";
 
 import "./globals.css";
+import "./components/permission-ui-guard.css";
 
 import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
