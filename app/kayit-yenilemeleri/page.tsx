@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +16,7 @@ function addDays(value:string,days:number){const d=new Date(`${value}T12:00:00+0
 
 export default async function RenewalOperationsPage(){
   const profile=await requireProfile(["owner","admin","branch_manager","registration_staff","accounting"]);
+  if(!profile.organization_id) redirect("/");
   const organizationId=profile.organization_id;
   const supabase=await createClient();
 
@@ -22,7 +24,7 @@ export default async function RenewalOperationsPage(){
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
-    supabase.from("student_group_memberships").select("student_id,group_id,started_at,is_active").eq("organization_id",organizationId).order("started_at",{ascending:false}),
+    supabase.from("student_group_memberships").select("student_id,group_id,started_at,is_active").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
     supabase.from("student_enrollments").select("id,student_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_lesson_balance").select("student_id,compensation_lesson_balance"),
     supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
