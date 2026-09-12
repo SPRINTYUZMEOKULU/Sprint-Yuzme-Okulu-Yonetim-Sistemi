@@ -16,6 +16,8 @@ export default async function PersonelPuantajPage() {
     "coach",
   ]);
 
+  const canManagePay = ["owner", "admin", "branch_manager"].includes(profile.role);
+
   return (
     <>
       <UstGezinme />
@@ -29,7 +31,10 @@ export default async function PersonelPuantajPage() {
                 Ders girişleri, konum doğrulama, aylık puantaj ve hakediş takibi tek ekranda.
               </p>
             </div>
-            <Link href="/" className="ppBack">Ana Sayfa</Link>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {canManagePay ? <Link href="/personel-puantaj/ucret-ayarlari" className="ppBack">Ücret Ayarları</Link> : null}
+              <Link href="/" className="ppBack">Ana Sayfa</Link>
+            </div>
           </header>
 
           <PersonelPuantajClient currentRole={profile.role} />
