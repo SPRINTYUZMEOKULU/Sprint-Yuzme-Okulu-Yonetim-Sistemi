@@ -1,12 +1,14 @@
 import Image from "next/image";
 
 import PreRegistrationForm from "./pre-registration-form";
+import PreRegEnhancements from "./pre-reg-enhancements";
 
 import "./on-kayit.css";
 
 export default function PreRegistrationPage() {
   return (
     <main className="preRegPage">
+      <PreRegEnhancements />
       <section className="preRegShell">
         <aside className="preRegBrand">
           <div className="preRegBrandTop">
