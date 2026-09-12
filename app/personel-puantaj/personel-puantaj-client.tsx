@@ -80,6 +80,23 @@ function timeOf(value: string) {
   }
 }
 
+function istanbulMinutesNow() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Istanbul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
+function minutes(value: string) {
+  const [hour, minute] = String(value || "00:00").slice(0, 5).split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+}
+
 function statusMeta(checkin: Checkin | null) {
   if (!checkin) return { label: "Giriş bekleniyor", tone: "waiting" };
   if (checkin.approval_status === "pending") return { label: "Yönetici onayı", tone: "pending" };
@@ -95,6 +112,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"today" | "payroll">("today");
+  const [clockTick, setClockTick] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,9 +129,59 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
     }
   }, []);
 
+  const syncAlerts = useCallback(async () => {
+    try {
+      await fetch("/api/personel-puantaj/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch {
+      // Görsel seans uyarıları istemci tarafında çalışmaya devam eder.
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void syncAlerts();
+  }, [load, syncAlerts]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setClockTick((value) => value + 1);
+      void syncAlerts();
+      void load();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [load, syncAlerts]);
+
+  const currentMinute = useMemo(() => istanbulMinutesNow(), [clockTick, data]);
+
+  const myUpcomingWarnings = useMemo(() => {
+    if (!data) return [] as Array<{ row: TodayRow; diff: number }>;
+    return data.today
+      .filter((row) => row.isMine && !row.checkin)
+      .map((row) => ({ row, diff: minutes(row.startTime) - currentMinute }))
+      .filter(({ diff }) => diff <= 30 && diff > 0)
+      .sort((a, b) => a.diff - b.diff);
+  }, [data, currentMinute]);
+
+  const myStartedMissing = useMemo(() => {
+    if (!data) return [] as Array<{ row: TodayRow; lateBy: number }>;
+    return data.today
+      .filter((row) => row.isMine && !row.checkin)
+      .map((row) => ({ row, lateBy: currentMinute - minutes(row.startTime) }))
+      .filter(({ lateBy }) => lateBy >= 0)
+      .sort((a, b) => b.lateBy - a.lateBy);
+  }, [data, currentMinute]);
+
+  const managerMissing = useMemo(() => {
+    if (!data?.isManager) return [] as Array<{ row: TodayRow; lateBy: number }>;
+    return data.today
+      .filter((row) => !row.checkin)
+      .map((row) => ({ row, lateBy: currentMinute - minutes(row.startTime) }))
+      .filter(({ lateBy }) => lateBy >= 0)
+      .sort((a, b) => b.lateBy - a.lateBy);
+  }, [data, currentMinute]);
 
   const checkin = useCallback(async (row: TodayRow) => {
     setMessage(null);
@@ -204,11 +272,57 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
       {message ? <div className="ppNotice success">{message}</div> : null}
       {error ? <div className="ppNotice danger">{error}</div> : null}
 
+      {myUpcomingWarnings.map(({ row, diff }) => (
+        <div className="ppSessionAlert warning" key={`upcoming-${row.scheduleId}`}>
+          <div className="ppSessionAlertIcon">!</div>
+          <div>
+            <strong>Dersinizin başlamasına {diff} dakika kaldı</strong>
+            <p>{row.branchName} · {row.groupName} · {row.startTime}–{row.endTime}</p>
+            <span>Henüz “Derse Geldim” girişi yapmadınız. Ders başlangıcında giriş yapılmazsa yönetici otomatik olarak bilgilendirilecektir.</span>
+          </div>
+          <button onClick={() => void checkin(row)} disabled={busyKey === row.scheduleId}>
+            {busyKey === row.scheduleId ? "Konum alınıyor…" : "Derse Geldim"}
+          </button>
+        </div>
+      ))}
+
+      {myStartedMissing.map(({ row, lateBy }) => (
+        <div className="ppSessionAlert danger" key={`started-${row.scheduleId}`}>
+          <div className="ppSessionAlertIcon">!</div>
+          <div>
+            <strong>Seans başladı · girişiniz bulunmuyor</strong>
+            <p>{row.branchName} · {row.groupName} · {row.startTime}–{row.endTime}</p>
+            <span>{lateBy > 0 ? `${lateBy} dakika geçti. ` : "Ders saati geldi. "}Yönetici bilgilendirildi. Lütfen tesisteyseniz girişinizi hemen yapın.</span>
+          </div>
+          <button onClick={() => void checkin(row)} disabled={busyKey === row.scheduleId}>
+            {busyKey === row.scheduleId ? "Konum alınıyor…" : "Şimdi Giriş Yap"}
+          </button>
+        </div>
+      ))}
+
+      {data.isManager && managerMissing.length ? (
+        <section className="ppManagerAlertPanel">
+          <div className="ppManagerAlertHead">
+            <div><p>YÖNETİCİ UYARISI</p><strong>Giriş yapılmayan seanslar</strong></div>
+            <span>{managerMissing.length}</span>
+          </div>
+          {managerMissing.map(({ row, lateBy }) => (
+            <div className="ppManagerAlertRow" key={`manager-${row.staffId}-${row.scheduleId}`}>
+              <div>
+                <strong>{row.staffName}</strong>
+                <p>{row.branchName} · {row.groupName} · {row.startTime}–{row.endTime}</p>
+              </div>
+              <span>{lateBy > 0 ? `${lateBy} dk gecikti` : "Seans başladı"}</span>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <section className="ppStats">
         <article><span>Bugünkü Plan</span><strong>{data.summary.planned}</strong><small>personel / ders ataması</small></article>
         <article><span>Giriş Yapan</span><strong>{data.summary.checkedIn}</strong><small>bugün kaydedilen</small></article>
         <article><span>Onay Bekleyen</span><strong>{data.summary.pending}</strong><small>konum / yönetici kontrolü</small></article>
-        <article className={data.summary.missing ? "alert" : ""}><span>Geciken Giriş</span><strong>{data.summary.missing}</strong><small>10 dk geçti, giriş yok</small></article>
+        <article className={managerMissing.length ? "alert" : ""}><span>Giriş Yapılmayan</span><strong>{managerMissing.length || data.summary.missing}</strong><small>başlayan seans / giriş yok</small></article>
       </section>
 
       <div className="ppTabs" role="tablist" aria-label="Personel puantaj bölümleri">
@@ -230,13 +344,15 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                 const meta = statusMeta(row.checkin);
                 const canCheckin = row.isMine && !row.checkin;
                 const canApprove = data.isManager && row.checkin?.approval_status === "pending";
+                const lateBy = currentMinute - minutes(row.startTime);
+                const isMissingStarted = !row.checkin && lateBy >= 0;
                 return (
-                  <article className="ppLessonRow" key={`${row.staffId}-${row.scheduleId}`}>
+                  <article className={`ppLessonRow ${isMissingStarted ? "missing" : ""}`} key={`${row.staffId}-${row.scheduleId}`}>
                     <div className="ppTimeBox"><strong>{row.startTime}</strong><span>{row.endTime}</span></div>
                     <div className="ppLessonMain">
                       <div className="ppLessonTitle">
                         <strong>{row.staffName}</strong>
-                        <span className={`ppStatus ${meta.tone}`}>{meta.label}</span>
+                        <span className={`ppStatus ${isMissingStarted ? "danger" : meta.tone}`}>{isMissingStarted ? "Giriş yapılmadı" : meta.label}</span>
                       </div>
                       <p>{row.branchName} · {row.groupName}</p>
                       <small>{row.title || "Eğitmen"}</small>
@@ -246,6 +362,8 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                           <span>{row.checkin.location_verified ? "Konum doğrulandı" : "Konum kontrolü gerekli"}</span>
                           {typeof row.checkin.distance_m === "number" ? <span>Mesafe: {Math.round(row.checkin.distance_m)} m</span> : null}
                         </div>
+                      ) : isMissingStarted ? (
+                        <div className="ppMissingMeta">Planlanan seans başladı · {lateBy > 0 ? `${lateBy} dk geçti` : "giriş bekleniyor"}</div>
                       ) : !row.branchLocationConfigured ? (
                         <div className="ppBranchWarn">Bu şube için havuz koordinatı henüz tanımlı değil; giriş yönetici onayına düşer.</div>
                       ) : null}
@@ -261,7 +379,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                           {busyKey === row.checkin.id ? "Onaylanıyor…" : "Puantaja Onayla"}
                         </button>
                       ) : null}
-                      {!canCheckin && !canApprove ? <span className="ppDone">{row.checkin ? "Kayıt tamamlandı" : "Planlandı"}</span> : null}
+                      {!canCheckin && !canApprove ? <span className="ppDone">{row.checkin ? "Kayıt tamamlandı" : isMissingStarted ? "Yönetici takibinde" : "Planlandı"}</span> : null}
                     </div>
                   </article>
                 );
