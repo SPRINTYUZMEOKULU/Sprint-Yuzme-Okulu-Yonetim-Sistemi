@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
-import ApprovalCenterClient from "./approval-center-client";
+import ApprovalCenterClient from "./approval-center-client-v2";
 import ApprovedArchiveFinalizer from "./approved-archive-finalizer";
 import "./approval-center-premium.css";
 
