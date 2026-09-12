@@ -64,6 +64,26 @@
 .sprintStatusBadge.danger { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; }
 .sprintStatusBadge.neutral { background: #eff6ff; color: #175cd3; border: 1px solid #bfdbfe; }
 
+.sprintCheckinButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid #15803d;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 5px 12px rgba(22, 163, 74, .18);
+}
+
+.sprintCheckinButton:hover { background: #15803d; }
+.sprintCheckinButton:disabled { opacity: .7; cursor: wait; }
+
 .sprintStaffAssignment {
   position: relative;
   transition: all .2s ease;
@@ -174,6 +194,17 @@
   .sprintStatusBadges {
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .sprintStatusBadge {
+    white-space: normal;
+  }
+
+  .sprintCheckinButton {
+    width: 100%;
+    min-height: 40px;
+    border-radius: 12px;
+    font-size: 12px;
   }
 
   .sprintCoachDistribution {
