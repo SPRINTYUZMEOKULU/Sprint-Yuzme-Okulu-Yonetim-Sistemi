@@ -24,6 +24,7 @@ const menuItems: MenuItem[] = [
   { label: "Ders Programı", href: "/ders-programi", moduleKey: "schedule" },
   { label: "Operasyon Planı", href: "/operasyon-plani", moduleKey: "operations" },
   { label: "Yoklama", href: "/yoklama", moduleKey: "attendance" },
+  { label: "Personel & Puantaj", href: "/personel-puantaj", moduleKey: "attendance" },
   { label: "Ödemeler", href: "/odemeler", moduleKey: "finance" },
   { label: "Kasa", href: "/kasa", moduleKey: "finance" },
   { label: "Raporlar", href: "/raporlar", moduleKey: "reports" },
