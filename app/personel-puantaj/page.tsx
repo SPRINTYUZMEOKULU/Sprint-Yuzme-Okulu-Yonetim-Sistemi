@@ -2,6 +2,7 @@ import Link from "next/link";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import PersonelPuantajClient from "./personel-puantaj-client";
+import PersonelOdemeleri from "./personel-odemeleri";
 import "./personel-puantaj.css";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function PersonelPuantajPage() {
     "coach",
   ]);
 
-  const canManagePay = ["owner", "admin", "branch_manager"].includes(profile.role);
+  const canManagePay = ["owner", "admin", "branch_manager", "accounting"].includes(profile.role);
 
   return (
     <>
@@ -28,7 +29,7 @@ export default async function PersonelPuantajPage() {
               <p className="ppEyebrow">SPRİNTOS · PERSONEL OPERASYONU</p>
               <h1>Personel & Puantaj</h1>
               <p className="ppIntro">
-                Ders girişleri, konum doğrulama, aylık puantaj ve hakediş takibi tek ekranda.
+                Ders girişleri, konum doğrulama, aylık puantaj, hakediş ve personel ödeme takibi tek ekranda.
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -38,6 +39,7 @@ export default async function PersonelPuantajPage() {
           </header>
 
           <PersonelPuantajClient currentRole={profile.role} />
+          {canManagePay ? <div style={{ marginTop: 16 }}><PersonelOdemeleri /></div> : null}
         </section>
       </main>
     </>
