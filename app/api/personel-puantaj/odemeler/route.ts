@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 type Role = "owner" | "admin" | "branch_manager" | "registration_staff" | "accounting" | "coach" | "guardian" | "pending";
 const paymentRoles: Role[] = ["owner", "admin", "branch_manager", "accounting"];
+const deleteRoles: Role[] = ["owner", "admin"];
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
     const active = rows.filter((r: any) => r.status !== "archived");
     return NextResponse.json({
       month,
+      canDeleteArchive: deleteRoles.includes(ctx.role),
       rows,
       summary: {
         total: active.reduce((s: number, r: any) => s + Number(r.totalAmount || 0), 0),
@@ -130,6 +132,14 @@ export async function POST(request: NextRequest) {
     if (!row) return NextResponse.json({ error: "Personel bulunamadı." }, { status: 404 });
     const periodMonth = `${month}-01`;
     const now = new Date().toISOString();
+
+    if (action === "delete_archive") {
+      if (!deleteRoles.includes(ctx.role)) return NextResponse.json({ error: "Arşiv kaydını yalnızca kurucu yönetici veya yönetici silebilir." }, { status: 403 });
+      if (row.status !== "archived" || !row.periodId) return NextResponse.json({ error: "Yalnızca arşivlenmiş ödeme kaydı silinebilir." }, { status: 400 });
+      const { error } = await ctx.admin.from("staff_payroll_periods").delete().eq("id", row.periodId).eq("organization_id", ctx.organizationId).eq("staff_id", staffId).eq("period_month", periodMonth).eq("status", "archived");
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
 
     if (action === "close_period") {
       if (["paid", "archived"].includes(row.status)) return NextResponse.json({ error: "Ödenmiş veya arşivlenmiş dönem değiştirilemez." }, { status: 400 });
