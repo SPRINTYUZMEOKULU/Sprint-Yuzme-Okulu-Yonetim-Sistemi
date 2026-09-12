@@ -1,4 +1,5 @@
 import Link from "next/link";
+import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import PersonelPuantajClient from "./personel-puantaj-client";
 import "./personel-puantaj.css";
@@ -16,21 +17,24 @@ export default async function PersonelPuantajPage() {
   ]);
 
   return (
-    <main className="ppPage">
-      <section className="ppShell">
-        <header className="ppHeader">
-          <div>
-            <p className="ppEyebrow">SPRİNTOS · PERSONEL OPERASYONU</p>
-            <h1>Personel & Puantaj</h1>
-            <p className="ppIntro">
-              Ders girişleri, konum doğrulama, aylık puantaj ve hakediş takibi tek ekranda.
-            </p>
-          </div>
-          <Link href="/" className="ppBack">Ana Sayfa</Link>
-        </header>
+    <>
+      <UstGezinme />
+      <main className="ppPage">
+        <section className="ppShell">
+          <header className="ppHeader">
+            <div>
+              <p className="ppEyebrow">SPRİNTOS · PERSONEL OPERASYONU</p>
+              <h1>Personel & Puantaj</h1>
+              <p className="ppIntro">
+                Ders girişleri, konum doğrulama, aylık puantaj ve hakediş takibi tek ekranda.
+              </p>
+            </div>
+            <Link href="/" className="ppBack">Ana Sayfa</Link>
+          </header>
 
-        <PersonelPuantajClient currentRole={profile.role} />
-      </section>
-    </main>
+          <PersonelPuantajClient currentRole={profile.role} />
+        </section>
+      </main>
+    </>
   );
 }
