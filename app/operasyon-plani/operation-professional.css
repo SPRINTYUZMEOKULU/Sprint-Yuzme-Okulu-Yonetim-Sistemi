@@ -1,0 +1,216 @@
+.sprintSessionCard {
+  border: 1px solid #dce6f3 !important;
+  border-radius: 22px !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07) !important;
+  overflow: hidden;
+}
+
+.sprintSessionHeader {
+  padding-bottom: 18px !important;
+  margin-bottom: 0 !important;
+}
+
+.sprintSessionStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
+}
+
+.sprintStatusHeading {
+  min-width: 190px;
+}
+
+.sprintStatusHeading span {
+  display: block;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.sprintStatusHeading small {
+  display: block;
+  margin-top: 2px;
+  color: #73849b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sprintStatusBadges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.sprintStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.sprintStatusBadge.ok { background: #ecfdf3; color: #067647; border: 1px solid #abefc6; }
+.sprintStatusBadge.warn { background: #fffaeb; color: #b54708; border: 1px solid #fedf89; }
+.sprintStatusBadge.danger { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; }
+.sprintStatusBadge.neutral { background: #eff6ff; color: #175cd3; border: 1px solid #bfdbfe; }
+
+.sprintStaffAssignment {
+  position: relative;
+  transition: all .2s ease;
+}
+
+.sprintStaffAssignment.isCollapsed form {
+  display: none !important;
+}
+
+.sprintInlineToggle {
+  float: right;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #fff;
+  color: #155eef;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.sprintCoachDistribution {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.sprintStudentSection {
+  margin-top: 16px !important;
+}
+
+.sprintStudentGrid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.sprintStudentCard {
+  position: relative;
+  padding: 12px !important;
+  border-radius: 14px !important;
+  border-color: #dbe5f1 !important;
+  box-shadow: none !important;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.sprintStudentCard:hover {
+  border-color: #bfdbfe !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .06) !important;
+}
+
+.sprintStudentAssignForm {
+  display: none !important;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.sprintStudentCard.isEditing .sprintStudentAssignForm {
+  display: flex !important;
+}
+
+.sprintStudentEditToggle {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #155eef;
+  padding: 5px 0;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.sprintSessionFooter {
+  position: sticky;
+  bottom: 8px;
+  z-index: 4;
+  padding: 10px !important;
+  margin-top: 18px !important;
+  border: 1px solid #dbeafe !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .10);
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 760px) {
+  .sprintSessionCard {
+    border-radius: 18px !important;
+  }
+
+  .sprintSessionHeader {
+    gap: 12px !important;
+  }
+
+  .sprintSessionStatus {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+
+  .sprintStatusHeading {
+    min-width: 0;
+  }
+
+  .sprintStatusBadges {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .sprintCoachDistribution {
+    padding: 12px;
+  }
+
+  .sprintStudentGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sprintStudentCard {
+    padding: 11px !important;
+  }
+
+  .sprintStudentCard > div:first-child {
+    gap: 8px;
+  }
+
+  .sprintStudentCard.isEditing {
+    border-color: #93c5fd !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, .08) !important;
+  }
+
+  .sprintStudentAssignForm select {
+    min-width: 0 !important;
+    flex: 1;
+  }
+
+  .sprintSessionFooter {
+    bottom: 6px;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .sprintSessionFooter form,
+  .sprintSessionFooter a {
+    width: 100% !important;
+  }
+}
