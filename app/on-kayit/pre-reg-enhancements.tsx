@@ -71,7 +71,8 @@ export default function PreRegEnhancements() {
         systemMessage.classList.add("successSystemPulse");
       }
 
-      const closing = Array.from(successRoot.querySelectorAll("div")).find((el) => el.textContent?.includes("Sizi en kısa sürede aramızda görmek") && el.children.length < 6);
+      const closingText = "🎁 Sizi en kısa sürede aramızda görmek için sabırsızlanıyoruz! 🏊";
+      const closing = Array.from(successRoot.querySelectorAll("div")).find((el) => el.textContent?.trim() === closingText);
       if (closing) {
         closing.innerHTML = `<span class="successClosingIcon">${heartHandIcon}</span><strong>Sizi en kısa sürede aramızda görmek amacıyla sabırsızlanıyoruz!</strong>`;
         closing.classList.add("successClosingCard");
