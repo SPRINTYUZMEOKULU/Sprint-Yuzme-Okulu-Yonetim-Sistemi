@@ -70,6 +70,11 @@ function isAdultCourse(value: unknown) {
   );
 }
 
+function draftObject(value: unknown): AnyRow {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as AnyRow;
+}
+
 export default async function PaymentsPage({
   searchParams,
 }: {
@@ -114,6 +119,7 @@ export default async function PaymentsPage({
     groupsResult,
     branchesResult,
     packagesResult,
+    completionResult,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -159,6 +165,11 @@ export default async function PaymentsPage({
       .select("*")
       .eq("organization_id", organizationId)
       .eq("is_active", true),
+
+    supabase
+      .from("registration_completion_checklists")
+      .select("student_id,draft_data,payment_due_date,payment_due_date_manual,payment_note,updated_at")
+      .eq("organization_id", organizationId),
   ]);
 
   const loadError =
@@ -167,7 +178,8 @@ export default async function PaymentsPage({
     paymentsResult.error ||
     groupsResult.error ||
     branchesResult.error ||
-    packagesResult.error;
+    packagesResult.error ||
+    completionResult.error;
 
   if (loadError) {
     console.error(
@@ -218,6 +230,9 @@ export default async function PaymentsPage({
   const packages =
     (packagesResult.data || []) as AnyRow[];
 
+  const completionRows =
+    (completionResult.data || []) as AnyRow[];
+
   const groupMap = new Map<string, AnyRow>();
 
   for (const group of groups) {
@@ -243,6 +258,11 @@ export default async function PaymentsPage({
         coursePackage
       );
     }
+  }
+
+  const completionMap = new Map<string, AnyRow>();
+  for (const row of completionRows) {
+    if (row.student_id) completionMap.set(String(row.student_id), row);
   }
 
   const enrollmentMap = new Map<
@@ -295,9 +315,12 @@ export default async function PaymentsPage({
 
   const preparedStudents: PaymentStudent[] = students.map((student) => {
     const enrollment = enrollmentMap.get(student.id);
+    const completion = completionMap.get(student.id);
+    const draft = draftObject(completion?.draft_data);
 
     const groupId =
       enrollment?.group_id ||
+      draft.group_id ||
       student.preferred_group_id ||
       null;
 
@@ -308,6 +331,7 @@ export default async function PaymentsPage({
     const branchId =
       group?.branch_id ||
       enrollment?.branch_id ||
+      draft.branch_id ||
       student.branch_id ||
       null;
 
@@ -318,6 +342,7 @@ export default async function PaymentsPage({
     const packageId =
       enrollment?.package_id ||
       enrollment?.course_package_id ||
+      draft.package_id ||
       student.preferred_package_id ||
       null;
 
@@ -344,6 +369,7 @@ export default async function PaymentsPage({
 
     const totalLessons = toNumber(
       enrollment?.total_lessons ??
+        draft.total_lessons ??
         coursePackage?.lesson_count ??
         coursePackage?.lessons ??
         0
@@ -355,6 +381,7 @@ export default async function PaymentsPage({
     const courseType =
       group?.course_type ||
       enrollment?.course_type ||
+      coursePackage?.course_type ||
       null;
 
     const adult = isAdultCourse(courseType);
@@ -368,7 +395,11 @@ export default async function PaymentsPage({
     const dueDate =
       enrollment?.payment_due_date ||
       enrollment?.due_date ||
+      completion?.payment_due_date ||
+      draft.payment_due_date ||
       latestPayment?.due_date ||
+      draft.start_date ||
+      enrollment?.start_date ||
       null;
 
     return {
@@ -396,10 +427,11 @@ export default async function PaymentsPage({
       package_price: packagePrice,
       total_paid: totalPaid,
       remaining_payment: remainingPayment,
-      start_date: enrollment?.start_date || null,
+      start_date: enrollment?.start_date || draft.start_date || null,
       end_date:
         enrollment?.planned_end_date ||
         enrollment?.end_date ||
+        draft.planned_end_date ||
         null,
       total_lessons: totalLessons,
       used_lessons: usedLessons,
