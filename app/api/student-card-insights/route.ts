@@ -12,6 +12,7 @@ function adminClient(){
 }
 
 function n(v:unknown){const x=Number(v??0);return Number.isFinite(x)?x:0;}
+function draft(v:unknown){return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,any>:{};}
 
 export async function GET(request:NextRequest){
   try{
@@ -25,26 +26,42 @@ export async function GET(request:NextRequest){
 
     const admin=adminClient();
     const {data:students,error:studentError}=await admin.from("students")
-      .select("id,first_name,last_name")
+      .select("id,first_name,last_name,preferred_package_id")
       .eq("organization_id",organizationId).in("id",ids);
     if(studentError) throw studentError;
     const validIds=(students||[]).map((s:any)=>String(s.id));
     if(!validIds.length) return NextResponse.json({ok:true,items:[]});
+    const studentMap=new Map<string,any>((students||[]).map((s:any)=>[String(s.id),s]));
 
-    const [{data:enrollments,error:enrollmentError},{data:followups,error:followupError}]=await Promise.all([
+    const [
+      {data:enrollments,error:enrollmentError},
+      {data:followups,error:followupError},
+      {data:completionRows,error:completionError},
+    ]=await Promise.all([
       admin.from("student_enrollments").select("id,student_id,package_id,payment_due_date,start_date,status,created_at")
         .eq("organization_id",organizationId).in("student_id",validIds).eq("status","active")
         .order("created_at",{ascending:false}),
       admin.from("student_absence_followups").select("id,student_id,first_absence_date,second_absence_date,status,contact_reason,created_at")
         .eq("organization_id",organizationId).in("student_id",validIds).eq("status","pending")
         .order("created_at",{ascending:false}),
+      admin.from("registration_completion_checklists").select("student_id,draft_data,payment_due_date,updated_at")
+        .eq("organization_id",organizationId).in("student_id",validIds),
     ]);
     if(enrollmentError) throw enrollmentError;
     if(followupError) throw followupError;
+    if(completionError) throw completionError;
 
     const enrollmentMap=new Map<string,any>();
     for(const row of enrollments||[]){if(!enrollmentMap.has(String(row.student_id))) enrollmentMap.set(String(row.student_id),row);}
-    const packageIds=[...new Set([...enrollmentMap.values()].map((x:any)=>String(x.package_id||"")).filter(Boolean))];
+    const completionMap=new Map<string,any>();
+    for(const row of completionRows||[]){completionMap.set(String(row.student_id),row);}
+
+    const packageIds=[...new Set(validIds.map((studentId)=>{
+      const enrollment=enrollmentMap.get(studentId);
+      const completion=completionMap.get(studentId);
+      const d=draft(completion?.draft_data);
+      return String(enrollment?.package_id||d.package_id||studentMap.get(studentId)?.preferred_package_id||"");
+    }).filter(Boolean))];
     const enrollmentIds=[...enrollmentMap.values()].map((x:any)=>String(x.id));
 
     const [packageResult,paymentResult]=await Promise.all([
@@ -66,10 +83,14 @@ export async function GET(request:NextRequest){
 
     const items=validIds.map((studentId)=>{
       const enrollment=enrollmentMap.get(studentId)||null;
-      const pkg=enrollment?.package_id?packageMap.get(String(enrollment.package_id))||null:null;
+      const completion=completionMap.get(studentId)||null;
+      const d=draft(completion?.draft_data);
+      const packageId=enrollment?.package_id||d.package_id||studentMap.get(studentId)?.preferred_package_id||null;
+      const pkg=packageId?packageMap.get(String(packageId))||null:null;
       const total=n(pkg?.price);
       const paid=enrollment?.id?n(paidMap.get(String(enrollment.id))):0;
       const remaining=Math.max(0,total-paid);
+      const hasFinanceRecord=Boolean(enrollment||pkg||completion);
       return {
         studentId,
         finance:{
@@ -78,8 +99,8 @@ export async function GET(request:NextRequest){
           total,
           paid,
           remaining,
-          dueDate:enrollment?.payment_due_date||enrollment?.start_date||null,
-          status:enrollment?(remaining>0?(paid>0?"partial":"waiting"):"paid"):"unknown",
+          dueDate:enrollment?.payment_due_date||completion?.payment_due_date||d.payment_due_date||enrollment?.start_date||d.start_date||null,
+          status:hasFinanceRecord?(remaining>0?(paid>0?"partial":"waiting"):total>0?"paid":"unknown"):"unknown",
         },
         absenceFollowup:followupMap.get(studentId)||null,
       };
