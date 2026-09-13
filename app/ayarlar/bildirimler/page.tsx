@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
 import NotificationSettingsClient from "./notification-settings-client";
 import NotificationRoutingClient from "./notification-routing-client";
+import NotificationRoutingTestClient from "./notification-routing-test-client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -66,6 +67,8 @@ export default async function NotificationSettingsPage() {
         ) : null}
 
         <NotificationRoutingClient profiles={profiles} preferences={(preferencesResult.data ?? []) as never[]} activePushProfileIds={activePushProfileIds} />
+
+        <NotificationRoutingTestClient profiles={profiles} />
 
         <section className="deviceSection">
           <div className="deviceSectionHead">
