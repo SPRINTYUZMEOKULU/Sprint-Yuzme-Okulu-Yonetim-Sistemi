@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { resolveNotificationScopeContext } from "@/lib/notifications/resolve-scope-context";
 
 export type NotificationCategory =
   | "preregistration"
@@ -143,24 +144,6 @@ function uniqueIds(values: string[]) {
   return Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim().length > 0)));
 }
 
-function getStringMetadata(metadata: Record<string, unknown> | undefined, keys: string[]) {
-  if (!metadata) return null;
-  for (const key of keys) {
-    const value = metadata[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function getStringArrayMetadata(metadata: Record<string, unknown> | undefined, keys: string[]) {
-  if (!metadata) return [] as string[];
-  for (const key of keys) {
-    const value = metadata[key];
-    if (Array.isArray(value)) return uniqueIds(value.filter((item): item is string => typeof item === "string"));
-  }
-  return [] as string[];
-}
-
 function defaultRule(role: string | null, category: NotificationCategory, explicit: boolean) {
   if (explicit) return { inAppEnabled: true, pushEnabled: true, scope: "all" as NotificationScope };
   if (role === "owner" || role === "admin") {
@@ -194,7 +177,7 @@ async function resolveRecipients(input: CreateNotificationInput): Promise<Recipi
   if (!profiles.length) return [];
 
   const candidateIds = profiles.map((profile) => profile.id);
-  const [{ data: preferenceData, error: preferenceError }, { data: staffData, error: staffError }] = await Promise.all([
+  const [{ data: preferenceData, error: preferenceError }, { data: staffData, error: staffError }, scopeContext] = await Promise.all([
     admin
       .from("notification_user_preferences")
       .select("profile_id,category,in_app_enabled,push_enabled,scope")
@@ -207,6 +190,7 @@ async function resolveRecipients(input: CreateNotificationInput): Promise<Recipi
       .eq("organization_id", input.organizationId)
       .eq("is_active", true)
       .in("auth_user_id", candidateIds),
+    resolveNotificationScopeContext(admin, input),
   ]);
 
   if (preferenceError) throw new Error(`Bildirim kuralları okunamadı: ${preferenceError.message}`);
@@ -238,15 +222,6 @@ async function resolveRecipients(input: CreateNotificationInput): Promise<Recipi
     allowedBranchesByStaff.set(String(row.staff_id), set);
   }
 
-  const branchId = getStringMetadata(input.metadata, ["branchId", "branch_id"]);
-  const assignedProfileIds = new Set([
-    ...getStringArrayMetadata(input.metadata, ["assignedProfileIds", "assigned_profile_ids", "coachProfileIds", "coach_profile_ids"]),
-    ...[
-      getStringMetadata(input.metadata, ["assignedProfileId", "assigned_profile_id"]),
-      getStringMetadata(input.metadata, ["coachProfileId", "coach_profile_id", "primaryCoachId", "primary_coach_id"]),
-    ].filter((value): value is string => Boolean(value)),
-  ]);
-
   return profiles.flatMap((profile) => {
     const stored = preferences.get(profile.id);
     const rule = stored
@@ -259,16 +234,16 @@ async function resolveRecipients(input: CreateNotificationInput): Promise<Recipi
 
     if (!rule.inAppEnabled) return [];
 
-    if (rule.scope === "branches" && branchId) {
+    if (rule.scope === "branches" && scopeContext.branchId) {
       const staff = staffByProfile.get(profile.id);
       if (staff && !staff.all_branches) {
         const allowed = allowedBranchesByStaff.get(String(staff.id));
-        if (!allowed?.has(branchId)) return [];
+        if (!allowed?.has(scopeContext.branchId)) return [];
       }
     }
 
-    if (rule.scope === "assigned" && assignedProfileIds.size > 0 && !assignedProfileIds.has(profile.id)) {
-      return [];
+    if (rule.scope === "assigned" && scopeContext.hasAssignableContext) {
+      if (!scopeContext.assignedProfileIds.has(profile.id)) return [];
     }
 
     return [{ profileId: profile.id, pushEnabled: input.push === true && rule.pushEnabled }];
