@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
     // yanlış ₺0 / Ödendi durumuna dönüşmez.
     const supabase = adminClient();
 
-    const [studentResult, enrollmentResult, paymentsResult] = await Promise.all([
+    const [studentResult, enrollmentResult, paymentsResult, checklistResult] = await Promise.all([
       supabase
         .from("students")
-        .select("id,first_name,last_name,phone,guardian_name,guardian_phone")
+        .select("id,first_name,last_name,phone,guardian_name,guardian_phone,preferred_package_id")
         .eq("organization_id", organizationId)
         .eq("id", studentId)
         .maybeSingle(),
@@ -69,11 +69,18 @@ export async function GET(request: NextRequest) {
         .eq("student_id", studentId)
         .order("received_at", { ascending: false })
         .limit(100),
+      supabase
+        .from("registration_completion_checklists")
+        .select("enrollment_id,draft_data,payment_due_date")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .maybeSingle(),
     ]);
 
     if (studentResult.error) throw studentResult.error;
     if (enrollmentResult.error) throw enrollmentResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
+    if (checklistResult.error) throw checklistResult.error;
 
     if (!studentResult.data) {
       return NextResponse.json(
@@ -83,14 +90,26 @@ export async function GET(request: NextRequest) {
     }
 
     const enrollment = enrollmentResult.data;
+    const draftData =
+      checklistResult.data?.draft_data && typeof checklistResult.data.draft_data === "object"
+        ? (checklistResult.data.draft_data as Record<string, unknown>)
+        : {};
+
+    const resolvedPackageId = String(
+      enrollment?.package_id ||
+        draftData.package_id ||
+        studentResult.data.preferred_package_id ||
+        "",
+    );
+
     let packageInfo: any = null;
 
-    if (enrollment?.package_id) {
+    if (resolvedPackageId) {
       const packageResult = await supabase
         .from("course_packages")
         .select("id,name,price,lesson_count")
         .eq("organization_id", organizationId)
-        .eq("id", enrollment.package_id)
+        .eq("id", resolvedPackageId)
         .maybeSingle();
       if (packageResult.error) throw packageResult.error;
       packageInfo = packageResult.data;
@@ -154,20 +173,32 @@ export async function GET(request: NextRequest) {
       0,
     );
 
-    const totalAmount = amount(packageInfo?.price ?? enrollment?.package_price ?? 0);
+    const totalAmount = amount(packageInfo?.price);
     const remainingPayment = Math.max(0, totalAmount - totalReceived);
+
+    const draftStartDate = String(draftData.start_date || "") || null;
+    const draftPlannedEndDate = String(draftData.planned_end_date || "") || null;
+    const draftTotalLessons = Number(draftData.total_lessons || 0);
+    const hasFinancePreview = Boolean(enrollment || packageInfo);
 
     return NextResponse.json({
       ok: true,
       student: studentResult.data,
-      enrollment: enrollment
+      enrollment: hasFinancePreview
         ? {
-            id: enrollment.id,
-            startDate: enrollment.start_date || null,
-            plannedEndDate: enrollment.planned_end_date || null,
-            paymentDueDate: enrollment.payment_due_date || enrollment.start_date || null,
+            id: enrollment?.id || "",
+            source: enrollment ? "active" : "registration_draft",
+            startDate: enrollment?.start_date || draftStartDate,
+            plannedEndDate: enrollment?.planned_end_date || draftPlannedEndDate,
+            paymentDueDate:
+              enrollment?.payment_due_date ||
+              checklistResult.data?.payment_due_date ||
+              draftStartDate ||
+              null,
             packageName: packageInfo?.name || null,
-            lessonCount: Number(enrollment.total_lessons || packageInfo?.lesson_count || 0),
+            lessonCount: Number(
+              enrollment?.total_lessons || draftTotalLessons || packageInfo?.lesson_count || 0,
+            ),
             totalAmount,
             totalReceived,
             remainingPayment,
