@@ -68,7 +68,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
 
   const [progressRes, messagesRes, announcementRes] = await Promise.all([
     linkedIds.length
-      ? admin.from("progress_notes").select("id,student_id,note,target,visible_to_guardian,created_at,coach_id").in("student_id", linkedIds).order("created_at", { ascending: false }).limit(60)
+      ? admin.from("student_notes").select("id,student_id,body,target,is_guardian_visible,created_at,author_id,note_type").eq("organization_id", org).eq("note_type", "coach").in("student_id", linkedIds).order("created_at", { ascending: false }).limit(60)
       : Promise.resolve({ data: [] as any[], error: null }),
     admin.from("guardian_messages").select("id,student_id,title,body,message_type,channel,sent_at,read_at,created_at").eq("organization_id", org).eq("guardian_id", id).order("created_at", { ascending: false }).limit(60),
     admin.from("announcements").select("id,title,body,audience,is_published,published_at,created_at").eq("is_published", true).order("published_at", { ascending: false }).limit(10),
@@ -77,7 +77,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const progress = progressRes.data || [];
   const messages = messagesRes.data || [];
   const announcements = announcementRes.data || [];
-  const visibleProgressCount = progress.filter((p: any) => p.visible_to_guardian).length;
+  const visibleProgressCount = progress.filter((p: any) => p.is_guardian_visible).length;
   const unreadMessageCount = messages.filter((m: any) => !m.read_at).length;
   const portalEnabled = guardian.is_active !== false && guardianRecordRes.data?.is_active !== false && guardianRecordRes.data?.login_enabled !== false;
 
@@ -212,14 +212,14 @@ export default async function GuardianFile({ params, searchParams }: { params: P
             <div className="guardianCardHead"><div><div className="guardianEyebrow">GELİŞİM GEÇMİŞİ</div><h2>Son gelişim notları</h2></div></div>
             <div className="guardianRequestList">
               {progress.slice(0, 12).map((n: any) => <article className="guardianRequest" key={n.id}>
-                <div className="guardianRequestHead"><div><small>{childName(n.student_id)}</small><h3>{n.target || "Gelişim Notu"}</h3></div><span className="guardianPill">{n.visible_to_guardian ? "Veli görüyor" : "Yönetim notu"}</span></div>
-                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{n.note}</p>
-                <div className="guardianRequestMeta"><span>{date(n.created_at)}</span></div>
+                <div className="guardianRequestHead"><div><small>{childName(n.student_id)}</small><h3>{n.target || "Gelişim Notu"}</h3></div><span className="guardianPill">{n.is_guardian_visible ? "Veli görüyor" : "Yönetim notu"}</span></div>
+                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{n.body}</p>
+                <div className="guardianRequestMeta"><span>{date(n.created_at)}</span><span>Dijital Kursiyer Dosyası ile ortak kayıt</span></div>
                 <form action={toggleGuardianProgressVisibility} style={{ marginTop: 10 }}>
                   <input type="hidden" name="guardian_profile_id" value={id} />
                   <input type="hidden" name="student_id" value={n.student_id} />
                   <input type="hidden" name="note_id" value={n.id} />
-                  <button className="guardianButton">{n.visible_to_guardian ? "Veli Portalından Gizle" : "Veliyle Paylaş"}</button>
+                  <button className="guardianButton">{n.is_guardian_visible ? "Veli Portalından Gizle" : "Veliyle Paylaş"}</button>
                 </form>
               </article>)}
               {!progress.length ? <div className="guardianEmpty">Henüz gelişim notu yok.</div> : null}
