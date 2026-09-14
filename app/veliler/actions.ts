@@ -25,6 +25,19 @@ function back(path: string, key: "saved" | "error", message: string): never {
   redirect(`${path}?${key}=${encodeURIComponent(message)}`);
 }
 
+function temporaryPassword() {
+  return `Sp-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}-A9!`;
+}
+
+function normalizePhone(value: unknown) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0090")) digits = digits.slice(4);
+  if (digits.startsWith("90") && digits.length === 12) digits = digits.slice(2);
+  if (digits.startsWith("0") && digits.length === 11) digits = digits.slice(1);
+  return digits.length === 10 && digits.startsWith("5") ? `+90${digits}` : "";
+}
+
 async function ensureGuardianProfile(admin: ReturnType<typeof adminClient>, guardianId: string, organizationId: string) {
   const { data: existing, error: profileReadError } = await admin
     .from("profiles")
@@ -70,6 +83,94 @@ async function ensureGuardianProfile(admin: ReturnType<typeof adminClient>, guar
 
   if (repairError) return { ok: false as const, message: `Veli profili onarılamadı: ${repairError.message}` };
   return { ok: true as const };
+}
+
+export async function prepareGuardianPortalAccess(guardianProfileId: string) {
+  const actor = await requireProfile([...managementRoles]);
+  const organizationId = actor.organization_id;
+  if (!organizationId || !guardianProfileId) return { ok: false as const, message: "Veli hesabı bulunamadı." };
+
+  const admin = adminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("id,full_name,phone,email,is_active")
+    .eq("organization_id", organizationId)
+    .eq("role", "guardian")
+    .eq("id", guardianProfileId)
+    .maybeSingle();
+
+  if (profileError || !profile) return { ok: false as const, message: profileError?.message || "Veli profili bulunamadı." };
+  const phone = normalizePhone(profile.phone);
+  if (!phone) return { ok: false as const, message: "Geçerli veli telefonu bulunamadı. Önce veli telefonunu düzeltin." };
+
+  const { data: authResult, error: authError } = await admin.auth.admin.getUserById(guardianProfileId);
+  if (authError || !authResult.user) return { ok: false as const, message: "Veli kimlik hesabı bulunamadı." };
+
+  const password = temporaryPassword();
+  const { error: authUpdateError } = await admin.auth.admin.updateUserById(guardianProfileId, {
+    phone,
+    phone_confirm: true,
+    password,
+    user_metadata: {
+      ...(authResult.user.user_metadata || {}),
+      full_name: profile.full_name || "Veli",
+      role: "guardian",
+      organization_id: organizationId,
+    },
+  });
+  if (authUpdateError) return { ok: false as const, message: `Şifre hazırlanamadı: ${authUpdateError.message}` };
+
+  let { data: guardianRow } = await admin
+    .from("guardians")
+    .select("id,auth_user_id")
+    .eq("organization_id", organizationId)
+    .eq("auth_user_id", guardianProfileId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!guardianRow) {
+    const { data: inserted, error: insertError } = await admin.from("guardians").insert({
+      organization_id: organizationId,
+      auth_user_id: guardianProfileId,
+      full_name: profile.full_name || "Veli",
+      phone,
+      email: profile.email || null,
+      relationship: "Veli",
+      login_enabled: true,
+      is_active: true,
+      first_login_required: true,
+      portal_created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).select("id,auth_user_id").single();
+    if (insertError || !inserted) return { ok: false as const, message: `Portal ana kaydı oluşturulamadı: ${insertError?.message || "Bilinmeyen hata"}` };
+    guardianRow = inserted;
+  } else {
+    const { error: guardianUpdateError } = await admin.from("guardians").update({
+      full_name: profile.full_name || "Veli",
+      phone,
+      email: profile.email || null,
+      login_enabled: true,
+      is_active: true,
+      first_login_required: true,
+      updated_at: new Date().toISOString(),
+    }).eq("id", guardianRow.id).eq("organization_id", organizationId);
+    if (guardianUpdateError) return { ok: false as const, message: guardianUpdateError.message };
+  }
+
+  await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId);
+
+  revalidatePath("/veliler");
+  revalidatePath(`/veliler/${guardianProfileId}`);
+
+  return {
+    ok: true as const,
+    message: "Portal hesabı hazırlandı. Geçici şifre WhatsApp gönderimine hazır.",
+    guardianId: guardianRow.id,
+    fullName: profile.full_name || "Değerli Velimiz",
+    phone,
+    email: profile.email || "",
+    password,
+  };
 }
 
 export async function updateGuardian(formData: FormData) {
@@ -151,7 +252,8 @@ export async function createGuardianRequest(formData: FormData) {
   if (!organizationId || !studentId || !subject || !description) back("/veli-talepleri", "error", "Öğrenci, konu ve açıklama zorunludur.");
 
   const supabase = await createClient();
-  const { data: link } = await supabase.from("guardian_students").select("student_id").eq("guardian_id", profile.id).eq("student_id", studentId).maybeSingle();
+  const { data: guardianRow } = await supabase.from("guardians").select("id").eq("auth_user_id", profile.id).eq("organization_id", organizationId).maybeSingle();
+  const { data: link } = guardianRow?.id ? await supabase.from("guardian_students").select("student_id").eq("guardian_id", guardianRow.id).eq("student_id", studentId).maybeSingle() : { data: null } as any;
   if (!link) back("/veli-talepleri", "error", "Bu öğrenci için talep oluşturma yetkiniz yok.");
 
   const requestNumber = `VTL-${new Date().getFullYear()}-${Date.now().toString().slice(-7)}`;
