@@ -36,6 +36,30 @@ async function resolveCanonicalGuardianId(authProfileId: string, organizationId:
   return { ok: true as const, message: "", guardianId: row.id };
 }
 
+async function verifyLinkedStudent(authProfileId: string, studentId: string, organizationId: string) {
+  const admin = adminClient();
+  const resolved = await resolveCanonicalGuardianId(authProfileId, organizationId);
+  if (!resolved.ok) return { ok: false as const, message: resolved.message };
+
+  const { data: student } = await admin
+    .from("students")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("id", studentId)
+    .maybeSingle();
+  if (!student) return { ok: false as const, message: "Öğrenci bulunamadı." };
+
+  const { data: link } = await admin
+    .from("guardian_students")
+    .select("student_id")
+    .eq("guardian_id", resolved.guardianId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (!link) return { ok: false as const, message: "Bu öğrenci bu veli hesabına bağlı değil." };
+
+  return { ok: true as const };
+}
+
 export async function linkGuardianStudentCanonical(formData: FormData) {
   const profile = await requireProfile([...managementRoles]);
   const authProfileId = text(formData, "guardian_profile_id", 100);
@@ -89,4 +113,83 @@ export async function unlinkGuardianStudentCanonical(formData: FormData) {
   revalidatePath("/veliler");
   revalidatePath(`/veliler/${authProfileId}`);
   back(authProfileId, "saved", "Öğrenci bağlantısı kaldırıldı.");
+}
+
+export async function addGuardianProgressNote(formData: FormData) {
+  const profile = await requireProfile([...managementRoles]);
+  const authProfileId = text(formData, "guardian_profile_id", 100);
+  const studentId = text(formData, "student_id", 100);
+  const note = text(formData, "note", 4000);
+  const target = text(formData, "target", 1000);
+  if (!profile.organization_id || !authProfileId || !studentId || !note) back(authProfileId, "error", "Öğrenci ve gelişim notu zorunludur.");
+
+  const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
+  if (!verified.ok) back(authProfileId, "error", verified.message);
+
+  const { error } = await adminClient().from("progress_notes").insert({
+    student_id: studentId,
+    coach_id: profile.id,
+    note,
+    target: target || null,
+    visible_to_guardian: formData.get("visible_to_guardian") === "on",
+  });
+  if (error) back(authProfileId, "error", `Gelişim notu kaydedilemedi: ${error.message}`);
+
+  revalidatePath(`/veliler/${authProfileId}`);
+  revalidatePath("/veli-gelisim");
+  back(authProfileId, "saved", formData.get("visible_to_guardian") === "on" ? "Gelişim notu kaydedildi ve veli portalında yayınlandı." : "Gelişim notu kaydedildi; yalnızca yönetim tarafından görülebilir.");
+}
+
+export async function sendGuardianPortalMessage(formData: FormData) {
+  const profile = await requireProfile([...managementRoles]);
+  const authProfileId = text(formData, "guardian_profile_id", 100);
+  const studentId = text(formData, "student_id", 100);
+  const title = text(formData, "title", 180);
+  const body = text(formData, "body", 4000);
+  const messageType = text(formData, "message_type", 40) || "information";
+  if (!profile.organization_id || !authProfileId || !title || !body) back(authProfileId, "error", "Mesaj başlığı ve içeriği zorunludur.");
+
+  if (studentId) {
+    const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
+    if (!verified.ok) back(authProfileId, "error", verified.message);
+  }
+
+  const { error } = await adminClient().from("guardian_messages").insert({
+    organization_id: profile.organization_id,
+    guardian_id: authProfileId,
+    student_id: studentId || null,
+    title,
+    body,
+    message_type: messageType,
+    channel: "panel",
+    sent_by: profile.id,
+    sent_at: new Date().toISOString(),
+  });
+  if (error) back(authProfileId, "error", `Portal mesajı gönderilemedi: ${error.message}`);
+
+  revalidatePath(`/veliler/${authProfileId}`);
+  revalidatePath("/veli-mesajlar");
+  back(authProfileId, "saved", "Mesaj veli portalına gönderildi.");
+}
+
+export async function toggleGuardianProgressVisibility(formData: FormData) {
+  const profile = await requireProfile([...managementRoles]);
+  const authProfileId = text(formData, "guardian_profile_id", 100);
+  const noteId = text(formData, "note_id", 100);
+  const studentId = text(formData, "student_id", 100);
+  if (!profile.organization_id || !authProfileId || !noteId || !studentId) back(authProfileId, "error", "Gelişim notu bulunamadı.");
+
+  const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
+  if (!verified.ok) back(authProfileId, "error", verified.message);
+
+  const admin = adminClient();
+  const { data: current } = await admin.from("progress_notes").select("id,visible_to_guardian").eq("id", noteId).eq("student_id", studentId).maybeSingle();
+  if (!current) back(authProfileId, "error", "Gelişim notu bulunamadı.");
+  const next = !current.visible_to_guardian;
+  const { error } = await admin.from("progress_notes").update({ visible_to_guardian: next }).eq("id", noteId).eq("student_id", studentId);
+  if (error) back(authProfileId, "error", error.message);
+
+  revalidatePath(`/veliler/${authProfileId}`);
+  revalidatePath("/veli-gelisim");
+  back(authProfileId, "saved", next ? "Gelişim notu veli portalında görünür hale getirildi." : "Gelişim notu veli portalından gizlendi.");
 }
