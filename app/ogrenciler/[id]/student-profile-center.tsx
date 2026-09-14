@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createOrLinkGuardianPortal,
@@ -49,8 +49,22 @@ const emptyForm: FormState = {
   generalNote: "",
 };
 
+function resolveStudentId() {
+  if (typeof window === "undefined") return "";
+  return window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
+}
+
+function detectAdultCourse() {
+  if (typeof document === "undefined") return false;
+  const coursePanel = document.querySelector<HTMLElement>("#kurs-kaydi");
+  const text = (coursePanel?.textContent || "").toLocaleLowerCase("tr-TR");
+  return text.includes("yetişkin") || text.includes("adult");
+}
+
 export default function StudentProfileCenter() {
   const router = useRouter();
+  const [studentId, setStudentId] = useState("");
+  const [adultCourse, setAdultCourse] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,13 +81,10 @@ export default function StudentProfileCenter() {
     temporaryPassword: "",
   });
 
-  const studentId = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    const match = window.location.pathname.match(/\/ogrenciler\/([^/]+)/);
-    return match?.[1] || "";
-  }, []);
-
   useEffect(() => {
+    const currentId = resolveStudentId();
+    if (currentId) setStudentId(currentId);
+
     const onClick = (event: MouseEvent) => {
       const target = event.target as Element | null;
       const actionButton = target?.closest<HTMLButtonElement>(".fileCommandActions button");
@@ -81,21 +92,28 @@ export default function StudentProfileCenter() {
       const alertLink = target?.closest<HTMLAnchorElement>(".smartAlertGrid a[href='#genel-bilgiler']");
       const text = actionButton?.textContent?.replace(/\s+/g, " ").trim() || "";
       if (!summaryButton && !alertLink && !text.includes("Bilgileri Düzenle")) return;
+
+      const id = resolveStudentId();
+      if (!id) return;
+
       event.preventDefault();
       event.stopPropagation();
-      void openEditor();
+      void openEditor(id, detectAdultCourse());
     };
 
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
-  }, [studentId]);
+  }, []);
 
-  async function openEditor() {
-    if (!studentId) return;
+  async function openEditor(id = resolveStudentId(), adult = detectAdultCourse()) {
+    if (!id) return;
+    setStudentId(id);
+    setAdultCourse(adult);
     setOpen(true);
     setLoading(true);
     setMessage("");
-    const response = await getStudentProfileForCenter(studentId);
+
+    const response = await getStudentProfileForCenter(id);
     if (!response.ok || !response.student) {
       setMessage(response.message || "Bilgiler alınamadı.");
       setLoading(false);
@@ -122,7 +140,7 @@ export default function StudentProfileCenter() {
       fullName: student.guardian_name || "",
       email: student.guardian_email || "",
       phone: student.guardian_phone || "",
-      relationship: "Veli",
+      relationship: adult ? "Yakını" : "Veli",
       temporaryPassword: "",
     });
     setLoading(false);
@@ -132,21 +150,27 @@ export default function StudentProfileCenter() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function activeStudentId() {
+    return studentId || resolveStudentId();
+  }
+
   async function save() {
-    if (!studentId || saving) return;
+    const id = activeStudentId();
+    if (!id || saving) return;
     setSaving(true);
     setMessage("");
-    const response = await saveStudentProfileFromCenter({ studentId, ...form });
+    const response = await saveStudentProfileFromCenter({ studentId: id, ...form });
     setMessage(response.message);
     setSaving(false);
     if (response.ok) router.refresh();
   }
 
   async function createOrLinkPortal() {
-    if (!studentId || portalBusy) return;
+    const id = activeStudentId();
+    if (!id || portalBusy) return;
     setPortalBusy(true);
     setMessage("");
-    const response = await createOrLinkGuardianPortal({ studentId, ...portalForm });
+    const response = await createOrLinkGuardianPortal({ studentId: id, ...portalForm });
     setMessage(response.message);
     if (response.ok) {
       setPortal((response as any).guardianPortal || null);
@@ -157,10 +181,11 @@ export default function StudentProfileCenter() {
   }
 
   async function togglePortal() {
-    if (!studentId || !portal || portalBusy) return;
+    const id = activeStudentId();
+    if (!id || !portal || portalBusy) return;
     setPortalBusy(true);
     setMessage("");
-    const response = await setGuardianPortalActive(studentId, !portal.isActive);
+    const response = await setGuardianPortalActive(id, !portal.isActive);
     setMessage(response.message);
     if (response.ok) {
       setPortal({ ...portal, isActive: !portal.isActive });
@@ -170,10 +195,11 @@ export default function StudentProfileCenter() {
   }
 
   async function unlinkPortal() {
-    if (!studentId || !portal || portalBusy) return;
+    const id = activeStudentId();
+    if (!id || !portal || portalBusy) return;
     setPortalBusy(true);
     setMessage("");
-    const response = await unlinkGuardianPortal(studentId);
+    const response = await unlinkGuardianPortal(id);
     setMessage(response.message);
     if (response.ok) {
       setPortal(null);
@@ -183,10 +209,11 @@ export default function StudentProfileCenter() {
   }
 
   async function resetPortalPassword() {
-    if (!studentId || !portal || portalBusy || portalPassword.length < 8) return;
+    const id = activeStudentId();
+    if (!id || !portal || portalBusy || portalPassword.length < 8) return;
     setPortalBusy(true);
     setMessage("");
-    const response = await resetGuardianPortalPassword(studentId, portalPassword);
+    const response = await resetGuardianPortalPassword(id, portalPassword);
     setMessage(response.message);
     if (response.ok) setPortalPassword("");
     setPortalBusy(false);
@@ -194,14 +221,16 @@ export default function StudentProfileCenter() {
 
   if (!open) return null;
 
+  const relationLabel = adultCourse ? "Yakını" : "Veli";
+
   return (
     <div className="profileCenterOverlay" onClick={() => setOpen(false)}>
       <aside className="profileCenterPanel" onClick={(event) => event.stopPropagation()}>
         <header>
           <div>
             <span>DİJİTAL KURSİYER DOSYASI</span>
-            <h2>Öğrenci / Veli Bilgi Merkezi</h2>
-            <p>Öğrenci, veli, acil durum ve portal erişimini tek merkezden yönetin.</p>
+            <h2>{adultCourse ? "Kursiyer Bilgi Merkezi" : "Öğrenci / Veli Bilgi Merkezi"}</h2>
+            <p>{adultCourse ? "Kursiyer, yakını, acil durum ve portal erişimini tek merkezden yönetin." : "Öğrenci, veli, acil durum ve portal erişimini tek merkezden yönetin."}</p>
           </div>
           <button type="button" onClick={() => setOpen(false)} aria-label="Kapat">×</button>
         </header>
@@ -211,22 +240,22 @@ export default function StudentProfileCenter() {
         ) : (
           <div className="profileCenterBody">
             <section>
-              <div className="sectionTitle"><b>1</b><div><strong>Öğrenci Bilgileri</strong><small>Kimlik ve doğrudan iletişim bilgileri</small></div></div>
+              <div className="sectionTitle"><b>1</b><div><strong>{adultCourse ? "Kursiyer Bilgileri" : "Öğrenci Bilgileri"}</strong><small>Kimlik ve doğrudan iletişim bilgileri</small></div></div>
               <div className="profileGrid">
                 <label><span>Ad</span><input value={form.firstName} onChange={(e) => set("firstName", e.target.value)} /></label>
                 <label><span>Soyad</span><input value={form.lastName} onChange={(e) => set("lastName", e.target.value)} /></label>
                 <label><span>Doğum Tarihi</span><input type="date" value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} /></label>
-                <label><span>Öğrenci Telefonu</span><input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
-                <label className="full"><span>Öğrenci E-postası</span><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></label>
+                <label><span>{adultCourse ? "Kursiyer Telefonu" : "Öğrenci Telefonu"}</span><input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
+                <label className="full"><span>{adultCourse ? "Kursiyer E-postası" : "Öğrenci E-postası"}</span><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></label>
               </div>
             </section>
 
             <section>
-              <div className="sectionTitle"><b>2</b><div><strong>Veli Bilgileri</strong><small>İletişim, ödeme ve bilgilendirme için ana veli kaydı</small></div></div>
+              <div className="sectionTitle"><b>2</b><div><strong>{adultCourse ? "Yakın Bilgileri" : "Veli Bilgileri"}</strong><small>{adultCourse ? "İsteğe bağlı yakın iletişim bilgileri" : "İletişim, ödeme ve bilgilendirme için ana veli kaydı"}</small></div></div>
               <div className="profileGrid">
-                <label><span>Veli Adı Soyadı</span><input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} /></label>
-                <label><span>Veli Telefonu</span><input value={form.guardianPhone} onChange={(e) => set("guardianPhone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
-                <label className="full"><span>Veli E-postası</span><input type="email" value={form.guardianEmail} onChange={(e) => set("guardianEmail", e.target.value)} /></label>
+                <label><span>{relationLabel} Adı Soyadı</span><input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} /></label>
+                <label><span>{relationLabel} Telefonu</span><input value={form.guardianPhone} onChange={(e) => set("guardianPhone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
+                <label className="full"><span>{relationLabel} E-postası</span><input type="email" value={form.guardianEmail} onChange={(e) => set("guardianEmail", e.target.value)} /></label>
               </div>
             </section>
 
@@ -240,16 +269,16 @@ export default function StudentProfileCenter() {
             </section>
 
             <section className="portalSection">
-              <div className="sectionTitle"><b>4</b><div><strong>Veli Portalı</strong><small>Veli giriş hesabı ve öğrenci bağlantısı</small></div></div>
+              <div className="sectionTitle"><b>4</b><div><strong>{adultCourse ? "Portal Hesabı" : "Veli Portalı"}</strong><small>{adultCourse ? "Kursiyer veya yakını için portal erişimi" : "Veli giriş hesabı ve öğrenci bağlantısı"}</small></div></div>
               {portal ? (
                 <div className="portalConnected">
                   <div className="portalStatusRow">
-                    <div><span>BAĞLI VELİ HESABI</span><strong>{portal.fullName}</strong><small>{portal.email || portal.phone || "İletişim bilgisi yok"} · {portal.relationship}</small></div>
+                    <div><span>{adultCourse ? "BAĞLI PORTAL HESABI" : "BAĞLI VELİ HESABI"}</span><strong>{portal.fullName}</strong><small>{portal.email || portal.phone || "İletişim bilgisi yok"} · {portal.relationship}</small></div>
                     <em className={portal.isActive ? "active" : "passive"}>{portal.isActive ? "AKTİF" : "PASİF"}</em>
                   </div>
                   <div className="portalActions">
                     <button type="button" className="portalToggle" disabled={portalBusy} onClick={togglePortal}>{portal.isActive ? "Portal Erişimini Pasife Al" : "Portal Erişimini Aktif Et"}</button>
-                    <button type="button" className="portalUnlink" disabled={portalBusy} onClick={unlinkPortal}>Öğrenci Bağlantısını Kaldır</button>
+                    <button type="button" className="portalUnlink" disabled={portalBusy} onClick={unlinkPortal}>Kursiyer Bağlantısını Kaldır</button>
                   </div>
                   <div className="portalPasswordPanel">
                     <div><strong>Giriş şifresini yenile</strong><small>En az 8 karakterlik yeni bir geçici şifre belirleyin.</small></div>
@@ -261,15 +290,15 @@ export default function StudentProfileCenter() {
                 </div>
               ) : (
                 <>
-                  <div className="portalInfo"><strong>Veli hesabı bağlı değil</strong><p>E-posta/telefon sistemde mevcut bir veli hesabıyla eşleşirse o hesap bağlanır. Eşleşme yoksa geçici şifreyle yeni veli hesabı oluşturulur.</p></div>
+                  <div className="portalInfo"><strong>{adultCourse ? "Portal hesabı bağlı değil" : "Veli hesabı bağlı değil"}</strong><p>E-posta/telefon sistemde mevcut bir hesapla eşleşirse o hesap bağlanır. Eşleşme yoksa geçici şifreyle yeni hesap oluşturulur.</p></div>
                   <div className="profileGrid">
-                    <label><span>Veli Adı Soyadı</span><input value={portalForm.fullName} onChange={(e) => setPortalForm({ ...portalForm, fullName: e.target.value })} /></label>
-                    <label><span>Yakınlık</span><input value={portalForm.relationship} onChange={(e) => setPortalForm({ ...portalForm, relationship: e.target.value })} placeholder="Anne, Baba, Vasi..." /></label>
+                    <label><span>{relationLabel} Adı Soyadı</span><input value={portalForm.fullName} onChange={(e) => setPortalForm({ ...portalForm, fullName: e.target.value })} /></label>
+                    <label><span>Yakınlık</span><input value={portalForm.relationship} onChange={(e) => setPortalForm({ ...portalForm, relationship: e.target.value })} placeholder={adultCourse ? "Yakını, kendisi..." : "Anne, Baba, Vasi..."} /></label>
                     <label><span>Portal E-postası</span><input type="email" value={portalForm.email} onChange={(e) => setPortalForm({ ...portalForm, email: e.target.value })} /></label>
                     <label><span>Portal Telefonu</span><input value={portalForm.phone} onChange={(e) => setPortalForm({ ...portalForm, phone: e.target.value })} /></label>
                     <label className="full"><span>Geçici Şifre</span><input type="password" value={portalForm.temporaryPassword} onChange={(e) => setPortalForm({ ...portalForm, temporaryPassword: e.target.value })} placeholder="Yeni hesap oluşturulacaksa en az 8 karakter" /></label>
                   </div>
-                  <button type="button" className="portalCreate" disabled={portalBusy} onClick={createOrLinkPortal}>{portalBusy ? "İşleniyor…" : "Veli Hesabı Oluştur / Bağla"}</button>
+                  <button type="button" className="portalCreate" disabled={portalBusy} onClick={createOrLinkPortal}>{portalBusy ? "İşleniyor…" : adultCourse ? "Portal Hesabı Oluştur / Bağla" : "Veli Hesabı Oluştur / Bağla"}</button>
                 </>
               )}
             </section>
@@ -280,7 +309,7 @@ export default function StudentProfileCenter() {
 
         <footer>
           <button type="button" className="ghost" onClick={() => setOpen(false)}>Kapat</button>
-          <button type="button" className="save" disabled={loading || saving} onClick={save}>{saving ? "Kaydediliyor…" : "✓ Öğrenci / Veli Bilgilerini Kaydet"}</button>
+          <button type="button" className="save" disabled={loading || saving} onClick={save}>{saving ? "Kaydediliyor…" : adultCourse ? "✓ Kursiyer / Yakın Bilgilerini Kaydet" : "✓ Öğrenci / Veli Bilgilerini Kaydet"}</button>
         </footer>
       </aside>
 
