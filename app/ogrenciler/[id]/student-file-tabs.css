@@ -74,6 +74,13 @@
   display: none !important;
 }
 
+/* Genel bilgiler özeti üretildiğinde eski düzenleme formu gerçekten gizli kalmalı.
+   .formGrid { display:grid } kuralı Safari/iOS'ta hidden niteliğini ezebildiği için
+   bu dar kapsamlı kural yalnızca kursiyer dosyasındaki eski formu hedefler. */
+.studentFilePage #duzenle > form.formGrid[hidden] {
+  display: none !important;
+}
+
 .studentFilePage.tabsReady [data-file-tab-container]:not([hidden]) {
   grid-template-columns: minmax(0, 1fr);
 }
