@@ -60,6 +60,24 @@ function isAdultCourse() {
   return courseType.includes("yetişkin") || courseType.includes("adult");
 }
 
+function markAdultCourseCard(adult: boolean) {
+  if (!adult) return;
+  const card = document.querySelector<HTMLElement>("#kurs-kaydi");
+  if (!card) return;
+  card.dataset.adultCourse = "1";
+
+  const head = card.querySelector<HTMLElement>(".panelHead");
+  const title = head?.querySelector<HTMLElement>("h2");
+  if (title) title.textContent = "Yetişkin Kursu · Aktif Kayıt";
+
+  if (head && !head.querySelector(".adultCourseBadge")) {
+    const badge = document.createElement("span");
+    badge.className = "adultCourseBadge";
+    badge.textContent = "YETİŞKİN KURSU";
+    head.appendChild(badge);
+  }
+}
+
 function openFinanceCenter(action: "collect" | "history" | "due" = "collect") {
   const labels =
     action === "history"
@@ -174,7 +192,7 @@ function adaptProfileCenterForAdultCourse(adult: boolean) {
   });
   panel.querySelectorAll<HTMLElement>(".sectionTitle small").forEach((item) => {
     if ((item.textContent || "").includes("ana veli")) {
-      item.textContent = "Yetişkin kursiyer için isteğe bağlı yakın iletişim bilgileri";
+      item.textContent = "İsteğe bağlıdır. Yalnızca gerektiğinde yakın iletişim bilgisi ekleyin.";
     }
   });
 
@@ -183,7 +201,27 @@ function adaptProfileCenterForAdultCourse(adult: boolean) {
     if (text === "Veli Adı Soyadı") item.textContent = "Yakını Adı Soyadı (isteğe bağlı)";
     if (text === "Veli Telefonu") item.textContent = "Yakını Telefonu (isteğe bağlı)";
     if (text === "Veli E-postası") item.textContent = "Yakını E-postası (isteğe bağlı)";
+    if (text === "Yakınlık") item.textContent = "Yakınlık Derecesi";
   });
+
+  const relativeTitle = Array.from(panel.querySelectorAll<HTMLElement>(".sectionTitle strong"))
+    .find((item) => item.textContent?.trim() === "Yakın Bilgileri");
+  const section = relativeTitle?.closest<HTMLElement>("section");
+  if (section && section.dataset.adultRelativeReady !== "1") {
+    section.dataset.adultRelativeReady = "1";
+    section.dataset.open = "0";
+    const titleRow = section.querySelector<HTMLElement>(".sectionTitle");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "adultRelativeToggle";
+    toggle.textContent = "Yakın bilgilerini aç";
+    toggle.addEventListener("click", () => {
+      const nextOpen = section.dataset.open !== "1";
+      section.dataset.open = nextOpen ? "1" : "0";
+      toggle.textContent = nextOpen ? "Yakın bilgilerini kapat" : "Yakın bilgilerini aç";
+    });
+    titleRow?.appendChild(toggle);
+  }
 }
 
 export default function GeneralInfoSummary() {
@@ -191,70 +229,69 @@ export default function GeneralInfoSummary() {
     const panel = document.querySelector<HTMLElement>("#duzenle.panel");
     const form = panel?.querySelector<HTMLFormElement>("form.formGrid");
     const adultCourse = isAdultCourse();
+    const studentId = window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
+    let relationship = "";
 
     if (panel && form && panel.dataset.professionalSummary !== "1") {
-      const allRows = [
+      const directRows = [
         ["Telefon", fieldValue(form, "phone")],
         ["E-posta", fieldValue(form, "email")],
-        [adultCourse ? "Yakını Adı Soyadı" : "Veli Adı Soyadı", fieldValue(form, "guardian_name")],
-        [adultCourse ? "Yakını Telefonu" : "Veli Telefonu", fieldValue(form, "guardian_phone")],
-        [adultCourse ? "Yakını E-postası" : "Veli E-postası", fieldValue(form, "guardian_email")],
         ["Acil Durum Kişisi", fieldValue(form, "emergency_contact_name")],
         ["Acil Durum Telefonu", fieldValue(form, "emergency_contact_phone")],
       ] as Array<[string, string]>;
 
-      const essentialLabels = new Set([
-        "Telefon",
-        adultCourse ? "Yakını Telefonu" : "Veli Telefonu",
-        "Acil Durum Telefonu",
-      ]);
-
-      const renderRows = (showAll: boolean) => {
-        const visibleRows = allRows.filter(([label, value]) => {
-          if (showAll) return true;
-          if (value) return true;
-          return essentialLabels.has(label) && label === "Telefon";
-        });
-
-        if (!visibleRows.length) {
-          return '<div class="professionalSummaryEmpty">Henüz iletişim bilgisi girilmemiş.</div>';
-        }
-
-        return visibleRows
-          .map(
-            ([label, value]) =>
-              `<div class="${value ? "" : "isEmpty"}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(displayValue(value))}</strong></div>`,
-          )
-          .join("");
-      };
+      const relativeRows = [
+        [adultCourse ? "Yakını Adı Soyadı" : "Veli Adı Soyadı", fieldValue(form, "guardian_name")],
+        [adultCourse ? "Yakını Telefonu" : "Veli Telefonu", fieldValue(form, "guardian_phone")],
+        [adultCourse ? "Yakını E-postası" : "Veli E-postası", fieldValue(form, "guardian_email")],
+      ] as Array<[string, string]>;
 
       const generalNote = fieldValue(form, "general_note");
       const summary = document.createElement("div");
       summary.className = "professionalGeneralSummary";
       summary.dataset.showAll = "0";
 
+      const rowHtml = ([label, value]: [string, string]) =>
+        `<div class="${value ? "" : "isEmpty"}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(displayValue(value))}</strong></div>`;
+
       const renderSummary = () => {
         const showAll = summary.dataset.showAll === "1";
+        const visibleDirect = directRows.filter(([label, value]) => showAll || Boolean(value) || label === "Telefon");
+        const relativeHasValue = relativeRows.some(([, value]) => Boolean(value)) || Boolean(relationship);
+
+        const relationRow = adultCourse
+          ? `<div class="${relationship ? "" : "isEmpty"}"><span>Yakınlık Derecesi</span><strong>${escapeHtml(displayValue(relationship))}</strong></div>`
+          : "";
+
+        const relativeContent = `${relativeRows
+          .filter(([, value]) => showAll || Boolean(value))
+          .map(rowHtml)
+          .join("")}${showAll || relationship ? relationRow : ""}`;
+
         summary.innerHTML = `
           <div class="professionalSummaryHead">
             <div>
               <span>KURSİYER PROFİLİ</span>
-              <strong>${adultCourse ? "İletişim ve yakın özeti" : "İletişim ve veli özeti"}</strong>
-              <small>Boş alanlar varsayılan olarak gizlenir; gerektiğinde açabilirsiniz.</small>
+              <strong>${adultCourse ? "Yetişkin kursiyer iletişim özeti" : "İletişim ve veli özeti"}</strong>
+              <small>Boş ve gereksiz alanlar kapalı tutulur; ihtiyaç olduğunda açabilirsiniz.</small>
             </div>
             <div class="professionalSummaryActions">
               <button type="button" data-toggle-empty-fields>${showAll ? "Gereksiz alanları gizle" : "Tüm alanları göster"}</button>
               <button type="button" data-open-profile-center>✎ Bilgileri Düzenle</button>
             </div>
           </div>
-          <div class="professionalSummaryGrid">${renderRows(showAll)}</div>
-          ${
-            generalNote
-              ? `<div class="professionalSummaryNote hasNote"><span>GENEL NOT</span><p>${escapeHtml(generalNote)}</p></div>`
-              : showAll
-                ? '<div class="professionalSummaryNote"><span>GENEL NOT</span><p>Henüz genel not eklenmemiş.</p></div>'
-                : ""
-          }
+          <div class="professionalSummaryGrid">${visibleDirect.map(rowHtml).join("")}</div>
+          ${adultCourse
+            ? `<details class="adultRelativeDetails" ${relativeHasValue && !showAll ? "" : ""}>
+                <summary><span>YAKIN BİLGİLERİ</span><strong>${relativeHasValue ? "Kayıtlı bilgi var" : "İsteğe bağlı"}</strong></summary>
+                <div class="professionalSummaryGrid adultRelativeGrid">${relativeContent || '<div class="professionalSummaryEmpty">Yakın bilgisi girilmemiş.</div>'}</div>
+              </details>`
+            : `<div class="professionalSummaryGrid relativeGrid">${relativeRows.filter(([, value]) => showAll || Boolean(value)).map(rowHtml).join("")}</div>`}
+          ${generalNote
+            ? `<div class="professionalSummaryNote hasNote"><span>GENEL NOT</span><p>${escapeHtml(generalNote)}</p></div>`
+            : showAll
+              ? '<div class="professionalSummaryNote"><span>GENEL NOT</span><p>Henüz genel not eklenmemiş.</p></div>'
+              : ""}
         `;
 
         summary
@@ -278,6 +315,18 @@ export default function GeneralInfoSummary() {
       form.setAttribute("aria-hidden", "true");
       panel.appendChild(summary);
       panel.dataset.professionalSummary = "1";
+
+      if (adultCourse && studentId) {
+        void fetch(`/api/student-relative-summary?studentId=${encodeURIComponent(studentId)}`, { cache: "no-store" })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((payload) => {
+            if (payload?.ok) {
+              relationship = String(payload.relationship || "").trim();
+              renderSummary();
+            }
+          })
+          .catch(() => undefined);
+      }
     }
 
     if (!document.getElementById("student-finance-status-style")) {
@@ -291,23 +340,26 @@ export default function GeneralInfoSummary() {
         .studentFinanceStatusCard.paid{border-color:#bce3ca;background:#f1fbf5}.studentFinanceStatusCard.paid .studentFinanceStatusBadge,.studentFinanceStatusCard.paid .studentFinanceStatusMessage{background:#daf3e4;color:#176c42}.studentFinanceStatusCard.unpaid{border-color:#f2d593;background:#fffaf0}.studentFinanceStatusCard.unpaid .studentFinanceStatusBadge,.studentFinanceStatusCard.unpaid .studentFinanceStatusMessage{background:#fff0c8;color:#8a5d00}.studentFinanceStatusCard.overdue{border-color:#ef9c9c;background:#fff4f4}.studentFinanceStatusCard.overdue .studentFinanceStatusBadge,.studentFinanceStatusCard.overdue .studentFinanceStatusMessage{background:#ffe0e0;color:#a82935}
         .studentFinanceLiveTarget{margin-top:18px}.studentFinanceLegacyHidden{display:none!important}.financeCriticalAlert{border-color:#e56565!important;box-shadow:0 0 0 3px rgba(229,101,101,.12)!important}
         .professionalSummaryActions{display:flex;gap:8px;flex-wrap:wrap}.professionalSummaryActions button{border:1px solid #cfe0f2;border-radius:12px;background:#fff;color:#175a97;padding:9px 12px;font-weight:800;cursor:pointer}.professionalSummaryGrid .isEmpty{opacity:.56}.professionalSummaryNote.hasNote{border-color:#b9d7f6;background:#f5faff}.professionalSummaryEmpty{grid-column:1/-1;padding:16px;border:1px dashed #d5e1ef;border-radius:14px;color:#71839a;text-align:center}
+        .adultRelativeDetails{margin-top:14px;border:1px solid #dce8f5;border-radius:16px;background:#f8fbff;overflow:hidden}.adultRelativeDetails summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;cursor:pointer;list-style:none}.adultRelativeDetails summary::-webkit-details-marker{display:none}.adultRelativeDetails summary span{color:#1769e8;font-size:11px;font-weight:900;letter-spacing:.1em}.adultRelativeDetails summary strong{color:#526981;font-size:12px}.adultRelativeGrid{padding:0 14px 14px}.adultCourseBadge{align-self:flex-start;margin-left:auto;border:1px solid #b9d7f6;border-radius:999px;background:#edf6ff;color:#0d63b8;padding:7px 10px;font-size:10px;font-weight:900;letter-spacing:.08em;white-space:nowrap}
+        .profileCenterPanel section[data-adult-relative-ready="1"] .profileGrid{display:none}.profileCenterPanel section[data-adult-relative-ready="1"][data-open="1"] .profileGrid{display:grid}.adultRelativeToggle{margin-left:auto;border:1px solid #cfe0f2;border-radius:10px;background:#f7fbff;color:#175a97;padding:8px 10px;font-size:11px;font-weight:900;cursor:pointer}
         .smartAlertHead>strong.smartAlertCountPulse{animation:smartAlertCountPulse 1.25s ease-in-out infinite;box-shadow:0 0 0 0 rgba(21,112,232,.28)}
         @keyframes smartAlertCountPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(21,112,232,.28)}50%{transform:scale(1.035);box-shadow:0 0 0 9px rgba(21,112,232,0)}}
         @media(prefers-reduced-motion:reduce){.smartAlertHead>strong.smartAlertCountPulse{animation:none}}
-        @media(max-width:720px){.studentFinanceStatusMeta{grid-template-columns:1fr 1fr}.studentFinanceStatusHead{flex-direction:column}.studentFinanceStatusActions button{flex:1 1 130px}.professionalSummaryActions{width:100%}.professionalSummaryActions button{flex:1 1 150px}}
+        @media(max-width:720px){.studentFinanceStatusMeta{grid-template-columns:1fr 1fr}.studentFinanceStatusHead{flex-direction:column}.studentFinanceStatusActions button{flex:1 1 130px}.professionalSummaryActions{width:100%}.professionalSummaryActions button{flex:1 1 150px}.adultCourseBadge{margin-left:0}.adultRelativeToggle{margin-left:0;width:100%}}
       `;
       document.head.appendChild(style);
     }
 
     syncSmartAlertCount();
+    markAdultCourseCard(adultCourse);
     adaptProfileCenterForAdultCourse(adultCourse);
 
     const profileObserver = new MutationObserver(() => {
+      markAdultCourseCard(adultCourse);
       adaptProfileCenterForAdultCourse(adultCourse);
     });
     profileObserver.observe(document.body, { childList: true, subtree: true });
 
-    const studentId = window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
     let cancelled = false;
 
     async function loadFinanceSummary() {
