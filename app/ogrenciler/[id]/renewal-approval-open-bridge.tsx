@@ -61,18 +61,27 @@ export default function RenewalApprovalOpenBridge() {
       cleanupUrl();
     };
 
+    const triggerRenewal = () => {
+      const button = document.querySelector<HTMLButtonElement>("[data-renewal-button='1']");
+      if (button) {
+        button.click();
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent("sprint:open-renewal", { detail: { requestId } }),
+      );
+    };
+
     const open = () => {
       if (document.querySelector(".renewalOverlay")) {
         finish();
         return;
       }
 
-      window.dispatchEvent(
-        new CustomEvent("sprint:open-renewal", { detail: { requestId } }),
-      );
+      triggerRenewal();
       tries += 1;
 
-      if (tries < 30) {
+      if (tries < 40) {
         timer = window.setTimeout(open, 180);
         return;
       }
