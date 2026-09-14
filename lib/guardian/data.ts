@@ -62,45 +62,45 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   const supabase = await createClient();
   const admin = getAdminClient();
 
-  // guardian_students.guardian_id, profiles.id/auth.users.id değerini değil
-  // public.guardians.id değerini tutar. Önce giriş yapan profilin ana veli kaydını çöz.
-  let canonicalGuardianId = "";
-  if (admin) {
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("id,organization_id,role")
-      .eq("id", userId)
-      .eq("role", "guardian")
-      .maybeSingle();
+  // Veli portalında önce oturum sahibini doğrulayıp public.guardians.id değerine çeviriyoruz.
+  // guardian_students.guardian_id alanı profiles/auth.users.id değil, guardians.id tutuyor.
+  if (!admin) return emptyContext();
 
-    if (profile?.organization_id) {
-      const { data: guardian } = await admin
-        .from("guardians")
-        .select("id")
-        .eq("organization_id", profile.organization_id)
-        .eq("auth_user_id", userId)
-        .maybeSingle();
-      canonicalGuardianId = guardian?.id || "";
-    }
-  }
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id,organization_id,role,is_active")
+    .eq("id", userId)
+    .eq("role", "guardian")
+    .eq("is_active", true)
+    .maybeSingle();
 
-  if (!canonicalGuardianId) return emptyContext();
+  if (!profile?.organization_id) return emptyContext();
 
-  // Bağlantıyı service-role ile yalnızca çözümlenmiş veli kaydı üzerinden okuyoruz.
-  // Böylece eski/eksik RLS politikaları veli portalını boş bırakmıyor.
-  const linkClient = admin || supabase;
-  const { data: links } = await linkClient
+  const { data: guardian } = await admin
+    .from("guardians")
+    .select("id,login_enabled,is_active")
+    .eq("organization_id", profile.organization_id)
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+
+  if (!guardian?.id || guardian.is_active === false || guardian.login_enabled === false) return emptyContext();
+
+  // Bu noktadan sonra service-role yalnızca doğrulanmış veli bağlantısından çıkan öğrenci ID'leri
+  // için kullanılır. Böylece eski RLS politikalarındaki auth.uid() / guardians.id uyumsuzluğu
+  // portalı boş bırakmaz ve başka öğrencilere erişim açılmaz.
+  const { data: links } = await admin
     .from("guardian_students")
     .select("student_id")
-    .eq("guardian_id", canonicalGuardianId)
+    .eq("guardian_id", guardian.id)
     .eq("portal_access", true);
 
   const ids = (links || []).map((item: any) => item.student_id).filter(Boolean);
   if (!ids.length) return emptyContext();
 
-  const { data: students } = await supabase
+  const { data: students } = await admin
     .from("students")
     .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id")
+    .eq("organization_id", profile.organization_id)
     .in("id", ids)
     .order("first_name");
 
@@ -109,14 +109,14 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   if (!selected) return emptyContext(studentList);
 
   const [enrollmentRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
-    supabase.from("student_enrollments").select("*").eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("attendance_records").select("*").eq("student_id", selected.id).order("lesson_date", { ascending: false }).limit(40),
-    supabase.from("progress_notes").select("*").eq("student_id", selected.id).eq("visible_to_guardian", true).order("created_at", { ascending: false }).limit(30),
+    admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    admin.from("attendance_records").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("lesson_date", { ascending: false }).limit(40),
+    admin.from("progress_notes").select("*").eq("student_id", selected.id).eq("visible_to_guardian", true).order("created_at", { ascending: false }).limit(30),
     supabase.from("announcements").select("*").eq("is_published", true).order("published_at", { ascending: false }).limit(20),
-    supabase.from("payments").select("*").eq("student_id", selected.id).order("received_at", { ascending: false }).limit(30),
-    supabase.from("guardian_messages").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
+    admin.from("payments").select("*").eq("student_id", selected.id).order("received_at", { ascending: false }).limit(30),
+    admin.from("guardian_messages").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
     supabase.from("guardian_documents").select("*").eq("is_active", true).order("sort_order").order("created_at", { ascending: false }),
-    supabase.from("guardian_consents").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("accepted_at", { ascending: false })
+    admin.from("guardian_consents").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("accepted_at", { ascending: false })
   ]);
 
   const enrollment = enrollmentRes.data || null;
@@ -127,24 +127,24 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   let schedules: any[] = [];
 
   if (enrollment?.group_id) {
-    const { data } = await supabase.from("training_groups").select("*").eq("id", enrollment.group_id).maybeSingle();
+    const { data } = await admin.from("training_groups").select("*").eq("organization_id", profile.organization_id).eq("id", enrollment.group_id).maybeSingle();
     group = data || null;
   }
   const branchId = group?.branch_id || selected.branch_id;
   if (branchId) {
-    const { data } = await supabase.from("branches").select("id,name,address,location_url,phone").eq("id", branchId).maybeSingle();
+    const { data } = await admin.from("branches").select("id,name,address,location_url,phone").eq("organization_id", profile.organization_id).eq("id", branchId).maybeSingle();
     branch = data || null;
   }
   if (enrollment?.package_id) {
-    const { data } = await supabase.from("course_packages").select("*").eq("id", enrollment.package_id).maybeSingle();
+    const { data } = await admin.from("course_packages").select("*").eq("organization_id", profile.organization_id).eq("id", enrollment.package_id).maybeSingle();
     coursePackage = data || null;
   }
   if (group?.primary_coach_id) {
-    const { data } = await supabase.from("profiles").select("id,full_name").eq("id", group.primary_coach_id).maybeSingle();
+    const { data } = await admin.from("profiles").select("id,full_name").eq("organization_id", profile.organization_id).eq("id", group.primary_coach_id).maybeSingle();
     coach = data || null;
   }
   if (group?.id) {
-    const { data } = await supabase.from("lesson_schedules").select("*").eq("group_id", group.id).eq("is_active", true).order("weekday").order("start_time");
+    const { data } = await admin.from("lesson_schedules").select("*").eq("organization_id", profile.organization_id).eq("group_id", group.id).eq("is_active", true).order("weekday").order("start_time");
     schedules = data || [];
   }
 
