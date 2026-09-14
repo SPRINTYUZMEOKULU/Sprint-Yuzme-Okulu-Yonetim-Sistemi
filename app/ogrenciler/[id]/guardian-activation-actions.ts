@@ -28,16 +28,26 @@ export async function sendGuardianActivation(studentIdValue: string) {
 
   if (!link?.guardian_id) return { ok: false as const, message: "Öğrenciye bağlı veli hesabı bulunamadı." };
 
+  const { data: guardianRecord, error: guardianRecordError } = await admin
+    .from("guardians")
+    .select("id,auth_user_id,full_name,email,phone,is_active,login_enabled")
+    .eq("id", link.guardian_id)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (guardianRecordError || !guardianRecord) return { ok: false as const, message: guardianRecordError?.message || "Veli portal kaydı bulunamadı." };
+  if (!guardianRecord.auth_user_id) return { ok: false as const, message: "Veli portal giriş hesabı henüz oluşturulmamış." };
+
   const { data: guardian } = await admin
     .from("profiles")
     .select("id,full_name,email,phone,role,organization_id")
-    .eq("id", link.guardian_id)
+    .eq("id", guardianRecord.auth_user_id)
     .eq("organization_id", organizationId)
     .eq("role", "guardian")
     .maybeSingle();
 
-  if (!guardian) return { ok: false as const, message: "Veli hesabı bulunamadı." };
-  const email = String(guardian.email || "").trim().toLowerCase();
+  if (!guardian) return { ok: false as const, message: "Veli giriş profili bulunamadı." };
+  const email = String(guardian.email || guardianRecord.email || "").trim().toLowerCase();
   if (!email) {
     return {
       ok: false as const,
@@ -61,9 +71,9 @@ export async function sendGuardianActivation(studentIdValue: string) {
     ok: true as const,
     message: "Veliye güvenli şifre belirleme bağlantısı e-posta ile gönderildi.",
     guardian: {
-      fullName: guardian.full_name || "Değerli Velimiz",
+      fullName: guardian.full_name || guardianRecord.full_name || "Değerli Velimiz",
       email,
-      phone: guardian.phone || "",
+      phone: guardian.phone || guardianRecord.phone || "",
     },
   };
 }
