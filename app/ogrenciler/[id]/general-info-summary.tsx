@@ -202,23 +202,14 @@ export default function GeneralInfoSummary() {
 
       const summary = document.createElement("div");
       summary.className = "professionalGeneralSummary";
-      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER PROFİLİ</span><strong>${adultCourse ? "İletişim ve yakın özeti" : "İletişim ve veli özeti"}</strong><small>Bilgileri değiştirmek için “Bilgileri Düzenle” işlemini kullanın.</small></div><button type="button" data-open-profile-center>✎ Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="professionalSummaryNote"><span>Genel Yönetim Notu</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></div>`;
+      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER PROFİLİ</span><strong>${adultCourse ? "İletişim ve yakın özeti" : "İletişim ve veli özeti"}</strong><small>Bilgileri değiştirmek için “Bilgileri Düzenle” işlemini kullanın.</small></div><button type="button" data-open-profile-center="1">✎ Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="professionalSummaryNote"><span>Genel Yönetim Notu</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></div>`;
       form.hidden = true;
       form.setAttribute("aria-hidden", "true");
       panel.appendChild(summary);
       panel.dataset.professionalSummary = "1";
       summary
-        .querySelector<HTMLButtonElement>("[data-open-profile-center]")
+        .querySelector<HTMLButtonElement>("[data-open-profile-center='1']")
         ?.addEventListener("click", () => {
-          Array.from(
-            document.querySelectorAll<HTMLButtonElement>(
-              ".fileCommandActions button",
-            ),
-          )
-            .find((item) =>
-              (item.textContent || "").includes("Bilgileri Düzenle"),
-            )
-            ?.click();
           window.setTimeout(() => adaptAdultLabels(adultCourse), 50);
         });
     }
