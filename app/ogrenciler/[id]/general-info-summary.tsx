@@ -37,11 +37,72 @@ function dateText(value?: string | null) {
       }).format(date);
 }
 
+function getCourseType() {
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>("#kurs-kaydi .infoRows > div"),
+  );
+  const courseRow = rows.find((row) =>
+    (row.querySelector("span")?.textContent || "")
+      .toLocaleLowerCase("tr-TR")
+      .includes("kurs türü"),
+  );
+  return courseRow?.querySelector("strong")?.textContent?.trim() || "";
+}
+
+function isAdultCourse() {
+  const courseType = getCourseType().toLocaleLowerCase("tr-TR");
+  return courseType.includes("yetişkin") || courseType.includes("adult");
+}
+
+function adaptAdultLabels(adult: boolean) {
+  if (!adult) return;
+
+  const generalPanel = document.querySelector<HTMLElement>("#duzenle.panel");
+  generalPanel?.querySelectorAll<HTMLLabelElement>("form.formGrid label").forEach((label) => {
+    const textNode = Array.from(label.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+    const raw = textNode?.textContent?.trim() || "";
+    if (raw === "Veli Adı Soyadı" && textNode) textNode.textContent = "Yakını Adı Soyadı ";
+    if (raw === "Veli Telefonu" && textNode) textNode.textContent = "Yakını Telefonu ";
+    if (raw === "Veli E-postası" && textNode) textNode.textContent = "Yakını E-postası ";
+  });
+
+  const profilePanel = document.querySelector<HTMLElement>(".profileCenterPanel");
+  if (!profilePanel) return;
+
+  const title = profilePanel.querySelector<HTMLElement>("header h2");
+  const intro = profilePanel.querySelector<HTMLElement>("header p");
+  if (title) title.textContent = "Kursiyer Bilgi Merkezi";
+  if (intro) {
+    intro.textContent =
+      "Kursiyer, yakını, acil durum ve portal erişimini tek merkezden yönetin.";
+  }
+
+  profilePanel.querySelectorAll<HTMLElement>(".sectionTitle strong").forEach((item) => {
+    if (item.textContent?.trim() === "Veli Bilgileri") item.textContent = "Yakın Bilgileri";
+  });
+
+  profilePanel.querySelectorAll<HTMLElement>("label > span").forEach((item) => {
+    const text = item.textContent?.trim();
+    if (text === "Veli Adı Soyadı") item.textContent = "Yakını Adı Soyadı";
+    if (text === "Veli Telefonu") item.textContent = "Yakını Telefonu";
+    if (text === "Veli E-postası") item.textContent = "Yakını E-postası";
+  });
+}
+
 function openFinanceCenter(action: "collect" | "history" | "due" = "collect") {
-  const labels = action === "history" ? ["Ödeme Geçmişi"] : action === "due" ? ["Vade", "Ödeme Al"] : ["Ödeme Al"];
+  const labels =
+    action === "history"
+      ? ["Ödeme Geçmişi"]
+      : action === "due"
+        ? ["Vade", "Ödeme Al"]
+        : ["Ödeme Al"];
   const quickAction = Array.from(
-    document.querySelectorAll<HTMLElement>(".fileCommandActions button, .fileCommandActions a"),
-  ).find((item) => labels.some((label) => (item.textContent || "").includes(label)));
+    document.querySelectorAll<HTMLElement>(
+      ".fileCommandActions button, .fileCommandActions a",
+    ),
+  ).find((item) =>
+    labels.some((label) => (item.textContent || "").includes(label)),
+  );
 
   if (quickAction) {
     quickAction.click();
@@ -55,40 +116,111 @@ function openFinanceCenter(action: "collect" | "history" | "due" = "collect") {
 }
 
 function bindFinanceActions(target: HTMLElement) {
-  target.querySelectorAll<HTMLButtonElement>("[data-finance-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      openFinanceCenter((button.dataset.financeAction || "collect") as "collect" | "history" | "due");
+  target
+    .querySelectorAll<HTMLButtonElement>("[data-finance-action]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        openFinanceCenter(
+          (button.dataset.financeAction || "collect") as
+            | "collect"
+            | "history"
+            | "due",
+        );
+      });
     });
-  });
+}
+
+function syncAlertCount() {
+  const head = document.querySelector<HTMLElement>(".smartAlertHead > strong");
+  if (!head) return;
+  const count = document.querySelectorAll(".smartAlertGrid > a").length;
+  head.textContent = count ? `${count} işlem bekliyor` : "✓ Her şey yolunda";
+}
+
+function normalizePaymentAlert({
+  remaining,
+  overdue,
+  statusMessage,
+}: {
+  remaining: number;
+  overdue: boolean;
+  statusMessage: string;
+}) {
+  const grid = document.querySelector<HTMLElement>(".smartAlertGrid");
+  if (!grid) return;
+
+  const paymentAlerts = Array.from(grid.querySelectorAll<HTMLAnchorElement>("a")).filter(
+    (item) => {
+      const text = (item.textContent || "").toLocaleLowerCase("tr-TR");
+      return item.getAttribute("href") === "#odeme" || text.includes("ödeme");
+    },
+  );
+
+  if (remaining <= 0) {
+    paymentAlerts.forEach((item) => item.remove());
+    syncAlertCount();
+    return;
+  }
+
+  const primary = paymentAlerts[0];
+  if (!primary) return;
+
+  primary.classList.remove("danger", "warning", "financeCriticalAlert");
+  primary.classList.add(overdue ? "danger" : "warning");
+  if (overdue) primary.classList.add("financeCriticalAlert");
+
+  const icon = primary.querySelector("i");
+  const title = primary.querySelector("b");
+  const description = primary.querySelector("small");
+  if (icon) icon.textContent = overdue ? "!" : "•";
+  if (title) title.textContent = overdue ? "Ödeme vadesi geçti" : "Ödeme bekliyor";
+  if (description) description.textContent = statusMessage;
+
+  paymentAlerts.slice(1).forEach((item) => item.remove());
+  syncAlertCount();
 }
 
 export default function GeneralInfoSummary() {
   useEffect(() => {
     const panel = document.querySelector<HTMLElement>("#duzenle.panel");
     const form = panel?.querySelector<HTMLFormElement>("form.formGrid");
+    const adultCourse = isAdultCourse();
+
+    adaptAdultLabels(adultCourse);
+    const adultLabelTimer = window.setTimeout(() => adaptAdultLabels(adultCourse), 300);
 
     if (panel && form && panel.dataset.professionalSummary !== "1") {
       const rows = [
         ["Telefon", valueOf(form, "phone")],
         ["E-posta", valueOf(form, "email")],
-        ["Veli Adı Soyadı", valueOf(form, "guardian_name")],
-        ["Veli Telefonu", valueOf(form, "guardian_phone")],
-        ["Veli E-postası", valueOf(form, "guardian_email")],
+        [adultCourse ? "Yakını Adı Soyadı" : "Veli Adı Soyadı", valueOf(form, "guardian_name")],
+        [adultCourse ? "Yakını Telefonu" : "Veli Telefonu", valueOf(form, "guardian_phone")],
+        [adultCourse ? "Yakını E-postası" : "Veli E-postası", valueOf(form, "guardian_email")],
         ["Acil Durum Kişisi", valueOf(form, "emergency_contact_name")],
         ["Acil Durum Telefonu", valueOf(form, "emergency_contact_phone")],
       ];
 
       const summary = document.createElement("div");
       summary.className = "professionalGeneralSummary";
-      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER PROFİLİ</span><strong>İletişim ve veli özeti</strong><small>Bilgileri değiştirmek için “Bilgileri Düzenle” işlemini kullanın.</small></div><button type="button" data-open-profile-center>✎ Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="professionalSummaryNote"><span>Genel Yönetim Notu</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></div>`;
+      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER PROFİLİ</span><strong>${adultCourse ? "İletişim ve yakın özeti" : "İletişim ve veli özeti"}</strong><small>Bilgileri değiştirmek için “Bilgileri Düzenle” işlemini kullanın.</small></div><button type="button" data-open-profile-center>✎ Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="professionalSummaryNote"><span>Genel Yönetim Notu</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></div>`;
       form.hidden = true;
       form.setAttribute("aria-hidden", "true");
       panel.appendChild(summary);
       panel.dataset.professionalSummary = "1";
-      summary.querySelector<HTMLButtonElement>("[data-open-profile-center]")?.addEventListener("click", () => {
-        Array.from(document.querySelectorAll<HTMLButtonElement>(".fileCommandActions button"))
-          .find((item) => (item.textContent || "").includes("Bilgileri Düzenle"))?.click();
-      });
+      summary
+        .querySelector<HTMLButtonElement>("[data-open-profile-center]")
+        ?.addEventListener("click", () => {
+          Array.from(
+            document.querySelectorAll<HTMLButtonElement>(
+              ".fileCommandActions button",
+            ),
+          )
+            .find((item) =>
+              (item.textContent || "").includes("Bilgileri Düzenle"),
+            )
+            ?.click();
+          window.setTimeout(() => adaptAdultLabels(adultCourse), 50);
+        });
     }
 
     if (!document.getElementById("student-finance-status-style")) {
@@ -106,13 +238,17 @@ export default function GeneralInfoSummary() {
       document.head.appendChild(style);
     }
 
-    const studentId = window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
+    const studentId =
+      window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
     let cancelled = false;
 
     async function loadFinanceSummary() {
       if (!studentId) return;
       try {
-        const response = await fetch(`/api/student-payment-center?studentId=${encodeURIComponent(studentId)}`, { cache: "no-store" });
+        const response = await fetch(
+          `/api/student-payment-center?studentId=${encodeURIComponent(studentId)}`,
+          { cache: "no-store" },
+        );
         if (!response.ok) return;
         const payload = await response.json();
         if (cancelled || !payload?.ok || !payload?.enrollment) return;
@@ -122,28 +258,39 @@ export default function GeneralInfoSummary() {
         const paid = Number(enrollment.totalReceived || 0);
         const remaining = Math.max(0, Number(enrollment.remainingPayment || 0));
         const due = enrollment.paymentDueDate || null;
-        const dueTimestamp = due ? new Date(`${String(due).slice(0, 10)}T23:59:59+03:00`).getTime() : Number.NaN;
-        const overdue = remaining > 0 && Number.isFinite(dueTimestamp) && dueTimestamp < Date.now();
+        const dueTimestamp = due
+          ? new Date(`${String(due).slice(0, 10)}T23:59:59+03:00`).getTime()
+          : Number.NaN;
+        const overdue =
+          remaining > 0 &&
+          Number.isFinite(dueTimestamp) &&
+          dueTimestamp < Date.now();
         const lessonCount = Number(enrollment.lessonCount || 0);
         const packageName = enrollment.packageName || "Aktif kurs paketi";
         const periodText = `${dateText(enrollment.startDate)} - ${dateText(enrollment.plannedEndDate)}`;
-        const packageText = lessonCount > 0 ? `${lessonCount} derslik ${packageName}` : packageName;
+        const packageText =
+          lessonCount > 0 ? `${lessonCount} derslik ${packageName}` : packageName;
         const statusClass = remaining <= 0 ? "paid" : overdue ? "overdue" : "unpaid";
-        const statusLabel = remaining <= 0 ? "ÖDENDİ" : overdue ? "VADESİ GEÇTİ" : "ÖDEME BEKLİYOR";
-        const statusMessage = remaining <= 0
-          ? `${periodText} tarihleri arasındaki ${packageText} ücreti ödendi.`
-          : `${periodText} tarihleri arasındaki ${packageText} ücreti ödenmedi. Açık borç ${money(remaining)}${due ? ` · Vade ${dateText(due)}` : ""}.`;
+        const statusLabel =
+          remaining <= 0 ? "ÖDENDİ" : overdue ? "VADESİ GEÇTİ" : "ÖDEME BEKLİYOR";
+        const statusMessage =
+          remaining <= 0
+            ? `${periodText} tarihleri arasındaki ${packageText} ücreti ödendi.`
+            : `${periodText} tarihleri arasındaki ${packageText} ücreti ödenmedi. Açık borç ${money(remaining)}${due ? ` · Vade ${dateText(due)}` : ""}.`;
 
         const cardHtml = `<section class="studentFinanceStatusCard ${statusClass}"><div class="studentFinanceStatusHead"><div><span>AKTİF PAKET</span><strong>${escapeHtml(packageText)}</strong></div><div class="studentFinanceStatusBadge">${escapeHtml(statusLabel)}</div></div><div class="studentFinanceStatusMeta"><div><span>Dönem</span><b>${escapeHtml(periodText)}</b></div><div><span>Paket Ücreti</span><b>${escapeHtml(money(total))}</b></div><div><span>Ödenen</span><b>${escapeHtml(money(paid))}</b></div><div><span>Kalan Borç</span><b>${escapeHtml(money(remaining))}</b></div></div><div class="studentFinanceStatusMessage">${escapeHtml(statusMessage)}</div><div class="studentFinanceStatusActions">${remaining > 0 ? '<button type="button" class="primary" data-finance-action="collect">Ödeme Al</button><button type="button" class="secondary" data-finance-action="due">Vade Belirle</button>' : ""}<button type="button" class="secondary" data-finance-action="history">Ödeme Geçmişi</button></div></section>`;
 
         const financePanel = document.querySelector<HTMLElement>("#odeme");
         if (financePanel) {
-          let liveTarget = financePanel.querySelector<HTMLElement>("[data-student-finance-live]");
+          let liveTarget =
+            financePanel.querySelector<HTMLElement>("[data-student-finance-live]");
           if (!liveTarget) {
             liveTarget = document.createElement("div");
             liveTarget.className = "studentFinanceLiveTarget";
             liveTarget.dataset.studentFinanceLive = "1";
-            financePanel.querySelector(".panelHead")?.insertAdjacentElement("afterend", liveTarget);
+            financePanel
+              .querySelector(".panelHead")
+              ?.insertAdjacentElement("afterend", liveTarget);
           }
           liveTarget.innerHTML = cardHtml;
           bindFinanceActions(liveTarget);
@@ -153,21 +300,12 @@ export default function GeneralInfoSummary() {
             if (child === liveTarget || child.classList.contains("panelHead")) return;
             child.classList.add("studentFinanceLegacyHidden");
           });
-          const totalLabel = financePanel.querySelector<HTMLElement>(".panelHead > strong");
+          const totalLabel =
+            financePanel.querySelector<HTMLElement>(".panelHead > strong");
           if (totalLabel) totalLabel.textContent = `Toplam Tahsilat: ${money(paid)}`;
         }
 
-        const existingPaymentAlert = Array.from(document.querySelectorAll<HTMLAnchorElement>(".smartAlertGrid a")).find((item) => {
-          const text = (item.textContent || "").toLocaleLowerCase("tr-TR");
-          return item.getAttribute("href") === "#odeme" || text.includes("ödeme");
-        });
-        if (existingPaymentAlert && remaining > 0) {
-          existingPaymentAlert.classList.toggle("financeCriticalAlert", overdue);
-          const title = existingPaymentAlert.querySelector("b");
-          const description = existingPaymentAlert.querySelector("span, p, small");
-          if (title) title.textContent = overdue ? "Ödeme vadesi geçti" : "Ödeme bekliyor";
-          if (description) description.textContent = statusMessage;
-        }
+        normalizePaymentAlert({ remaining, overdue, statusMessage });
       } catch {
         // Ana kursiyer dosyası finans servisi geçici hata verse bile kullanılabilir kalır.
       }
@@ -176,17 +314,31 @@ export default function GeneralInfoSummary() {
     void loadFinanceSummary();
 
     const openProfileForMissingPhone = (event: MouseEvent) => {
-      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(".smartAlertGrid a[href='#genel-bilgiler']");
-      if (!link || !(link.querySelector("b")?.textContent || "").includes("Telefon bilgisi eksik")) return;
+      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
+        ".smartAlertGrid a[href='#genel-bilgiler']",
+      );
+      if (
+        !link ||
+        !(link.querySelector("b")?.textContent || "").includes(
+          "Telefon bilgisi eksik",
+        )
+      )
+        return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      Array.from(document.querySelectorAll<HTMLButtonElement>(".fileCommandActions button"))
-        .find((item) => (item.textContent || "").includes("Bilgileri Düzenle"))?.click();
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".fileCommandActions button"),
+      )
+        .find((item) =>
+          (item.textContent || "").includes("Bilgileri Düzenle"),
+        )
+        ?.click();
     };
 
     document.addEventListener("click", openProfileForMissingPhone, true);
     return () => {
       cancelled = true;
+      window.clearTimeout(adultLabelTimer);
       document.removeEventListener("click", openProfileForMissingPhone, true);
     };
   }, []);
