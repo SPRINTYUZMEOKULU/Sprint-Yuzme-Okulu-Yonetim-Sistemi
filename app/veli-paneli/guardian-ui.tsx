@@ -40,8 +40,8 @@ export function GuardianHeader({ name, students, selectedId }: { name: string; s
     <GuardianAutoRefresh />
     <header className="guardianTop">
       <Link prefetch={false} href={portalHref("/veli-paneli", selectedId)} className="guardianBrand" aria-label="Sprint Yüzme Okulu portal ana sayfası">
-        <span className="guardianBrandLogo"><img src="/sprint-logo.png" alt="Sprint Yüzme Okulu" /></span>
-        <span className="guardianBrandText"><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
+        <span className="guardianBrandMark" style={{background:"#fff",overflow:"hidden",padding:3}}><img src="/sprint-logo.png" alt="Sprint Yüzme Okulu" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}} /></span>
+        <span><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
       </Link>
       <div className="guardianTopRight">
         <span className="guardianWelcome">Hoş geldiniz, <b>{name}</b></span>
