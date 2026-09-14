@@ -33,8 +33,8 @@ function phoneCandidates(phone: string) {
   return [phone, `90${local}`, `0${local}`, local];
 }
 
-function isAdultCourse(value: unknown) {
-  const text = norm(value);
+function isAdultCourse(...values: unknown[]) {
+  const text = norm(values.filter(Boolean).join(" "));
   return text.includes("yetişkin") || text.includes("yetiskin") || text.includes("adult") || text.includes("master");
 }
 
@@ -81,10 +81,10 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     const guardianName = String(student.guardian_name || "").trim();
     const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
     const group: any = groupMap.get(student.preferred_group_id);
-    const adult = isAdultCourse(group?.course_type);
-    const usesSelf = adult || (!guardianName && !guardianPhone && Boolean(studentPhone));
-    const accountPhone = usesSelf ? studentPhone : (guardianPhone || studentPhone);
-    const accountName = usesSelf ? studentName : (guardianName || studentName);
+    const adult = isAdultCourse(group?.course_type, group?.name);
+    const usesSelf = adult;
+    const accountPhone = usesSelf ? studentPhone : guardianPhone;
+    const accountName = usesSelf ? studentName : guardianName;
     const existingGuardian = !linkedGuardian && accountPhone ? guardianByPhone.get(accountPhone) : null;
     const ready = Boolean(accountName && accountPhone);
     return { student, link, linkedGuardian, existingGuardian, ready, accountPhone, accountName, usesSelf, adult, group };
@@ -103,10 +103,9 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     const guardianName = String(s.guardian_name || "").trim();
     const studentName = `${s.first_name || ""} ${s.last_name || ""}`.trim();
     const group: any = groupMap.get(s.preferred_group_id);
-    const adult = isAdultCourse(group?.course_type);
-    const usesSelf = adult || (!guardianName && !guardianPhone && Boolean(studentPhone));
-    const accountPhone = usesSelf ? studentPhone : (guardianPhone || studentPhone);
-    const accountName = usesSelf ? studentName : (guardianName || studentName);
+    const adult = isAdultCourse(group?.course_type, group?.name);
+    const accountPhone = adult ? studentPhone : guardianPhone;
+    const accountName = adult ? studentName : guardianName;
     return { id: s.id, ready: Boolean(accountName && accountPhone) };
   });
   const unlinkedCount = students.filter((s: any) => !linkByStudent.has(s.id)).length;
@@ -119,13 +118,13 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     const guardianRecord: any = link ? guardianRecordById.get(link.guardian_id) : null;
     const linkedProfile: any = guardianRecord?.auth_user_id ? guardianById.get(guardianRecord.auth_user_id) : null;
     const group: any = groupMap.get(student.preferred_group_id);
-    const adult = isAdultCourse(group?.course_type);
+    const adult = isAdultCourse(group?.course_type, group?.name);
     const ownPhone = normalizePhone(student.phone);
     const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
     const guardianPhone = normalizePhone(linkedProfile?.phone || guardianRecord?.phone || student.guardian_phone);
     const guardianName = String(linkedProfile?.full_name || guardianRecord?.full_name || student.guardian_name || "").trim();
-    const phone = adult ? ownPhone : (guardianPhone || ownPhone);
-    const fullName = adult ? studentName : (guardianName || studentName);
+    const phone = adult ? ownPhone : guardianPhone;
+    const fullName = adult ? studentName : guardianName;
     if (!phone || !fullName) continue;
     const state: GuardianBulkCandidate["state"] = linkedProfile ? (linkedProfile.last_sign_in_at ? "active" : "pending") : "new";
     const existing = candidateMap.get(phone);
@@ -140,7 +139,7 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const bulkCandidates = [...candidateMap.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, "tr"));
 
   return <><UstGezinme/><main className="guardianWizardPage"><div className="guardianWizardWrap">
-    <header className="wizardHero"><div><small>SPRİNTOS · PORTAL HESABI OLUŞTURMA</small><h1>Kursiyer / Veli Portal Hesabı Oluştur</h1><p>Çocuk kursiyerlerde veli bilgisi kullanılır. Yetişkin kursiyerlerde seçilen grubun kurs türü esas alınır ve hesap doğrudan kursiyerin kendi adı ve telefonuyla oluşturulur.</p></div><Link href="/veliler">Portal Merkezine Dön</Link></header>
+    <header className="wizardHero"><div><small>SPRİNTOS · PORTAL HESABI OLUŞTURMA</small><h1>Kursiyer / Veli Portal Hesabı Oluştur</h1><p>Çocuk kursiyerlerde yalnızca veli adı ve veli telefonu kullanılır. Yetişkin kursiyerlerde grup türü otomatik algılanır ve hesap doğrudan kursiyerin kendi adı ve telefonuyla oluşturulur.</p></div><Link href="/veliler">Portal Merkezine Dön</Link></header>
 
     {query.saved ? <div className="wizardNotice success"><strong>✓ İşlem tamamlandı</strong><span>{query.saved}</span>{query.guardian ? <div><Link href={`/veliler/${query.guardian}`}>Portal Dosyasını Aç</Link>{query.student ? <Link href={`/ogrenciler/${query.student}`}>Öğrenci Dosyasını Aç</Link> : null}</div> : null}</div> : null}
     {query.error ? <div className="wizardNotice error"><strong>İşlem tamamlanamadı</strong><span>{query.error}</span>{query.student ? <Link href={`/ogrenciler/${query.student}`}>Öğrenci bilgilerini düzenle</Link> : null}</div> : null}
@@ -155,13 +154,13 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
       const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
       const branchName = branchMap.get(student.branch_id) || "Şube yok";
       const statusClass = linkedGuardian ? "linked" : !ready ? "missing" : existingGuardian ? "existing" : "new";
-      const statusText = linkedGuardian ? "Portal bağlı" : !ready ? "İletişim bilgisi eksik" : existingGuardian ? "Mevcut portal hesabı bulundu" : usesSelf ? "Kursiyer kendi hesabını kullanacak" : "Yeni veli hesabı oluşturulacak";
+      const statusText = linkedGuardian ? (adult ? "Kursiyer portalı bağlı" : "Veli portalı bağlı") : !ready ? (adult ? "Kursiyer telefonu eksik" : "Veli bilgisi eksik") : existingGuardian ? (adult ? "Mevcut kursiyer portal hesabı bulundu" : "Mevcut veli portal hesabı bulundu") : adult ? "Yeni kursiyer portal hesabı oluşturulacak" : "Yeni veli hesabı oluşturulacak";
       return <article className="wizardStudentCard" key={student.id}>
         <div className="wizardStudentHead"><div><small>{student.student_number || "Kursiyer"} · {branchName}{group?.course_type ? ` · ${group.course_type}` : ""}</small><h2>{studentName}</h2></div><span className={`wizardStatus ${statusClass}`}>{statusText}</span></div>
-        <div className="wizardGuardianInfo"><div><span>{usesSelf ? "Hesap Sahibi" : "Veli"}</span><strong>{accountName || "Ad bilgisi yok"}</strong></div><div><span>Telefon</span><strong>{accountPhone || student.guardian_phone || student.phone || "Telefon yok"}</strong></div>{student.guardian_email && !usesSelf ? <div><span>E-posta</span><strong>{student.guardian_email}</strong></div> : null}</div>
-        {usesSelf ? <div className="wizardExisting"><span>{adult ? "Yetişkin kursiyer / kendi hesabı" : "Kursiyer / kendi hesabı"}</span><strong>{studentName}</strong><small>Veli bilgisi kullanılmayacak; kursiyerin kendi telefonu portal girişi için kullanılacak.</small></div> : null}
-        {linkedGuardian ? <div className="wizardExisting"><span>Bağlı hesap</span><strong>{linkedGuardian.full_name || "Portal kullanıcısı"}</strong><small>{linkedGuardian.phone || "Telefon yok"}</small></div> : existingGuardian ? <div className="wizardExisting"><span>Aynı telefonla mevcut hesap</span><strong>{existingGuardian.full_name || "Portal kullanıcısı"}</strong><small>Yeni hesap açılmayacak; bu kursiyer mevcut hesaba bağlanacak.</small></div> : null}
-        <div className="wizardActions">{linkedGuardian ? <><Link href={`/veliler/${linkedGuardian.id}`}>Portal Dosyasını Aç</Link><Link href={`/ogrenciler/${student.id}`}>Kursiyer Dosyası</Link></> : ready ? <form action={createOrLinkGuardianFromStudent}><input type="hidden" name="student_id" value={student.id}/><input type="hidden" name="account_mode" value={usesSelf ? "self" : "guardian"}/><button className="primary">{existingGuardian ? "Mevcut Hesaba Bağla" : usesSelf ? "Kursiyer Hesabı Oluştur ve Bağla" : "Veli Hesabı Oluştur ve Bağla"}</button></form> : <Link className="warning" href={`/ogrenciler/${student.id}`}>Eksik İletişim Bilgisini Tamamla</Link>}</div>
+        <div className="wizardGuardianInfo"><div><span>{usesSelf ? "Hesap Sahibi / Kursiyer" : "Veli"}</span><strong>{accountName || "Ad bilgisi yok"}</strong></div><div><span>{usesSelf ? "Kursiyer Telefonu" : "Veli Telefonu"}</span><strong>{accountPhone || (usesSelf ? student.phone : student.guardian_phone) || "Telefon yok"}</strong></div>{student.guardian_email && !usesSelf ? <div><span>E-posta</span><strong>{student.guardian_email}</strong></div> : null}</div>
+        {usesSelf ? <div className="wizardExisting"><span>{adult ? "Yetişkin kursiyer · kendi hesabı" : "Kursiyer · kendi hesabı"}</span><strong>{studentName}</strong><small>Bu kayıt için veli hesabı açılmaz. Portal girişi kursiyerin kendi telefonu ve kendi hesabı üzerinden yapılır.</small></div> : null}
+        {linkedGuardian ? <div className="wizardExisting"><span>{adult ? "Bağlı kursiyer hesabı" : "Bağlı veli hesabı"}</span><strong>{linkedGuardian.full_name || "Portal kullanıcısı"}</strong><small>{linkedGuardian.phone || "Telefon yok"}</small></div> : existingGuardian ? <div className="wizardExisting"><span>{adult ? "Aynı telefonla mevcut kursiyer hesabı" : "Aynı telefonla mevcut veli hesabı"}</span><strong>{existingGuardian.full_name || "Portal kullanıcısı"}</strong><small>Yeni hesap açılmayacak; bu kursiyer mevcut hesaba bağlanacak.</small></div> : null}
+        <div className="wizardActions">{linkedGuardian ? <><Link href={`/veliler/${linkedGuardian.id}`}>Portal Dosyasını Aç</Link><Link href={`/ogrenciler/${student.id}`}>Kursiyer Dosyası</Link></> : ready ? <form action={createOrLinkGuardianFromStudent}><input type="hidden" name="student_id" value={student.id}/><input type="hidden" name="account_mode" value={usesSelf ? "self" : "guardian"}/><button className="primary">{existingGuardian ? (adult ? "Mevcut Kursiyer Hesabını Bağla" : "Mevcut Veli Hesabını Bağla") : adult ? "Kursiyer Portal Hesabı Oluştur" : "Veli Hesabı Oluştur ve Bağla"}</button></form> : <Link className="warning" href={`/ogrenciler/${student.id}`}>{adult ? "Kursiyer Telefonunu Tamamla" : "Veli Bilgilerini Tamamla"}</Link>}</div>
       </article>;
     })}{!rows.length ? <div className="wizardEmpty">Bu filtreye uygun kursiyer bulunamadı.</div> : null}</section>
   </div></main></>;
