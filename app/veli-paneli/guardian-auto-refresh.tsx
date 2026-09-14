@@ -7,26 +7,16 @@ export default function GuardianAutoRefresh() {
   const router = useRouter();
 
   useEffect(() => {
-    let lastRefresh = Date.now();
-    const refresh = () => {
+    // Mobil/PWA'da focus, pageshow ve visibilitychange olayları sayfa geçişleri
+    // sırasında art arda tetiklenebiliyor. Bu olaylarda router.refresh() çağırmak
+    // portal navigasyonu ile yarışıp oturum kontrolünün yeniden çalışmasına neden
+    // olabiliyordu. Portal verisini yalnızca sakin bir periyodik yenilemeyle tazeliyoruz.
+    const interval = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      const now = Date.now();
-      if (now - lastRefresh < 5000) return;
-      lastRefresh = now;
       router.refresh();
-    };
+    }, 60000);
 
-    const interval = window.setInterval(refresh, 30000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("pageshow", refresh);
-    document.addEventListener("visibilitychange", refresh);
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("pageshow", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
+    return () => window.clearInterval(interval);
   }, [router]);
 
   return null;
