@@ -42,6 +42,15 @@ function temporaryPassword() {
   return `Sp-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}-A9!`;
 }
 
+function norm(value: unknown) {
+  return String(value || "").trim().toLocaleLowerCase("tr-TR");
+}
+
+function isAdultCourse(...values: unknown[]) {
+  const text = norm(values.filter(Boolean).join(" "));
+  return text.includes("yetişkin") || text.includes("yetiskin") || text.includes("adult") || text.includes("master");
+}
+
 export async function prepareGuardianAccountBatch(studentIdsValue: string[]): Promise<GuardianBulkResult[]> {
   const profile = await requireProfile([...roles]);
   const organizationId = profile.organization_id;
@@ -51,7 +60,7 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[]): Pr
   const admin = adminClient();
   const { data: students, error: studentError } = await admin
     .from("students")
-    .select("id,first_name,last_name,phone,guardian_name,guardian_phone,guardian_email")
+    .select("id,first_name,last_name,phone,guardian_name,guardian_phone,guardian_email,preferred_group_id")
     .eq("organization_id", organizationId)
     .eq("is_deleted", false)
     .in("id", studentIds);
@@ -60,15 +69,22 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[]): Pr
     return [{ ok: false, key: "batch", fullName: "", phone: "", email: "", studentNames: [], status: "error", message: studentError.message }];
   }
 
+  const groupIds = [...new Set((students || []).map((student: any) => student.preferred_group_id).filter(Boolean))];
+  const { data: groupRows } = groupIds.length
+    ? await admin.from("training_groups").select("id,name,course_type").eq("organization_id", organizationId).in("id", groupIds)
+    : { data: [] as any[] };
+  const groupMap = new Map((groupRows || []).map((group: any) => [group.id, group]));
+
   const groups = new Map<string, { fullName: string; phone: string; email: string; relationship: string; students: any[] }>();
   for (const student of students || []) {
     const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
     const guardianName = String(student.guardian_name || "").trim();
     const guardianPhone = normalizePhone(student.guardian_phone);
     const ownPhone = normalizePhone(student.phone);
-    const usesSelf = !guardianName && !guardianPhone && Boolean(ownPhone);
-    const phone = guardianPhone || ownPhone;
-    const fullName = guardianName || studentName;
+    const group: any = groupMap.get(student.preferred_group_id);
+    const usesSelf = isAdultCourse(group?.course_type, group?.name);
+    const phone = usesSelf ? ownPhone : guardianPhone;
+    const fullName = usesSelf ? studentName : guardianName;
     const email = usesSelf ? "" : String(student.guardian_email || "").trim().toLowerCase();
     if (!fullName || !phone) continue;
     const current = groups.get(phone);
@@ -90,12 +106,12 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[]): Pr
         const payload: any = { phone: group.phone, phone_confirm: true, password, user_metadata: { full_name: group.fullName, role: "guardian", organization_id: organizationId } };
         if (group.email) { payload.email = group.email; payload.email_confirm = true; }
         const { data: createdUser, error: createError } = await admin.auth.admin.createUser(payload);
-        if (createError || !createdUser.user) throw createError || new Error("Veli giriş hesabı oluşturulamadı.");
+        if (createError || !createdUser.user) throw createError || new Error("Portal giriş hesabı oluşturulamadı.");
         authUserId = createdUser.user.id;
         created = true;
       } else {
         const { data: authData, error: authLookupError } = await admin.auth.admin.getUserById(authUserId);
-        if (authLookupError || !authData.user) throw authLookupError || new Error("Veli kimlik hesabı bulunamadı.");
+        if (authLookupError || !authData.user) throw authLookupError || new Error("Portal kimlik hesabı bulunamadı.");
         const { error: updateAuthError } = await admin.auth.admin.updateUserById(authUserId, { password, phone: group.phone, phone_confirm: true, user_metadata: { ...(authData.user.user_metadata || {}), full_name: group.fullName, role: "guardian", organization_id: organizationId } });
         if (updateAuthError) throw updateAuthError;
       }
@@ -115,19 +131,21 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[]): Pr
         if (error) throw error;
       } else {
         const { data: inserted, error } = await admin.from("guardians").insert({ organization_id: organizationId, auth_user_id: authUserId, full_name: group.fullName, phone: group.phone, email: group.email || null, relationship: group.relationship, login_enabled: true, is_active: true, first_login_required: true, portal_created_at: new Date().toISOString() }).select("id").single();
-        if (error || !inserted) throw error || new Error("Veli portal kaydı oluşturulamadı.");
+        if (error || !inserted) throw error || new Error("Portal kişi kaydı oluşturulamadı.");
         guardianRecord = inserted;
       }
 
       for (const student of group.students) {
         const { error: linkError } = await admin.from("guardian_students").upsert({ guardian_id: guardianRecord.id, student_id: student.id, relationship: group.relationship, is_primary: true, is_payment_contact: true, receives_messages: true, portal_access: true }, { onConflict: "guardian_id,student_id" });
         if (linkError) throw linkError;
-        await admin.from("student_activity_logs").insert({ organization_id: organizationId, student_id: student.id, activity_type: created ? "guardian_portal_bulk_created" : "guardian_portal_password_reset", title: created ? "Veli portal hesabı toplu işlemle oluşturuldu" : "Veli portal giriş bilgileri yenilendi", description: `${group.fullName} için giriş bilgileri Veli Yönetim Merkezi üzerinden hazırlandı.`, source_type: "guardian_bulk_accounts", source_id: authUserId, performed_at: new Date().toISOString() });
+        const selfAccount = group.relationship === "Kendisi";
+        await admin.from("student_activity_logs").insert({ organization_id: organizationId, student_id: student.id, activity_type: created ? (selfAccount ? "student_self_portal_bulk_created" : "guardian_portal_bulk_created") : "portal_password_reset", title: created ? (selfAccount ? "Kursiyer portal hesabı toplu işlemle oluşturuldu" : "Veli portal hesabı toplu işlemle oluşturuldu") : "Portal giriş bilgileri yenilendi", description: `${group.fullName} için giriş bilgileri Veli / Kursiyer Portal Merkezi üzerinden hazırlandı.`, source_type: "guardian_bulk_accounts", source_id: authUserId, performed_at: new Date().toISOString() });
       }
 
-      results.push({ ok: true, key, fullName: group.fullName, phone: group.phone, email: group.email, password, studentNames, status: created ? "created" : existingProfile ? "password_reset" : "linked", message: created ? "Veli hesabı oluşturuldu ve şifresi hazırlandı." : "Veli hesabının yeni geçici şifresi hazırlandı." });
+      const selfAccount = group.relationship === "Kendisi";
+      results.push({ ok: true, key, fullName: group.fullName, phone: group.phone, email: group.email, password, studentNames, status: created ? "created" : existingProfile ? "password_reset" : "linked", message: created ? (selfAccount ? "Kursiyer portal hesabı oluşturuldu ve şifresi hazırlandı." : "Veli portal hesabı oluşturuldu ve şifresi hazırlandı.") : "Portal hesabının yeni geçici şifresi hazırlandı." });
     } catch (error) {
-      results.push({ ok: false, key, fullName: group.fullName, phone: group.phone, email: group.email, studentNames, status: "error", message: error instanceof Error ? error.message : "Veli hesabı hazırlanamadı." });
+      results.push({ ok: false, key, fullName: group.fullName, phone: group.phone, email: group.email, studentNames, status: "error", message: error instanceof Error ? error.message : "Portal hesabı hazırlanamadı." });
     }
   }
   revalidatePath("/veliler");
