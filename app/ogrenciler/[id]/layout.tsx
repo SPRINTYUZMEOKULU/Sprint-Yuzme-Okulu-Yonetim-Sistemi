@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { requireProfile } from "@/lib/auth/profile";
-import StudentFileTabs from "./student-file-tabs";
 import StudentProfileCenter from "./student-profile-center";
 import GeneralInfoSummary from "./general-info-summary";
 import StudentRenewalCenter from "./student-renewal-center";
@@ -14,7 +13,6 @@ import AdminCorrectionLauncher from "./admin-correction-launcher";
 import GuardianActivationWhatsAppBridge from "./guardian-activation-whatsapp-bridge";
 import RegistrationGuardianAutoBridge from "./registration-guardian-auto-bridge";
 import PortalQueryOpener from "./portal-query-opener";
-import "./student-file-tabs.css";
 import "./student-crm-polish.css";
 import "./student-finance-center.css";
 
@@ -39,7 +37,6 @@ export default async function StudentFileLayout({
   return (
     <>
       {children}
-      <StudentFileTabs />
       <StudentProfileCenter />
       <GuardianActivationWhatsAppBridge studentId={id} />
       <RegistrationGuardianAutoBridge studentId={id} />
