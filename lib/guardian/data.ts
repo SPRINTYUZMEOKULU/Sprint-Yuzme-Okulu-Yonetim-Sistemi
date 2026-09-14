@@ -62,8 +62,6 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   const supabase = await createClient();
   const admin = getAdminClient();
 
-  // Veli portalında önce oturum sahibini doğrulayıp public.guardians.id değerine çeviriyoruz.
-  // guardian_students.guardian_id alanı profiles/auth.users.id değil, guardians.id tutuyor.
   if (!admin) return emptyContext();
 
   const { data: profile } = await admin
@@ -85,9 +83,6 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
 
   if (!guardian?.id || guardian.is_active === false || guardian.login_enabled === false) return emptyContext();
 
-  // Bu noktadan sonra service-role yalnızca doğrulanmış veli bağlantısından çıkan öğrenci ID'leri
-  // için kullanılır. Böylece eski RLS politikalarındaki auth.uid() / guardians.id uyumsuzluğu
-  // portalı boş bırakmaz ve başka öğrencilere erişim açılmaz.
   const { data: links } = await admin
     .from("guardian_students")
     .select("student_id")
@@ -111,7 +106,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   const [enrollmentRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
     admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("attendance_records").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("lesson_date", { ascending: false }).limit(40),
-    admin.from("progress_notes").select("*").eq("student_id", selected.id).eq("visible_to_guardian", true).order("created_at", { ascending: false }).limit(30),
+    admin.from("student_notes").select("id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("note_type", "coach").eq("is_guardian_visible", true).order("created_at", { ascending: false }).limit(30),
     supabase.from("announcements").select("*").eq("is_published", true).order("published_at", { ascending: false }).limit(20),
     admin.from("payments").select("*").eq("student_id", selected.id).order("received_at", { ascending: false }).limit(30),
     admin.from("guardian_messages").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
@@ -148,6 +143,13 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     schedules = data || [];
   }
 
+  const progress = (progressRes.data || []).map((item: any) => ({
+    ...item,
+    note: item.body,
+    visible_to_guardian: item.is_guardian_visible,
+    coach_id: item.author_id,
+  }));
+
   return {
     students: studentList,
     selected,
@@ -158,7 +160,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     coach,
     schedules,
     attendance: attendanceRes.data || [],
-    progress: progressRes.data || [],
+    progress,
     announcements: announcementRes.data || [],
     payments: paymentsRes.data || [],
     messages: messagesRes.data || [],
