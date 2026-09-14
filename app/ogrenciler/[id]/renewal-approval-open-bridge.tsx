@@ -62,14 +62,22 @@ export default function RenewalApprovalOpenBridge() {
     };
 
     const triggerRenewal = () => {
-      const button = document.querySelector<HTMLButtonElement>("[data-renewal-button='1']");
-      if (button) {
-        button.click();
-        return;
-      }
       window.dispatchEvent(
         new CustomEvent("sprint:open-renewal", { detail: { requestId } }),
       );
+
+      const button = document.querySelector<HTMLButtonElement>(
+        "[data-renewal-button='1']",
+      );
+      if (button && !button.disabled) {
+        button.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          }),
+        );
+      }
     };
 
     const open = () => {
@@ -81,8 +89,8 @@ export default function RenewalApprovalOpenBridge() {
       triggerRenewal();
       tries += 1;
 
-      if (tries < 40) {
-        timer = window.setTimeout(open, 180);
+      if (tries < 50) {
+        timer = window.setTimeout(open, 200);
         return;
       }
 
@@ -90,7 +98,7 @@ export default function RenewalApprovalOpenBridge() {
       veil.innerHTML = `
         <div class="renewalDirectOpenCard error" role="alert">
           <strong>Yenileme merkezi açılamadı.</strong>
-          <span>Sayfa yenilendi ancak Kayıt Yenileme Merkezi başlatılamadı. Tekrar deneyebilirsiniz.</span>
+          <span>Kayıt Yenileme Merkezi başlatılamadı. Sayfayı kapatmadan tekrar deneyebilirsiniz.</span>
           <button type="button" data-renewal-retry>Tekrar Dene</button>
         </div>
       `;
@@ -103,7 +111,7 @@ export default function RenewalApprovalOpenBridge() {
         });
     };
 
-    timer = window.setTimeout(open, 120);
+    timer = window.setTimeout(open, 180);
 
     return () => {
       window.clearTimeout(timer);
