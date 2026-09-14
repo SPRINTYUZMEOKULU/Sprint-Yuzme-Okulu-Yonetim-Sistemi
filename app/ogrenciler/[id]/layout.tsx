@@ -8,6 +8,7 @@ import StudentFinanceCenter from "./student-finance-center";
 import StudentActionRouter from "./student-action-router";
 import StudentActionFeedback from "./student-action-feedback";
 import StudentHeroEnhancer from "./student-hero-enhancer";
+import StudentFileStabilityBridge from "./student-file-stability-bridge";
 import RenewalApprovalOpenBridge from "./renewal-approval-open-bridge";
 import RenewalMobilePolish from "./renewal-mobile-polish";
 import AdminCorrectionLauncher from "./admin-correction-launcher";
@@ -40,6 +41,7 @@ export default async function StudentFileLayout({
     <>
       {children}
       <StudentFileTabs />
+      <StudentFileStabilityBridge />
       <StudentProfileCenter />
       <GuardianActivationWhatsAppBridge studentId={id} />
       <RegistrationGuardianAutoBridge studentId={id} />
