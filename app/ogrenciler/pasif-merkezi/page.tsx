@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 type SimpleRow={id:string;name:string};
 type MembershipRow={student_id:string;group_id:string|null;started_at:string|null};
+type PortalLinkRow={student_id:string;portal_access:boolean|null};
 
 type RequestRow={
   id:string; student_id:string; reason:string|null; description:string|null; status:string|null;
@@ -17,12 +18,13 @@ export default async function PassiveCenterPage(){
   const supabase=await createClient();
   const organizationId=profile.organization_id;
 
-  const [studentsRes,branchesRes,groupsRes,membershipsRes,requestsRes]=await Promise.all([
+  const [studentsRes,branchesRes,groupsRes,membershipsRes,requestsRes,portalLinksRes]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,phone,guardian_phone,created_at,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]).order("first_name"),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
     supabase.from("student_group_memberships").select("student_id,group_id,started_at").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
-    supabase.from("student_status_change_requests").select("id,student_id,reason,description,status,requested_at,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).eq("request_type","deactivate").order("created_at",{ascending:false}),
+    supabase.from("student_status_change_requests").select("id,student_id,reason,description,status,requested_at,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).in("request_type",["deactivate","activate"]).order("created_at",{ascending:false}),
+    supabase.from("guardian_students").select("student_id,portal_access"),
   ]);
 
   const branchMap=new Map(((branchesRes.data||[]) as SimpleRow[]).map(x=>[x.id,x.name]));
@@ -31,6 +33,8 @@ export default async function PassiveCenterPage(){
   for(const row of (membershipsRes.data||[]) as MembershipRow[]){if(!membershipMap.has(row.student_id))membershipMap.set(row.student_id,row)}
   const requestMap=new Map<string,RequestRow>();
   for(const row of (requestsRes.data||[]) as RequestRow[]){if(!requestMap.has(row.student_id))requestMap.set(row.student_id,row)}
+  const portalMap=new Map<string,boolean>();
+  for(const row of (portalLinksRes.data||[]) as PortalLinkRow[]){portalMap.set(row.student_id,Boolean(portalMap.get(row.student_id)||row.portal_access))}
 
   const students:PassiveCenterStudent[]=((studentsRes.data||[]) as any[]).map(student=>{
     const membership=membershipMap.get(student.id);const req=requestMap.get(student.id);
@@ -50,6 +54,7 @@ export default async function PassiveCenterPage(){
       passive_description:student.status==="passive"?(req?.description||null):null,
       passive_at:student.status==="passive"?(req?.applied_at||req?.reviewed_at||req?.created_at||null):null,
       request_status:req?.status||null,
+      portal_access:portalMap.has(student.id)?Boolean(portalMap.get(student.id)):null,
     };
   });
 
