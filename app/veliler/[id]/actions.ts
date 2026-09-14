@@ -126,18 +126,32 @@ export async function addGuardianProgressNote(formData: FormData) {
   const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
   if (!verified.ok) back(authProfileId, "error", verified.message);
 
-  const { error } = await adminClient().from("progress_notes").insert({
+  const visible = formData.get("visible_to_guardian") === "on";
+  const admin = adminClient();
+  const { error } = await admin.from("student_notes").insert({
+    organization_id: profile.organization_id,
     student_id: studentId,
-    coach_id: profile.id,
-    note,
+    author_id: profile.id,
+    note_type: "coach",
+    body: note,
     target: target || null,
-    visible_to_guardian: formData.get("visible_to_guardian") === "on",
+    is_guardian_visible: visible,
   });
   if (error) back(authProfileId, "error", `Gelişim notu kaydedilemedi: ${error.message}`);
 
+  await admin.from("student_timeline_events").insert({
+    organization_id: profile.organization_id,
+    student_id: studentId,
+    event_type: "note_added",
+    title: "Gelişim notu eklendi",
+    description: target ? `${note}\nHedef: ${target}` : note,
+    created_by: profile.id,
+  });
+
   revalidatePath(`/veliler/${authProfileId}`);
+  revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/veli-gelisim");
-  back(authProfileId, "saved", formData.get("visible_to_guardian") === "on" ? "Gelişim notu kaydedildi ve veli portalında yayınlandı." : "Gelişim notu kaydedildi; yalnızca yönetim tarafından görülebilir.");
+  back(authProfileId, "saved", visible ? "Gelişim notu Dijital Kursiyer Dosyasına kaydedildi ve veli portalında yayınlandı." : "Gelişim notu Dijital Kursiyer Dosyasına kaydedildi; veli portalında gizli.");
 }
 
 export async function sendGuardianPortalMessage(formData: FormData) {
@@ -183,13 +197,14 @@ export async function toggleGuardianProgressVisibility(formData: FormData) {
   if (!verified.ok) back(authProfileId, "error", verified.message);
 
   const admin = adminClient();
-  const { data: current } = await admin.from("progress_notes").select("id,visible_to_guardian").eq("id", noteId).eq("student_id", studentId).maybeSingle();
+  const { data: current } = await admin.from("student_notes").select("id,is_guardian_visible").eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId).eq("note_type", "coach").maybeSingle();
   if (!current) back(authProfileId, "error", "Gelişim notu bulunamadı.");
-  const next = !current.visible_to_guardian;
-  const { error } = await admin.from("progress_notes").update({ visible_to_guardian: next }).eq("id", noteId).eq("student_id", studentId);
+  const next = !current.is_guardian_visible;
+  const { error } = await admin.from("student_notes").update({ is_guardian_visible: next }).eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId);
   if (error) back(authProfileId, "error", error.message);
 
   revalidatePath(`/veliler/${authProfileId}`);
+  revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/veli-gelisim");
   back(authProfileId, "saved", next ? "Gelişim notu veli portalında görünür hale getirildi." : "Gelişim notu veli portalından gizlendi.");
 }
