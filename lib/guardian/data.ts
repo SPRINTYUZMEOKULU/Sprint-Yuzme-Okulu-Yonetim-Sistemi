@@ -1,3 +1,4 @@
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 export type GuardianStudent = {
@@ -28,22 +29,74 @@ export type GuardianContext = {
   consents: any[];
 };
 
+function emptyContext(students: GuardianStudent[] = []): GuardianContext {
+  return {
+    students,
+    selected: null,
+    enrollment: null,
+    group: null,
+    branch: null,
+    coursePackage: null,
+    coach: null,
+    schedules: [],
+    attendance: [],
+    progress: [],
+    announcements: [],
+    payments: [],
+    messages: [],
+    documents: [],
+    consents: [],
+  };
+}
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function getGuardianContext(userId: string, selectedId?: string): Promise<GuardianContext> {
   const supabase = await createClient();
+  const admin = getAdminClient();
 
-  const { data: links } = await supabase
+  // guardian_students.guardian_id, profiles.id/auth.users.id değerini değil
+  // public.guardians.id değerini tutar. Önce giriş yapan profilin ana veli kaydını çöz.
+  let canonicalGuardianId = "";
+  if (admin) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id,organization_id,role")
+      .eq("id", userId)
+      .eq("role", "guardian")
+      .maybeSingle();
+
+    if (profile?.organization_id) {
+      const { data: guardian } = await admin
+        .from("guardians")
+        .select("id")
+        .eq("organization_id", profile.organization_id)
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+      canonicalGuardianId = guardian?.id || "";
+    }
+  }
+
+  if (!canonicalGuardianId) return emptyContext();
+
+  // Bağlantıyı service-role ile yalnızca çözümlenmiş veli kaydı üzerinden okuyoruz.
+  // Böylece eski/eksik RLS politikaları veli portalını boş bırakmıyor.
+  const linkClient = admin || supabase;
+  const { data: links } = await linkClient
     .from("guardian_students")
     .select("student_id")
-    .eq("guardian_id", userId);
+    .eq("guardian_id", canonicalGuardianId)
+    .eq("portal_access", true);
 
   const ids = (links || []).map((item: any) => item.student_id).filter(Boolean);
-  if (!ids.length) {
-    return {
-      students: [], selected: null, enrollment: null, group: null, branch: null,
-      coursePackage: null, coach: null, schedules: [], attendance: [], progress: [],
-      announcements: [], payments: [], messages: [], documents: [], consents: []
-    };
-  }
+  if (!ids.length) return emptyContext();
 
   const { data: students } = await supabase
     .from("students")
@@ -53,13 +106,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
 
   const studentList = (students || []) as GuardianStudent[];
   const selected = studentList.find((student) => student.id === selectedId) || studentList[0] || null;
-  if (!selected) {
-    return {
-      students: studentList, selected: null, enrollment: null, group: null, branch: null,
-      coursePackage: null, coach: null, schedules: [], attendance: [], progress: [],
-      announcements: [], payments: [], messages: [], documents: [], consents: []
-    };
-  }
+  if (!selected) return emptyContext(studentList);
 
   const [enrollmentRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
     supabase.from("student_enrollments").select("*").eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
