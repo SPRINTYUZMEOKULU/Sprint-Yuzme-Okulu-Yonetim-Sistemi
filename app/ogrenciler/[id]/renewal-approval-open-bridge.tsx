@@ -6,7 +6,8 @@ export default function RenewalApprovalOpenBridge() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const approvedOpen = params.get("renewalApproval") === "approved";
-    const directOpen = params.get("renewalOpen") === "1";
+    const directOpen =
+      params.get("renewalOpen") === "1" || params.get("renewal") === "1";
     if (!approvedOpen && !directOpen) return;
 
     const requestId = approvedOpen
@@ -45,6 +46,7 @@ export default function RenewalApprovalOpenBridge() {
       params.delete("renewalApproval");
       params.delete("renewalRequestId");
       params.delete("renewalOpen");
+      params.delete("renewal");
       const query = params.toString();
       const cleanUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
       window.history.replaceState(null, "", cleanUrl);
