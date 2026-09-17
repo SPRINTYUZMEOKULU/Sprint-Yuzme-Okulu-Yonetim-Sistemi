@@ -1,0 +1,31 @@
+/* SprintOS group action menu: keep destructive/archive actions inside the card so they cannot be clipped by sessionCard overflow. */
+.groupMoreActions[open] {
+  flex: 1 0 100%;
+  width: 100%;
+}
+
+.groupMoreActions[open] > summary {
+  width: fit-content;
+}
+
+.groupMoreActions > div {
+  position: static !important;
+  width: min(100%, 360px) !important;
+  box-sizing: border-box;
+  margin-top: 7px !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  box-shadow: none !important;
+}
+
+.groupMoreActions .deleteGroupButton {
+  border-color: #f1c7ca !important;
+  background: #fff5f5 !important;
+  color: #c52c36 !important;
+}
+
+@media (max-width: 560px) {
+  .groupMoreActions > div {
+    width: 100% !important;
+    grid-template-columns: 1fr;
+  }
+}
