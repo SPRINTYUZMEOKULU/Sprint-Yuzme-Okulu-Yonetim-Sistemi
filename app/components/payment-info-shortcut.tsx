@@ -11,7 +11,7 @@ export default function PaymentInfoShortcut() {
     if (!match) return;
 
     const studentId = encodeURIComponent(match[1]);
-    const paymentUrl = `/odeme-belge-gonder?studentId=${studentId}`;
+    const paymentUrl = `/odeme-bilgileri?studentId=${studentId}`;
 
     function enhancePaymentAreas() {
       const candidates = Array.from(document.querySelectorAll<HTMLElement>("button, a")).filter((element) => {
