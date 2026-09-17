@@ -29,11 +29,11 @@ export default function GroupEditor({ group, schedules, branches, levels, coache
     <dialog ref={dialogRef} className="groupEditorDialog" onClick={(e) => e.target === e.currentTarget && close()}>
       <form action={updateGroupMulti} className="groupEditorForm">
         <input type="hidden" name="group_id" value={group.id} />
-        <header className="groupEditorHeader"><div><span>EĞİTİM GRUBU DÜZENLEME</span><h2>{group.name}</h2><p>Aynı seansa birden fazla kurs programı ekleyebilirsiniz.</p></div><button type="button" className="groupEditorClose" onClick={close} aria-label="Pencereyi kapat">×</button></header>
+        <header className="groupEditorHeader"><div><span>EĞİTİM GRUBU DÜZENLEME</span><h2>{group.name}</h2><p>Aynı seansa Çocuk, Yetişkin, Özel Ders ve Takım programlarından birden fazlasını birlikte ekleyebilirsiniz.</p></div><button type="button" className="groupEditorClose" onClick={close} aria-label="Pencereyi kapat">×</button></header>
         <div className="groupEditorBody">
           <fieldset className="courseTypeField"><legend>Kurs programları <small>Birden fazla seçebilirsiniz</small></legend><div className="courseTypeGrid">
             {courseTypes.map((type) => <label key={type} className={type === group.course_type ? "currentType" : ""}><input type="checkbox" name="course_types" value={type} defaultChecked={type === group.course_type} disabled={type === group.course_type} /><span><b>{type}</b>{type === group.course_type && <em>Mevcut grup</em>}</span>{type === group.course_type && <input type="hidden" name="course_types" value={type} />}</label>)}
-          </div><p className="courseHelp">Örneğin Çocuk + Yetişkin seçildiğinde aynı gün ve saatte iki ayrı eğitim grubu oluşur. Öğrenci kayıtları ve kontenjanlar birbirinden ayrı takip edilir.</p></fieldset>
+          </div><p className="courseHelp">Örneğin Çocuk + Yetişkin + Takım seçildiğinde aynı gün ve saatte üç ayrı eğitim grubu oluşur. Öğrenci kayıtları ve kontenjanlar birbirinden ayrı takip edilir.</p></fieldset>
 
           <div className="editorGrid">
             <label>Şube<select name="branch_id" defaultValue={group.branch_id} required>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
