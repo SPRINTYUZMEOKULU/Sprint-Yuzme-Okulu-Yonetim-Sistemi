@@ -21,7 +21,9 @@ function calculateEndDate(startDate:string, lessonCount:number, weekdays:number[
   return startDate;
 }
 
-function refresh(){ ["/operasyon-plani","/ogrenciler","/yoklama","/ders-programi","/kayit-yenilemeleri"].forEach(revalidatePath); }
+function refresh(){
+  ["/operasyon-plani","/ogrenciler","/yoklama","/ders-programi","/kayit-yenilemeleri"].forEach((path) => revalidatePath(path));
+}
 
 export async function closeFacility(formData:FormData){
   const profile = await requireProfile([...ROLES]);
