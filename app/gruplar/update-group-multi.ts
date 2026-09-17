@@ -18,7 +18,8 @@ function automaticName(branchName: string, weekdays: number[], startTime: string
 }
 
 function refresh() {
-  ["/gruplar", "/on-kayit", "/on-kayitlar", "/kayit-tamamlama", "/yoklama", "/ders-programi", "/operasyon-plani", "/ogrenciler"].forEach(revalidatePath);
+  const paths = ["/gruplar", "/on-kayit", "/on-kayitlar", "/kayit-tamamlama", "/yoklama", "/ders-programi", "/operasyon-plani", "/ogrenciler"];
+  paths.forEach((path) => revalidatePath(path));
 }
 
 export async function updateGroupMulti(formData: FormData) {
