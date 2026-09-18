@@ -104,6 +104,7 @@ type Props = {
 type StatusFilter =
   | "all"
   | "active"
+  | "starting"
   | "passive"
   | "pre_registration"
   | "ending_soon"
@@ -815,6 +816,7 @@ export default function StudentsClient({
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
   const [sort, setSort] = useState<SortType>("name_asc");
+  const [dataPanelOpen, setDataPanelOpen] = useState(false);
 
   const [dayFilter, setDayFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all");
@@ -1272,10 +1274,21 @@ function closeLessonAction() {
     [students, selectedStudentIds]
   );
 
+  const isStartingStudent = (student: StudentListItem) => {
+    if (student.status !== "active" || !student.start_date) return false;
+    const start = new Date(student.start_date);
+    if (Number.isNaN(start.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    return start.getTime() > today.getTime();
+  };
+
   const counts = useMemo(() => {
     return {
       total: students.length,
       active: students.filter((student) => student.status === "active").length,
+      starting: students.filter(isStartingStudent).length,
       passive: students.filter((student) => student.status === "passive").length,
       preRegistration: students.filter(
         (student) => student.status === "pre_registration"
@@ -1357,6 +1370,10 @@ function closeLessonAction() {
 
       if (status === "active") {
         statusMatch = student.status === "active";
+      }
+
+      if (status === "starting") {
+        statusMatch = isStartingStudent(student);
       }
 
       if (status === "passive") {
@@ -2071,50 +2088,24 @@ function closeLessonAction() {
     ⌂ Ana Sayfa
   </button>
 </div>
-      <section className="studentCommandHeader">
+      <section className="studentCommandHeader mobileProfessionalHeader">
         <div>
-          <span className="commandEyebrow">
-            SPRİNTOS · ÖĞRENCİ OPERASYON MERKEZİ
-          </span>
-          <h2>Öğrenci, program ve iletişim yönetimi</h2>
-          <p>
-            Filtrele, seç, aktar, mesaj hazırla ve öğrenci geçmişine
-            kaydet.
-          </p>
+          <span className="commandEyebrow">SPRİNTOS · ÖĞRENCİ YÖNETİMİ</span>
+          <h2>Öğrenci Merkezi</h2>
+          <p>Öğrenci, iletişim, ders hakkı, telafi, kayıt yenileme ve ödeme takibini tek merkezden yönetin.</p>
         </div>
 
-        <div className="commandActions">
-          <button
-            type="button"
-            className="commandButton ghost"
-            onClick={() => router.push("/")}
-          >
+        <div className="commandActions professionalQuickActions">
+          <button type="button" className="commandButton ghost" onClick={() => router.push("/")}>
             <Icon name="home" /> Ana Sayfa
           </button>
-
-          <button
-            type="button"
-            className="commandButton"
-            onClick={() => router.push("/on-kayit")}
-          >
+          <button type="button" className="commandButton primaryAction" onClick={() => router.push("/on-kayit")}>
             <Icon name="plus" /> Yeni Kayıt
           </button>
-
-          <button
-            type="button"
-            className="commandButton orange"
-            onClick={openBulkMessage}
-            disabled={!selectedStudentIds.length}
-          >
+          <button type="button" className="commandButton orange" onClick={openBulkMessage} disabled={!selectedStudentIds.length}>
             <Icon name="message" /> Mesaj Merkezi
           </button>
-
-          <button
-            type="button"
-            className="commandButton"
-            onClick={openBulkTransfer}
-            disabled={!selectedStudentIds.length}
-          >
+          <button type="button" className="commandButton" onClick={openBulkTransfer} disabled={!selectedStudentIds.length}>
             <Icon name="transfer" /> Toplu İşlem
           </button>
         </div>
@@ -2135,6 +2126,16 @@ function closeLessonAction() {
         >
           <span>Aktif Öğrenci</span>
           <strong>{counts.active}</strong>
+        </button>
+
+        <button
+          type="button"
+          className={`summaryCard startingSummaryCard ${status === "starting" ? "selected" : ""}`}
+          onClick={() => setStatus("starting")}
+        >
+          <span>Başlayacak Kursiyerler</span>
+          <strong>{counts.starting}</strong>
+          <small>Başlangıç tarihi yaklaşan aktif kayıtlar</small>
         </button>
 
         <button
@@ -2197,6 +2198,14 @@ function closeLessonAction() {
           <strong>{counts.compensationWaiting}</strong>
         </div>
       </section>
+
+      <nav className="studentStatusTabs" aria-label="Öğrenci durum filtreleri">
+        <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü</button>
+        <button className={status === "active" ? "active" : ""} onClick={() => setStatus("active")}>Aktif</button>
+        <button className={status === "starting" ? "active" : ""} onClick={() => setStatus("starting")}>Başlayacak <b>{counts.starting}</b></button>
+        <button className={status === "passive" ? "active" : ""} onClick={() => setStatus("passive")}>Pasif</button>
+        <button className={status === "pre_registration" ? "active" : ""} onClick={() => setStatus("pre_registration")}>Ön Kayıt</button>
+      </nav>
 
       <section className="toolbar">
         <div className="searchBox">
@@ -2289,28 +2298,37 @@ function closeLessonAction() {
           <option value="remaining_asc">Kalan Ders Azdan Çoğa</option>
         </select>
 
-        <div className="dataActions">
-          <button className="dataAction primary" type="button" onClick={exportCSV}>
-            <span className="dataActionIcon">XLSX</span>
-            <span><strong>{selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Excel’e Aktar"}</strong><small>Filtrelenen listeyi düzenli çalışma kitabı olarak indir</small></span>
-          </button>
-          <button className="dataAction" type="button" onClick={exportPDF}>
-            <span className="dataActionIcon">PDF</span>
-            <span><strong>{selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "PDF’ye Aktar"}</strong><small>A4 yatay yazdırma / PDF ekranını aç</small></span>
-          </button>
-          <a className="dataAction subtle" href="/api/student-import">
-            <span className="dataActionIcon">↓</span>
-            <span><strong>İçe Aktarma Şablonu</strong><small>Doğru kolon yapısındaki örnek şablonu indir</small></span>
-          </a>
+        <div className="dataPanelShell">
           <button
-            className="dataAction subtle"
             type="button"
-            disabled={importSubmitting}
-            onClick={() => importInputRef.current?.click()}
+            className="dataPanelToggle"
+            aria-expanded={dataPanelOpen}
+            onClick={() => setDataPanelOpen((open) => !open)}
           >
-            <span className="dataActionIcon">↑</span>
-            <span><strong>{importSubmitting ? "Aktarılıyor…" : "Excel / CSV İçe Aktar"}</strong><small>Hazırladığınız dosyayı kontrol ederek sisteme aktar</small></span>
+            <span><Icon name="file" /> <strong>Aktarım & Çıktılar</strong></span>
+            <small>Excel, PDF, şablon ve içe aktarma</small>
+            <b>{dataPanelOpen ? "−" : "+"}</b>
           </button>
+          {dataPanelOpen && (
+            <div className="dataActions">
+              <button className="dataAction primary" type="button" onClick={exportCSV}>
+                <span className="dataActionIcon">XLSX</span>
+                <span><strong>{selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Excel’e Aktar"}</strong><small>Filtrelenen listeyi düzenli çalışma kitabı olarak indir</small></span>
+              </button>
+              <button className="dataAction" type="button" onClick={exportPDF}>
+                <span className="dataActionIcon">PDF</span>
+                <span><strong>{selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "PDF’ye Aktar"}</strong><small>A4 yatay yazdırma / PDF ekranını aç</small></span>
+              </button>
+              <a className="dataAction subtle" href="/api/student-import">
+                <span className="dataActionIcon">↓</span>
+                <span><strong>İçe Aktarma Şablonu</strong><small>Doğru kolon yapısındaki örnek şablonu indir</small></span>
+              </a>
+              <button className="dataAction subtle" type="button" disabled={importSubmitting} onClick={() => importInputRef.current?.click()}>
+                <span className="dataActionIcon">↑</span>
+                <span><strong>{importSubmitting ? "Aktarılıyor…" : "Excel / CSV İçe Aktar"}</strong><small>Hazırladığınız dosyayı kontrol ederek sisteme aktar</small></span>
+              </button>
+            </div>
+          )}
         </div>
         <input
           ref={importInputRef}
@@ -5429,6 +5447,29 @@ function closeLessonAction() {
   .mainDetails,.dateRow { grid-template-columns:1fr 1fr !important; }
 }
 
+
+/* SprintOS Öğrenci Merkezi — mobil profesyonel üst alan */
+.studentStatusTabs{display:flex;gap:7px;padding:7px;margin:0 0 14px;border:1px solid #dbe6f3;border-radius:16px;background:#fff;overflow-x:auto}
+.studentStatusTabs button{appearance:none;border:0;background:transparent;color:#60738d;border-radius:11px;min-height:42px;padding:0 16px;font-weight:800;white-space:nowrap;cursor:pointer}
+.studentStatusTabs button.active{background:#176fe8;color:#fff;box-shadow:0 6px 16px rgba(23,111,232,.18)}
+.studentStatusTabs b{margin-left:4px}
+.startingSummaryCard{border-color:#f2c36b!important;background:#fffaf0!important}
+.startingSummaryCard.selected{border-color:#f59e0b!important;box-shadow:0 8px 24px rgba(245,158,11,.14)!important}
+.dataPanelShell{grid-column:1/-1}
+.dataPanelToggle{width:100%;min-height:58px;border:1px solid #cfe0f3;border-radius:14px;background:#fff;color:#17345c;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 12px;padding:10px 14px;text-align:left;cursor:pointer}
+.dataPanelToggle>span{display:flex;align-items:center;gap:8px}
+.dataPanelToggle small{grid-column:1;color:#71839a}
+.dataPanelToggle>b{grid-column:2;grid-row:1/3;font-size:22px;color:#176fe8}
+.primaryAction{background:#176fe8!important;color:#fff!important;border-color:#176fe8!important}
+@media(max-width:760px){
+  .mobileProfessionalHeader{padding:16px!important}
+  .mobileProfessionalHeader h2{font-size:24px!important}
+  .professionalQuickActions{grid-template-columns:1fr 1fr!important}
+  .summaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .studentStatusTabs{position:sticky;top:0;z-index:8}
+  .studentStatusTabs button{min-height:40px;padding:0 13px;font-size:12px}
+  .dataPanelToggle{min-height:54px}
+}
 
 /* SprintOS Öğrenci Merkezi — profesyonel filtre / veri işlemleri */
 .toolbar {
