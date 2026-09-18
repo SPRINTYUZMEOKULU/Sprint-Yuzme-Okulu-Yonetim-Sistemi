@@ -429,12 +429,20 @@ export async function applyManagerCorrection(formData: FormData) {
   if (activePlan?.id) {
     const currentCompEnd = activePlan.compensation_planned_end_date || null;
     const normalEnd = updatedEnrollment.planned_end_date || null;
-    const compensationEnd =
-      currentCompEnd && normalEnd
+    const balanceResult = await supabase
+      .from("student_lesson_balance")
+      .select("compensation_lesson_balance")
+      .eq("student_id", studentId)
+      .maybeSingle();
+    const hasCompensation =
+      Number(balanceResult.data?.compensation_lesson_balance || 0) > 0;
+    const compensationEnd = hasCompensation
+      ? currentCompEnd && normalEnd
         ? currentCompEnd >= normalEnd
           ? currentCompEnd
           : normalEnd
-        : currentCompEnd || normalEnd;
+        : currentCompEnd || normalEnd
+      : null;
 
     await supabase
       .from("student_attendance_plans")
