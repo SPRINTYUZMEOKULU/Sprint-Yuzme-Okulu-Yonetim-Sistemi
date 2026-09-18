@@ -758,6 +758,34 @@ export default async function OperasyonPlaniPage({
           </div>
         </section>
 
+        <section style={operationCenterStyle}>
+          <div style={operationCenterHeaderStyle}>
+            <div>
+              <div style={operationCenterEyebrowStyle}>HIZLI OPERASYON MERKEZİ</div>
+              <strong style={operationCenterTitleStyle}>Bugünün ders ve tesis işlemleri</strong>
+              <p style={operationCenterTextStyle}>Havuz kapanışı, yapılmayan ders, telafi ve yeniden başlangıç işlemlerini buradan yönetin. Yapılan işlemler merkezi ders bakiyesine otomatik yansır.</p>
+            </div>
+            <span style={liveBadgeStyle}>● CANLI</span>
+          </div>
+          <div style={operationActionGridStyle}>
+            <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
+              <span style={operationIconStyle}><Icons.branch /></span>
+              <span><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+            <Link href="/ders-operasyonlari" style={operationActionStyle}>
+              <span style={operationIconStyle}><Icons.calendar /></span>
+              <span><b>Ders Yapılmadı / Telafi</b><small>Seans iptali · hak düşme · telafi planla</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+            <Link href="/yoklama" style={operationActionStyle}>
+              <span style={operationIconStyle}><Icons.check /></span>
+              <span><b>Yoklama</b><small>Katılımı kaydet · merkezi bakiyeyi güncelle</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+          </div>
+        </section>
+
         {/* =================================================
             GÖRÜNÜM SEKMELERİ
         ================================================= */}
@@ -2198,6 +2226,18 @@ function MiniStat({
 /* =========================================================
    STİLLER
 ========================================================= */
+
+const operationCenterStyle = { background: "#fff", border: "1px solid #d9e4f2", borderRadius: 20, padding: 18, marginBottom: 18, boxShadow: "0 8px 28px rgba(31,76,135,.06)" } as const;
+const operationCenterHeaderStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 } as const;
+const operationCenterEyebrowStyle = { fontSize: 10, fontWeight: 900, letterSpacing: ".12em", color: "#1769e8", marginBottom: 5 } as const;
+const operationCenterTitleStyle = { display: "block", fontSize: 18, color: "#13233f" } as const;
+const operationCenterTextStyle = { margin: "6px 0 0", color: "#65758d", fontSize: 12, lineHeight: 1.45, maxWidth: 720 } as const;
+const liveBadgeStyle = { flexShrink: 0, fontSize: 10, fontWeight: 900, color: "#16824b", background: "#eaf8f0", border: "1px solid #ccebd9", padding: "7px 9px", borderRadius: 999 } as const;
+const operationActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 } as const;
+const operationActionStyle = { minHeight: 72, display: "flex", alignItems: "center", gap: 11, textDecoration: "none", background: "#f8fbff", border: "1px solid #dce7f5", borderRadius: 15, padding: "12px 13px", color: "#13233f" } as const;
+const operationActionPrimaryStyle = { ...operationActionStyle, background: "#1769e8", borderColor: "#1769e8", color: "#fff" } as const;
+const operationIconStyle = { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.18)", flexShrink: 0 } as const;
+const operationArrowStyle = { marginLeft: "auto", fontSize: 20, fontWeight: 800 } as const;
 
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
