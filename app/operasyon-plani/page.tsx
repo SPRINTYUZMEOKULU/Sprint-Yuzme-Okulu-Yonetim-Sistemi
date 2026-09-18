@@ -1516,6 +1516,41 @@ export default async function OperasyonPlaniPage({
                       </div>
                     </div>
 
+                    {canEdit && (
+                      <section style={sessionOperationBarStyle}>
+                        <div style={sessionOperationHeadStyle}>
+                          <div>
+                            <strong>Seans İşlemleri</strong>
+                            <span>Bu seans için yapılacak işlem tüm bağlı ekranlara merkezi olarak yansır.</span>
+                          </div>
+                          <span style={sessionReadyBadgeStyle}>Planlı Seans</span>
+                        </div>
+                        <div style={sessionOperationButtonsStyle}>
+                          <Link
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=cancel`}
+                            style={sessionDangerButtonStyle}
+                          >
+                            <span>×</span>
+                            <span><b>Ders Yapılmadı</b><small>Normal hak düşmesin</small></span>
+                          </Link>
+                          <Link
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=compensation`}
+                            style={sessionPurpleButtonStyle}
+                          >
+                            <span>↻</span>
+                            <span><b>Telafi Planla</b><small>Telafi hakkı / seansı oluştur</small></span>
+                          </Link>
+                          <Link
+                            href={`/yoklama?tarih=${selectedDate}&schedule_id=${schedule.id}`}
+                            style={sessionNeutralButtonStyle}
+                          >
+                            <span>✓</span>
+                            <span><b>Yoklamaya Git</b><small>Katılım durumunu kaydet</small></span>
+                          </Link>
+                        </div>
+                      </section>
+                    )}
+
                     {/* =====================================
                         PERSONEL ATAMA
                     ===================================== */}
@@ -2241,6 +2276,15 @@ function MiniStat({
 /* =========================================================
    STİLLER
 ========================================================= */
+
+const sessionOperationBarStyle = { margin:"14px 0", padding:13, border:"1px solid #dce7f5", borderRadius:15, background:"#f8fbff" } as const;
+const sessionOperationHeadStyle = { display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:10 } as const;
+const sessionReadyBadgeStyle = { fontSize:10, fontWeight:850, color:"#1769e8", background:"#eaf3ff", border:"1px solid #cfe1fb", padding:"6px 8px", borderRadius:999, whiteSpace:"nowrap" } as const;
+const sessionOperationButtonsStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:8 } as const;
+const sessionBaseButtonStyle = { display:"flex", alignItems:"center", gap:9, minHeight:54, padding:"9px 11px", borderRadius:12, textDecoration:"none", border:"1px solid #dce7f5", fontSize:12 } as const;
+const sessionDangerButtonStyle = { ...sessionBaseButtonStyle, color:"#a43a22", background:"#fff7f3", borderColor:"#ffd5c7" } as const;
+const sessionPurpleButtonStyle = { ...sessionBaseButtonStyle, color:"#6d36c9", background:"#f8f4ff", borderColor:"#e2d5ff" } as const;
+const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", background:"#fff", borderColor:"#cfe0f5" } as const;
 
 const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
 const controlPanelHeaderStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" } as const;
