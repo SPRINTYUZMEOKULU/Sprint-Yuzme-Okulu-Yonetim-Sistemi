@@ -38,6 +38,7 @@ export type StudentListItem = {
   normal_end_date?: string | null;
   compensation_end_date?: string | null;
   end_date?: string | null;
+  remaining_lesson_end_date?: string | null;
 
   phone?: string | null;
   guardian_phone?: string | null;
@@ -2582,6 +2583,11 @@ function closeLessonAction() {
                 <div>
                   <span>Telafili Bitiş</span>
                   <strong>{formatDate(student.compensation_end_date)}</strong>
+                </div>
+
+                <div>
+                  <span>Kalan Ders Bitişi</span>
+                  <strong>{formatDate(student.remaining_lesson_end_date)}</strong>
                 </div>
 
                 <div>
