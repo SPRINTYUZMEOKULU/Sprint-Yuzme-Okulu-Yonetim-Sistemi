@@ -32,7 +32,7 @@ type DailyAttendanceInput = {
   lessonDate: string;
 };
 
-type MonthlyAttendanceInput = {
+type SessionConsumptionInput = {\n  groupId: string;\n  scheduleId: string;\n  lessonDate: string;\n  consumeRight: boolean;\n  reason: string;\n  note?: string | null;\n};\n\ntype MonthlyAttendanceInput = {
   groupId: string;
   month: string;
 };
@@ -169,9 +169,37 @@ async function syncEnrollmentUsedLessons(params: {
     };
   }
 
+  const attendanceBase = attendanceRows || [];
+  const { data: exceptions, error: exceptionError } = await supabase
+    .from("lesson_consumption_exceptions")
+    .select("group_id,schedule_id,lesson_date")
+    .eq("organization_id", organizationId)
+    .eq("consume_right", false);
+  if (exceptionError) return { ok:false as const, message:`Ders istisnaları okunamadı: ${exceptionError.message}`, updatedEnrollmentIds:[] as string[], studentIds:[] as string[] };
+  const blocked = new Set((exceptions || []).map((x:any)=>`${x.group_id}:${x.schedule_id}:${x.lesson_date}`));
+  const { data: detailedRows, error: detailedError } = await supabase
+    .from("attendance_records")
+    .select("id,enrollment_id,status,group_id,schedule_id,lesson_date")
+    .eq("organization_id", organizationId)
+    .in("enrollment_id", validEnrollmentIds)
+    .in("status", PACKAGE_CONSUMING_STATUSES);
+  if (detailedError) return { ok:false as const, message:detailedError.message, updatedEnrollmentIds:[] as string[], studentIds:[] as string[] };
+  const effectiveAttendanceRows = (detailedRows || []).filter((row:any)=>!blocked.has(`${row.group_id}:${row.schedule_id}:${row.lesson_date}`));
+
+  /* legacy query above is intentionally retained for schema compatibility; detailed rows drive the count. */
+
+  if (attendanceError) {
+    return {
+      ok: false as const,
+      message: `Ders hakkı hesaplanamadı: ${attendanceError.message}`,
+      updatedEnrollmentIds: [] as string[],
+      studentIds: [] as string[],
+    };
+  }
+
   const countMap = new Map<string, number>();
 
-  for (const row of attendanceRows || []) {
+  for (const row of effectiveAttendanceRows) {
     if (!row.enrollment_id) continue;
 
     countMap.set(
@@ -685,5 +713,49 @@ export async function getMonthlyAttendance(
           ? error.message
           : "Aylık yoklama yüklenemedi.",
     };
+  }
+}
+
+
+/*
+ * Seans bazlı ders hakkı istisnası.
+ * "Ders yapılmadı" işaretlendiğinde yoklama geçmişi silinmez; paket tüketimi
+ * merkezi hesapta bu seans için yok sayılır. Başlangıç/bitiş tarihleri değişmez.
+ */
+export async function setSessionConsumption(input: SessionConsumptionInput) {
+  try {
+    const profile = await getAuthorizedProfile();
+    const supabase = await createClient();
+    const organizationId = profile.organization_id;
+    if (!organizationId || !input.groupId || !input.scheduleId || !input.lessonDate) {
+      return { ok:false, message:"Seans bilgisi eksik." };
+    }
+    const reason = String(input.reason || "").trim();
+    if (!input.consumeRight && !reason) return { ok:false, message:"Ders düşmeyecekse gerekçe zorunludur." };
+
+    if (input.consumeRight) {
+      const { error } = await supabase.from("lesson_consumption_exceptions").delete()
+        .eq("organization_id", organizationId).eq("group_id", input.groupId)
+        .eq("schedule_id", input.scheduleId).eq("lesson_date", input.lessonDate);
+      if (error) return { ok:false, message:error.message };
+    } else {
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("lesson_consumption_exceptions").upsert({
+        organization_id:organizationId, group_id:input.groupId, schedule_id:input.scheduleId,
+        lesson_date:input.lessonDate, consume_right:false, reason,
+        note:input.note?.trim() || null, created_by:profile.id, updated_at:now
+      }, { onConflict:"organization_id,group_id,schedule_id,lesson_date" });
+      if (error) return { ok:false, message:error.message };
+    }
+
+    const { data: affected } = await supabase.from("attendance_records")
+      .select("enrollment_id").eq("organization_id", organizationId)
+      .eq("group_id", input.groupId).eq("schedule_id", input.scheduleId).eq("lesson_date", input.lessonDate);
+    const enrollmentIds = uniqueStrings((affected || []).map((row:any)=>row.enrollment_id));
+    const sync = await syncEnrollmentUsedLessons({supabase,organizationId,enrollmentIds});
+    revalidatePath("/yoklama"); revalidatePath("/ogrenciler"); revalidatePath("/veli-paneli");
+    return { ok:sync.ok, message: input.consumeRight ? "Seans tekrar ders hakkından düşecek şekilde açıldı." : "Ders yapılmadı olarak işaretlendi; bu seans paket hakkından düşmeyecek." };
+  } catch (error) {
+    return { ok:false, message:error instanceof Error ? error.message : "Seans kuralı kaydedilemedi." };
   }
 }
