@@ -60,7 +60,31 @@ begin
   while d <= (p_as_of at time zone 'Europe/Istanbul')::date
     and used_count < e.total_lessons loop
 
-    if extract(dow from d)::smallint = any(e.lesson_weekdays) then
+    /*
+     * student_enrollments.lesson_weekdays kayıt akışında 0..6 (Postgres DOW)
+     * olarak saklanır. Asıl seans kaynağı lesson_schedules'tır: grup adındaki
+     * "Salı-Perşembe-Cumartesi" gibi metinlere göre hak düşülmez.
+     *
+     * Aynı günde birden fazla aktif schedule olsa bile paket günde bir kez
+     * tüketilir. Bugünkü ders ise seansın end_time'ı geçmeden tüketilmez.
+     */
+    if extract(dow from d)::smallint = any(e.lesson_weekdays)
+      and exists(
+        select 1
+        from public.lesson_schedules ls
+        where ls.organization_id=e.organization_id
+          and ls.group_id=e.group_id
+          and ls.is_active=true
+          and ls.weekday=extract(dow from d)::smallint
+          and (
+            d < (p_as_of at time zone 'Europe/Istanbul')::date
+            or (
+              d = (p_as_of at time zone 'Europe/Istanbul')::date
+              and ls.end_time <= (p_as_of at time zone 'Europe/Istanbul')::time
+            )
+          )
+      )
+    then
       -- Tesis kapanışında kapanış tarihinden START tarihine kadar normal hak tüketilmez.
       select exists(
         select 1
@@ -79,6 +103,14 @@ begin
             and x.group_id=e.group_id
             and x.lesson_date=d
             and x.consume_right=false
+            and (
+              x.schedule_id is null
+              or exists(
+                select 1 from public.lesson_schedules lsx
+                where lsx.id=x.schedule_id
+                  and lsx.weekday=extract(dow from d)::smallint
+              )
+            )
         )
       then
         used_count := used_count + 1;
