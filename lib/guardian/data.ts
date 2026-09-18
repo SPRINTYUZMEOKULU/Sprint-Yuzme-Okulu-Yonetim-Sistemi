@@ -60,6 +60,8 @@ function getAdminClient() {
 
 export async function getGuardianContext(userId: string, selectedId?: string): Promise<GuardianContext> {
   const supabase = await createClient();
+  // Veli portalındaki tüm ders bakiyeleri de merkezi planlı ders motorundan gelir.
+  await supabase.rpc("sync_scheduled_used_lessons");
   const admin = getAdminClient();
 
   if (!admin) return emptyContext();
