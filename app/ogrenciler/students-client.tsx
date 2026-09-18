@@ -12,6 +12,7 @@ import {
 export type StudentListItem = {
   id: string;
   student_number?: string | null;
+  birth_date?: string | null;
   first_name: string;
   last_name: string;
 
@@ -333,6 +334,29 @@ function formatDate(value?: string | null) {
     month: "2-digit",
     year: "numeric",
   }).format(date);
+}
+
+function ageFromBirthDate(value?: string | null) {
+  if (!value) return null;
+  const birth = new Date(value);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDifference = today.getMonth() - birth.getMonth();
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age >= 0 ? age : null;
+}
+
+function matchesAgeGroup(value: string, birthDate?: string | null) {
+  if (value === "all") return true;
+  const age = ageFromBirthDate(birthDate);
+  if (age == null) return false;
+  if (value === "3_5") return age >= 3 && age <= 5;
+  if (value === "6_8") return age >= 6 && age <= 8;
+  if (value === "9_11") return age >= 9 && age <= 11;
+  if (value === "12_13") return age >= 12 && age <= 13;
+  if (value === "14_plus") return age >= 14;
+  return true;
 }
 
 function normalizeText(value?: string | null) {
@@ -818,6 +842,7 @@ export default function StudentsClient({
   const [branch, setBranch] = useState("all");
   const [group, setGroup] = useState("all");
   const [level, setLevel] = useState("all");
+  const [ageGroup, setAgeGroup] = useState("all");
   const [sort, setSort] = useState<SortType>("name_asc");
   const [dataPanelOpen, setDataPanelOpen] = useState(false);
 
@@ -1357,6 +1382,8 @@ function closeLessonAction() {
       const levelMatch =
         level === "all" || student.swimming_level === level;
 
+      const ageMatch = matchesAgeGroup(ageGroup, student.birth_date);
+
       const dayMatch =
         dayFilter === "all" ||
         (student.schedule_weekdays || []).includes(
@@ -1424,6 +1451,7 @@ function closeLessonAction() {
         branchMatch &&
         groupMatch &&
         levelMatch &&
+        ageMatch &&
         dayMatch &&
         timeMatch &&
         statusMatch
@@ -1491,6 +1519,7 @@ function closeLessonAction() {
     branch,
     group,
     level,
+    ageGroup,
     dayFilter,
     timeFilter,
     sort,
@@ -2285,6 +2314,19 @@ function closeLessonAction() {
               {levelName}
             </option>
           ))}
+        </select>
+
+        <select
+          value={ageGroup}
+          onChange={(event) => setAgeGroup(event.target.value)}
+          aria-label="Yaş grubu filtresi"
+        >
+          <option value="all">Tüm Yaş Grupları</option>
+          <option value="3_5">3–5 Yaş · Minikler</option>
+          <option value="6_8">6–8 Yaş · Çocuk</option>
+          <option value="9_11">9–11 Yaş · Çocuk</option>
+          <option value="12_13">12–13 Yaş · Genç</option>
+          <option value="14_plus">14+ · Yetişkin</option>
         </select>
 
         <select
@@ -5523,7 +5565,7 @@ function closeLessonAction() {
 
 /* SprintOS Öğrenci Merkezi — profesyonel filtre / veri işlemleri */
 .toolbar {
-  grid-template-columns: minmax(280px, 1.7fr) repeat(5, minmax(150px, 1fr)) !important;
+  grid-template-columns: minmax(280px, 1.7fr) repeat(6, minmax(150px, 1fr)) !important;
   align-items: stretch;
 }
 .toolbar input,
