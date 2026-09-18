@@ -2967,7 +2967,7 @@ function closeLessonAction() {
                   <strong>Seçilen tarihte aktarılacak ders hakkı</strong>
                   {selectedStudents.length === 1 ? (
                     <p>
-                      <b>{selectedStudents[0].remaining_lessons ?? 0} ders</b> mevcut kalan hak görünüyor. Aktarım başlangıcı <b>{effectiveDate ? new Date(effectiveDate + "T12:00:00").toLocaleDateString("tr-TR") : "—"}</b>. Yeni program ders sayısı alanını boş bırakırsanız bu hak aynen taşınır; farklı bir sayı girerseniz yönetici tercihi olarak o sayı esas alınır.
+                      <b>{selectedStudents[0].normal_remaining_lessons ?? selectedStudents[0].remaining_lessons ?? 0} ders</b> mevcut kalan hak görünüyor. Aktarım başlangıcı <b>{effectiveDate ? new Date(effectiveDate + "T12:00:00").toLocaleDateString("tr-TR") : "—"}</b>. Yeni program ders sayısı alanını boş bırakırsanız bu hak aynen taşınır; farklı bir sayı girerseniz yönetici tercihi olarak o sayı esas alınır.
                     </p>
                   ) : (
                     <div>
@@ -2976,7 +2976,7 @@ function closeLessonAction() {
                         {selectedStudents.map((student) => (
                           <div key={student.id} style={{display:"flex",justifyContent:"space-between",gap:12}}>
                             <span>{student.first_name} {student.last_name}</span>
-                            <b>{student.remaining_lessons ?? 0} ders</b>
+                            <b>{student.normal_remaining_lessons ?? student.remaining_lessons ?? 0} ders</b>
                           </div>
                         ))}
                       </div>
@@ -2994,7 +2994,7 @@ function closeLessonAction() {
                       inputMode="numeric"
                       value={transferLessonCount}
                       onChange={(event) => setTransferLessonCount(event.target.value)}
-                      placeholder={selectedStudents.length === 1 ? String(selectedStudents[0].remaining_lessons ?? "") : "Örn. 8"}
+                      placeholder={selectedStudents.length === 1 ? String(selectedStudents[0].normal_remaining_lessons ?? selectedStudents[0].remaining_lessons ?? "") : "Örn. 8"}
                     />
                     <small>Boş bırakırsanız mevcut kalan ders hakkı aynen taşınır.</small>
                   </label>
