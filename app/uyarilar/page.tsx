@@ -24,6 +24,17 @@ function severity(row: AlertRow) {
   return "info";
 }
 
+function formatAlertDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(date);
+  } catch {
+    return null;
+  }
+}
+
 function turkeyToday() {
   const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" });
   const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
@@ -116,7 +127,7 @@ export default async function AlertsPage() {
             const target = text(item, ["target_path", "action_path", "href"], studentId ? `/ogrenciler/${studentId}` : "/uyarilar");
             return <article className={`alertRow ${severity(item)}`} key={item.id}>
               <div className="alertPulse" aria-hidden="true" />
-              <div className="alertBody"><div className="alertMeta"><span>{text(item,["category","alert_type","type"],"Sistem")}</span>{item.created_at ? <small>{new Intl.DateTimeFormat("tr-TR",{dateStyle:"short",timeStyle:"short"}).format(new Date(item.created_at))}</small> : null}</div><h3>{title}</h3><p>{body}</p></div>
+              <div className="alertBody"><div className="alertMeta"><span>{text(item,["category","alert_type","type"],"Sistem")}</span>{formatAlertDate(item.created_at) ? <small>{formatAlertDate(item.created_at)}</small> : null}</div><h3>{title}</h3><p>{body}</p></div>
               <div className="alertActions">{target !== "/uyarilar" ? <Link href={target}>İşleme Git</Link> : null}<form action={resolveAlert}><input type="hidden" name="id" value={item.id}/><button>Tamamlandı</button></form></div>
             </article>;
           })}
