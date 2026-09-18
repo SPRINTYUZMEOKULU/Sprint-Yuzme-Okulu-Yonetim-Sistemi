@@ -22,7 +22,7 @@ function calculateEndDate(startDate:string, lessonCount:number, weekdays:number[
 }
 
 function refresh(){
-  ["/operasyon-plani","/ogrenciler","/yoklama","/ders-programi","/kayit-yenilemeleri"].forEach((path) => revalidatePath(path));
+  ["/operasyon-plani","/ogrenciler","/baslayacak-kursiyerler","/yoklama","/ders-programi","/ders-operasyonlari","/kayit-yenilemeleri","/odemeler","/raporlar","/veli-paneli","/"].forEach((path) => revalidatePath(path));
 }
 
 export async function closeFacility(formData:FormData){
@@ -58,7 +58,12 @@ export async function startFacility(formData:FormData){
   for(const row of snapshots||[]){
     const endDate=calculateEndDate(startDate,Number(row.remaining_lessons||0),weekdays);
     const {error}=await supabase.from("student_enrollments").update({group_id:targetGroupId,branch_id:targetBranchId||pause.branch_id,start_date:startDate,planned_end_date:endDate,normal_end_date:endDate,lesson_weekdays:weekdays.map((d:number)=>d===7?0:d),weekly_frequency:weekdays.length,used_lessons:row.used_lessons_at_close,updated_at:new Date().toISOString()}).eq("id",row.enrollment_id).eq("organization_id",profile.organization_id); if(error) throw error;
-    await supabase.from("students").update({branch_id:targetBranchId||pause.branch_id,preferred_group_id:targetGroupId,updated_at:new Date().toISOString()}).eq("id",row.student_id).eq("organization_id",profile.organization_id);
+    await supabase.from("students").update({branch_id:targetBranchId||pause.branch_id,preferred_group_id:targetGroupId,preferred_days:weekdays.map((d:number)=>d===7?0:d).join(","),updated_at:new Date().toISOString()}).eq("id",row.student_id).eq("organization_id",profile.organization_id);
+    await supabase.from("student_group_memberships").update({is_active:false,ended_at:startDate}).eq("organization_id",profile.organization_id).eq("student_id",row.student_id).eq("is_active",true);
+    const {error:membershipError}=await supabase.from("student_group_memberships").insert({organization_id:profile.organization_id,student_id:row.student_id,group_id:targetGroupId,started_at:startDate,is_active:true}); if(membershipError) throw membershipError;
+    await supabase.from("student_attendance_plans").update({is_active:false,updated_by:profile.id,updated_at:new Date().toISOString()}).eq("organization_id",profile.organization_id).eq("student_id",row.student_id).eq("is_active",true);
+    const totalLessons=Math.max(0,Number(row.remaining_lessons||0)+Number(row.used_lessons_at_close||0));
+    const {error:planError}=await supabase.from("student_attendance_plans").insert({organization_id:profile.organization_id,student_id:row.student_id,enrollment_id:row.enrollment_id,group_id:targetGroupId,selected_weekdays:weekdays,weekly_frequency:weekdays.length,package_lesson_count:totalLessons,start_date:startDate,normal_planned_end_date:endDate,compensation_planned_end_date:endDate,is_active:true,created_by:profile.id,updated_by:profile.id}); if(planError) throw planError;
     await supabase.from("facility_pause_student_snapshots").update({resumed_at:startDate,target_group_id:targetGroupId,new_planned_end_date:endDate}).eq("id",row.id);
     await supabase.from("student_activity_logs").insert({organization_id:profile.organization_id,student_id:row.student_id,activity_type:targetBranchId&&targetBranchId!==pause.branch_id?"facility_transfer_start":"facility_start",title:targetBranchId&&targetBranchId!==pause.branch_id?"Aktar + START":"Tesis START",description:`${row.remaining_lessons} kalan ders ${startDate} tarihinden itibaren yeniden planlandı. Yeni bitiş: ${endDate}.`,old_value:{branch_id:pause.branch_id,group_id:row.source_group_id},new_value:{branch_id:targetBranchId||pause.branch_id,group_id:targetGroupId,start_date:startDate,planned_end_date:endDate}});
   }
