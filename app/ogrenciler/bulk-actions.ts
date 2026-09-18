@@ -387,17 +387,12 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       const remainingLessons = Math.max(totalLessons - usedLessons, 0);
       const compensationBalance = balanceMap.get(studentId) || 0;
 
-      const newNormalEndDate = calculateEndDate(
-        input.effectiveDate,
-        remainingLessons,
-        targetWeekdays,
-      );
-
-      const newCompensationEndDate = calculateEndDate(
-        input.effectiveDate,
-        remainingLessons + compensationBalance,
-        targetWeekdays,
-      );
+      // Aktarım yalnız program/grup değiştirir; kayıtlı başlangıç ve bitiş
+      // tarihleri authoritative'dir ve aktarım sırasında yeniden türetilmez.
+      const preservedNormalEndDate = enrollment.planned_end_date ?? null;
+      const preservedPlanStartDate = oldPlan?.start_date ?? enrollment.start_date ?? input.effectiveDate;
+      const preservedCompensationEndDate =
+        oldPlan?.compensation_planned_end_date ?? preservedNormalEndDate;
 
       const oldGroup = enrollment.group_id
         ? oldGroupMap.get(enrollment.group_id)
@@ -415,7 +410,6 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         .from("student_enrollments")
         .update({
           group_id: input.targetGroupId,
-          planned_end_date: newNormalEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
           updated_at: now,
         })
@@ -496,9 +490,9 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           selected_weekdays: targetWeekdays,
           weekly_frequency: targetWeekdays.length,
           package_lesson_count: totalLessons,
-          start_date: input.effectiveDate,
-          normal_planned_end_date: newNormalEndDate,
-          compensation_planned_end_date: newCompensationEndDate,
+          start_date: preservedPlanStartDate,
+          normal_planned_end_date: preservedNormalEndDate,
+          compensation_planned_end_date: preservedCompensationEndDate,
           is_active: true,
           created_by: profile.id,
           updated_by: profile.id,
@@ -544,7 +538,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             } programından ` +
             `${targetBranch.name} / ${targetGroup.name} programına aktarıldı. ` +
             `${remainingLessons} normal ders hakkı yeni programa taşındı. ` +
-            `Yeni planlanan bitiş: ${formatDateTR(newNormalEndDate)}.`,
+            `Kayıtlı bitiş tarihi korunmuştur: ${formatDateTR(preservedNormalEndDate)}.`,
           old_value: {
             branch_id: oldBranchId,
             group_id: enrollment.group_id,
@@ -558,8 +552,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             selected_weekdays: targetWeekdays,
             schedule_ids: input.targetScheduleIds,
             effective_date: input.effectiveDate,
-            planned_end_date: newNormalEndDate,
-            compensation_end_date: newCompensationEndDate,
+            planned_end_date: preservedNormalEndDate,
+            compensation_end_date: preservedCompensationEndDate,
             remaining_lessons: remainingLessons,
           },
           source_type: "student_center_bulk_transfer",
@@ -589,7 +583,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           `📅 *Yeni Program:* ${scheduleText}\n` +
           `▶️ *Başlangıç:* ${formatDateTR(input.effectiveDate)}\n` +
           `🏊 *Kalan Normal Ders:* ${remainingLessons}\n` +
-          `📌 *Yeni Planlanan Bitiş:* ${formatDateTR(newNormalEndDate)}\n\n` +
+          `📌 *Kayıtlı Bitiş:* ${formatDateTR(preservedNormalEndDate)}\n\n` +
           `Dersleriniz yeni program doğrultusunda kaldığı yerden devam edecektir.\n\n` +
           `*Sprint Yüzme Okulu Yönetimi*`;
 
@@ -611,7 +605,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             new_group_id: input.targetGroupId,
             schedule_ids: input.targetScheduleIds,
             remaining_lessons: remainingLessons,
-            planned_end_date: newNormalEndDate,
+            planned_end_date: preservedNormalEndDate,
           },
         });
 
