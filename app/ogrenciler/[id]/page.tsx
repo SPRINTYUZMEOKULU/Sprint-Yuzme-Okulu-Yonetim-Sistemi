@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 import {
   addStudentNote,
   deleteStudentNote,
@@ -129,6 +130,8 @@ export default async function StudentFile({
     enrollmentHistoryResult,
     attendanceResult,
     consentResult,
+    lessonSchedulesResult,
+    lessonExceptionsResult,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", id).single(),
 
@@ -253,6 +256,9 @@ export default async function StudentFile({
       )
       .eq("student_id", id)
       .maybeSingle(),
+,
+    supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("is_active",true),
+    supabase.from("lesson_session_exceptions").select("lesson_date,group_id,schedule_id,exception_type").eq("organization_id",profile.organization_id),
   ]);
 
   const student = studentResult.data;
@@ -533,16 +539,19 @@ export default async function StudentFile({
     enrollment?.total_lessons ?? packageInfo?.lesson_count ?? 0,
   );
 
-  const usedLessons = Number(enrollment?.used_lessons ?? 0);
-
-  const normalRemaining = Math.max(0, normalTotal - usedLessons);
-
-  const compensationBalance = Math.max(
-    0,
-    Number(lessonBalance?.compensation_lesson_balance ?? 0),
-  );
-
-  const totalRights = normalRemaining + compensationBalance;
+  const compensationBalance = Math.max(0,Number(lessonBalance?.compensation_lesson_balance ?? 0));
+  const balanceProjection=calculateLessonBalance({
+    totalLessons:normalTotal,
+    storedUsedLessons:Number(enrollment?.used_lessons??0),
+    startDate:enrollment?.start_date??attendancePlan?.start_date??null,
+    normalEndDate:attendancePlan?.normal_planned_end_date??enrollment?.planned_end_date??null,
+    schedules:((lessonSchedulesResult.data||[]) as any[]).filter(row=>String(row.group_id)===String(enrollment?.group_id??membership?.group_id??"")),
+    exceptions:(lessonExceptionsResult.data||[]) as any[],
+    compensationBalance,
+  });
+  const usedLessons=balanceProjection.usedLessons;
+  const normalRemaining=balanceProjection.normalRemainingLessons;
+  const totalRights=balanceProjection.totalRemainingLessons;
 
   const packagePrice = Number(
     packageInfo?.price ??
