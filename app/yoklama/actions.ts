@@ -32,7 +32,16 @@ type DailyAttendanceInput = {
   lessonDate: string;
 };
 
-type SessionConsumptionInput = {\n  groupId: string;\n  scheduleId: string;\n  lessonDate: string;\n  consumeRight: boolean;\n  reason: string;\n  note?: string | null;\n};\n\ntype MonthlyAttendanceInput = {
+type SessionConsumptionInput = {
+  groupId: string;
+  scheduleId: string;
+  lessonDate: string;
+  consumeRight: boolean;
+  reason: string;
+  note?: string | null;
+};
+
+type MonthlyAttendanceInput = {
   groupId: string;
   month: string;
 };
