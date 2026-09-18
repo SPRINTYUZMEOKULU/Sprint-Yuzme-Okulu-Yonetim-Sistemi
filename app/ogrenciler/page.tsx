@@ -67,6 +67,29 @@ function toNumber(value: unknown) {
 }
 
 
+function elapsedScheduledLessonCount(
+  startDate: string | null,
+  schedules: ScheduleRow[],
+  now = new Date()
+) {
+  if (!startDate || schedules.length === 0) return 0;
+  const start = new Date(startDate + "T00:00:00+03:00");
+  if (Number.isNaN(start.getTime()) || start > now) return 0;
+  let count = 0;
+  const cursor = new Date(start);
+  for (let guard = 0; guard < 730 && cursor <= now; guard += 1) {
+    const isoWeekday = cursor.getDay() === 0 ? 7 : cursor.getDay();
+    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(cursor);
+    for (const schedule of schedules) {
+      if (Number(schedule.weekday) !== isoWeekday) continue;
+      const lessonAt = new Date(ymd + "T" + String(schedule.start_time || "00:00").slice(0, 5) + ":00+03:00");
+      if (lessonAt <= now) count += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
 function projectedRemainingEndDate(
   startDate: string | null,
   schedules: ScheduleRow[],
@@ -479,12 +502,16 @@ export default async function StudentsPage() {
           )
       );
 
-      // Kalan ders hesabı kayıtlı tarihleri değiştirmez. Mevcut programı geçmişe
-      // uygulamak transfer edilmiş öğrencilerde yanlış tüketim üretebildiği için
-      // yalnız authoritative kullanılan ders + gerçek yoklama kayıtları okunur.
+      // Tarih bazlı normal hak: zamanı geçmiş planlı seanslar tüketir.
+      // Yoklama, aynı seansı ikinci kez tüketmez; yalnız geçmiş veri için güvenli alt sınırdır.
+      // Bu hesap salt-okunurdur ve enrollment başlangıç/bitiş tarihlerini değiştirmez.
+      const elapsedScheduledLessons = elapsedScheduledLessonCount(
+        enrollment?.start_date ?? attendancePlan?.start_date ?? null,
+        studentSchedules
+      );
       const usedLessons = Math.min(
         normalTotal,
-        Math.max(storedUsedLessons, attendanceUsedLessons)
+        Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons)
       );
       const normalRemaining = Math.max(normalTotal - usedLessons, 0);
       const totalRemaining = normalRemaining + compensationBalance;
