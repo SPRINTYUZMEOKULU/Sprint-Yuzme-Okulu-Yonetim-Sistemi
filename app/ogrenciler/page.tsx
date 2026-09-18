@@ -66,6 +66,36 @@ function toNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function isoWeekday(date: Date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function scheduledLessonsElapsed(params: {
+  startDate?: string | null;
+  weekdays: number[];
+  totalLessons: number;
+  now?: Date;
+}) {
+  const { startDate, weekdays, totalLessons } = params;
+  if (!startDate || !weekdays.length || totalLessons <= 0) return 0;
+
+  const start = new Date(`${startDate}T00:00:00`);
+  const now = params.now ?? new Date();
+  if (Number.isNaN(start.getTime()) || start > now) return 0;
+
+  const allowed = new Set(weekdays);
+  let cursor = new Date(start);
+  let count = 0;
+
+  while (cursor <= now && count < totalLessons) {
+    if (allowed.has(isoWeekday(cursor))) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return count;
+}
+
 function latestByStudent<T extends { student_id?: string | null }>(
   rows: T[]
 ) {
@@ -396,13 +426,8 @@ export default async function StudentsPage() {
           0
       );
 
-      const usedLessons = toNumber(
+      const recordedUsedLessons = toNumber(
         enrollment?.used_lessons ?? 0
-      );
-
-      const normalRemaining = Math.max(
-        normalTotal - usedLessons,
-        0
       );
 
       const compensationBalance = Math.max(
@@ -440,6 +465,44 @@ export default async function StudentsPage() {
           selectedWeekdays.includes(
             Number(schedule.weekday)
           )
+      );
+
+      const effectiveWeekdays =
+        selectedWeekdays.length > 0
+          ? selectedWeekdays
+          : Array.from(
+              new Set(
+                studentSchedules
+                  .map((schedule) => Number(schedule.weekday))
+                  .filter((day) => day >= 1 && day <= 7)
+              )
+            );
+
+      /*
+       * Normal ders hakkı yoklamaya bağlı değildir.
+       * Başlangıç tarihinden bugüne kadar öğrencinin planlı ders günleri
+       * geldikçe hak düşer. Yoklama yalnız katılım bilgisidir.
+       *
+       * Eski kayıtlarda daha yüksek bir used_lessons varsa veri kaybı
+       * yaratmamak için kayıtlı değer alt sınır olarak korunur.
+       */
+      const elapsedScheduledLessons = scheduledLessonsElapsed({
+        startDate:
+          attendancePlan?.start_date ??
+          enrollment?.start_date ??
+          null,
+        weekdays: effectiveWeekdays,
+        totalLessons: normalTotal,
+      });
+
+      const usedLessons = Math.min(
+        Math.max(recordedUsedLessons, elapsedScheduledLessons),
+        normalTotal
+      );
+
+      const normalRemaining = Math.max(
+        normalTotal - usedLessons,
+        0
       );
 
       const scheduleText = studentSchedules
