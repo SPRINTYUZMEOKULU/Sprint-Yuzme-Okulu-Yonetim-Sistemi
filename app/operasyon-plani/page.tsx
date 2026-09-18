@@ -413,7 +413,10 @@ export default async function OperasyonPlaniPage({
         "id,organization_id,branch_id,full_name,email,phone,role,is_active"
       )
       .eq("organization_id", organizationId)
-      .eq("role", "coach")
+      // Eğitmen kaynağı merkezi profiles tablosudur. Bazı eğitmen hesapları
+      // yönetici yetkisi de taşıyabildiği için yalnızca role=coach filtresi
+      // operasyon ekranında eksik liste üretiyordu.
+      .in("role", ["coach", "admin", "branch_manager"])
       .eq("is_active", true)
       .order("full_name"),
 
@@ -2514,9 +2517,10 @@ const dayBadgeStyle: React.CSSProperties = {
 
 const scheduleGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns:
-    "repeat(auto-fit,minmax(570px,1fr))",
-  gap: 16,
+  // Tek/az seans olduğunda kartın masaüstünde gereksiz dar kalmasını önle.
+  // Mobilde min() sayesinde viewport taşması oluşmaz.
+  gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,680px),1fr))",
+  gap: 18,
 };
 
 const sessionCardStyle: React.CSSProperties = {
@@ -2626,14 +2630,16 @@ const assignmentTitleStyle: React.CSSProperties = {
 };
 
 const assignmentFormStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 7,
-  flexWrap: "wrap",
+  display: "grid",
+  gridTemplateColumns: "minmax(min(100%,280px),1fr) auto",
+  gap: 10,
+  alignItems: "stretch",
 };
 
 const compactInputStyle: React.CSSProperties = {
-  minWidth: 180,
-  minHeight: 38,
+  width: "100%",
+  minWidth: 0,
+  minHeight: 44,
   border: "1px solid #dce5f2",
   borderRadius: 9,
   padding: "0 10px",
@@ -2643,7 +2649,7 @@ const compactInputStyle: React.CSSProperties = {
 };
 
 const compactPrimaryButtonStyle: React.CSSProperties = {
-  minHeight: 38,
+  minHeight: 44,
   border: 0,
   borderRadius: 9,
   padding: "0 13px",
