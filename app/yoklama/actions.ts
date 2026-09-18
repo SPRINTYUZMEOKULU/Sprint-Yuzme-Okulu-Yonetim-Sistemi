@@ -687,3 +687,30 @@ export async function getMonthlyAttendance(
     };
   }
 }
+
+
+export async function markLessonSessionNotHeld(input: { branchId: string | null; groupId: string; scheduleId: string; lessonDate: string; reason: string; exceptionType?: "not_held" | "pool_closed" | "frozen" | "cancelled"; }) {
+  try {
+    const profile = await requireProfile(["owner","admin","branch_manager"]);
+    const supabase = await createClient();
+    const organizationId = profile.organization_id;
+    if (!organizationId || !input.groupId || !input.scheduleId || !input.lessonDate) return { ok:false, message:"Seans bilgileri eksik." };
+    const { data: schedule } = await supabase.from("lesson_schedules").select("id,branch_id,group_id").eq("organization_id",organizationId).eq("id",input.scheduleId).eq("group_id",input.groupId).maybeSingle();
+    if (!schedule) return { ok:false, message:"Ders seansı bulunamadı." };
+    const { error } = await supabase.from("lesson_session_exceptions").upsert({ organization_id:organizationId, branch_id:schedule.branch_id ?? input.branchId, group_id:input.groupId, schedule_id:input.scheduleId, lesson_date:input.lessonDate, exception_type:input.exceptionType ?? "not_held", reason:input.reason?.trim() || "Ders yapılmadı", created_by:profile.id, updated_at:new Date().toISOString() }, { onConflict:"organization_id,lesson_date,schedule_id,group_id,exception_type" });
+    if (error) return { ok:false, message:error.message };
+    revalidatePath("/yoklama"); revalidatePath("/ogrenciler"); revalidatePath("/veli-paneli"); revalidatePath("/raporlar");
+    return { ok:true, message:"Seans 'Ders Yapılmadı' olarak işaretlendi. Bu seans normal ders hakkından düşmeyecek." };
+  } catch (error) { return { ok:false, message:error instanceof Error ? error.message : "İşlem tamamlanamadı." }; }
+}
+
+export async function restoreLessonSession(input: { groupId:string; scheduleId:string; lessonDate:string; }) {
+  try {
+    const profile=await requireProfile(["owner","admin","branch_manager"]); const supabase=await createClient(); const organizationId=profile.organization_id;
+    if(!organizationId) return {ok:false,message:"Organizasyon bilgisi bulunamadı."};
+    const {error}=await supabase.from("lesson_session_exceptions").delete().eq("organization_id",organizationId).eq("group_id",input.groupId).eq("schedule_id",input.scheduleId).eq("lesson_date",input.lessonDate);
+    if(error) return {ok:false,message:error.message};
+    revalidatePath("/yoklama"); revalidatePath("/ogrenciler"); revalidatePath("/veli-paneli"); revalidatePath("/raporlar");
+    return {ok:true,message:"Seans yeniden aktif hale getirildi."};
+  } catch(error){return {ok:false,message:error instanceof Error?error.message:"İşlem tamamlanamadı."};}
+}
