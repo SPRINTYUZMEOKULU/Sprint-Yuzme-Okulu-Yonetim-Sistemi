@@ -536,7 +536,13 @@ export default async function StudentsPage() {
         normalTotal,
         Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons)
       );
-      const normalRemaining = Math.max(normalTotal - usedLessons, 0);
+      // Kayıtlı normal bitiş tarihi authoritative kalır. Tarih geçtiyse normal paket
+      // artık aktif hak değildir; kartta kalan hak 0 görünmelidir. Bu yalnız görüntü/
+      // hesap katmanıdır, kayıtlı tarih veya used_lessons alanına yazmaz.
+      const authoritativeEndDate = attendancePlan?.normal_planned_end_date ?? enrollment?.planned_end_date ?? null;
+      const endOfEnrollment = authoritativeEndDate ? new Date(authoritativeEndDate + "T23:59:59+03:00") : null;
+      const enrollmentEnded = Boolean(endOfEnrollment && !Number.isNaN(endOfEnrollment.getTime()) && new Date() > endOfEnrollment);
+      const normalRemaining = enrollmentEnded ? 0 : Math.max(normalTotal - usedLessons, 0);
       const totalRemaining = normalRemaining + compensationBalance;
 
       const scheduleText = studentSchedules
