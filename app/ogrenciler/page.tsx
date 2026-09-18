@@ -532,17 +532,16 @@ export default async function StudentsPage() {
         studentSchedules,
         excludedSessionKeys
       );
-      const usedLessons = Math.min(
-        normalTotal,
-        Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons)
-      );
+      const authoritativeEndForBalance = attendancePlan?.normal_planned_end_date ?? enrollment?.planned_end_date ?? null;
+      const balanceEnd = authoritativeEndForBalance ? new Date(authoritativeEndForBalance + "T23:59:59+03:00") : null;
+      const balanceEnded = Boolean(balanceEnd && !Number.isNaN(balanceEnd.getTime()) && new Date() > balanceEnd);
+      const usedLessons = balanceEnded
+        ? normalTotal
+        : Math.min(normalTotal, Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons));
       // Kayıtlı normal bitiş tarihi authoritative kalır. Tarih geçtiyse normal paket
       // artık aktif hak değildir; kartta kalan hak 0 görünmelidir. Bu yalnız görüntü/
       // hesap katmanıdır, kayıtlı tarih veya used_lessons alanına yazmaz.
-      const authoritativeEndDate = attendancePlan?.normal_planned_end_date ?? enrollment?.planned_end_date ?? null;
-      const endOfEnrollment = authoritativeEndDate ? new Date(authoritativeEndDate + "T23:59:59+03:00") : null;
-      const enrollmentEnded = Boolean(endOfEnrollment && !Number.isNaN(endOfEnrollment.getTime()) && new Date() > endOfEnrollment);
-      const normalRemaining = enrollmentEnded ? 0 : Math.max(normalTotal - usedLessons, 0);
+      const normalRemaining = balanceEnded ? 0 : Math.max(normalTotal - usedLessons, 0);
       const totalRemaining = normalRemaining + compensationBalance;
 
       const scheduleText = studentSchedules
