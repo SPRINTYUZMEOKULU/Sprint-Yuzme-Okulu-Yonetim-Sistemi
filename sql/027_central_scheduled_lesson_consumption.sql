@@ -57,7 +57,10 @@ begin
   end if;
 
   d := e.start_date;
-  while d <= (p_as_of at time zone 'Europe/Istanbul')::date
+  while d <= least(
+      (p_as_of at time zone 'Europe/Istanbul')::date,
+      coalesce(e.planned_end_date, (p_as_of at time zone 'Europe/Istanbul')::date)
+    )
     and used_count < e.total_lessons loop
 
     /*
@@ -65,8 +68,11 @@ begin
      * olarak saklanır. Asıl seans kaynağı lesson_schedules'tır: grup adındaki
      * "Salı-Perşembe-Cumartesi" gibi metinlere göre hak düşülmez.
      *
-     * Aynı günde birden fazla aktif schedule olsa bile paket günde bir kez
-     * tüketilir. Bugünkü ders ise seansın end_time'ı geçmeden tüketilmez.
+     * Kayıtta seçilen lesson_weekdays kaç gün ise yalnız o günler tüketilir:
+     * ör. iki gün seçildiyse haftada iki, üç gün seçildiyse haftada üç ders.
+     * Hesap planned_end_date sınırını aşmaz. Aynı günde birden fazla aktif
+     * schedule olsa bile paket günde bir kez tüketilir. Bugünkü ders ise
+     * seansın end_time'ı geçmeden tüketilmez.
      */
     if extract(dow from d)::smallint = any(e.lesson_weekdays)
       and exists(
