@@ -120,6 +120,7 @@ export default async function StudentsPage() {
         first_name,
         last_name,
         student_number,
+        birth_date,
         status,
         swimming_level,
         branch_id,
@@ -508,6 +509,7 @@ export default async function StudentsPage() {
       return {
         id: student.id,
         student_number: student.student_number || null,
+        birth_date: student.birth_date || null,
 
         first_name: student.first_name || "",
         last_name: student.last_name || "",
