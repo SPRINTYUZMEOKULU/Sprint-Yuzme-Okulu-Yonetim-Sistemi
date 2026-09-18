@@ -108,135 +108,40 @@ async function syncEnrollmentUsedLessons(params: {
 }) {
   const { supabase, organizationId, enrollmentIds } = params;
 
-  if (!enrollmentIds.length) {
+  // Yoklama normal paket sayacını hesaplamaz. Merkezi planlı ders motoru
+  // tüm aktif kayıtları gerçek seanslara göre idempotent olarak senkronize eder.
+  const { error } = await supabase.rpc("sync_scheduled_used_lessons", {
+    p_organization_id: organizationId,
+  });
+
+  if (error) {
     return {
-      ok: true as const,
+      ok: false as const,
+      message: `Merkezi ders bakiyesi güncellenemedi: ${error.message}`,
       updatedEnrollmentIds: [] as string[],
       studentIds: [] as string[],
     };
   }
 
-  const {
-    data: enrollments,
-    error: enrollmentError,
-  } = await supabase
+  const { data: enrollments, error: enrollmentError } = await supabase
     .from("student_enrollments")
-    .select(
-      "id, student_id, total_lessons, used_lessons, status"
-    )
+    .select("id, student_id")
     .eq("organization_id", organizationId)
     .in("id", enrollmentIds);
 
   if (enrollmentError) {
     return {
       ok: false as const,
-      message: `Aktif kayıtlar doğrulanamadı: ${enrollmentError.message}`,
+      message: `Kayıtlar yenilenemedi: ${enrollmentError.message}`,
       updatedEnrollmentIds: [] as string[],
       studentIds: [] as string[],
     };
-  }
-
-  const validEnrollments = enrollments || [];
-
-  if (!validEnrollments.length) {
-    return {
-      ok: true as const,
-      updatedEnrollmentIds: [] as string[],
-      studentIds: [] as string[],
-    };
-  }
-
-  const validEnrollmentIds = validEnrollments.map(
-    (enrollment) => enrollment.id
-  );
-
-  const {
-    data: attendanceRows,
-    error: attendanceError,
-  } = await supabase
-    .from("attendance_records")
-    .select("id, enrollment_id, status")
-    .eq("organization_id", organizationId)
-    .in("enrollment_id", validEnrollmentIds)
-    .in("status", PACKAGE_CONSUMING_STATUSES);
-
-  if (attendanceError) {
-    return {
-      ok: false as const,
-      message: `Ders hakkı hesaplanamadı: ${attendanceError.message}`,
-      updatedEnrollmentIds: [] as string[],
-      studentIds: [] as string[],
-    };
-  }
-
-  const countMap = new Map<string, number>();
-
-  for (const row of attendanceRows || []) {
-    if (!row.enrollment_id) continue;
-
-    countMap.set(
-      row.enrollment_id,
-      (countMap.get(row.enrollment_id) || 0) + 1
-    );
-  }
-
-  const updatedEnrollmentIds: string[] = [];
-  const studentIds: string[] = [];
-
-  for (const enrollment of validEnrollments) {
-    const rawCount = countMap.get(enrollment.id) || 0;
-
-    const totalLessons = Math.max(
-      Number(enrollment.total_lessons || 0),
-      0
-    );
-
-    /*
-     * Paket hakkı tanımlıysa kullanılan ders toplam paketi aşmasın.
-     * total_lessons = 0 gibi eski/eksik kayıt varsa gerçek sayıyı
-     * kaybetmemek için rawCount kullanıyoruz.
-     */
-    const nextUsedLessons =
-      totalLessons > 0
-        ? Math.min(rawCount, totalLessons)
-        : rawCount;
-
-    const currentUsedLessons = Math.max(
-      Number(enrollment.used_lessons || 0),
-      0
-    );
-
-    if (currentUsedLessons !== nextUsedLessons) {
-      const { error: updateError } = await supabase
-        .from("student_enrollments")
-        .update({
-          used_lessons: nextUsedLessons,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", enrollment.id)
-        .eq("organization_id", organizationId);
-
-      if (updateError) {
-        return {
-          ok: false as const,
-          message: `Ders hakkı güncellenemedi: ${updateError.message}`,
-          updatedEnrollmentIds,
-          studentIds,
-        };
-      }
-    }
-
-    updatedEnrollmentIds.push(enrollment.id);
-
-    if (enrollment.student_id) {
-      studentIds.push(enrollment.student_id);
-    }
   }
 
   return {
     ok: true as const,
-    updatedEnrollmentIds,
-    studentIds: uniqueStrings(studentIds),
+    updatedEnrollmentIds: (enrollments || []).map((e) => e.id),
+    studentIds: uniqueStrings((enrollments || []).map((e) => e.student_id)),
   };
 }
 
@@ -479,7 +384,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
      * -------------------------------------------------------
      *
      * Yoklama kaydı başarılı olduktan sonra ilgili paketlerin
-     * used_lessons değerini gerçek yoklamadan yeniden hesaplıyoruz.
+     * used_lessons değerini merkezi planlı ders motorundan yeniden senkronize ediyoruz.
      *
      * Geldi / Gelmedi / İzinli -> paket hakkından düşer
      * Telafi                    -> normal paketten düşmez
