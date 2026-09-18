@@ -327,6 +327,7 @@ export default async function StudentsPage() {
   );
 
   const plannedCompensationCount = new Map<string, number>();
+  const compensationByStudent = new Map<string, any[]>();
   const nextCompensationMap = new Map<string, any>();
 
   for (const row of (compensationPlansResult.data || []) as any[]) {
@@ -336,6 +337,9 @@ export default async function StudentsPage() {
       row.student_id,
       (plannedCompensationCount.get(row.student_id) || 0) + 1
     );
+    const compensationRows = compensationByStudent.get(row.student_id) || [];
+    compensationRows.push(row);
+    compensationByStudent.set(row.student_id, compensationRows);
 
     if (!nextCompensationMap.has(row.student_id)) {
       nextCompensationMap.set(row.student_id, row);
@@ -433,6 +437,8 @@ export default async function StudentsPage() {
         schedules: studentSchedules,
         exceptions: (lessonExceptionsResult.data || []) as any[],
         compensationBalance,
+        compensationLessons: compensationByStudent.get(student.id),
+        allSchedules: schedules,
       });
       const usedLessons = lessonBalanceProjection.usedLessons;
       const normalRemaining = lessonBalanceProjection.normalRemainingLessons;
