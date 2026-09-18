@@ -416,6 +416,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
      * -------------------------------------------------------
      */
     revalidatePath("/yoklama");
+    revalidatePath("/baslayacak-kursiyerler");
     revalidatePath("/ogrenciler");
     revalidatePath("/odemeler");
     revalidatePath("/");
