@@ -17,8 +17,8 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
-  const used = Number(data.enrollment?.used_lessons || 0);
-  const remaining = Math.max(0, total - used);
+  const used = data.lessonBalance?.usedLessons ?? Number(data.enrollment?.used_lessons || 0);
+  const remaining = data.lessonBalance?.totalRemainingLessons ?? Math.max(0, total - used);
   const attendanceTotal = data.attendance.length;
   const presentCount = data.attendance.filter((item: any) => item.status === "present").length;
   const attendanceRate = attendanceTotal ? Math.round((presentCount / attendanceTotal) * 100) : 0;
