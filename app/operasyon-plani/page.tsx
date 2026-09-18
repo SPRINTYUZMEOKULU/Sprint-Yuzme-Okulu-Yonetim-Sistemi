@@ -420,10 +420,11 @@ export default async function OperasyonPlaniPage({
     supabase
       .from("students")
       .select(
-        "id,first_name,last_name,student_number,swimming_level,medical_note,general_note,guardian_name,guardian_phone,phone"
+        "id,first_name,last_name,student_number,swimming_level,medical_note,general_note,guardian_name,guardian_phone,phone,status"
       )
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
+      .eq("status", "active")
       .order("first_name"),
 
     supabase
