@@ -441,10 +441,13 @@ export default async function StudentsPage() {
         ? groupMap.get(nextCompensation.target_group_id)
         : undefined;
 
+      // Aktif enrollment kalan ders hesabının sahibi ve authoritative grup kaynağıdır.
+      // Eski membership kaydı öne alınırsa öğrenci kartı güncel olmayan grubun seanslarını
+      // kullanıp kalan hakkı sabit gösterebiliyordu.
       const groupId =
-        membership?.group_id ??
         enrollment?.group_id ??
         attendancePlan?.group_id ??
+        membership?.group_id ??
         student.preferred_group_id ??
         null;
 
