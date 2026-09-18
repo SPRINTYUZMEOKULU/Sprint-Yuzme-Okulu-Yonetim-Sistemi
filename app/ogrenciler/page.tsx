@@ -477,9 +477,6 @@ export default async function StudentsPage() {
         0
       );
 
-      const totalRemaining =
-        normalRemaining + compensationBalance;
-
       const regularSchedules = groupId
         ? schedulesByGroup.get(groupId) || []
         : [];
@@ -518,6 +515,7 @@ export default async function StudentsPage() {
         Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons)
       );
       const normalRemaining = Math.max(normalTotal - usedLessons, 0);
+      const totalRemaining = normalRemaining + compensationBalance;
 
       const scheduleText = studentSchedules
         .slice()
