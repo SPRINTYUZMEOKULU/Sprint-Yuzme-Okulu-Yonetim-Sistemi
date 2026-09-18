@@ -482,7 +482,6 @@ export async function applyManagerCorrection(formData: FormData) {
       payment_status: paymentStatus,
       description: paymentDescription,
       received_at: paymentReceivedAt ? new Date(paymentReceivedAt).toISOString() : oldPaymentSnapshot.received_at,
-      updated_at: now,
     }).eq("organization_id", organizationId).eq("student_id", studentId).eq("id", paymentId).select("*").single();
     if (paymentUpdate.error) {
       redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Ödeme bilgileri düzeltilemedi: ${paymentUpdate.error.message}`)}`);
