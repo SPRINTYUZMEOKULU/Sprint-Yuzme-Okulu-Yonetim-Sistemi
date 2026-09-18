@@ -583,8 +583,7 @@ export default async function StudentFile({
     enrollment?.planned_end_date ??
     null;
 
-  const compensationEndDate =
-    attendancePlan?.compensation_planned_end_date ?? normalEndDate;
+  // Telafili bitiş yalnızca gerçekten kullanılmamış telafi hakkı varsa gösterilir.\n  // Eski/stale attendance-plan tarihleri telafi yokken normal bitiş gibi sunulmaz.\n  const compensationEndDate =\n    compensationBalance > 0\n      ? attendancePlan?.compensation_planned_end_date ?? normalEndDate\n      : null;
 
   /*
    * =========================================================
