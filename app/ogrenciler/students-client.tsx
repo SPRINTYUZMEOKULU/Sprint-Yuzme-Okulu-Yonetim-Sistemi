@@ -1317,7 +1317,7 @@ function closeLessonAction() {
   const counts = useMemo(() => {
     return {
       total: students.length,
-      active: students.filter((student) => student.status === "active").length,
+      active: students.filter((student) => student.status === "active" && !isStartingStudent(student)).length,
       starting: students.filter(isStartingStudent).length,
       passive: students.filter((student) => student.status === "passive").length,
       preRegistration: students.filter(
@@ -1406,7 +1406,9 @@ function closeLessonAction() {
       let statusMatch = true;
 
       if (status === "active") {
-        statusMatch = student.status === "active";
+        // Başlangıç tarihi henüz gelmemiş kayıtlar operasyonel olarak
+        // "Başlayacak" grubundadır; Aktif listede ikinci kez görünmez.
+        statusMatch = student.status === "active" && !isStartingStudent(student);
       }
 
       if (status === "starting") {
