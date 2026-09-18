@@ -79,10 +79,14 @@ function elapsedScheduledLessonCount(
   let count = 0;
   const cursor = new Date(start);
   for (let guard = 0; guard < 730 && cursor <= now; guard += 1) {
-    const isoWeekday = cursor.getDay() === 0 ? 7 : cursor.getDay();
+    const jsWeekday = cursor.getDay();
+    const isoWeekday = jsWeekday === 0 ? 7 : jsWeekday;
     const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(cursor);
     for (const schedule of schedules) {
-      if (Number(schedule.weekday) !== isoWeekday) continue;
+      const scheduleWeekday = Number(schedule.weekday);
+      // Veritabanındaki mevcut lesson_schedules JS gün numarası kullanıyor:
+      // Pazar=0, Pazartesi=1 ... Cumartesi=6. Eski ISO kayıtlarını da tolere et.
+      if (scheduleWeekday !== jsWeekday && scheduleWeekday !== isoWeekday) continue;
       const lessonAt = new Date(ymd + "T" + String(schedule.start_time || "00:00").slice(0, 5) + ":00+03:00");
       const sessionKey = ymd + ":" + schedule.id;
       const groupKey = ymd + ":group:" + String(schedule.group_id || "");
@@ -109,8 +113,9 @@ function projectedRemainingEndDate(
 
   let counted = 0;
   for (let guard = 0; guard < 730; guard += 1) {
-    const isoWeekday = cursor.getDay() === 0 ? 7 : cursor.getDay();
-    if (weekdays.has(isoWeekday)) {
+    const jsWeekday = cursor.getDay();
+    const isoWeekday = jsWeekday === 0 ? 7 : jsWeekday;
+    if (weekdays.has(jsWeekday) || weekdays.has(isoWeekday)) {
       counted += 1;
       if (counted >= totalLessons) {
         return new Intl.DateTimeFormat("en-CA", {
