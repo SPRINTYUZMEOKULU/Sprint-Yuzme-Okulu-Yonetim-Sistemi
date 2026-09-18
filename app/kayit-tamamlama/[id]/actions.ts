@@ -2077,6 +2077,8 @@ export async function completeRegistration(
     "/ogrenciler"
   );
 
+  ["/baslayacak-kursiyerler","/kayit-yenilemeleri","/yoklama","/ders-programi","/ders-operasyonlari","/raporlar","/veli-paneli","/"].forEach((path) => revalidatePath(path));
+
   revalidatePath(
     `/ogrenciler/${studentId}`
   );
