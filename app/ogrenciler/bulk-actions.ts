@@ -21,6 +21,10 @@ type BulkTransferInput = {
   prepareMessages: boolean;
   updateAttendancePlans: boolean;
   logHistory: boolean;
+  /** Optional: number of normal lessons to carry into the new program. */
+  transferLessonCount?: number | null;
+  /** Optional manager-added lesson rights during transfer (0, 1, 2...). */
+  additionalLessons?: number | null;
 };
 
 type BulkMessageInput = {
@@ -382,9 +386,15 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         continue;
       }
 
-      const totalLessons = Math.max(Number(enrollment.total_lessons || 0), 0);
+      const oldTotalLessons = Math.max(Number(enrollment.total_lessons || 0), 0);
       const usedLessons = Math.max(Number(enrollment.used_lessons || 0), 0);
-      const remainingLessons = Math.max(totalLessons - usedLessons, 0);
+      const oldRemainingLessons = Math.max(oldTotalLessons - usedLessons, 0);
+      const requestedTransferLessons = Number(input.transferLessonCount ?? 0);
+      const additionalLessons = Math.max(0, Math.trunc(Number(input.additionalLessons ?? 0)));
+      const hasTransferLessonOverride = Number.isInteger(requestedTransferLessons) && requestedTransferLessons > 0;
+      const normalLessonsToCarry = hasTransferLessonOverride ? requestedTransferLessons : oldRemainingLessons;
+      const remainingLessons = normalLessonsToCarry + additionalLessons;
+      const newTotalLessons = usedLessons + remainingLessons;
       const compensationBalance = balanceMap.get(studentId) || 0;
 
       const newNormalEndDate = calculateEndDate(
@@ -415,6 +425,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         .from("student_enrollments")
         .update({
           group_id: input.targetGroupId,
+          start_date: input.effectiveDate,
+          total_lessons: newTotalLessons,
           planned_end_date: newNormalEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
           updated_at: now,
@@ -495,7 +507,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           group_id: input.targetGroupId,
           selected_weekdays: targetWeekdays,
           weekly_frequency: targetWeekdays.length,
-          package_lesson_count: totalLessons,
+          package_lesson_count: newTotalLessons,
           start_date: input.effectiveDate,
           normal_planned_end_date: newNormalEndDate,
           compensation_planned_end_date: newCompensationEndDate,
@@ -550,7 +562,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             group_id: enrollment.group_id,
             planned_end_date: enrollment.planned_end_date,
             used_lessons: usedLessons,
-            remaining_lessons: remainingLessons,
+            remaining_lessons: oldRemainingLessons,
           },
           new_value: {
             branch_id: input.targetBranchId,
@@ -561,6 +573,9 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             planned_end_date: newNormalEndDate,
             compensation_end_date: newCompensationEndDate,
             remaining_lessons: remainingLessons,
+            transfer_lesson_count: normalLessonsToCarry,
+            additional_lessons: additionalLessons,
+            total_lessons: newTotalLessons,
           },
           source_type: "student_center_bulk_transfer",
           source_id: enrollment.id,
@@ -588,7 +603,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           `👥 *Yeni Grup:* ${targetGroup.name}\n` +
           `📅 *Yeni Program:* ${scheduleText}\n` +
           `▶️ *Başlangıç:* ${formatDateTR(input.effectiveDate)}\n` +
-          `🏊 *Kalan Normal Ders:* ${remainingLessons}\n` +
+          `🏊 *Yeni Program Ders Hakkı:* ${remainingLessons}\n` +
+          (additionalLessons > 0 ? `🎁 *Ek Ders:* +${additionalLessons}\n` : "") +
           `📌 *Yeni Planlanan Bitiş:* ${formatDateTR(newNormalEndDate)}\n\n` +
           `Dersleriniz yeni program doğrultusunda kaldığı yerden devam edecektir.\n\n` +
           `*Sprint Yüzme Okulu Yönetimi*`;
@@ -611,6 +627,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
             new_group_id: input.targetGroupId,
             schedule_ids: input.targetScheduleIds,
             remaining_lessons: remainingLessons,
+            transfer_lesson_count: normalLessonsToCarry,
+            additional_lessons: additionalLessons,
             planned_end_date: newNormalEndDate,
           },
         });
