@@ -36,34 +36,6 @@ export default function FutureStartStudentEnhancer() {
 
     let scheduled = false;
 
-    function updateStudentCenter() {
-      const today = startOfToday();
-      const cards = Array.from(document.querySelectorAll<HTMLElement>(".studentCard"));
-      let hidden = 0;
-
-      for (const card of cards) {
-        const badge = card.querySelector<HTMLElement>(".statusBadge")?.textContent?.trim() || "";
-        const startDate = findStartDate(card);
-        const isFutureStarter = badge === "Aktif" && Boolean(startDate && startDate.getTime() > today.getTime());
-        card.dataset.futureStarter = isFutureStarter ? "1" : "0";
-        card.style.display = isFutureStarter ? "none" : "";
-        if (isFutureStarter) hidden += 1;
-      }
-
-      const resultInfo = document.querySelector<HTMLElement>(".resultInfo");
-      if (resultInfo && hidden > 0) {
-        const visible = cards.filter((card) => card.style.display !== "none").length;
-        resultInfo.innerHTML = `<strong>${visible}</strong> öğrenci gösteriliyor <span class="futureStarterHint">· ${hidden} henüz başlamadı, Başlayacak Kursiyerler'de</span>`;
-      }
-
-      const selectAll = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-        (button.textContent || "").includes("Görünenlerin tümünü seç")
-      );
-      if (selectAll) {
-        selectAll.title = hidden > 0 ? "Henüz başlangıç tarihi gelmeyen kursiyerler seçime dahil edilmez." : "";
-      }
-    }
-
     function updateStartingCenter() {
       document.querySelectorAll<HTMLElement>(".startingGroup").forEach((group) => {
         const heading = group.querySelector("h2")?.textContent || "";
@@ -94,7 +66,6 @@ export default function FutureStartStudentEnhancer() {
       scheduled = true;
       requestAnimationFrame(() => {
         scheduled = false;
-        if (pathname === "/ogrenciler") updateStudentCenter();
         if (pathname === "/baslayacak-kursiyerler") updateStartingCenter();
       });
     }
@@ -109,7 +80,6 @@ export default function FutureStartStudentEnhancer() {
 
   return (
     <style jsx global>{`
-      .futureStarterHint{font-size:12px;color:#8a5a08;font-weight:700;margin-left:5px}
       .futureStartNotice{display:flex;align-items:center;gap:10px;margin:12px 0;padding:11px 13px;border:1px solid #f4d8a0;border-radius:12px;background:#fff9ec;color:#70450a}
       .futureStartNotice>span{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#ffefc7;font-size:16px;flex:0 0 auto}
       .futureStartNotice>div{display:grid;gap:2px}.futureStartNotice strong{font-size:12px;font-weight:900}.futureStartNotice small{font-size:11px;color:#8a672d;font-weight:700}
