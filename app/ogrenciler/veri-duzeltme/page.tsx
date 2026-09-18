@@ -42,6 +42,9 @@ export default async function StudentDataCorrectionPage() {
   if (!organizationId) return <main className="operationPage"><div className="tableEmpty">Organizasyon bilgisi bulunamadı.</div></main>;
 
   const supabase = await createClient();
+
+  // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
+  await supabase.rpc("sync_scheduled_used_lessons");
   const finance = adminClient();
 
   const [studentsResult, branchesResult, groupsResult, packagesResult, enrollmentsResult, plansResult, balancesResult, paymentsResult] = await Promise.all([
