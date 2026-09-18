@@ -19,7 +19,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
   const supabase = await createClient();
   if (!organizationId) notFound();
 
-  const [studentResult, enrollmentResult, planResult, branchesResult, groupsResult, packagesResult, schedulesResult] = await Promise.all([
+  const [studentResult, enrollmentResult, planResult, branchesResult, groupsResult, packagesResult, schedulesResult, paymentResult] = await Promise.all([
     supabase.from("students").select("*").eq("organization_id", organizationId).eq("id", id).maybeSingle(),
     supabase.from("student_enrollments").select("*").eq("organization_id", organizationId).eq("student_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("student_attendance_plans").select("*").eq("organization_id", organizationId).eq("student_id", id).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -27,6 +27,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     supabase.from("training_groups").select("id,name,branch_id").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("course_packages").select("id,name,lesson_count,price").eq("organization_id", organizationId).order("name"),
     supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
+    supabase.from("student_payments").select("id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,cash_handover_status,cancelled_at").eq("organization_id", organizationId).eq("student_id", id).order("received_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   if (!studentResult.data) notFound();
@@ -79,7 +80,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
 
         {query.error ? <div className="correctionNotice error"><strong>İşlem tamamlanamadı.</strong><span>{query.error}</span></div> : null}
         {!enrollmentResult.data ? <div className="correctionNotice error"><strong>Aktif kayıt bulunamadı.</strong><span>Paket/program düzeltmesi için öğrencinin aktif kaydı olmalıdır.</span></div> : (
-          <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
+          <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={paymentResult.data || null} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
         )}
       </div>
     </main>
