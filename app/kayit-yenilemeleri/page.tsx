@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 import RenewalStatusCenterClient, { type CenterItem, type RenewalApproval, type RenewalHistory } from "./renewal-status-center-client";
 import DecisionCompletionSummary from "./decision-completion-summary";
 
@@ -21,7 +22,7 @@ export default async function RenewalOperationsPage(){
   const organizationId=profile.organization_id;
   const supabase=await createClient();
 
-  const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult,approvalResult]=await Promise.all([
+  const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult,approvalResult,schedulesRes,exceptionsRes]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
@@ -31,6 +32,8 @@ export default async function RenewalOperationsPage(){
     supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_activity_logs").select("id,student_id,title,description,new_value,performed_at").eq("organization_id",organizationId).eq("activity_type","registration_renewed").order("performed_at",{ascending:false}).limit(250),
     supabase.from("approval_requests").select("id,student_id,status,new_values,metadata,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).eq("request_type","registration_custom_lesson_count").order("created_at",{ascending:false}).limit(250),
+    supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",organizationId).eq("is_active",true),
+    supabase.from("lesson_session_exceptions").select("lesson_date,group_id,schedule_id,exception_type").eq("organization_id",organizationId),
   ]);
 
   const branches=new Map(((branchesRes.data||[]) as any[]).map(x=>[x.id,x.name]));
@@ -40,6 +43,7 @@ export default async function RenewalOperationsPage(){
   const enrollments=new Map<string,any>();
   for(const row of (enrollmentsRes.data||[]) as any[]){if(!enrollments.has(row.student_id))enrollments.set(row.student_id,row)}
   const balances=new Map(((balanceRes.data||[]) as any[]).map(x=>[x.student_id,Number(x.compensation_lesson_balance||0)]));
+  const schedulesByGroup=new Map<string,any[]>();for(const row of (schedulesRes.data||[]) as any[]){const list=schedulesByGroup.get(row.group_id)||[];list.push(row);schedulesByGroup.set(row.group_id,list)}
   const latestStatusRequest=new Map<string,any>();
   for(const row of (statusRequestsRes.data||[]) as any[]){if(!latestStatusRequest.has(row.student_id))latestStatusRequest.set(row.student_id,row)}
   const lastRenewed=new Map<string,string>();
@@ -50,11 +54,12 @@ export default async function RenewalOperationsPage(){
   const items:CenterItem[]=((studentsRes.data||[]) as any[]).map((student):CenterItem=>{
     const enrollment=enrollments.get(student.id);
     const total=Number(enrollment?.total_lessons||0);
-    const used=Number(enrollment?.used_lessons||0);
     const compensation=Number(balances.get(student.id)||0);
-    const remaining=Math.max(total-used,0)+Math.max(compensation,0);
-    const endDate=enrollment?.planned_end_date||null;
     const membership=memberships.get(student.id);
+    const endDate=enrollment?.planned_end_date||null;
+    const projection=calculateLessonBalance({totalLessons:total,storedUsedLessons:Number(enrollment?.used_lessons||0),startDate:enrollment?.start_date||null,normalEndDate:endDate,schedules:schedulesByGroup.get(membership?.group_id)||[],exceptions:(exceptionsRes.data||[]) as any[],compensationBalance:compensation});
+    const used=projection.usedLessons;
+    const remaining=projection.totalRemainingLessons;
     const statusRequest=latestStatusRequest.get(student.id);
     const endedByRights=student.status==="active"&&total>0&&remaining<=0;
     const endedByDate=student.status==="active"&&Boolean(endDate&&endDate<=today);
