@@ -2255,10 +2255,10 @@ function closeLessonAction() {
           <small>Listeyi aç</small>
         </button>
 
-        <button type="button" className={`summaryCard infoCard ${status === "compensation_waiting" ? "selected" : ""}`} onClick={() => setStatus("compensation_waiting")}>
+        <button type="button" className={`summaryCard infoCard ${status === "compensation_waiting" ? "selected" : ""}`} onClick={() => { setStatus("compensation_waiting"); window.location.href = "/telafi-yonetimi"; }}>
           <span>Telafi Bekleyen</span>
           <strong>{counts.compensationWaiting}</strong>
-          <small>Listeyi aç</small>
+          <small>Telafileri yönet</small>
         </button>
       </section>
 
