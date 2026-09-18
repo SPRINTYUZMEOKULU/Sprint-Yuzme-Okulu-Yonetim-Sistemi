@@ -384,7 +384,7 @@ export default async function PaymentsPage({
       totalLessons,
       storedUsedLessons:toNumber(enrollment?.used_lessons??0),
       startDate:enrollment?.start_date||draft.start_date||null,
-      normalEndDate:enrollment?.planned_end_date||draft.planned_end_date||null,
+      normalEndDate:enrollment?.planned_end_date||null,
       schedules:groupId?schedulesByGroup.get(String(groupId))||[]:[],
       exceptions:(exceptionsResult.data||[]) as any[],
       compensationBalance:Number(lessonBalanceMap.get(String(student.id))||0),
