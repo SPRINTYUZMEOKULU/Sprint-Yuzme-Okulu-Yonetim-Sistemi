@@ -63,6 +63,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const supabase = await createClient();
 
+  // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
+  await supabase.rpc("sync_scheduled_used_lessons");
+
   const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, paymentsResult, profilesResult, schedulesResult] = await Promise.all([
     supabase.from("branches").select("id,name").eq("organization_id", organizationId).order("name"),
     supabase.from("training_groups").select("id,branch_id,name,primary_coach_id").eq("organization_id", organizationId).order("name"),
