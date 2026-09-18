@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 import StudentsClient, {
   type StudentListItem,
 } from "./students-client";
@@ -66,70 +67,6 @@ function toNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
-
-function elapsedScheduledLessonCount(
-  startDate: string | null,
-  schedules: ScheduleRow[],
-  excludedSessionKeys: Set<string>,
-  now = new Date()
-) {
-  if (!startDate || schedules.length === 0) return 0;
-  const start = new Date(startDate + "T00:00:00+03:00");
-  if (Number.isNaN(start.getTime()) || start > now) return 0;
-  let count = 0;
-  const cursor = new Date(start);
-  for (let guard = 0; guard < 730 && cursor <= now; guard += 1) {
-    const jsWeekday = cursor.getDay();
-    const isoWeekday = jsWeekday === 0 ? 7 : jsWeekday;
-    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(cursor);
-    for (const schedule of schedules) {
-      const scheduleWeekday = Number(schedule.weekday);
-      // Veritabanındaki mevcut lesson_schedules JS gün numarası kullanıyor:
-      // Pazar=0, Pazartesi=1 ... Cumartesi=6. Eski ISO kayıtlarını da tolere et.
-      if (scheduleWeekday !== jsWeekday && scheduleWeekday !== isoWeekday) continue;
-      const lessonAt = new Date(ymd + "T" + String(schedule.start_time || "00:00").slice(0, 5) + ":00+03:00");
-      const sessionKey = ymd + ":" + schedule.id;
-      const groupKey = ymd + ":group:" + String(schedule.group_id || "");
-      if (lessonAt <= now && !excludedSessionKeys.has(sessionKey) && !excludedSessionKeys.has(groupKey)) count += 1;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return count;
-}
-
-function projectedRemainingEndDate(
-  startDate: string | null,
-  schedules: ScheduleRow[],
-  totalLessons: number
-) {
-  if (!startDate || totalLessons <= 0 || schedules.length === 0) return null;
-  const weekdays = new Set(
-    schedules.map((schedule) => Number(schedule.weekday)).filter((day) => day >= 1 && day <= 7)
-  );
-  if (!weekdays.size) return null;
-
-  const cursor = new Date(startDate + "T12:00:00+03:00");
-  if (Number.isNaN(cursor.getTime())) return null;
-
-  let counted = 0;
-  for (let guard = 0; guard < 730; guard += 1) {
-    const jsWeekday = cursor.getDay();
-    const isoWeekday = jsWeekday === 0 ? 7 : jsWeekday;
-    if (weekdays.has(jsWeekday) || weekdays.has(isoWeekday)) {
-      counted += 1;
-      if (counted >= totalLessons) {
-        return new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Europe/Istanbul",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }).format(cursor);
-      }
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return null;
-}
 
 function latestByStudent<T extends { student_id?: string | null }>(
   rows: T[]
@@ -482,67 +419,24 @@ export default async function StudentsPage() {
       );
 
       const storedUsedLessons = toNumber(enrollment?.used_lessons ?? 0);
-      const attendanceUsedLessons = enrollment?.id
-        ? attendanceUsedCountMap.get(String(enrollment.id)) || 0
-        : 0;
-
       const compensationBalance = Math.max(
-        toNumber(
-          lessonBalance?.compensation_lesson_balance ??
-            plannedCompensationCount.get(student.id) ??
-            0
-        ),
-        0
+        toNumber(lessonBalance?.compensation_lesson_balance ?? plannedCompensationCount.get(student.id) ?? 0), 0
       );
-
-      const regularSchedules = groupId
-        ? schedulesByGroup.get(groupId) || []
-        : [];
-
-      const enrollmentWeekdays = Array.isArray(enrollment?.lesson_weekdays)
-        ? enrollment.lesson_weekdays.map((day: unknown) => Number(day)).filter(
-            (day: number) => Number.isInteger(day) && day >= 1 && day <= 7
-          )
-        : [];
-      const planWeekdays = Array.isArray(attendancePlan?.selected_weekdays)
-        ? attendancePlan.selected_weekdays.map((day: unknown) => Number(day)).filter(
-            (day: number) => Number.isInteger(day) && day >= 1 && day <= 7
-          )
-        : [];
-      // Kayıt üzerindeki günler, tarih bazlı hak hesabında birincil kaynaktır.
-      // Attendance plan yalnız kayıt günleri yoksa fallback olur.
-      // lesson_schedules.weekday ISO gün numarası (Pzt=1 ... Paz=7) kullanır.
-      // Eski enrollment.lesson_weekdays kayıtlarının bir kısmı JS gün numarasıyla
-      // tutulduğu için burada filtrelemek aktif seansları tamamen silebiliyordu.
-      // Kalan ders hesabının authoritative kaynağı mevcut grubun aktif seanslarıdır.
-      const selectedWeekdays = planWeekdays.length > 0 ? planWeekdays : enrollmentWeekdays;
+      const regularSchedules = groupId ? schedulesByGroup.get(groupId) || [] : [];
       const studentSchedules = regularSchedules;
-
-      // Tarih bazlı normal hak: zamanı geçmiş planlı seanslar tüketir.
-      // Yoklama, aynı seansı ikinci kez tüketmez; yalnız geçmiş veri için güvenli alt sınırdır.
-      // Bu hesap salt-okunurdur ve enrollment başlangıç/bitiş tarihlerini değiştirmez.
-      const excludedSessionKeys = new Set<string>();
-      for (const exception of lessonExceptionsResult.data || []) {
-        const date = String(exception.lesson_date || "");
-        if (exception.schedule_id) excludedSessionKeys.add(date + ":" + String(exception.schedule_id));
-        if (exception.group_id) excludedSessionKeys.add(date + ":group:" + String(exception.group_id));
-      }
-      const elapsedScheduledLessons = elapsedScheduledLessonCount(
-        enrollment?.start_date ?? attendancePlan?.start_date ?? null,
-        studentSchedules,
-        excludedSessionKeys
-      );
-      const authoritativeEndForBalance = attendancePlan?.normal_planned_end_date ?? enrollment?.planned_end_date ?? null;
-      const balanceEnd = authoritativeEndForBalance ? new Date(authoritativeEndForBalance + "T23:59:59+03:00") : null;
-      const balanceEnded = Boolean(balanceEnd && !Number.isNaN(balanceEnd.getTime()) && new Date() > balanceEnd);
-      const usedLessons = balanceEnded
-        ? normalTotal
-        : Math.min(normalTotal, Math.max(storedUsedLessons, attendanceUsedLessons, elapsedScheduledLessons));
-      // Kayıtlı normal bitiş tarihi authoritative kalır. Tarih geçtiyse normal paket
-      // artık aktif hak değildir; kartta kalan hak 0 görünmelidir. Bu yalnız görüntü/
-      // hesap katmanıdır, kayıtlı tarih veya used_lessons alanına yazmaz.
-      const normalRemaining = balanceEnded ? 0 : Math.max(normalTotal - usedLessons, 0);
-      const totalRemaining = normalRemaining + compensationBalance;
+      const normalEndForBalance = attendancePlan?.normal_planned_end_date ?? enrollment?.planned_end_date ?? null;
+      const lessonBalanceProjection = calculateLessonBalance({
+        totalLessons: normalTotal,
+        storedUsedLessons,
+        startDate: enrollment?.start_date ?? attendancePlan?.start_date ?? null,
+        normalEndDate: normalEndForBalance,
+        schedules: studentSchedules,
+        exceptions: (lessonExceptionsResult.data || []) as any[],
+        compensationBalance,
+      });
+      const usedLessons = lessonBalanceProjection.usedLessons;
+      const normalRemaining = lessonBalanceProjection.normalRemainingLessons;
+      const totalRemaining = lessonBalanceProjection.totalRemainingLessons;
 
       const scheduleText = studentSchedules
         .slice()
@@ -582,16 +476,7 @@ export default async function StudentsPage() {
         attendancePlan?.compensation_planned_end_date ??
         normalEndDate;
 
-      // Kalan ders bitişi, kayıt başlangıcını değiştirmeden yoklama + kayıt
-      // verilerinden bulunan gerçek kullanılan hakkı düşer ve bugünden sonraki
-      // aktif seanslarda yalnızca kalan normal dersleri projekte eder.
-      const remainingLessonEndDate = projectedRemainingEndDate(
-        new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(new Date()),
-        studentSchedules,
-        normalRemaining
-      );
+      const remainingLessonEndDate = lessonBalanceProjection.projectedRemainingEndDate;
 
       const paymentStatus =
         paymentSummary?.payment_status ??
