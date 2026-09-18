@@ -1077,42 +1077,11 @@ export default async function OperasyonPlaniPage({
             ÖZET KARTLARI
         ================================================= */}
 
-        <section style={summaryGridStyle}>
-          <SummaryCard
-            label="Bugünkü Seans"
-            value={
-              filteredSchedules.length
-            }
-            icon={<Icons.calendar />}
-            href={gorunumHref("seans")}
-          />
-
-          <SummaryCard
-            label="Eğitmen"
-            value={
-              shownCoachIds.size
-            }
-            icon={<Icons.users />}
-            href={gorunumHref("egitmen")}
-          />
-
-          <SummaryCard
-            label="Öğrenci"
-            value={
-              shownStudentIds.size
-            }
-            icon={<Icons.child />}
-            href={gorunumHref("ogrenci")}
-          />
-
-          <SummaryCard
-            label="Grup"
-            value={
-              shownGroupIds.size
-            }
-            icon={<Icons.branch />}
-            href={gorunumHref("grup")}
-          />
+        <section style={compactSummaryStyle}>
+          <Link href={gorunumHref("seans")} style={compactStatStyle}><b>{filteredSchedules.length}</b><span>Seans</span></Link>
+          <Link href={gorunumHref("egitmen")} style={compactStatStyle}><b>{shownCoachIds.size}</b><span>Eğitmen</span></Link>
+          <Link href={gorunumHref("ogrenci")} style={compactStatStyle}><b>{shownStudentIds.size}</b><span>Öğrenci</span></Link>
+          <Link href={gorunumHref("grup")} style={compactStatStyle}><b>{shownGroupIds.size}</b><span>Grup</span></Link>
         </section>
 
         {/* =================================================
@@ -2276,6 +2245,9 @@ function MiniStat({
 /* =========================================================
    STİLLER
 ========================================================= */
+
+const compactSummaryStyle = { display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:7, margin:"10px 0 12px" } as const;
+const compactStatStyle = { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2, minHeight:54, background:"#fff", border:"1px solid #dce7f5", borderRadius:13, textDecoration:"none", color:"#13233f" } as const;
 
 const sessionOperationBarStyle = { margin:"14px 0", padding:13, border:"1px solid #dce7f5", borderRadius:15, background:"#f8fbff" } as const;
 const sessionOperationHeadStyle = { display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:10 } as const;
