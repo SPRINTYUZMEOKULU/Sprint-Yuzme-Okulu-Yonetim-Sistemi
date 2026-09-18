@@ -20,6 +20,7 @@ export default async function RenewalOperationsPage(){
   if(!profile.organization_id) redirect("/");
   const organizationId=profile.organization_id;
   const supabase=await createClient();
+  await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
 
   const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult,approvalResult]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]),

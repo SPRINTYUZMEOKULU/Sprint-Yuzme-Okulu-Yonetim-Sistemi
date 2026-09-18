@@ -112,6 +112,9 @@ export default async function PaymentsPage({
 
   const supabase = await createClient();
 
+  // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
+  await supabase.rpc("sync_scheduled_used_lessons");
+
   const [
     studentsResult,
     enrollmentsResult,

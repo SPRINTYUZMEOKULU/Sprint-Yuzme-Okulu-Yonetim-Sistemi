@@ -758,11 +758,47 @@ export default async function OperasyonPlaniPage({
           </div>
         </section>
 
+        <section style={operationCenterStyle}>
+          <div style={operationCenterHeaderStyle}>
+            <div>
+              <div style={operationCenterEyebrowStyle}>HIZLI OPERASYON MERKEZİ</div>
+              <strong style={operationCenterTitleStyle}>Bugünün ders ve tesis işlemleri</strong>
+              <p style={operationCenterTextStyle}>Havuz kapanışı, yapılmayan ders, telafi ve yeniden başlangıç işlemlerini buradan yönetin. Yapılan işlemler merkezi ders bakiyesine otomatik yansır.</p>
+            </div>
+            <span style={liveBadgeStyle}>● CANLI</span>
+          </div>
+          <div style={operationActionGridStyle}>
+            <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
+              <span style={operationIconStyle}><Icons.branch /></span>
+              <span><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+            <Link href="/ders-operasyonlari" style={operationActionStyle}>
+              <span style={operationIconStyle}><Icons.calendar /></span>
+              <span><b>Ders Yapılmadı / Telafi</b><small>Seans iptali · hak düşme · telafi planla</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+            <Link href="/yoklama" style={operationActionStyle}>
+              <span style={operationIconStyle}><Icons.check /></span>
+              <span><b>Yoklama</b><small>Katılımı kaydet · merkezi bakiyeyi güncelle</small></span>
+              <span style={operationArrowStyle}>→</span>
+            </Link>
+          </div>
+        </section>
+
         {/* =================================================
-            GÖRÜNÜM SEKMELERİ
+            GÖRÜNÜM / FİLTRE KONTROLÜ
         ================================================= */}
 
-        <section style={viewBarStyle}>
+        <section style={controlPanelStyle}>
+          <div style={controlPanelHeaderStyle}>
+            <div>
+              <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
+              <p style={controlPanelTextStyle}>Seansları ihtiyacınıza göre tek dokunuşla gruplayın ve filtreleyin.</p>
+            </div>
+            <span style={controlDateBadgeStyle}>{GUNLER[selectedWeekday]} · {selectedDate.split("-").reverse().join(".")}</span>
+          </div>
+          <div style={viewBarStyle}>
           {[
             ["seans", "Seans"],
             ["egitmen", "Eğitmen"],
@@ -834,15 +870,21 @@ export default async function OperasyonPlaniPage({
               </Link>
             );
           })}
+          </div>
         </section>
 
         {/* =================================================
             FİLTRELER
         ================================================= */}
 
+        <details style={filterDetailsStyle}>
+          <summary style={filterSummaryStyle}>
+            <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye</small></span>
+            <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
+          </summary>
         <form
           method="get"
-          style={filterPanelStyle}
+          style={filterPanelCompactStyle}
         >
           <input
             type="hidden"
@@ -1029,47 +1071,17 @@ export default async function OperasyonPlaniPage({
             Temizle
           </Link>
         </form>
+        </details>
 
         {/* =================================================
             ÖZET KARTLARI
         ================================================= */}
 
-        <section style={summaryGridStyle}>
-          <SummaryCard
-            label="Bugünkü Seans"
-            value={
-              filteredSchedules.length
-            }
-            icon={<Icons.calendar />}
-            href={gorunumHref("seans")}
-          />
-
-          <SummaryCard
-            label="Eğitmen"
-            value={
-              shownCoachIds.size
-            }
-            icon={<Icons.users />}
-            href={gorunumHref("egitmen")}
-          />
-
-          <SummaryCard
-            label="Öğrenci"
-            value={
-              shownStudentIds.size
-            }
-            icon={<Icons.child />}
-            href={gorunumHref("ogrenci")}
-          />
-
-          <SummaryCard
-            label="Grup"
-            value={
-              shownGroupIds.size
-            }
-            icon={<Icons.branch />}
-            href={gorunumHref("grup")}
-          />
+        <section style={compactSummaryStyle}>
+          <Link href={gorunumHref("seans")} style={compactStatStyle}><b>{filteredSchedules.length}</b><span>Seans</span></Link>
+          <Link href={gorunumHref("egitmen")} style={compactStatStyle}><b>{shownCoachIds.size}</b><span>Eğitmen</span></Link>
+          <Link href={gorunumHref("ogrenci")} style={compactStatStyle}><b>{shownStudentIds.size}</b><span>Öğrenci</span></Link>
+          <Link href={gorunumHref("grup")} style={compactStatStyle}><b>{shownGroupIds.size}</b><span>Grup</span></Link>
         </section>
 
         {/* =================================================
@@ -1472,6 +1484,41 @@ export default async function OperasyonPlaniPage({
                         )}
                       </div>
                     </div>
+
+                    {canEdit && (
+                      <section style={sessionOperationBarStyle}>
+                        <div style={sessionOperationHeadStyle}>
+                          <div>
+                            <strong>Seans İşlemleri</strong>
+                            <span>Bu seans için yapılacak işlem tüm bağlı ekranlara merkezi olarak yansır.</span>
+                          </div>
+                          <span style={sessionReadyBadgeStyle}>Planlı Seans</span>
+                        </div>
+                        <div style={sessionOperationButtonsStyle}>
+                          <Link
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=cancel`}
+                            style={sessionDangerButtonStyle}
+                          >
+                            <span>×</span>
+                            <span><b>Ders Yapılmadı</b><small>Normal hak düşmesin</small></span>
+                          </Link>
+                          <Link
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=compensation`}
+                            style={sessionPurpleButtonStyle}
+                          >
+                            <span>↻</span>
+                            <span><b>Telafi Planla</b><small>Telafi hakkı / seansı oluştur</small></span>
+                          </Link>
+                          <Link
+                            href={`/yoklama?tarih=${selectedDate}&schedule_id=${schedule.id}`}
+                            style={sessionNeutralButtonStyle}
+                          >
+                            <span>✓</span>
+                            <span><b>Yoklamaya Git</b><small>Katılım durumunu kaydet</small></span>
+                          </Link>
+                        </div>
+                      </section>
+                    )}
 
                     {/* =====================================
                         PERSONEL ATAMA
@@ -2198,6 +2245,41 @@ function MiniStat({
 /* =========================================================
    STİLLER
 ========================================================= */
+
+const compactSummaryStyle = { display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:7, margin:"10px 0 12px" } as const;
+const compactStatStyle = { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2, minHeight:54, background:"#fff", border:"1px solid #dce7f5", borderRadius:13, textDecoration:"none", color:"#13233f" } as const;
+
+const sessionOperationBarStyle = { margin:"14px 0", padding:13, border:"1px solid #dce7f5", borderRadius:15, background:"#f8fbff" } as const;
+const sessionOperationHeadStyle = { display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:10 } as const;
+const sessionReadyBadgeStyle = { fontSize:10, fontWeight:850, color:"#1769e8", background:"#eaf3ff", border:"1px solid #cfe1fb", padding:"6px 8px", borderRadius:999, whiteSpace:"nowrap" } as const;
+const sessionOperationButtonsStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:8 } as const;
+const sessionBaseButtonStyle = { display:"flex", alignItems:"center", gap:9, minHeight:54, padding:"9px 11px", borderRadius:12, textDecoration:"none", border:"1px solid #dce7f5", fontSize:12 } as const;
+const sessionDangerButtonStyle = { ...sessionBaseButtonStyle, color:"#a43a22", background:"#fff7f3", borderColor:"#ffd5c7" } as const;
+const sessionPurpleButtonStyle = { ...sessionBaseButtonStyle, color:"#6d36c9", background:"#f8f4ff", borderColor:"#e2d5ff" } as const;
+const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", background:"#fff", borderColor:"#cfe0f5" } as const;
+
+const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
+const controlPanelHeaderStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" } as const;
+const controlPanelTitleStyle = { fontSize:15, color:"#13233f" } as const;
+const controlPanelTextStyle = { margin:"3px 0 0", color:"#718096", fontSize:11 } as const;
+const controlDateBadgeStyle = { fontSize:11, fontWeight:800, color:"#1769e8", background:"#eef5ff", padding:"7px 9px", borderRadius:10 } as const;
+const filterDetailsStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, marginBottom:14, overflow:"hidden" } as const;
+const filterSummaryStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, padding:"14px 16px", cursor:"pointer", color:"#13233f", fontSize:13 } as const;
+const filterSummaryTextStyle = { color:"#7a899f", fontWeight:500 } as const;
+const filterSummaryBadgeStyle = { fontSize:10, fontWeight:800, color:"#1769e8", background:"#eef5ff", padding:"6px 8px", borderRadius:9 } as const;
+const filterPanelCompactStyle: React.CSSProperties = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))", gap:10, alignItems:"end", background:"#fff", padding:16, border:0, borderTop:"1px solid #edf2f8", borderRadius:0, margin:0, boxShadow:"none" };
+
+const operationCenterStyle = { background: "#fff", border: "1px solid #d9e4f2", borderRadius: 20, padding: 18, marginBottom: 18, boxShadow: "0 8px 28px rgba(31,76,135,.06)" } as const;
+const operationCenterHeaderStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 } as const;
+const operationCenterEyebrowStyle = { fontSize: 10, fontWeight: 900, letterSpacing: ".12em", color: "#1769e8", marginBottom: 5 } as const;
+const operationCenterTitleStyle = { display: "block", fontSize: 18, color: "#13233f" } as const;
+const operationCenterTextStyle = { margin: "6px 0 0", color: "#65758d", fontSize: 12, lineHeight: 1.45, maxWidth: 720 } as const;
+const liveBadgeStyle = { flexShrink: 0, fontSize: 10, fontWeight: 900, color: "#16824b", background: "#eaf8f0", border: "1px solid #ccebd9", padding: "7px 9px", borderRadius: 999 } as const;
+const operationActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 } as const;
+const operationActionStyle = { minHeight: 72, display: "flex", alignItems: "center", gap: 11, textDecoration: "none", background: "#f8fbff", border: "1px solid #dce7f5", borderRadius: 15, padding: "12px 13px", color: "#13233f" } as const;
+const operationActionPrimaryStyle = { ...operationActionStyle, background: "#1769e8", borderColor: "#1769e8", color: "#fff" } as const;
+const operationIconStyle = { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.18)", flexShrink: 0 } as const;
+const operationArrowStyle = { marginLeft: "auto", fontSize: 20, fontWeight: 800 } as const;
 
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
