@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,10 @@ export async function GET() {
     const ids = (students || []).map((s: any) => s.id);
     if (!ids.length) return NextResponse.json({ ok: true, items: [] });
 
-    const [enrollmentRes, balanceRes, requestRes] = await Promise.all([
+    const [enrollmentRes, balanceRes, requestRes, schedulesRes, exceptionsRes] = await Promise.all([
       supabase
         .from("student_enrollments")
-        .select("id,student_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at")
+        .select("id,student_id,group_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at")
         .eq("organization_id", organizationId)
         .in("student_id", ids)
         .eq("status", "active")
@@ -42,12 +43,15 @@ export async function GET() {
         .in("student_id", ids)
         .eq("request_type", "deactivate")
         .eq("status", "pending"),
+      supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",organizationId).eq("is_active",true),
+      supabase.from("lesson_session_exceptions").select("lesson_date,group_id,schedule_id,exception_type").eq("organization_id",organizationId),
     ]);
 
     const latestEnrollment = new Map<string, any>();
     for (const row of enrollmentRes.data || []) if (!latestEnrollment.has(row.student_id)) latestEnrollment.set(row.student_id, row);
     const balanceMap = new Map((balanceRes.data || []).map((row: any) => [row.student_id, Number(row.compensation_lesson_balance || 0)]));
     const pendingPassive = new Set((requestRes.data || []).map((row: any) => row.student_id));
+    const schedulesByGroup=new Map<string,any[]>();for(const row of schedulesRes.data||[]){const list=schedulesByGroup.get(String(row.group_id))||[];list.push(row);schedulesByGroup.set(String(row.group_id),list)}
 
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -55,9 +59,10 @@ export async function GET() {
       const enrollment = latestEnrollment.get(student.id);
       if (!enrollment) return [];
       const total = Number(enrollment.total_lessons || 0);
-      const used = Number(enrollment.used_lessons || 0);
       const compensation = Number(balanceMap.get(student.id) || 0);
-      const remaining = Math.max(total - used, 0) + Math.max(compensation, 0);
+      const projection=calculateLessonBalance({totalLessons:total,storedUsedLessons:Number(enrollment.used_lessons||0),startDate:enrollment.start_date||null,normalEndDate:enrollment.planned_end_date||null,schedules:schedulesByGroup.get(String(enrollment.group_id))||[],exceptions:(exceptionsRes.data||[]) as any[],compensationBalance:compensation});
+      const used=projection.usedLessons;
+      const remaining=projection.totalRemainingLessons;
       const endDate = enrollment.planned_end_date || null;
       const endedByRights = total > 0 && remaining <= 0;
       const endedByDate = Boolean(endDate && endDate <= today);
