@@ -177,6 +177,19 @@ export default async function StudentsPage() {
   const students = studentsResult.data || [];
   const studentIds = students.map((student) => student.id);
 
+  // Önce merkezi planlı ders sayacını güncelle. Bu RPC yoklamaya bakmaz;
+  // geçmiş gerçek seansları, seçili haftalık günleri ve kapanış istisnalarını kullanır.
+  const lessonSyncResult = studentIds.length
+    ? await supabase.rpc("sync_scheduled_used_lessons")
+    : { error: null };
+
+  if (lessonSyncResult.error) {
+    console.error(
+      "Merkezi ders bakiyesi senkronizasyonu başarısız:",
+      lessonSyncResult.error
+    );
+  }
+
   const [
     enrollmentsResult,
     membershipsResult,
