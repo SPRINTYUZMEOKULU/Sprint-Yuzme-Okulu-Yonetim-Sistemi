@@ -862,6 +862,8 @@ export default function StudentsClient({
   const [effectiveDate, setEffectiveDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [transferLessonCount, setTransferLessonCount] = useState("");
+  const [additionalTransferLessons, setAdditionalTransferLessons] = useState("0");
   const [prepareTransferMessages, setPrepareTransferMessages] =
     useState(true);
   const [updateAttendancePlans, setUpdateAttendancePlans] =
@@ -1580,10 +1582,11 @@ function closeLessonAction() {
       !selectedStudentIds.length ||
       !targetBranchId ||
       !targetGroupId ||
-      !targetScheduleIds.length
+      !targetScheduleIds.length ||
+      !effectiveDate
     ) {
       setBulkResult(
-        "Yeni şube, grup ve en az bir ders seansı seçilmelidir."
+        "Yeni şube, grup, başlangıç tarihi ve en az bir ders seansı seçilmelidir."
       );
       return;
     }
@@ -1598,6 +1601,8 @@ function closeLessonAction() {
         targetGroupId,
         targetScheduleIds,
         effectiveDate,
+        transferLessonCount: transferLessonCount ? Number(transferLessonCount) : null,
+        additionalLessons: Number(additionalTransferLessons || 0),
         prepareMessages: prepareTransferMessages,
         updateAttendancePlans,
         logHistory: logTransferHistory,
@@ -2957,6 +2962,31 @@ function closeLessonAction() {
                     }
                   />
                 </label>
+
+                <div className="transferLessonGrid">
+                  <label>
+                    <span>Yeni Program Toplam Ders Sayısı</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={transferLessonCount}
+                      onChange={(event) => setTransferLessonCount(event.target.value)}
+                      placeholder={selectedStudents.length === 1 ? String(selectedStudents[0].remaining_lessons ?? "") : "Örn. 8"}
+                    />
+                    <small>Boş bırakırsanız mevcut kalan ders hakkı aynen taşınır.</small>
+                  </label>
+                  <label>
+                    <span>Ek Ders</span>
+                    <select value={additionalTransferLessons} onChange={(event) => setAdditionalTransferLessons(event.target.value)}>
+                      <option value="0">Ek ders yok</option>
+                      <option value="1">+1 ders</option>
+                      <option value="2">+2 ders</option>
+                    </select>
+                    <small>Seçilen ek ders yeni programın bitiş hesabına dahil edilir.</small>
+                  </label>
+                </div>
 
                 <div className="bulkChecks">
                   <label>
