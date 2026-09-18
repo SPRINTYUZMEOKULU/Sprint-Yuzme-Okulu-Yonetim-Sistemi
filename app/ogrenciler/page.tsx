@@ -70,6 +70,7 @@ function toNumber(value: unknown) {
 function elapsedScheduledLessonCount(
   startDate: string | null,
   schedules: ScheduleRow[],
+  excludedSessionKeys: Set<string>,
   now = new Date()
 ) {
   if (!startDate || schedules.length === 0) return 0;
@@ -83,7 +84,9 @@ function elapsedScheduledLessonCount(
     for (const schedule of schedules) {
       if (Number(schedule.weekday) !== isoWeekday) continue;
       const lessonAt = new Date(ymd + "T" + String(schedule.start_time || "00:00").slice(0, 5) + ":00+03:00");
-      if (lessonAt <= now) count += 1;
+      const sessionKey = ymd + ":" + schedule.id;
+      const groupKey = ymd + ":group:" + String(schedule.group_id || "");
+      if (lessonAt <= now && !excludedSessionKeys.has(sessionKey) && !excludedSessionKeys.has(groupKey)) count += 1;
     }
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -291,8 +294,14 @@ export default async function StudentsPage() {
           .in("student_id", studentIds)
           .order("lesson_date", { ascending: false })
           .order("updated_at", { ascending: false }),
+
+        supabase
+          .from("lesson_session_exceptions")
+          .select("lesson_date,group_id,schedule_id,exception_type")
+          .eq("organization_id", organizationId),
       ])
     : [
+        { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
@@ -310,6 +319,7 @@ export default async function StudentsPage() {
     paymentSummariesResult.error,
     compensationPlansResult.error,
     lastAttendanceResult.error,
+    lessonExceptionsResult.error,
   ].filter(Boolean);
 
   if (secondaryErrors.length) {
@@ -505,9 +515,16 @@ export default async function StudentsPage() {
       // Tarih bazlı normal hak: zamanı geçmiş planlı seanslar tüketir.
       // Yoklama, aynı seansı ikinci kez tüketmez; yalnız geçmiş veri için güvenli alt sınırdır.
       // Bu hesap salt-okunurdur ve enrollment başlangıç/bitiş tarihlerini değiştirmez.
+      const excludedSessionKeys = new Set<string>();
+      for (const exception of lessonExceptionsResult.data || []) {
+        const date = String(exception.lesson_date || "");
+        if (exception.schedule_id) excludedSessionKeys.add(date + ":" + String(exception.schedule_id));
+        if (exception.group_id) excludedSessionKeys.add(date + ":group:" + String(exception.group_id));
+      }
       const elapsedScheduledLessons = elapsedScheduledLessonCount(
         enrollment?.start_date ?? attendancePlan?.start_date ?? null,
-        studentSchedules
+        studentSchedules,
+        excludedSessionKeys
       );
       const usedLessons = Math.min(
         normalTotal,
