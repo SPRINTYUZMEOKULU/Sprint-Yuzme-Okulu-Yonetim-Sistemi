@@ -1319,7 +1319,12 @@ function closeLessonAction() {
       ).length,
       compensationWaiting: students.filter(
         (student) =>
-          numberValue(student.planned_compensation_lessons) > 0
+          student.status === "active" &&
+          (
+            numberValue(student.planned_compensation_lessons) > 0 ||
+            numberValue(student.compensation_lessons) > 0 ||
+            Boolean(student.next_compensation_date)
+          )
       ).length,
       informationPending: students.filter(
         (student) => Boolean(informationNeed(student))
@@ -1405,7 +1410,13 @@ function closeLessonAction() {
       }
 
       if (status === "compensation_waiting") {
-        statusMatch = Boolean(student.next_compensation_date) || numberValue(student.compensation_lessons) > 0;
+        statusMatch =
+          student.status === "active" &&
+          (
+            numberValue(student.planned_compensation_lessons) > 0 ||
+            numberValue(student.compensation_lessons) > 0 ||
+            Boolean(student.next_compensation_date)
+          );
       }
 
       return (
@@ -5492,9 +5503,11 @@ function closeLessonAction() {
   .summaryCard{min-height:112px!important;padding:14px!important;border-radius:16px!important}
   .summaryCard span{font-size:13px!important}
   .summaryCard strong{font-size:28px!important}
-  .toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important}
-  .toolbar .searchBox,.dataPanelShell{grid-column:1/-1!important}
-  .toolbar select{width:100%!important;min-width:0!important;height:46px!important;font-size:14px!important}
+  .toolbar{display:grid!important;grid-template-columns:1fr!important;gap:10px!important;width:100%!important}
+  .toolbar .searchBox,.dataPanelShell{grid-column:1!important;width:100%!important}
+  .toolbar select{grid-column:1!important;width:100%!important;max-width:none!important;min-width:0!important;height:48px!important;font-size:14px!important}
+  .toolbar .searchBox input{width:100%!important;max-width:none!important;box-sizing:border-box!important}
+  .dataPanelShell,.dataPanelToggle{width:100%!important;max-width:none!important;box-sizing:border-box!important}
   .searchBox input{width:100%!important;min-width:0!important;height:48px!important}
   .dataPanelToggle{width:100%!important}
   .dataActions{grid-template-columns:1fr!important}
