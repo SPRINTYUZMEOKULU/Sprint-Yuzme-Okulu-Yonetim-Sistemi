@@ -787,10 +787,18 @@ export default async function OperasyonPlaniPage({
         </section>
 
         {/* =================================================
-            GÖRÜNÜM SEKMELERİ
+            GÖRÜNÜM / FİLTRE KONTROLÜ
         ================================================= */}
 
-        <section style={viewBarStyle}>
+        <section style={controlPanelStyle}>
+          <div style={controlPanelHeaderStyle}>
+            <div>
+              <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
+              <p style={controlPanelTextStyle}>Seansları ihtiyacınıza göre tek dokunuşla gruplayın ve filtreleyin.</p>
+            </div>
+            <span style={controlDateBadgeStyle}>{GUNLER[selectedWeekday]} · {selectedDate.split("-").reverse().join(".")}</span>
+          </div>
+          <div style={viewBarStyle}>
           {[
             ["seans", "Seans"],
             ["egitmen", "Eğitmen"],
@@ -862,15 +870,21 @@ export default async function OperasyonPlaniPage({
               </Link>
             );
           })}
+          </div>
         </section>
 
         {/* =================================================
             FİLTRELER
         ================================================= */}
 
+        <details style={filterDetailsStyle}>
+          <summary style={filterSummaryStyle}>
+            <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye</small></span>
+            <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
+          </summary>
         <form
           method="get"
-          style={filterPanelStyle}
+          style={filterPanelCompactStyle}
         >
           <input
             type="hidden"
@@ -1057,6 +1071,7 @@ export default async function OperasyonPlaniPage({
             Temizle
           </Link>
         </form>
+        </details>
 
         {/* =================================================
             ÖZET KARTLARI
@@ -2226,6 +2241,17 @@ function MiniStat({
 /* =========================================================
    STİLLER
 ========================================================= */
+
+const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
+const controlPanelHeaderStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" } as const;
+const controlPanelTitleStyle = { fontSize:15, color:"#13233f" } as const;
+const controlPanelTextStyle = { margin:"3px 0 0", color:"#718096", fontSize:11 } as const;
+const controlDateBadgeStyle = { fontSize:11, fontWeight:800, color:"#1769e8", background:"#eef5ff", padding:"7px 9px", borderRadius:10 } as const;
+const filterDetailsStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, marginBottom:14, overflow:"hidden" } as const;
+const filterSummaryStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, padding:"14px 16px", cursor:"pointer", color:"#13233f", fontSize:13 } as const;
+const filterSummaryTextStyle = { color:"#7a899f", fontWeight:500 } as const;
+const filterSummaryBadgeStyle = { fontSize:10, fontWeight:800, color:"#1769e8", background:"#eef5ff", padding:"6px 8px", borderRadius:9 } as const;
+const filterPanelCompactStyle = { ...filterPanelStyle, border:0, borderTop:"1px solid #edf2f8", borderRadius:0, margin:0, boxShadow:"none" } as const;
 
 const operationCenterStyle = { background: "#fff", border: "1px solid #d9e4f2", borderRadius: 20, padding: 18, marginBottom: 18, boxShadow: "0 8px 28px rgba(31,76,135,.06)" } as const;
 const operationCenterHeaderStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 } as const;
