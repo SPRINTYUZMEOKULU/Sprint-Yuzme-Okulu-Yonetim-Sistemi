@@ -313,6 +313,8 @@ export async function applyManagerCorrection(formData: FormData) {
       prepareMessages: false,
       updateAttendancePlans: true,
       logHistory: false,
+      transferLessonCount: baseTotalLessons,
+      additionalLessons,
     });
 
     if (!transferResult.ok || !transferResult.transferredCount) {
