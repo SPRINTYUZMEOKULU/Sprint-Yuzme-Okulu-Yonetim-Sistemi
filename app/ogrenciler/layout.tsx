@@ -11,9 +11,11 @@ export default function StudentsLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <DefaultStudentSort />
-      <StartingStudentsPanel />
-      <DataCorrectionEntry />
       {children}
+      <div className="studentCenterSecondaryTools">
+        <StartingStudentsPanel />
+        <DataCorrectionEntry />
+      </div>
       <LessonOperationCommandAction />
       <StudentCardInsightsEnhancer />
       <ImportedStudentBadgeEnhancer />
