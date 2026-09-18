@@ -288,8 +288,15 @@ export default function CorrectionForm({
               name="group_id"
               value={groupId}
               onChange={(e) => {
-                setGroupId(e.target.value);
-                setSelectedScheduleIds([]);
+                const nextGroupId = e.target.value;
+                setGroupId(nextGroupId);
+                // Grup seçildiğinde grubun aktif programını doğrudan hesaba kat.
+                // Yönetici isterse aşağıdaki seanslardan seçimleri daraltabilir.
+                setSelectedScheduleIds(
+                  schedules
+                    .filter((schedule) => schedule.group_id === nextGroupId)
+                    .map((schedule) => schedule.id),
+                );
               }}
               required
             >
@@ -323,10 +330,15 @@ export default function CorrectionForm({
               name="total_lessons"
               type="number"
               min="1"
+              step="1"
+              inputMode="numeric"
               value={totalLessons}
               onChange={(e) => setTotalLessons(e.target.value)}
               required
             />
+            <small className="fieldHelp">
+              Yönetici özel ders sayısı girebilir. Girilen sayı ve seçili grup/seanslara göre bitiş tarihi otomatik hesaplanır.
+            </small>
           </label>
           <label>
             <span>Başlangıç Tarihi</span>
