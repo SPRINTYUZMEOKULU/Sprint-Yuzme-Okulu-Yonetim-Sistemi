@@ -281,7 +281,8 @@ export default async function StudentFile({
   const paymentSummary = paymentSummaryResult.data;
   const payments = paymentsResult.data ?? [];
   const coachReports = coachReportsResult.data ?? [];
-  const enrollmentHistory = enrollmentHistoryResult.data ?? [];\n  const registrationPeriodCount = enrollmentHistory.length;
+  const enrollmentHistory = enrollmentHistoryResult.data ?? [];
+  const registrationPeriodCount = enrollmentHistory.length;
   const attendanceRecords = attendanceResult.data ?? [];
   const consent = consentResult.data;
 
@@ -941,7 +942,11 @@ export default async function StudentFile({
             </div>
           </div>
 
-          <div className="infoRows">\n            <div>\n              <span>Kayıt Dönemi</span>\n              <strong>{registrationPeriodCount > 0 ? `${registrationPeriodCount}. dönem` : "—"}</strong>\n            </div>
+          <div className="infoRows">
+            <div>
+              <span>Kayıt Dönemi</span>
+              <strong>{registrationPeriodCount > 0 ? `${registrationPeriodCount}. dönem` : "—"}</strong>
+            </div>
             <div>
               <span>Şube</span>
               <strong>{branchInfo?.name || "—"}</strong>
