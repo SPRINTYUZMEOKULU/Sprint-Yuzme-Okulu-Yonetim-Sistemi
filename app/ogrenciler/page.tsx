@@ -503,15 +503,12 @@ export default async function StudentsPage() {
         : [];
       // Kayıt üzerindeki günler, tarih bazlı hak hesabında birincil kaynaktır.
       // Attendance plan yalnız kayıt günleri yoksa fallback olur.
-      const selectedWeekdays = enrollmentWeekdays.length > 0 ? enrollmentWeekdays : planWeekdays;
-
-      const studentSchedules = regularSchedules.filter(
-        (schedule) =>
-          selectedWeekdays.length === 0 ||
-          selectedWeekdays.includes(
-            Number(schedule.weekday)
-          )
-      );
+      // lesson_schedules.weekday ISO gün numarası (Pzt=1 ... Paz=7) kullanır.
+      // Eski enrollment.lesson_weekdays kayıtlarının bir kısmı JS gün numarasıyla
+      // tutulduğu için burada filtrelemek aktif seansları tamamen silebiliyordu.
+      // Kalan ders hesabının authoritative kaynağı mevcut grubun aktif seanslarıdır.
+      const selectedWeekdays = planWeekdays.length > 0 ? planWeekdays : enrollmentWeekdays;
+      const studentSchedules = regularSchedules;
 
       // Tarih bazlı normal hak: zamanı geçmiş planlı seanslar tüketir.
       // Yoklama, aynı seansı ikinci kez tüketmez; yalnız geçmiş veri için güvenli alt sınırdır.
