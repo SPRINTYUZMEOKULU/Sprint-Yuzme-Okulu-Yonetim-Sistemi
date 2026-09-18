@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import * as XLSX from "xlsx";
 
 const ALLOWED_ROLES = [
   "owner",
@@ -83,11 +84,24 @@ export async function GET() {
     return NextResponse.json({ error: "Organizasyon bilgisi bulunamadı." }, { status: 400 });
   }
 
-  const template = "Ad;Soyad;Doğum Tarihi;Telefon;Veli Adı;Veli Telefonu;Veli E-posta;Şube;Grup;Seviye;Not\n";
-  return new NextResponse(`\uFEFF${template}`, {
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    ["Ad", "Soyad", "Doğum Tarihi", "Telefon", "Veli Adı", "Veli Telefonu", "Veli E-posta", "Şube", "Grup", "Seviye", "Not"],
+    ["Örnek", "Kursiyer", "15.05.2015", "05XXXXXXXXX", "Örnek Veli", "05XXXXXXXXX", "veli@ornek.com", "Şube adı", "Grup adı", "Başlangıç", "Bu örnek satırı silip kendi verilerinizi girin."],
+  ]);
+  worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+  worksheet["!autofilter"] = { ref: "A1:K2" };
+  worksheet["!cols"] = [
+    { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 24 },
+    { wch: 18 }, { wch: 28 }, { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 42 },
+  ];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Öğrenci Aktarımı");
+  const output = XLSX.write(workbook, { type: "buffer", bookType: "xlsx", compression: true });
+  return new NextResponse(output, {
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="sprintos-ogrenci-ice-aktarma-sablonu.csv"',
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="SprintOS-Ogrenci-Ice-Aktarma-Sablonu.xlsx"',
+      "Cache-Control": "no-store",
     },
   });
 }
@@ -106,9 +120,18 @@ export async function POST(request: NextRequest) {
       const form = await request.formData();
       const file = form.get("file");
       if (!(file instanceof File)) {
-        return NextResponse.json({ error: "CSV dosyası seçilmedi." }, { status: 400 });
+        return NextResponse.json({ error: "Excel veya CSV dosyası seçilmedi." }, { status: 400 });
       }
-      rows = parseCsv(await file.text());
+      const isXlsx =
+        file.name.toLowerCase().endsWith(".xlsx") ||
+        file.type.includes("spreadsheetml");
+      if (isXlsx) {
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = sheet ? (XLSX.utils.sheet_to_json(sheet, { defval: "" }) as ImportRow[]) : [];
+      } else {
+        rows = parseCsv(await file.text());
+      }
     } else {
       const body = await request.json();
       rows = Array.isArray(body) ? body : Array.isArray(body.rows) ? body.rows : [];
