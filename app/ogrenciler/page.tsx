@@ -481,18 +481,19 @@ export default async function StudentsPage() {
         ? schedulesByGroup.get(groupId) || []
         : [];
 
-      const selectedWeekdays = Array.isArray(
-        attendancePlan?.selected_weekdays
-      )
-        ? attendancePlan.selected_weekdays
-            .map((day: unknown) => Number(day))
-            .filter(
-              (day: number) =>
-                Number.isInteger(day) &&
-                day >= 1 &&
-                day <= 7
-            )
+      const enrollmentWeekdays = Array.isArray(enrollment?.lesson_weekdays)
+        ? enrollment.lesson_weekdays.map((day: unknown) => Number(day)).filter(
+            (day: number) => Number.isInteger(day) && day >= 1 && day <= 7
+          )
         : [];
+      const planWeekdays = Array.isArray(attendancePlan?.selected_weekdays)
+        ? attendancePlan.selected_weekdays.map((day: unknown) => Number(day)).filter(
+            (day: number) => Number.isInteger(day) && day >= 1 && day <= 7
+          )
+        : [];
+      // Kayıt üzerindeki günler, tarih bazlı hak hesabında birincil kaynaktır.
+      // Attendance plan yalnız kayıt günleri yoksa fallback olur.
+      const selectedWeekdays = enrollmentWeekdays.length > 0 ? enrollmentWeekdays : planWeekdays;
 
       const studentSchedules = regularSchedules.filter(
         (schedule) =>
