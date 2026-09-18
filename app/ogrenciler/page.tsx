@@ -245,6 +245,7 @@ export default async function StudentsPage() {
     paymentSummariesResult,
     compensationPlansResult,
     lastAttendanceResult,
+    lessonExceptionsResult,
   ] = studentIds.length
     ? await Promise.all([
         supabase
