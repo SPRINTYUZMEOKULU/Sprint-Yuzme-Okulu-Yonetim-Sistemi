@@ -425,7 +425,10 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         .from("student_enrollments")
         .update({
           group_id: input.targetGroupId,
-          start_date: input.effectiveDate,
+          // Transfer is a schedule/group change, not a new enrollment.
+          // Keep the student's original enrollment start date; effectiveDate only
+          // marks when the new group/schedule becomes active.
+          start_date: enrollment.start_date || input.effectiveDate,
           total_lessons: newTotalLessons,
           planned_end_date: newNormalEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
@@ -508,7 +511,8 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           selected_weekdays: targetWeekdays,
           weekly_frequency: targetWeekdays.length,
           package_lesson_count: newTotalLessons,
-          start_date: input.effectiveDate,
+          // Preserve the historical course start date on the active plan as well.
+          start_date: enrollment.start_date || input.effectiveDate,
           normal_planned_end_date: newNormalEndDate,
           compensation_planned_end_date: newCompensationEndDate,
           is_active: true,
