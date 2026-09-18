@@ -5587,6 +5587,41 @@ function closeLessonAction() {
   .dataActions { grid-template-columns:1fr; }
   .dataAction { min-height:56px; }
 }
+
+/* Mobile final override: must remain after desktop/tablet toolbar rules */
+@media (max-width: 760px) {
+  .studentCenter .toolbar {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    width:100% !important;
+    max-width:none !important;
+    gap:8px !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar > .searchBox,
+  .studentCenter .toolbar > select,
+  .studentCenter .toolbar > .dataPanelShell {
+    grid-column:1 / -1 !important;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar .searchBox,
+  .studentCenter .toolbar .searchBox input,
+  .studentCenter .toolbar select,
+  .studentCenter .toolbar .dataPanelToggle {
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar select,
+  .studentCenter .toolbar .searchBox input {
+    min-height:46px !important;
+  }
+  .studentCenter .dataPanelShell { margin-top:2px !important; }
+}
       `}</style>
     </div>
   );
