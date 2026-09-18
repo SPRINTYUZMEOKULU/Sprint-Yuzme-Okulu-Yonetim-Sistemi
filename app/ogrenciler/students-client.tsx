@@ -108,7 +108,10 @@ type StatusFilter =
   | "passive"
   | "pre_registration"
   | "ending_soon"
-  | "information_pending";
+  | "information_pending"
+  | "lesson_ended"
+  | "payment_waiting"
+  | "compensation_waiting";
 
 type SortType =
   | "name_asc"
@@ -1393,6 +1396,18 @@ function closeLessonAction() {
         statusMatch = Boolean(informationNeed(student));
       }
 
+      if (status === "lesson_ended") {
+        statusMatch = numberValue(student.total_remaining_lessons ?? student.remaining_lessons) <= 0;
+      }
+
+      if (status === "payment_waiting") {
+        statusMatch = numberValue(student.payment_outstanding) > 0;
+      }
+
+      if (status === "compensation_waiting") {
+        statusMatch = Boolean(student.next_compensation_date) || numberValue(student.compensation_lessons) > 0;
+      }
+
       return (
         searchMatch &&
         branchMatch &&
@@ -2171,10 +2186,11 @@ function closeLessonAction() {
           <strong>{counts.endingSoon}</strong>
         </button>
 
-        <div className="summaryCard alertCard">
+        <button type="button" className={`summaryCard alertCard ${status === "lesson_ended" ? "selected" : ""}`} onClick={() => setStatus("lesson_ended")}>
           <span>Ders Hakkı Biten</span>
           <strong>{counts.lessonEnded}</strong>
-        </div>
+          <small>Listeyi aç</small>
+        </button>
 
         <button
           type="button"
@@ -2188,15 +2204,17 @@ function closeLessonAction() {
           <small>İşlem için tıklayın</small>
         </button>
 
-        <div className="summaryCard warningCard">
+        <button type="button" className={`summaryCard warningCard ${status === "payment_waiting" ? "selected" : ""}`} onClick={() => setStatus("payment_waiting")}>
           <span>Ödeme Bekleyen</span>
           <strong>{counts.paymentWaiting}</strong>
-        </div>
+          <small>Listeyi aç</small>
+        </button>
 
-        <div className="summaryCard infoCard">
+        <button type="button" className={`summaryCard infoCard ${status === "compensation_waiting" ? "selected" : ""}`} onClick={() => setStatus("compensation_waiting")}>
           <span>Telafi Bekleyen</span>
           <strong>{counts.compensationWaiting}</strong>
-        </div>
+          <small>Listeyi aç</small>
+        </button>
       </section>
 
       <nav className="studentStatusTabs" aria-label="Öğrenci durum filtreleri">
@@ -5449,6 +5467,11 @@ function closeLessonAction() {
 
 
 /* SprintOS Öğrenci Merkezi — mobil profesyonel üst alan */
+.summaryCard{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.summaryCard:active,.commandButton:active,.studentStatusTabs button:active,.dataPanelToggle:active{transform:scale(.975)}
+.summaryCard.selected{border-color:#176fe8!important;box-shadow:0 0 0 2px rgba(23,111,232,.16),0 8px 20px rgba(23,111,232,.12)!important}
+.summaryCard.selected span,.summaryCard.selected strong{color:#176fe8!important}
+
 .studentStatusTabs{display:flex;gap:7px;padding:7px;margin:0 0 14px;border:1px solid #dbe6f3;border-radius:16px;background:#fff;overflow-x:auto}
 .studentStatusTabs button{appearance:none;border:0;background:transparent;color:#60738d;border-radius:11px;min-height:42px;padding:0 16px;font-weight:800;white-space:nowrap;cursor:pointer}
 .studentStatusTabs button.active{background:#176fe8;color:#fff;box-shadow:0 6px 16px rgba(23,111,232,.18)}
@@ -5462,6 +5485,20 @@ function closeLessonAction() {
 .dataPanelToggle>b{grid-column:2;grid-row:1/3;font-size:22px;color:#176fe8}
 .primaryAction{background:#176fe8!important;color:#fff!important;border-color:#176fe8!important}
 @media(max-width:760px){
+  .studentCenter{padding-left:12px!important;padding-right:12px!important}
+  .mobileProfessionalHeader{padding:14px!important}
+  .mobileProfessionalHeader p{font-size:13px!important;line-height:1.45!important}
+  .summaryGrid{gap:9px!important}
+  .summaryCard{min-height:112px!important;padding:14px!important;border-radius:16px!important}
+  .summaryCard span{font-size:13px!important}
+  .summaryCard strong{font-size:28px!important}
+  .toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important}
+  .toolbar .searchBox,.dataPanelShell{grid-column:1/-1!important}
+  .toolbar select{width:100%!important;min-width:0!important;height:46px!important;font-size:14px!important}
+  .searchBox input{width:100%!important;min-width:0!important;height:48px!important}
+  .dataPanelToggle{width:100%!important}
+  .dataActions{grid-template-columns:1fr!important}
+  .selectionToolbar{padding:14px!important}
   .mobileProfessionalHeader{padding:16px!important}
   .mobileProfessionalHeader h2{font-size:24px!important}
   .professionalQuickActions{grid-template-columns:1fr 1fr!important}
