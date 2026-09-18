@@ -264,7 +264,7 @@ export default async function StudentsPage() {
 
         supabase
           .from("attendance_records")
-          .select("student_id,lesson_date,status,updated_at")
+          .select("student_id,enrollment_id,schedule_id,lesson_date,status,updated_at")
           .in("student_id", studentIds)
           .order("lesson_date", { ascending: false })
           .order("updated_at", { ascending: false }),
@@ -368,9 +368,18 @@ export default async function StudentsPage() {
 
   const lastAttendanceMap = new Map<string, any>();
   const lastAbsentMap = new Map<string, any>();
+  const attendanceUsedCountMap = new Map<string, number>();
 
   for (const row of (lastAttendanceResult.data || []) as any[]) {
     if (!row.student_id) continue;
+
+    if (
+      row.enrollment_id &&
+      row.status !== "compensation"
+    ) {
+      const key = String(row.enrollment_id);
+      attendanceUsedCountMap.set(key, (attendanceUsedCountMap.get(key) || 0) + 1);
+    }
 
     if (!lastAttendanceMap.has(row.student_id)) {
       lastAttendanceMap.set(row.student_id, row);
@@ -430,8 +439,12 @@ export default async function StudentsPage() {
           0
       );
 
-      const usedLessons = toNumber(
-        enrollment?.used_lessons ?? 0
+      const usedLessons = Math.min(
+        normalTotal,
+        Math.max(
+          toNumber(enrollment?.used_lessons ?? 0),
+          enrollment?.id ? attendanceUsedCountMap.get(String(enrollment.id)) || 0 : 0
+        )
       );
 
       const normalRemaining = Math.max(
@@ -514,10 +527,15 @@ export default async function StudentsPage() {
         attendancePlan?.compensation_planned_end_date ??
         normalEndDate;
 
+      // Kalan ders bitişi, kayıt başlangıcını değiştirmeden yoklama + kayıt
+      // verilerinden bulunan gerçek kullanılan hakkı düşer ve bugünden sonraki
+      // aktif seanslarda yalnızca kalan normal dersleri projekte eder.
       const remainingLessonEndDate = projectedRemainingEndDate(
-        startDate,
+        new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
+        }).format(new Date()),
         studentSchedules,
-        normalTotal
+        normalRemaining
       );
 
       const paymentStatus =
