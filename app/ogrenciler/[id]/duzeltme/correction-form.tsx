@@ -24,6 +24,7 @@ type Props = {
   student: any;
   enrollment: any;
   attendancePlan: any;
+  payment: any;
   branches: Branch[];
   groups: Group[];
   packages: Package[];
@@ -103,6 +104,7 @@ export default function CorrectionForm({
   student,
   enrollment,
   attendancePlan,
+  payment,
   branches,
   groups,
   packages,
@@ -138,6 +140,7 @@ export default function CorrectionForm({
   const [totalLessons, setTotalLessons] = useState(
     String(enrollment?.total_lessons || ""),
   );
+  const [additionalLessons, setAdditionalLessons] = useState("0");
   const [startDate, setStartDate] = useState(
     String(enrollment?.start_date || ""),
   );
@@ -167,10 +170,10 @@ export default function CorrectionForm({
     () =>
       calculatePlannedEndDate(
         startDate,
-        Number(totalLessons || 0),
+        Number(totalLessons || 0) + Number(additionalLessons || 0),
         selectedWeekdays,
       ),
-    [startDate, totalLessons, selectedWeekdays],
+    [startDate, totalLessons, additionalLessons, selectedWeekdays],
   );
 
   function changePackage(nextId: string) {
@@ -341,6 +344,15 @@ export default function CorrectionForm({
             </small>
           </label>
           <label>
+            <span>Ek Ders</span>
+            <select name="additional_lessons" value={additionalLessons} onChange={(e) => setAdditionalLessons(e.target.value)}>
+              <option value="0">Ek ders yok</option>
+              <option value="1">+1 ders</option>
+              <option value="2">+2 ders</option>
+            </select>
+            <small className="fieldHelp">Ek ders, toplam hakka ve otomatik bitiş hesabına eklenir.</small>
+          </label>
+          <label>
             <span>Başlangıç Tarihi</span>
             <input
               name="start_date"
@@ -386,6 +398,18 @@ export default function CorrectionForm({
             </span>
           </div>
         ) : null}
+
+        <div className="scheduleBlock">
+          <div className="scheduleTitle"><strong>Ödeme Bilgileri</strong><span>Son ödeme kaydı yönetici denetimiyle düzeltilebilir.</span></div>
+          {payment ? <div className="correctionGrid">
+            <input type="hidden" name="payment_id" value={payment.id} />
+            <label><span>Ödeme Tutarı</span><input name="payment_amount" type="number" min="0" step="0.01" defaultValue={payment.amount ?? ""} /></label>
+            <label><span>Ödeme Yöntemi</span><select name="payment_method" defaultValue={payment.payment_method || "cash"}><option value="cash">Nakit</option><option value="card">Kart</option><option value="transfer">Havale / EFT</option><option value="other">Diğer</option></select></label>
+            <label><span>Ödeme Durumu</span><select name="payment_status" defaultValue={payment.payment_status || "received"}><option value="received">Ödendi / Alındı</option><option value="pending">Bekliyor</option><option value="cancelled">İptal</option></select></label>
+            <label><span>Ödeme Tarihi</span><input name="payment_received_at" type="datetime-local" defaultValue={payment.received_at ? String(payment.received_at).slice(0,16) : ""} /></label>
+            <label style={{gridColumn:"1 / -1"}}><span>Ödeme Açıklaması</span><input name="payment_description" defaultValue={payment.description || ""} /></label>
+          </div> : <div className="emptySchedules">Bu kayıt dönemine ait ödeme hareketi bulunmuyor. Ödeme vadesi yukarıdan yine düzeltilebilir.</div>}
+        </div>
 
         <div className="scheduleBlock">
           <div className="scheduleTitle">
