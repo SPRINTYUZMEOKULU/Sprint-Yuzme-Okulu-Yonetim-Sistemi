@@ -27,12 +27,17 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     supabase.from("training_groups").select("id,name,branch_id").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("course_packages").select("id,name,lesson_count,price").eq("organization_id", organizationId).order("name"),
     supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
-    supabase.from("student_payments").select("id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,cash_handover_status,cancelled_at").eq("organization_id", organizationId).eq("student_id", id).order("received_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("student_payments").select("id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,cash_handover_status,cancelled_at").eq("organization_id", organizationId).eq("student_id", id).order("received_at", { ascending: false }),
   ]);
 
   if (!studentResult.data) notFound();
   const student = studentResult.data;
   const savedEnrollment = enrollmentResult.data;
+  // Yönetici düzeltmesinde yalnız aktif kayıt dönemine ait ödeme hareketini göster.
+  // Eski dönem ödemesinin yanlışlıkla düzenlenmesini engeller.
+  const activeEnrollmentPayment = savedEnrollment
+    ? (paymentResult.data || []).find((payment) => payment.enrollment_id === savedEnrollment.id) || null
+    : null;
   const savedBranch = (branchesResult.data || []).find((branch) => branch.id === savedEnrollment?.branch_id);
   const savedGroup = (groupsResult.data || []).find((group) => group.id === savedEnrollment?.group_id);
   const savedPackage = (packagesResult.data || []).find((coursePackage) => coursePackage.id === savedEnrollment?.package_id);
@@ -80,7 +85,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
 
         {query.error ? <div className="correctionNotice error"><strong>İşlem tamamlanamadı.</strong><span>{query.error}</span></div> : null}
         {!enrollmentResult.data ? <div className="correctionNotice error"><strong>Aktif kayıt bulunamadı.</strong><span>Paket/program düzeltmesi için öğrencinin aktif kaydı olmalıdır.</span></div> : (
-          <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={paymentResult.data || null} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
+          <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={activeEnrollmentPayment} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
         )}
       </div>
     </main>
