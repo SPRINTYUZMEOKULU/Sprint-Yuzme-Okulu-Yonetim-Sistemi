@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 
 export type GuardianStudent = {
   id: string;
@@ -27,6 +28,7 @@ export type GuardianContext = {
   messages: any[];
   documents: any[];
   consents: any[];
+  lessonBalance: ReturnType<typeof calculateLessonBalance> | null;
 };
 
 function emptyContext(students: GuardianStudent[] = []): GuardianContext {
@@ -46,6 +48,7 @@ function emptyContext(students: GuardianStudent[] = []): GuardianContext {
     messages: [],
     documents: [],
     consents: [],
+    lessonBalance: null,
   };
 }
 
@@ -143,6 +146,23 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     schedules = data || [];
   }
 
+  let lessonBalance = null;
+  if (enrollment) {
+    const [{ data: exceptions }, { data: balance }] = await Promise.all([
+      admin.from("lesson_session_exceptions").select("lesson_date,group_id,schedule_id,exception_type").eq("organization_id", profile.organization_id),
+      admin.from("student_lesson_balance").select("compensation_lesson_balance").eq("student_id", selected.id).maybeSingle(),
+    ]);
+    lessonBalance = calculateLessonBalance({
+      totalLessons: Number(enrollment.total_lessons || coursePackage?.lesson_count || 0),
+      storedUsedLessons: Number(enrollment.used_lessons || 0),
+      startDate: enrollment.start_date || null,
+      normalEndDate: enrollment.planned_end_date || null,
+      schedules,
+      exceptions: exceptions || [],
+      compensationBalance: Number(balance?.compensation_lesson_balance || 0),
+    });
+  }
+
   const progress = (progressRes.data || []).map((item: any) => ({
     ...item,
     note: item.body,
@@ -165,7 +185,8 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     payments: paymentsRes.data || [],
     messages: messagesRes.data || [],
     documents: documentsRes.data || [],
-    consents: consentsRes.data || []
+    consents: consentsRes.data || [],
+    lessonBalance,
   };
 }
 
