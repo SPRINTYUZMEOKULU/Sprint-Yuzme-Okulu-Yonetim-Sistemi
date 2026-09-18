@@ -2267,7 +2267,7 @@ const filterDetailsStyle = { background:"#fff", border:"1px solid #d9e4f2", bord
 const filterSummaryStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, padding:"14px 16px", cursor:"pointer", color:"#13233f", fontSize:13 } as const;
 const filterSummaryTextStyle = { color:"#7a899f", fontWeight:500 } as const;
 const filterSummaryBadgeStyle = { fontSize:10, fontWeight:800, color:"#1769e8", background:"#eef5ff", padding:"6px 8px", borderRadius:9 } as const;
-const filterPanelCompactStyle = { ...filterPanelStyle, border:0, borderTop:"1px solid #edf2f8", borderRadius:0, margin:0, boxShadow:"none" } as const;
+const filterPanelCompactStyle: React.CSSProperties = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))", gap:10, alignItems:"end", background:"#fff", padding:16, border:0, borderTop:"1px solid #edf2f8", borderRadius:0, margin:0, boxShadow:"none" };
 
 const operationCenterStyle = { background: "#fff", border: "1px solid #d9e4f2", borderRadius: 20, padding: 18, marginBottom: 18, boxShadow: "0 8px 28px rgba(31,76,135,.06)" } as const;
 const operationCenterHeaderStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 } as const;
