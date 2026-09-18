@@ -66,6 +66,40 @@ function toNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+
+function projectedRemainingEndDate(
+  startDate: string | null,
+  schedules: ScheduleRow[],
+  totalLessons: number
+) {
+  if (!startDate || totalLessons <= 0 || schedules.length === 0) return null;
+  const weekdays = new Set(
+    schedules.map((schedule) => Number(schedule.weekday)).filter((day) => day >= 1 && day <= 7)
+  );
+  if (!weekdays.size) return null;
+
+  const cursor = new Date(\`${startDate}T12:00:00+03:00\`);
+  if (Number.isNaN(cursor.getTime())) return null;
+
+  let counted = 0;
+  for (let guard = 0; guard < 730; guard += 1) {
+    const isoWeekday = cursor.getDay() === 0 ? 7 : cursor.getDay();
+    if (weekdays.has(isoWeekday)) {
+      counted += 1;
+      if (counted >= totalLessons) {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/Istanbul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(cursor);
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return null;
+}
+
 function latestByStudent<T extends { student_id?: string | null }>(
   rows: T[]
 ) {
@@ -480,6 +514,12 @@ export default async function StudentsPage() {
         attendancePlan?.compensation_planned_end_date ??
         normalEndDate;
 
+      const remainingLessonEndDate = projectedRemainingEndDate(
+        startDate,
+        studentSchedules,
+        normalTotal
+      );
+
       const paymentStatus =
         paymentSummary?.payment_status ??
         paymentSummary?.status ??
@@ -538,6 +578,7 @@ export default async function StudentsPage() {
         normal_end_date: normalEndDate,
         compensation_end_date: compensationEndDate,
         end_date: compensationEndDate,
+        remaining_lesson_end_date: remainingLessonEndDate,
 
         phone: student.phone || null,
         guardian_phone: student.guardian_phone || null,
