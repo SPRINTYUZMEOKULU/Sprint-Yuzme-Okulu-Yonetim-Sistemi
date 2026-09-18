@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 
 import {
   bulkTransferStudents,
@@ -1907,71 +1908,63 @@ function closeLessonAction() {
   }
 
   function exportCSV() {
-    const headers = [
-      "Öğrenci",
-      "Durum",
-      "Şube",
-      "Grup",
-      "Seviye",
-      "Paket",
-      "Normal Ders",
-      "Telafi",
-      "Toplam Hak",
-      "Kullanılan",
-      "Kalan",
-      "Başlangıç",
-      "Bitiş",
-      "Telefon",
-    ];
+    const studentsToExport = exportStudents();
+    if (!studentsToExport.length) {
+      setImportResult("Excel için öğrenci bulunamadı.");
+      return;
+    }
 
-    const rows = exportStudents().map((student) => {
+    const rows = studentsToExport.map((student, index) => {
       const normalLessons = numberValue(student.package_lesson_count);
       const compensation = numberValue(student.compensation_lessons);
       const totalRights = normalLessons + compensation;
+      const remaining =
+        student.total_remaining_lessons != null
+          ? numberValue(student.total_remaining_lessons)
+          : numberValue(student.remaining_lessons);
 
-      return [
-        `${student.first_name} ${student.last_name}`,
-        statusLabels[student.status || ""] || student.status || "",
-        student.branch_name || "",
-        student.group_name || "",
-        student.swimming_level || "",
-        student.package_name || "",
-        normalLessons,
-        compensation,
-        totalRights,
-        numberValue(student.used_lessons),
-        numberValue(student.remaining_lessons),
-        formatDate(student.start_date),
-        formatDate(student.end_date),
-        student.phone || student.guardian_phone || "",
-      ];
+      return {
+        "Sıra": index + 1,
+        "SPR Öğrenci No": student.student_number || "",
+        "Ad Soyad": `${student.first_name} ${student.last_name}`.trim(),
+        "Durum": statusLabels[student.status || ""] || student.status || "",
+        "Şube": student.branch_name || "",
+        "Grup": student.group_name || "",
+        "Program": scheduleLabel(student) || "",
+        "Seviye": student.swimming_level || "",
+        "Paket": student.package_name || "",
+        "Normal Ders": normalLessons,
+        "Telafi": compensation,
+        "Toplam Hak": totalRights,
+        "Kullanılan": numberValue(student.used_lessons),
+        "Kalan": remaining,
+        "Başlangıç": formatDate(student.start_date),
+        "Bitiş": formatDate(student.compensation_end_date || student.normal_end_date || student.end_date),
+        "Telefon": student.phone || "",
+        "Veli": student.guardian_name || "",
+        "Veli Telefon": student.guardian_phone || "",
+        "E-posta": student.email || student.guardian_email || "",
+      };
     });
 
-    const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
-          .join(";")
-      )
-      .join("\n");
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+    worksheet["!autofilter"] = { ref: worksheet["!ref"] || "A1:T1" };
+    worksheet["!cols"] = [
+      { wch: 7 }, { wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 24 },
+      { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 20 }, { wch: 12 },
+      { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
+      { wch: 14 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 28 },
+    ];
 
-    const blob = new Blob(["\uFEFF" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-
-    anchor.href = url;
-    anchor.download = `SprintOS-Ogrenciler-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-
-    URL.revokeObjectURL(url);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Öğrenciler");
+    XLSX.writeFile(
+      workbook,
+      `SprintOS-Ogrenci-Listesi-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      { compression: true }
+    );
+    setImportResult(`${studentsToExport.length} öğrenci Excel dosyasına aktarıldı.`);
   }
 
   function exportPDF() {
@@ -1985,11 +1978,12 @@ function closeLessonAction() {
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
     const body = rows.map((student) => `<tr><td>${escape(`${student.first_name} ${student.last_name}`)}</td><td>${escape(statusLabels[student.status || ""] || student.status || "")}</td><td>${escape(student.branch_name)}</td><td>${escape(student.group_name)}</td><td>${escape(student.swimming_level)}</td><td>${escape(student.package_name)}</td><td>${numberValue(student.used_lessons)}</td><td>${numberValue(student.remaining_lessons)}</td><td>${escape(formatDate(student.end_date))}</td><td>${escape(student.phone || student.guardian_phone)}</td></tr>`).join("");
     const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SprintOS Öğrenci Listesi</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#10213a;margin:0}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #176de9;padding-bottom:10px;margin-bottom:14px}.head h1{margin:0;font-size:22px}.head p{margin:4px 0 0;color:#64748b;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{padding:7px 6px;border:1px solid #dbe4ef;text-align:left;vertical-align:top}th{background:#edf5ff;color:#174a7c}.foot{margin-top:10px;color:#64748b;font-size:9px;text-align:right}</style></head><body><div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt</p></div><strong>SprintOS</strong></div><table><thead><tr><th>Öğrenci</th><th>Durum</th><th>Şube</th><th>Grup</th><th>Seviye</th><th>Paket</th><th>Kullanılan</th><th>Kalan</th><th>Bitiş</th><th>Telefon</th></tr></thead><tbody>${body}</tbody></table><div class="foot">${escape(new Date().toLocaleString("tr-TR"))}</div><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`;
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+    const popup = window.open("", "_blank");
     if (!popup) {
       setImportResult("PDF penceresi tarayıcı tarafından engellendi.");
       return;
     }
+    try { popup.opener = null; } catch {}
     popup.document.open();
     popup.document.write(html);
     popup.document.close();
@@ -2295,27 +2289,33 @@ function closeLessonAction() {
           <option value="remaining_asc">Kalan Ders Azdan Çoğa</option>
         </select>
 
-        <button className="exportButton" onClick={exportCSV}>
-          {selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Listeyi Excel’e Aktar"}
-        </button>
-        <button className="exportButton" onClick={exportPDF}>
-          {selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "Listeyi PDF’ye Aktar"}
-        </button>
-        <a className="exportButton" href="/api/student-import">
-          İçe Aktarma Şablonu
-        </a>
-        <button
-          className="exportButton"
-          type="button"
-          disabled={importSubmitting}
-          onClick={() => importInputRef.current?.click()}
-        >
-          {importSubmitting ? "Aktarılıyor…" : "Excel/CSV İçe Aktar"}
-        </button>
+        <div className="dataActions">
+          <button className="dataAction primary" type="button" onClick={exportCSV}>
+            <span className="dataActionIcon">XLSX</span>
+            <span><strong>{selectedStudentIds.length ? "Seçilenleri Excel’e Aktar" : "Excel’e Aktar"}</strong><small>Filtrelenen listeyi düzenli çalışma kitabı olarak indir</small></span>
+          </button>
+          <button className="dataAction" type="button" onClick={exportPDF}>
+            <span className="dataActionIcon">PDF</span>
+            <span><strong>{selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "PDF’ye Aktar"}</strong><small>A4 yatay yazdırma / PDF ekranını aç</small></span>
+          </button>
+          <a className="dataAction subtle" href="/api/student-import">
+            <span className="dataActionIcon">↓</span>
+            <span><strong>İçe Aktarma Şablonu</strong><small>Doğru kolon yapısındaki örnek şablonu indir</small></span>
+          </a>
+          <button
+            className="dataAction subtle"
+            type="button"
+            disabled={importSubmitting}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <span className="dataActionIcon">↑</span>
+            <span><strong>{importSubmitting ? "Aktarılıyor…" : "Excel / CSV İçe Aktar"}</strong><small>Hazırladığınız dosyayı kontrol ederek sisteme aktar</small></span>
+          </button>
+        </div>
         <input
           ref={importInputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           hidden
           onChange={(event) => void importStudents(event.target.files?.[0])}
         />
@@ -2412,6 +2412,16 @@ function closeLessonAction() {
               role="button"
               tabIndex={0}
               onClick={() => router.push(`/ogrenciler/${student.id}`)}
+              onAuxClick={(event) => {
+                if (event.button === 1) window.open(`/ogrenciler/${student.id}`, "_blank", "noopener,noreferrer");
+              }}
+              onContextMenu={(event) => {
+                if (typeof window !== "undefined" && window.matchMedia("(pointer:fine)").matches) {
+                  event.preventDefault();
+                  window.open(`/ogrenciler/${student.id}`, "_blank", "noopener,noreferrer");
+                }
+              }}
+              title="Aç · Masaüstünde sağ tık veya orta tık ile yeni sekme"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   router.push(`/ogrenciler/${student.id}`);
@@ -5419,6 +5429,73 @@ function closeLessonAction() {
   .mainDetails,.dateRow { grid-template-columns:1fr 1fr !important; }
 }
 
+
+/* SprintOS Öğrenci Merkezi — profesyonel filtre / veri işlemleri */
+.toolbar {
+  grid-template-columns: minmax(280px, 1.7fr) repeat(5, minmax(150px, 1fr)) !important;
+  align-items: stretch;
+}
+.toolbar input,
+.toolbar select {
+  min-height: 52px !important;
+  padding: 0 15px !important;
+  border-radius: 14px !important;
+  font-size: 14px !important;
+  font-weight: 650;
+  border-color: #cfdbea !important;
+}
+.toolbar input::placeholder { color: #8a9ab0; }
+.dataActions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 2px;
+}
+.dataAction {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid #d7e2ef;
+  border-radius: 14px;
+  background: #fff;
+  color: #17345c;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  transition: .16s ease;
+}
+.dataAction:hover { border-color:#8eb9ee; box-shadow:0 8px 22px rgba(20,73,132,.08); transform:translateY(-1px); }
+.dataAction.primary { background:#176fe8; border-color:#176fe8; color:#fff; }
+.dataAction.subtle { background:#f8fbff; }
+.dataActionIcon {
+  flex:0 0 42px; height:42px; display:grid; place-items:center;
+  border-radius:11px; background:#edf5ff; color:#176fe8;
+  font-size:10px; font-weight:900; letter-spacing:.04em;
+}
+.dataAction.primary .dataActionIcon { background:rgba(255,255,255,.16); color:#fff; }
+.dataAction strong,.dataAction small { display:block; }
+.dataAction strong { font-size:13px; line-height:1.25; }
+.dataAction small { margin-top:4px; font-size:10px; line-height:1.35; color:#71839a; font-weight:600; }
+.dataAction.primary small { color:rgba(255,255,255,.82); }
+.selectionToolbar { margin-top: 16px; }
+@media (max-width: 1050px) {
+  .toolbar { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .dataActions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .toolbar input,.toolbar select { min-height:48px !important; font-size:14px !important; }
+  .dataActions { grid-template-columns:1fr 1fr; gap:8px; }
+  .dataAction { min-height:62px; padding:9px 10px; }
+  .dataActionIcon { flex-basis:36px; height:36px; border-radius:10px; }
+  .dataAction small { display:none; }
+}
+@media (max-width: 480px) {
+  .dataActions { grid-template-columns:1fr; }
+  .dataAction { min-height:56px; }
+}
       `}</style>
     </div>
   );
