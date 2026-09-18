@@ -342,8 +342,8 @@ export default async function OperasyonPlaniPage({
 
   if (!organizationId) {
     return (
-      <main style={pageStyle}>
-        <div style={containerStyle}>
+      <main style={pageStyle} className="operationPlanPage">
+        <div style={containerStyle} className="operationPlanContainer">
           <h1>Operasyon Planı</h1>
 
           <div style={errorStyle}>
@@ -462,8 +462,8 @@ export default async function OperasyonPlaniPage({
 
   if (criticalError) {
     return (
-      <main style={pageStyle}>
-        <div style={containerStyle}>
+      <main style={pageStyle} className="operationPlanPage">
+        <div style={containerStyle} className="operationPlanContainer">
           <Link href="/" style={backButtonStyle}>
             ← Ana Sayfa
           </Link>
@@ -717,13 +717,13 @@ export default async function OperasyonPlaniPage({
   return (
     <>
       <UstGezinme />
-      <main style={pageStyle}>
-      <div style={containerStyle}>
+      <main style={pageStyle} className="operationPlanPage">
+      <div style={containerStyle} className="operationPlanContainer">
         {/* =================================================
             ÜST ALAN
         ================================================= */}
 
-        <section style={topAreaStyle}>
+        <section style={topAreaStyle} className="operationTopArea">
           <div>
             <div style={eyebrowStyle}>
               SPRİNT YÜZME OKULU · OPERASYON
@@ -740,7 +740,7 @@ export default async function OperasyonPlaniPage({
             </p>
           </div>
 
-          <div style={topButtonsStyle}>
+          <div style={topButtonsStyle} className="operationTopButtons">
             <Link
               href="/yoklama"
               style={secondaryButtonStyle}
@@ -759,7 +759,7 @@ export default async function OperasyonPlaniPage({
           </div>
         </section>
 
-        <section style={operationCenterStyle}>
+        <section style={operationCenterStyle} className="operationCenter">
           <div style={operationCenterHeaderStyle}>
             <div>
               <div style={operationCenterEyebrowStyle}>HIZLI OPERASYON MERKEZİ</div>
@@ -768,7 +768,7 @@ export default async function OperasyonPlaniPage({
             </div>
             <span style={liveBadgeStyle}>● CANLI</span>
           </div>
-          <div style={operationActionGridStyle}>
+          <div style={operationActionGridStyle} className="operationActionGrid">
             <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
               <span style={operationIconStyle}><Icons.branch /></span>
               <span><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
@@ -791,7 +791,7 @@ export default async function OperasyonPlaniPage({
             GÖRÜNÜM / FİLTRE KONTROLÜ
         ================================================= */}
 
-        <section style={controlPanelStyle}>
+        <section style={controlPanelStyle} className="operationControlPanel">
           <div style={controlPanelHeaderStyle}>
             <div>
               <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
@@ -799,7 +799,7 @@ export default async function OperasyonPlaniPage({
             </div>
             <span style={controlDateBadgeStyle}>{GUNLER[selectedWeekday]} · {selectedDate.split("-").reverse().join(".")}</span>
           </div>
-          <div style={viewBarStyle}>
+          <div style={viewBarStyle} className="operationViewBar">
           {[
             ["seans", "Seans"],
             ["egitmen", "Eğitmen"],
@@ -878,7 +878,7 @@ export default async function OperasyonPlaniPage({
             FİLTRELER
         ================================================= */}
 
-        <details style={filterDetailsStyle}>
+        <details style={filterDetailsStyle} className="operationFilters">
           <summary style={filterSummaryStyle}>
             <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye</small></span>
             <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
@@ -1153,7 +1153,7 @@ export default async function OperasyonPlaniPage({
             </p>
           </section>
         ) : (
-          <section style={scheduleGridStyle}>
+          <section style={scheduleGridStyle} className="operationScheduleGrid">
             {filteredSchedules.map(
               (schedule: any) => {
                 const group =
