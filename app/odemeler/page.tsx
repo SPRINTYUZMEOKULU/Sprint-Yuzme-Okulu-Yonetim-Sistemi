@@ -1,6 +1,7 @@
 import FinanceQuickNav from "@/app/components/finance-quick-nav";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { calculateLessonBalance } from "@/lib/lessons/balance";
 
 import PaymentsClient, {
   type PaymentRecord,
@@ -120,6 +121,9 @@ export default async function PaymentsPage({
     branchesResult,
     packagesResult,
     completionResult,
+    schedulesResult,
+    exceptionsResult,
+    balancesResult,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -166,10 +170,10 @@ export default async function PaymentsPage({
       .eq("organization_id", organizationId)
       .eq("is_active", true),
 
-    supabase
-      .from("registration_completion_checklists")
-      .select("student_id,draft_data,payment_due_date,payment_due_date_manual,payment_note,updated_at")
-      .eq("organization_id", organizationId),
+    supabase.from("registration_completion_checklists").select("student_id,draft_data,payment_due_date,payment_due_date_manual,payment_note,updated_at").eq("organization_id", organizationId),
+    supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",organizationId).eq("is_active",true),
+    supabase.from("lesson_session_exceptions").select("lesson_date,group_id,schedule_id,exception_type").eq("organization_id",organizationId),
+    supabase.from("student_lesson_balance").select("student_id,compensation_lesson_balance"),
   ]);
 
   const loadError =
@@ -179,7 +183,7 @@ export default async function PaymentsPage({
     groupsResult.error ||
     branchesResult.error ||
     packagesResult.error ||
-    completionResult.error;
+    completionResult.error || schedulesResult.error || exceptionsResult.error || balancesResult.error;
 
   if (loadError) {
     console.error(
@@ -230,8 +234,9 @@ export default async function PaymentsPage({
   const packages =
     (packagesResult.data || []) as AnyRow[];
 
-  const completionRows =
-    (completionResult.data || []) as AnyRow[];
+  const completionRows = (completionResult.data || []) as AnyRow[];
+  const schedulesByGroup=new Map<string,AnyRow[]>(); for(const row of (schedulesResult.data||[]) as AnyRow[]){const list=schedulesByGroup.get(String(row.group_id))||[];list.push(row);schedulesByGroup.set(String(row.group_id),list)}
+  const lessonBalanceMap=new Map((balancesResult.data||[]).map((row:any)=>[String(row.student_id),Number(row.compensation_lesson_balance||0)]));
 
   const groupMap = new Map<string, AnyRow>();
 
@@ -375,8 +380,17 @@ export default async function PaymentsPage({
         0
     );
 
-    const usedLessons = toNumber(enrollment?.used_lessons ?? 0);
-    const remainingLessons = Math.max(totalLessons - usedLessons, 0);
+    const lessonProjection=calculateLessonBalance({
+      totalLessons,
+      storedUsedLessons:toNumber(enrollment?.used_lessons??0),
+      startDate:enrollment?.start_date||draft.start_date||null,
+      normalEndDate:enrollment?.planned_end_date||draft.planned_end_date||null,
+      schedules:groupId?schedulesByGroup.get(String(groupId))||[]:[],
+      exceptions:(exceptionsResult.data||[]) as any[],
+      compensationBalance:Number(lessonBalanceMap.get(String(student.id))||0),
+    });
+    const usedLessons=lessonProjection.usedLessons;
+    const remainingLessons=lessonProjection.totalRemainingLessons;
 
     const courseType =
       group?.course_type ||
