@@ -76,6 +76,13 @@ export async function applyManagerCorrection(formData: FormData) {
   const paymentDueDate = nullable(formData, "payment_due_date");
   const selectedScheduleIds = uniqueStrings(formData.getAll("schedule_ids"));
   const requestedTotalLessons = Number(formData.get("total_lessons") || 0);
+  const additionalLessons = Math.max(0, Math.trunc(Number(formData.get("additional_lessons") || 0)));
+  const paymentId = text(formData, "payment_id");
+  const paymentAmount = Number(formData.get("payment_amount") || 0);
+  const paymentMethod = text(formData, "payment_method");
+  const paymentStatus = text(formData, "payment_status");
+  const paymentReceivedAt = nullable(formData, "payment_received_at");
+  const paymentDescription = nullable(formData, "payment_description");
 
   if (
     !branchId ||
@@ -225,10 +232,11 @@ export async function applyManagerCorrection(formData: FormData) {
     );
   }
 
-  const totalLessons =
+  const baseTotalLessons =
     Number.isInteger(requestedTotalLessons) && requestedTotalLessons > 0
       ? requestedTotalLessons
       : Number(coursePackage.lesson_count || 0);
+  const totalLessons = baseTotalLessons + additionalLessons;
 
   const usedLessons = Math.max(0, Number(enrollment.used_lessons || 0));
   if (!totalLessons || totalLessons < usedLessons) {
@@ -280,6 +288,7 @@ export async function applyManagerCorrection(formData: FormData) {
           started_at: membership.started_at,
         }
       : null,
+    payment: null as any,
     attendance_plan: oldPlan
       ? {
           id: oldPlan.id,
@@ -453,6 +462,32 @@ export async function applyManagerCorrection(formData: FormData) {
       .eq("id", activePlan.id);
   }
 
+  let oldPaymentSnapshot: any = null;
+  let newPaymentSnapshot: any = null;
+  if (paymentId) {
+    const paymentResult = await supabase.from("student_payments").select("*").eq("organization_id", organizationId).eq("student_id", studentId).eq("id", paymentId).maybeSingle();
+    if (paymentResult.error || !paymentResult.data) {
+      redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Düzeltilecek ödeme kaydı bulunamadı.")}`);
+    }
+    oldPaymentSnapshot = paymentResult.data;
+    const allowedPaymentStatuses = new Set(["received", "pending", "cancelled"]);
+    if (!Number.isFinite(paymentAmount) || paymentAmount < 0 || !paymentMethod || !allowedPaymentStatuses.has(paymentStatus)) {
+      redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ödeme bilgileri geçersiz.")}`);
+    }
+    const paymentUpdate = await supabase.from("student_payments").update({
+      amount: paymentAmount,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      description: paymentDescription,
+      received_at: paymentReceivedAt ? new Date(paymentReceivedAt).toISOString() : oldPaymentSnapshot.received_at,
+      updated_at: now,
+    }).eq("organization_id", organizationId).eq("student_id", studentId).eq("id", paymentId).select("*").single();
+    if (paymentUpdate.error) {
+      redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Ödeme bilgileri düzeltilemedi: ${paymentUpdate.error.message}`)}`);
+    }
+    newPaymentSnapshot = paymentUpdate.data;
+  }
+
   const newSnapshot = {
     student: {
       first_name: text(formData, "first_name"),
@@ -479,7 +514,10 @@ export async function applyManagerCorrection(formData: FormData) {
       used_lessons: updatedEnrollment.used_lessons,
       lesson_weekdays: isoWeekdays.map(isoToJsDay),
       payment_due_date: paymentDueDate,
+      base_total_lessons: baseTotalLessons,
+      additional_lessons: additionalLessons,
     },
+    payment: newPaymentSnapshot,
     program: {
       branch_name: branch.name,
       group_name: group.name,
@@ -487,6 +525,8 @@ export async function applyManagerCorrection(formData: FormData) {
       selected_weekdays: isoWeekdays,
     },
   };
+
+  oldSnapshot.payment = oldPaymentSnapshot;
 
   const logResult = await supabase.from("student_activity_logs").insert({
     organization_id: organizationId,
