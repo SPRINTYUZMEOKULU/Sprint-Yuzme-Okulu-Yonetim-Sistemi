@@ -415,7 +415,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         .from("student_enrollments")
         .update({
           group_id: input.targetGroupId,
+          branch_id: input.targetBranchId,
+          start_date: input.effectiveDate,
           planned_end_date: newNormalEndDate,
+          normal_end_date: newNormalEndDate,
+          compensation_end_date: newCompensationEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
           updated_at: now,
         })
@@ -639,6 +643,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
     }
 
     revalidatePath("/ogrenciler");
+    revalidatePath("/baslayacak-kursiyerler");
+    revalidatePath("/kayit-yenilemeleri");
+    revalidatePath("/ders-programi");
+    revalidatePath("/ders-operasyonlari");
+    revalidatePath("/raporlar");
     revalidatePath("/yoklama");
     revalidatePath("/odemeler");
     revalidatePath("/veli-paneli");

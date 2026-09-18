@@ -587,6 +587,9 @@ export async function POST(request: NextRequest) {
       if (result.error) console.error(`student renewal optional write ${index} error`, result.error);
     });
 
+    ["/ogrenciler","/baslayacak-kursiyerler","/kayit-yenilemeleri","/yoklama","/ders-programi","/ders-operasyonlari","/odemeler","/raporlar","/veli-paneli","/"].forEach((path) => revalidatePath(path));
+    revalidatePath(`/ogrenciler/${studentId}`);
+
     const whatsappUrl = recipient
       ? `https://wa.me/${recipient}?text=${encodeURIComponent(renewalMessage)}`
       : null;
