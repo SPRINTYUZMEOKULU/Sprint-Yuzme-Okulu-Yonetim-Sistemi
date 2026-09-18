@@ -78,7 +78,7 @@ function projectedRemainingEndDate(
   );
   if (!weekdays.size) return null;
 
-  const cursor = new Date(\`${startDate}T12:00:00+03:00\`);
+  const cursor = new Date(startDate + "T12:00:00+03:00");
   if (Number.isNaN(cursor.getTime())) return null;
 
   let counted = 0;
