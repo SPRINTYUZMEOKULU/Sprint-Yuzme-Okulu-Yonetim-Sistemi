@@ -10,6 +10,18 @@ export const dynamic = "force-dynamic";
 
 const DAYS: Record<number, string> = { 1: "Pazartesi", 2: "Salı", 3: "Çarşamba", 4: "Perşembe", 5: "Cuma", 6: "Cumartesi", 7: "Pazar" };
 const shortTime = (value?: string | null) => String(value || "").slice(0, 5);
+const ageFromBirthDate = (value?: string | null) => {
+  if (!value) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const birthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+  if (!birthdayPassed) age -= 1;
+  return age >= 0 && age <= 120 ? age : null;
+};
 
 export default async function ManagerCorrectionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const profile = await requireProfile(["owner", "admin"]);
@@ -32,6 +44,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
 
   if (!studentResult.data) notFound();
   const student = studentResult.data;
+  const studentAge = ageFromBirthDate(student.birth_date);
   const savedEnrollment = enrollmentResult.data;
   // Yönetici düzeltmesinde yalnız aktif kayıt dönemine ait ödeme hareketini göster.
   // Eski dönem ödemesinin yanlışlıkla düzenlenmesini engeller.
@@ -57,7 +70,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
 
         <section className="correctionHero">
           <div><span>SPRİNTOS · YÖNETİCİ KONTROLLÜ ALAN</span><h1>Kesin Kayıt Düzeltme Merkezi</h1><p>Kesinleşmiş öğrenci, paket ve program verilerini düzeltin. Eski değerler kaybolmaz; her değişiklik yönetici denetim kaydı olarak işlem geçmişine kilitlenir.</p></div>
-          <aside><strong>{student.first_name} {student.last_name}</strong><span>Aktif kayıt: {enrollmentResult.data ? "Bulundu" : "Bulunamadı"}</span><small>Yalnız Owner / Admin erişebilir</small></aside>
+          <aside><strong>{student.first_name} {student.last_name}</strong><span>{studentAge != null ? `${studentAge} yaş` : "Yaş bilgisi yok"}{student.birth_date ? ` · Doğum: ${student.birth_date}` : ""}</span><span>Aktif kayıt: {enrollmentResult.data ? "Bulundu" : "Bulunamadı"}</span><small>Yalnız Owner / Admin erişebilir</small></aside>
         </section>
 
         {query.saved === "1" ? (
