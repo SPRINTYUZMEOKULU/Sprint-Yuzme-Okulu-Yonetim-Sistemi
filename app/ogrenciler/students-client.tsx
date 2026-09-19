@@ -1485,7 +1485,7 @@ function closeLessonAction() {
   const counts = useMemo(() => {
     return {
       total: students.length,
-      active: students.filter((student) => student.status === "active" && !isStartingStudent(student)).length,
+      active: students.filter((student) => student.status === "active").length,
       starting: students.filter(isStartingStudent).length,
       passive: students.filter((student) => student.status === "passive").length,
       preRegistration: students.filter(
@@ -1574,9 +1574,10 @@ function closeLessonAction() {
       let statusMatch = true;
 
       if (status === "active") {
-        // Başlangıç tarihi henüz gelmemiş kayıtlar operasyonel olarak
-        // "Başlayacak" grubundadır; Aktif listede ikinci kez görünmez.
-        statusMatch = student.status === "active" && !isStartingStudent(student);
+        // Aktif statüdeki tüm kesin kayıtlar Aktif listede görünür.
+        // Başlangıç tarihi ileri bir tarih olsa bile kayıt aktifse gizlenmez;
+        // "Başlayacak" sekmesi aynı öğrenciyi operasyonel takip için ayrıca gösterebilir.
+        statusMatch = student.status === "active";
       }
 
       if (status === "starting") {
@@ -2435,8 +2436,8 @@ function closeLessonAction() {
       </section>
 
       <nav className="studentStatusTabs" aria-label="Öğrenci durum filtreleri">
-        <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü</button>
-        <button className={status === "active" ? "active" : ""} onClick={() => setStatus("active")}>Aktif</button>
+        <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü <b>{status === "all" ? filteredStudents.length : counts.total}</b></button>
+        <button className={status === "active" ? "active" : ""} onClick={() => setStatus("active")}>Aktif <b>{status === "active" ? filteredStudents.length : counts.active}</b></button>
         <button className={status === "starting" ? "active" : ""} onClick={() => setStatus("starting")}>Başlayacak <b>{counts.starting}</b></button>
         <button className={status === "passive" ? "active" : ""} onClick={() => setStatus("passive")}>Pasif</button>
         <button className={status === "pre_registration" ? "active" : ""} onClick={() => setStatus("pre_registration")}>Ön Kayıt</button>
