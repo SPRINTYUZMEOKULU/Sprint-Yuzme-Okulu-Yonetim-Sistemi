@@ -1304,6 +1304,7 @@ function closeLessonAction() {
     [students, selectedStudentIds]
   );
 
+  // Başlangıç tarihi gelmemiş aktif kayıtlar Başlayacak listesinde tutulur.
   const isStartingStudent = (student: StudentListItem) => {
     if (student.status !== "active" || !student.start_date) return false;
     const start = new Date(student.start_date);
