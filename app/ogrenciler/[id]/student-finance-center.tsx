@@ -50,6 +50,7 @@ type CenterData = {
 type Obligation = {
   id: string;
   title: string;
+  description?: string | null;
   amount: number;
   paid_amount?: number | null;
   remaining_amount?: number | null;
@@ -114,6 +115,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
   const [debtAmount, setDebtAmount] = useState("");
   const [debtDueDate, setDebtDueDate] = useState(today());
   const [debtDescription, setDebtDescription] = useState("");
+  const [confirmingObligationId, setConfirmingObligationId] = useState<string | null>(null);
 
   async function load() {
     if (!studentId) return;
@@ -287,6 +289,28 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     }
   }
 
+  async function cancelDebt(obligationId: string) {
+    if (busy) return;
+    setBusy(true);
+    const response = await fetch("/api/student-obligations", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        obligationId,
+        reason: "Yanlışlıkla oluşturulan ek borç yönetici tarafından iptal edildi.",
+      }),
+    });
+    const payload = await response.json();
+    setBusy(false);
+    setError(!response.ok);
+    setMessage(payload.message || payload.error || "İşlem tamamlanamadı.");
+    if (response.ok) {
+      setConfirmingObligationId(null);
+      await load();
+      router.refresh();
+    }
+  }
+
   function openPaymentReceivedMessage(payment?: PaymentRow | null) {
     if (!data) return;
     const row = payment || lastPayment;
@@ -403,7 +427,50 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
 
           {tab === "debt" ? (
             <section className="sfcCard">
-              <div className="sfcCardHead"><div><span>EK BORÇLANDIRMA</span><h3>Paket dışı borç ekle</h3></div></div>
+              <div className="sfcCardHead">
+                <div><span>AÇIK EK BORÇLAR</span><h3>Ek borçları yönet</h3></div>
+                <b>{money(extraRemaining)}</b>
+              </div>
+              {openDebts.length > 0 ? (
+                <div className="sfcDebtList">
+                  {openDebts.map((item) => {
+                    const paidAmount = Number(item.paid_amount || 0);
+                    const remainingAmount = Math.max(
+                      0,
+                      Number(item.remaining_amount ?? Number(item.amount) - paidAmount),
+                    );
+                    const canCancel = item.status === "open" && paidAmount === 0;
+                    const confirming = confirmingObligationId === item.id;
+                    return (
+                      <article key={item.id}>
+                        <div>
+                          <b>{item.title}</b>
+                          <span>{item.description || "Açıklama girilmedi"}</span>
+                          <small>
+                            Kalan: {money(remainingAmount)} · Vade: {dateText(item.due_date)}
+                          </small>
+                        </div>
+                        {canCancel ? (
+                          confirming ? (
+                            <div className="sfcDebtConfirm">
+                              <small>Bu borç toplamdan çıkarılacak. Onaylıyor musunuz?</small>
+                              <div>
+                                <button type="button" disabled={busy} onClick={() => setConfirmingObligationId(null)}>Vazgeç</button>
+                                <button className="danger" type="button" disabled={busy} onClick={() => void cancelDebt(item.id)}>{busy ? "İptal ediliyor…" : "Borcu İptal Et"}</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button className="sfcCancelDebt" type="button" disabled={busy} onClick={() => setConfirmingObligationId(item.id)}>İptal Et</button>
+                          )
+                        ) : (
+                          <small className="sfcDebtLocked">Ödeme hareketi olduğu için iptal edilemez.</small>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : <div className="sfcPaid">Açık ek borç bulunmuyor.</div>}
+              <div className="sfcDebtCreateHead"><span>YENİ EK BORÇ</span><h3>Paket dışı borç ekle</h3></div>
               <div className="sfcFormGrid">
                 <label className="full">Borç Başlığı<input value={debtTitle} onChange={(e) => setDebtTitle(e.target.value)} /></label>
                 <label>Tutar<input value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} inputMode="decimal" /></label>
@@ -449,7 +516,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
       </section>
 
       <style jsx global>{`
-        .sfcOverlay{position:fixed;inset:0;z-index:10000;background:rgba(8,28,55,.42);display:flex;justify-content:center;align-items:flex-start;overflow:auto}.sfcPanel{width:min(760px,100%);min-height:100vh;background:#f4f8fe}.sfcHeader{background:linear-gradient(135deg,#176fe8,#2c83ef);color:#fff;padding:34px 28px;display:flex;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:3}.sfcHeader span{font-size:13px;font-weight:900;letter-spacing:2px}.sfcHeader h2{font-size:36px;margin:10px 0}.sfcHeader p{margin:0}.sfcHeader button{width:54px;height:54px;border:0;border-radius:18px;background:rgba(255,255,255,.17);color:#fff;font-size:38px}.sfcBody{padding:24px}.sfcHeroGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.sfcHeroGrid article,.sfcCard{background:#fff;border:1px solid #d8e5f5;border-radius:24px;padding:22px}.sfcHeroGrid span,.sfcCardHead span{display:block;color:#75869d;text-transform:uppercase;font-size:13px;font-weight:900;letter-spacing:1.3px}.sfcHeroGrid strong{display:block;color:#112b4d;font-size:28px;margin:10px 0 5px}.sfcHeroGrid .success{background:#eefaf4}.sfcHeroGrid .danger{background:#fff4f4}.sfcTabs{margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#fff;border:1px solid #d8e5f5;border-radius:24px;padding:12px}.sfcTabs button{min-height:58px;border:0;border-radius:18px;background:#f2f6fb;color:#506681;font-size:17px;font-weight:900}.sfcTabs button.active{background:#176fe8;color:#fff}.sfcMessage{margin-bottom:16px;padding:15px 18px;border-radius:16px;font-weight:800}.sfcMessage.success{background:#eaf8f0;color:#147a47}.sfcMessage.error{background:#fff0f0;color:#b4323b}.sfcCardHead{display:flex;justify-content:space-between;gap:16px;margin-bottom:20px}.sfcCardHead h3{margin:6px 0 0;color:#112b4d;font-size:25px}.sfcInfoBox{background:#f5f8fc;border-radius:20px;padding:18px;display:grid;gap:12px}.sfcInfoBox div{display:flex;justify-content:space-between;gap:12px}.sfcFormGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.sfcFormGrid label{display:grid;gap:8px;color:#425b79;font-weight:800}.sfcFormGrid input,.sfcFormGrid select,.sfcFormGrid textarea{width:100%;box-sizing:border-box;border:1px solid #cfdeef;border-radius:15px;padding:14px;font:inherit}.sfcFormGrid .full{grid-column:1/-1}.sfcPrimary{border:0;border-radius:17px;background:#176fe8;color:#fff;padding:16px;font-size:18px;font-weight:900}.sfcNotice{padding:16px;border-radius:16px;background:#fff7df;color:#805d00;font-weight:700}.sfcPaid{margin-top:18px;padding:18px;border-radius:18px;background:#eaf8f0;color:#187c4a;font-weight:900}.sfcHistory{display:grid;gap:12px}.sfcHistory article{border:1px solid #dce7f4;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:15px}.sfcHistory article>div{display:grid;gap:5px}.sfcHistory span,.sfcHistory small{color:#71839b}.sfcHistory .sfcUnpaidPeriod{background:#fff9ec;border-color:#efd18b}.sfcHistory .sfcUnpaidPeriod b{color:#8a5d00}.sfcHistory .sfcUnpaidPeriod.overdue{background:#fff1f1;border-color:#e99090}.sfcHistory .sfcUnpaidPeriod.overdue b{color:#b22f3a}.sfcMini{border:1px solid #bcd4f1;background:#fff;color:#176fe8;border-radius:14px;padding:10px 13px;font-weight:900}.sfcEmpty,.sfcLoading{padding:24px;border:1px solid #d8e5f5;border-radius:20px;background:#fff;color:#63758d}@media(max-width:600px){.sfcHeader{padding:28px 22px}.sfcHeader h2{font-size:31px}.sfcBody{padding:18px}.sfcHeroGrid{gap:10px}.sfcHeroGrid article{padding:17px}.sfcHeroGrid strong{font-size:22px}.sfcTabs{gap:9px;padding:9px}.sfcTabs button{font-size:15px}.sfcFormGrid{grid-template-columns:1fr}.sfcFormGrid .full{grid-column:auto}.sfcHistory article{flex-direction:column;align-items:stretch}}
+        .sfcOverlay{position:fixed;inset:0;z-index:10000;background:rgba(8,28,55,.42);display:flex;justify-content:center;align-items:flex-start;overflow:auto}.sfcPanel{width:min(760px,100%);min-height:100vh;background:#f4f8fe}.sfcHeader{background:linear-gradient(135deg,#176fe8,#2c83ef);color:#fff;padding:34px 28px;display:flex;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:3}.sfcHeader span{font-size:13px;font-weight:900;letter-spacing:2px}.sfcHeader h2{font-size:36px;margin:10px 0}.sfcHeader p{margin:0}.sfcHeader button{width:54px;height:54px;border:0;border-radius:18px;background:rgba(255,255,255,.17);color:#fff;font-size:38px}.sfcBody{padding:24px}.sfcHeroGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.sfcHeroGrid article,.sfcCard{background:#fff;border:1px solid #d8e5f5;border-radius:24px;padding:22px}.sfcHeroGrid span,.sfcCardHead span,.sfcDebtCreateHead span{display:block;color:#75869d;text-transform:uppercase;font-size:13px;font-weight:900;letter-spacing:1.3px}.sfcHeroGrid strong{display:block;color:#112b4d;font-size:28px;margin:10px 0 5px}.sfcHeroGrid .success{background:#eefaf4}.sfcHeroGrid .danger{background:#fff4f4}.sfcTabs{margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#fff;border:1px solid #d8e5f5;border-radius:24px;padding:12px}.sfcTabs button{min-height:58px;border:0;border-radius:18px;background:#f2f6fb;color:#506681;font-size:17px;font-weight:900}.sfcTabs button.active{background:#176fe8;color:#fff}.sfcMessage{margin-bottom:16px;padding:15px 18px;border-radius:16px;font-weight:800}.sfcMessage.success{background:#eaf8f0;color:#147a47}.sfcMessage.error{background:#fff0f0;color:#b4323b}.sfcCardHead{display:flex;justify-content:space-between;gap:16px;margin-bottom:20px}.sfcCardHead h3,.sfcDebtCreateHead h3{margin:6px 0 0;color:#112b4d;font-size:25px}.sfcInfoBox{background:#f5f8fc;border-radius:20px;padding:18px;display:grid;gap:12px}.sfcInfoBox div{display:flex;justify-content:space-between;gap:12px}.sfcFormGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.sfcFormGrid label{display:grid;gap:8px;color:#425b79;font-weight:800}.sfcFormGrid input,.sfcFormGrid select,.sfcFormGrid textarea{width:100%;box-sizing:border-box;border:1px solid #cfdeef;border-radius:15px;padding:14px;font:inherit}.sfcFormGrid .full{grid-column:1/-1}.sfcPrimary{border:0;border-radius:17px;background:#176fe8;color:#fff;padding:16px;font-size:18px;font-weight:900}.sfcNotice{padding:16px;border-radius:16px;background:#fff7df;color:#805d00;font-weight:700}.sfcPaid{margin-top:18px;padding:18px;border-radius:18px;background:#eaf8f0;color:#187c4a;font-weight:900}.sfcDebtList{display:grid;gap:12px}.sfcDebtList article{border:1px solid #dce7f4;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:15px;background:#f9fbfe}.sfcDebtList article>div:first-child{display:grid;gap:5px}.sfcDebtList span,.sfcDebtList small{color:#71839b}.sfcCancelDebt{border:1px solid #e4a4aa;background:#fff4f4;color:#b4323b;border-radius:14px;padding:10px 14px;font-weight:900}.sfcDebtConfirm{display:grid;gap:9px;max-width:290px}.sfcDebtConfirm>div{display:flex;gap:8px;justify-content:flex-end}.sfcDebtConfirm button{border:1px solid #c8d8ea;background:#fff;color:#506681;border-radius:12px;padding:9px 12px;font-weight:900}.sfcDebtConfirm button.danger{border-color:#c94551;background:#c94551;color:#fff}.sfcDebtLocked{max-width:220px;text-align:right}.sfcDebtCreateHead{border-top:1px solid #dce7f4;margin-top:22px;padding-top:22px}.sfcHistory{display:grid;gap:12px}.sfcHistory article{border:1px solid #dce7f4;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:15px}.sfcHistory article>div{display:grid;gap:5px}.sfcHistory span,.sfcHistory small{color:#71839b}.sfcHistory .sfcUnpaidPeriod{background:#fff9ec;border-color:#efd18b}.sfcHistory .sfcUnpaidPeriod b{color:#8a5d00}.sfcHistory .sfcUnpaidPeriod.overdue{background:#fff1f1;border-color:#e99090}.sfcHistory .sfcUnpaidPeriod.overdue b{color:#b22f3a}.sfcMini{border:1px solid #bcd4f1;background:#fff;color:#176fe8;border-radius:14px;padding:10px 13px;font-weight:900}.sfcEmpty,.sfcLoading{padding:24px;border:1px solid #d8e5f5;border-radius:20px;background:#fff;color:#63758d}@media(max-width:600px){.sfcHeader{padding:28px 22px}.sfcHeader h2{font-size:31px}.sfcBody{padding:18px}.sfcHeroGrid{gap:10px}.sfcHeroGrid article{padding:17px}.sfcHeroGrid strong{font-size:22px}.sfcTabs{gap:9px;padding:9px}.sfcTabs button{font-size:15px}.sfcFormGrid{grid-template-columns:1fr}.sfcFormGrid .full{grid-column:auto}.sfcDebtList article,.sfcHistory article{flex-direction:column;align-items:stretch}.sfcDebtConfirm{max-width:none}.sfcDebtLocked{text-align:left;max-width:none}}
       `}</style>
     </div>
   );

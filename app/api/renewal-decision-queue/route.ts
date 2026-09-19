@@ -10,10 +10,10 @@ export async function GET() {
     if (!profile.organization_id) return NextResponse.json({ ok: true, items: [] });
 
     const supabase = await createClient();
-
-  // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
-  await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
     const organizationId = profile.organization_id;
+
+    // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
+    await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
 
     const { data: students, error: studentError } = await supabase
       .from("students")

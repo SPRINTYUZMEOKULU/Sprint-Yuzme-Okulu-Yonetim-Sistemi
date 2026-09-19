@@ -250,3 +250,88 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Tahsilat kaydedilemedi." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const profile = await requireProfile([...ROLES]);
+    const body = await request.json();
+    const organizationId = profile.organization_id;
+    const obligationId = String(body.obligationId || "");
+    const cancellationReason = String(body.reason || "Yanlışlıkla oluşturuldu")
+      .trim()
+      .slice(0, 500);
+
+    if (!organizationId || !obligationId) {
+      return NextResponse.json({ error: "İptal edilecek ek borç bulunamadı." }, { status: 400 });
+    }
+
+    const supabase = adminClient();
+    const { data: current, error: currentError } = await supabase
+      .from("student_financial_obligations")
+      .select("id,student_id,title,description,amount,paid_amount,due_date,status")
+      .eq("organization_id", organizationId)
+      .eq("id", obligationId)
+      .maybeSingle();
+
+    if (currentError) throw currentError;
+    if (!current) {
+      return NextResponse.json({ error: "Ek borç kaydı bulunamadı." }, { status: 404 });
+    }
+    if (current.status !== "open" || Number(current.paid_amount || 0) > 0) {
+      return NextResponse.json(
+        { error: "Ödeme alınmış veya kapanmış bir ek borç iptal edilemez." },
+        { status: 409 },
+      );
+    }
+
+    const now = new Date().toISOString();
+    const { data: cancelled, error: cancelError } = await supabase
+      .from("student_financial_obligations")
+      .update({ status: "cancelled", updated_at: now })
+      .eq("organization_id", organizationId)
+      .eq("id", obligationId)
+      .eq("status", "open")
+      .eq("paid_amount", 0)
+      .select("id")
+      .maybeSingle();
+
+    if (cancelError) throw cancelError;
+    if (!cancelled) {
+      return NextResponse.json(
+        { error: "Ek borç başka bir işlemle değişti. Sayfayı yenileyip tekrar deneyiniz." },
+        { status: 409 },
+      );
+    }
+
+    await supabase.from("student_activity_logs").insert({
+      organization_id: organizationId,
+      student_id: current.student_id,
+      activity_type: "financial_obligation_cancelled",
+      title: "Ek borç iptal edildi",
+      description: `${current.title} · ${Number(current.amount).toLocaleString("tr-TR")} TL · ${cancellationReason}`,
+      source_type: "student_financial_obligation",
+      source_id: obligationId,
+      old_value: {
+        status: current.status,
+        amount: current.amount,
+        paid_amount: current.paid_amount,
+        due_date: current.due_date,
+        description: current.description,
+      },
+      new_value: {
+        status: "cancelled",
+        reason: cancellationReason,
+      },
+      performed_by: profile.id,
+      performed_at: now,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Ek borç iptal edildi ve toplam borç yeniden hesaplandı.",
+    });
+  } catch (error) {
+    console.error("student obligations DELETE error", error);
+    return NextResponse.json({ error: "Ek borç iptal edilemedi." }, { status: 500 });
+  }
+}
