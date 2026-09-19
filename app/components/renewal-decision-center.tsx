@@ -94,7 +94,7 @@ export default function RenewalDecisionCenter() {
           <a className="renew" href={`/ogrenciler/${current.studentId}?renewal=1`}>↻ Kayıt Yenile</a>
           <a className="passive" href={`/ogrenciler/pasif-merkezi?studentId=${current.studentId}`}>{current.passiveRequestPending ? "Pasife Alma Onay Bekliyor" : "Pasife Al"}</a>
           {items.length > 1 ? <button type="button" onClick={() => setIndex((i) => (i + 1) % items.length)}>Sonraki →</button> : null}
-          <a className="all" href="/kayit-kararlari">Tümünü Gör</a>
+          <a className="all" href="/kayit-yenilemeleri">Tümünü Gör</a>
         </div>
       </div>
       <style jsx>{`
