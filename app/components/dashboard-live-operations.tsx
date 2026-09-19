@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
+import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
  type LiveData = {
   ok: boolean;
@@ -25,6 +26,9 @@ import { usePathname } from "next/navigation";
     age: number | null;
     branchName: string;
     whatsappUrl: string | null;
+    celebrated?: boolean;
+    celebratedAt?: string | null;
+    celebratedBy?: string | null;
   }>;
   summary: {
     todayLessons: number;
@@ -40,6 +44,7 @@ import { usePathname } from "next/navigation";
 function OperationPanel() {
   const [data, setData] = useState<LiveData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [celebrationBusy, setCelebrationBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -69,6 +74,48 @@ function OperationPanel() {
     return data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts;
   }, [data]);
 
+  async function celebrateBirthday(birthday: LiveData["birthdays"][number]) {
+    if (!birthday.whatsappUrl || celebrationBusy) return;
+    window.open(birthday.whatsappUrl, "_blank", "noopener,noreferrer");
+    setCelebrationBusy(birthday.id);
+    try {
+      const response = await fetch("/api/dashboard/birthday-celebrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          studentId: birthday.id,
+          year: Number(data?.date?.slice(0, 4) || new Date().getFullYear()),
+        }),
+      });
+      const payload = await response.json();
+      if (response.ok && payload.ok) {
+        setData((current) => current ? {
+          ...current,
+          birthdays: current.birthdays.map((item) =>
+            item.id === birthday.id
+              ? { ...item, celebrated: true, celebratedAt: payload.celebration?.sent_at || new Date().toISOString() }
+              : item
+          ),
+        } : current);
+      }
+    } catch (error) {
+      console.error("Doğum günü kutlama kaydı:", error);
+    } finally {
+      setCelebrationBusy(null);
+    }
+  }
+
+  function celebrationTime(value?: string | null) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+
   if (loading) {
     return <section className="liveOpsShell"><div className="liveOpsLoading">Günlük operasyon verileri hazırlanıyor…</div></section>;
   }
@@ -94,6 +141,8 @@ function OperationPanel() {
           <i /> {actionCount ? `${actionCount} işlem` : "Operasyon normal"}
         </a>
       </div>
+
+      <DashboardSmartCalendar />
 
       <div className="liveOpsSummary">
         {summaryCards.map((item) => (
@@ -152,7 +201,17 @@ function OperationPanel() {
               <div className="birthdayRow" key={birthday.id}>
                 <div className="birthdayAvatar">🎂</div>
                 <div><strong>{birthday.name}</strong><span>{birthday.age !== null ? `${birthday.age} yaş` : "Doğum günü"}{birthday.branchName ? ` · ${birthday.branchName}` : ""}</span></div>
-                {birthday.whatsappUrl ? <a href={birthday.whatsappUrl} target="_blank" rel="noreferrer" className="birthdayWhatsapp">WhatsApp'tan Kutla</a> : <span className="birthdayNoPhone">Telefon yok</span>}
+                {birthday.celebrated ? (
+                  <div className="birthdayCelebrated">
+                    <strong>✓ Kutlandı</strong>
+                    <span>{birthday.celebratedAt ? `Saat ${celebrationTime(birthday.celebratedAt)}` : "Kutlama kaydedildi"}</span>
+                    {birthday.whatsappUrl ? <button type="button" onClick={() => celebrateBirthday(birthday)} disabled={celebrationBusy === birthday.id}>Tekrar Gönder</button> : null}
+                  </div>
+                ) : birthday.whatsappUrl ? (
+                  <button type="button" onClick={() => celebrateBirthday(birthday)} disabled={celebrationBusy === birthday.id} className="birthdayWhatsapp">
+                    {celebrationBusy === birthday.id ? "Kaydediliyor…" : "WhatsApp'tan Kutla"}
+                  </button>
+                ) : <span className="birthdayNoPhone">Telefon yok</span>}
               </div>
             ))}
           </div>
@@ -160,7 +219,7 @@ function OperationPanel() {
       </article>
 
       <style jsx global>{`
-        .dashboardGrid .scheduleCard{display:none!important}.liveOpsShell{margin:18px 0 20px}.liveOpsHeadline{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:13px}.liveOpsHeadline>div>span,.livePanelHead span{display:block;color:#6f829e;font-size:10px;font-weight:900;letter-spacing:1.45px}.liveOpsHeadline h2{margin:5px 0 4px;color:#10213e;font-size:24px;letter-spacing:-.4px}.liveOpsHeadline p{margin:0;color:#7b8ca4;font-size:12px}.liveOpsSignal{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #dce6f2;border-radius:999px;background:#fff;color:#52667f;text-decoration:none;font-size:11px;font-weight:900}.liveOpsSignal i{width:8px;height:8px;border-radius:50%;background:#22a06b}.liveOpsSignal.active{border-color:#fecaca;color:#b42318;background:#fff7f7}.liveOpsSignal.active i{background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.38);animation:sprintPulse 1.5s infinite}@keyframes sprintPulse{70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}.liveOpsSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.liveSummaryCard{position:relative;display:flex;flex-direction:column;min-height:112px;padding:15px;border:1px solid #dfe7f1;border-radius:17px;background:#fff;text-decoration:none;color:#172b49;box-shadow:0 7px 20px rgba(15,23,42,.035);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}.liveSummaryCard:active{transform:scale(.98)}.liveSummaryCard:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(22,54,91,.08)}.liveSummaryCard span{color:#74859c;font-size:11px;font-weight:800}.liveSummaryCard strong{margin-top:8px;font-size:29px;line-height:1}.liveSummaryCard small{margin-top:8px;color:#8796aa;font-size:10px}.liveSummaryCard>b{position:absolute;right:14px;bottom:13px;font-size:18px}.liveSummaryCard.blue{border-color:#bfdbfe}.liveSummaryCard.orange{border-color:#fed7aa;background:#fffaf4}.liveSummaryCard.green{border-color:#bbf7d0;background:#f8fffb}.liveSummaryCard.red{border-color:#fecaca;background:#fff8f8}.liveSummaryCard.purple{border-color:#ddd6fe;background:#fbfaff}.liveSummaryCard.calm{background:#fbfcfe}.liveOpsGrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);gap:14px;margin-bottom:14px}.livePanel{border:1px solid #dfe7f1;border-radius:20px;background:#fff;box-shadow:0 9px 26px rgba(15,23,42,.035);overflow:hidden}.livePanelHead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:18px 19px;border-bottom:1px solid #edf1f6}.livePanelHead h3{margin:4px 0 0;color:#10213e;font-size:18px}.livePanelHead>a{color:#176de9;text-decoration:none;font-size:11px;font-weight:900}.lessonRows,.priorityRows,.birthdayRows{display:flex;flex-direction:column}.lessonRow{display:grid;grid-template-columns:74px minmax(0,1fr) auto 20px;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid #edf1f6;color:inherit;text-decoration:none;transition:background .15s ease}.lessonRow:last-child{border-bottom:0}.lessonRow:hover,.lessonRow:active{background:#f8fbff}.lessonTime strong,.lessonInfo strong{display:block;color:#142847}.lessonTime strong{font-size:17px}.lessonTime small,.lessonInfo span{display:block;margin-top:3px;color:#8594a8;font-size:10px}.lessonStatus{display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border-radius:999px;font-size:9px;font-weight:900;white-space:nowrap}.lessonStatus i,.priorityRow i{width:7px;height:7px;border-radius:50%}.lessonStatus.done{background:#ecfdf3;color:#16875b}.lessonStatus.done i{background:#22a06b}.lessonStatus.pending{background:#fff7ed;color:#b54708}.lessonStatus.pending i{background:#f79009}.lessonArrow{color:#9aa9bb}.priorityRow{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:13px 17px;border-bottom:1px solid #edf1f6;text-decoration:none;color:inherit}.priorityRow:last-child{border-bottom:0}.priorityRow strong{display:block;color:#1a2d49;font-size:11px}.priorityRow span{display:block;margin-top:3px;color:#8493a6;font-size:9px}.priorityRow b{color:#176de9;font-size:9px}.priorityRow.urgent i{background:#ef4444}.priorityRow.warning i{background:#f59e0b}.priorityRow.info i{background:#3b82f6}.priorityRow.success i{background:#22a06b}.liveEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;padding:25px;text-align:center}.liveEmpty.compact{min-height:105px}.liveEmpty strong{color:#223652;font-size:13px}.liveEmpty span{max-width:440px;margin-top:6px;color:#8a99ac;font-size:10px;line-height:1.5}.birthdayRow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid #edf1f6}.birthdayRow:last-child{border-bottom:0}.birthdayAvatar{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:#fff7ed;font-size:20px}.birthdayRow strong{display:block;color:#17304f;font-size:12px}.birthdayRow span{display:block;margin-top:3px;color:#8493a6;font-size:9px}.birthdayWhatsapp{display:inline-flex;align-items:center;justify-content:center;min-height:35px;padding:0 11px;border-radius:10px;background:#ecfdf3;color:#16875b;text-decoration:none;font-size:9px;font-weight:900}.birthdayNoPhone{color:#94a3b8;font-size:9px}.liveOpsLoading{padding:18px;border:1px solid #dfe7f1;border-radius:16px;background:#fff;color:#718096;font-size:11px}@media(max-width:900px){.liveOpsSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.liveOpsGrid{grid-template-columns:1fr}}@media(max-width:640px){.liveOpsShell{margin:14px 0 18px}.liveOpsHeadline{align-items:flex-start}.liveOpsHeadline h2{font-size:20px}.liveOpsHeadline p{font-size:10px;line-height:1.45}.liveOpsSignal{padding:7px 9px;font-size:9px}.liveOpsSummary{gap:9px}.liveSummaryCard{min-height:103px;padding:13px}.liveSummaryCard strong{font-size:25px}.livePanel{border-radius:17px}.livePanelHead{padding:15px}.livePanelHead h3{font-size:16px}.lessonRow{grid-template-columns:58px minmax(0,1fr) 18px;padding:12px 14px;gap:9px}.lessonStatus{grid-column:2/4;justify-self:start}.lessonTime strong{font-size:15px}.birthdayRow{grid-template-columns:40px minmax(0,1fr);padding:12px 14px}.birthdayWhatsapp,.birthdayNoPhone{grid-column:2;justify-self:start}.priorityRow{grid-template-columns:9px minmax(0,1fr);padding:12px 14px}.priorityRow b{grid-column:2;justify-self:start;margin-top:3px}}
+        .dashboardGrid .scheduleCard{display:none!important}.liveOpsShell{margin:18px 0 20px}.liveOpsHeadline{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:13px}.liveOpsHeadline>div>span,.livePanelHead span{display:block;color:#6f829e;font-size:10px;font-weight:900;letter-spacing:1.45px}.liveOpsHeadline h2{margin:5px 0 4px;color:#10213e;font-size:24px;letter-spacing:-.4px}.liveOpsHeadline p{margin:0;color:#7b8ca4;font-size:12px}.liveOpsSignal{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #dce6f2;border-radius:999px;background:#fff;color:#52667f;text-decoration:none;font-size:11px;font-weight:900}.liveOpsSignal i{width:8px;height:8px;border-radius:50%;background:#22a06b}.liveOpsSignal.active{border-color:#fecaca;color:#b42318;background:#fff7f7}.liveOpsSignal.active i{background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.38);animation:sprintPulse 1.5s infinite}@keyframes sprintPulse{70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}.liveOpsSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.liveSummaryCard{position:relative;display:flex;flex-direction:column;min-height:112px;padding:15px;border:1px solid #dfe7f1;border-radius:17px;background:#fff;text-decoration:none;color:#172b49;box-shadow:0 7px 20px rgba(15,23,42,.035);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}.liveSummaryCard:active{transform:scale(.98)}.liveSummaryCard:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(22,54,91,.08)}.liveSummaryCard span{color:#74859c;font-size:11px;font-weight:800}.liveSummaryCard strong{margin-top:8px;font-size:29px;line-height:1}.liveSummaryCard small{margin-top:8px;color:#8796aa;font-size:10px}.liveSummaryCard>b{position:absolute;right:14px;bottom:13px;font-size:18px}.liveSummaryCard.blue{border-color:#bfdbfe}.liveSummaryCard.orange{border-color:#fed7aa;background:#fffaf4}.liveSummaryCard.green{border-color:#bbf7d0;background:#f8fffb}.liveSummaryCard.red{border-color:#fecaca;background:#fff8f8}.liveSummaryCard.purple{border-color:#ddd6fe;background:#fbfaff}.liveSummaryCard.calm{background:#fbfcfe}.liveOpsGrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);gap:14px;margin-bottom:14px}.livePanel{border:1px solid #dfe7f1;border-radius:20px;background:#fff;box-shadow:0 9px 26px rgba(15,23,42,.035);overflow:hidden}.livePanelHead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:18px 19px;border-bottom:1px solid #edf1f6}.livePanelHead h3{margin:4px 0 0;color:#10213e;font-size:18px}.livePanelHead>a{color:#176de9;text-decoration:none;font-size:11px;font-weight:900}.lessonRows,.priorityRows,.birthdayRows{display:flex;flex-direction:column}.lessonRow{display:grid;grid-template-columns:74px minmax(0,1fr) auto 20px;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid #edf1f6;color:inherit;text-decoration:none;transition:background .15s ease}.lessonRow:last-child{border-bottom:0}.lessonRow:hover,.lessonRow:active{background:#f8fbff}.lessonTime strong,.lessonInfo strong{display:block;color:#142847}.lessonTime strong{font-size:17px}.lessonTime small,.lessonInfo span{display:block;margin-top:3px;color:#8594a8;font-size:10px}.lessonStatus{display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border-radius:999px;font-size:9px;font-weight:900;white-space:nowrap}.lessonStatus i,.priorityRow i{width:7px;height:7px;border-radius:50%}.lessonStatus.done{background:#ecfdf3;color:#16875b}.lessonStatus.done i{background:#22a06b}.lessonStatus.pending{background:#fff7ed;color:#b54708}.lessonStatus.pending i{background:#f79009}.lessonArrow{color:#9aa9bb}.priorityRow{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:13px 17px;border-bottom:1px solid #edf1f6;text-decoration:none;color:inherit}.priorityRow:last-child{border-bottom:0}.priorityRow strong{display:block;color:#1a2d49;font-size:11px}.priorityRow span{display:block;margin-top:3px;color:#8493a6;font-size:9px}.priorityRow b{color:#176de9;font-size:9px}.priorityRow.urgent i{background:#ef4444}.priorityRow.warning i{background:#f59e0b}.priorityRow.info i{background:#3b82f6}.priorityRow.success i{background:#22a06b}.liveEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;padding:25px;text-align:center}.liveEmpty.compact{min-height:105px}.liveEmpty strong{color:#223652;font-size:13px}.liveEmpty span{max-width:440px;margin-top:6px;color:#8a99ac;font-size:10px;line-height:1.5}.birthdayRow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid #edf1f6}.birthdayRow:last-child{border-bottom:0}.birthdayAvatar{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:#fff7ed;font-size:20px}.birthdayRow strong{display:block;color:#17304f;font-size:12px}.birthdayRow span{display:block;margin-top:3px;color:#8493a6;font-size:9px}.birthdayWhatsapp{display:inline-flex;align-items:center;justify-content:center;min-height:35px;padding:0 11px;border:0;border-radius:10px;background:#ecfdf3;color:#16875b;text-decoration:none;font:inherit;font-size:9px;font-weight:900;cursor:pointer}.birthdayWhatsapp:disabled{opacity:.65;cursor:wait}.birthdayCelebrated{display:flex;align-items:flex-end;flex-direction:column;gap:3px}.birthdayCelebrated>strong{color:#16875b!important;font-size:10px!important}.birthdayCelebrated>span{margin:0!important;color:#6f8c7d!important;font-size:8px!important}.birthdayCelebrated>button{border:0;background:transparent;color:#176de9;font:inherit;font-size:8px;font-weight:900;cursor:pointer;padding:2px 0}.birthdayNoPhone{color:#94a3b8;font-size:9px}.liveOpsLoading{padding:18px;border:1px solid #dfe7f1;border-radius:16px;background:#fff;color:#718096;font-size:11px}@media(max-width:900px){.liveOpsSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.liveOpsGrid{grid-template-columns:1fr}}@media(max-width:640px){.liveOpsShell{margin:14px 0 18px}.liveOpsHeadline{align-items:flex-start}.liveOpsHeadline h2{font-size:20px}.liveOpsHeadline p{font-size:10px;line-height:1.45}.liveOpsSignal{padding:7px 9px;font-size:9px}.liveOpsSummary{gap:9px}.liveSummaryCard{min-height:103px;padding:13px}.liveSummaryCard strong{font-size:25px}.livePanel{border-radius:17px}.livePanelHead{padding:15px}.livePanelHead h3{font-size:16px}.lessonRow{grid-template-columns:58px minmax(0,1fr) 18px;padding:12px 14px;gap:9px}.lessonStatus{grid-column:2/4;justify-self:start}.lessonTime strong{font-size:15px}.birthdayRow{grid-template-columns:40px minmax(0,1fr);padding:12px 14px}.birthdayWhatsapp,.birthdayNoPhone,.birthdayCelebrated{grid-column:2;justify-self:start}.birthdayCelebrated{align-items:flex-start}.priorityRow{grid-template-columns:9px minmax(0,1fr);padding:12px 14px}.priorityRow b{grid-column:2;justify-self:start;margin-top:3px}}
       `}</style>
     </section>
   );
