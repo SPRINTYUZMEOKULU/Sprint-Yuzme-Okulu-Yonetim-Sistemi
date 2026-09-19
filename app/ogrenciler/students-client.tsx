@@ -13,6 +13,9 @@ export type StudentListItem = {
   id: string;
   student_number?: string | null;
   birth_date?: string | null;
+  transfer_effective_date?: string | null;
+  transfer_remaining_lessons?: number | null;
+  transfer_end_date?: string | null;
   first_name: string;
   last_name: string;
 
@@ -2696,8 +2699,11 @@ function closeLessonAction() {
                 </div>
 
                 <div>
-                  <span>Normal Bitiş</span>
-                  <strong>{formatDate(student.normal_end_date)}</strong>
+                  <span>{student.transfer_end_date ? "Aktarım Sonrası Bitiş" : "Normal Bitiş"}</span>
+                  <strong>{formatDate(student.transfer_end_date || student.normal_end_date)}</strong>
+                  {student.transfer_end_date ? (
+                    <small>{numberValue(student.transfer_remaining_lessons)} kalan ders · aktarım {formatDate(student.transfer_effective_date)}</small>
+                  ) : null}
                 </div>
 
                 <div>
