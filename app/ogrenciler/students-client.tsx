@@ -63,6 +63,14 @@ export type StudentListItem = {
   next_compensation_start_time?: string | null;
   next_compensation_end_time?: string | null;
 
+  latest_note_id?: string | null;
+  latest_note_body?: string | null;
+  latest_note_type?: string | null;
+  latest_note_created_at?: string | null;
+  note_count?: number | null;
+  active_note_reminder_at?: string | null;
+  active_note_reminder_id?: string | null;
+
   schedule_text?: string | null;
   schedule_weekdays?: number[];
   schedule_slots?: Array<{
@@ -93,6 +101,15 @@ export type ScheduleOption = {
   weekday: number | null;
   start_time: string | null;
   end_time: string | null;
+};
+
+type StudentNoteItem = {
+  id: string;
+  note_type?: string | null;
+  body: string;
+  created_at?: string | null;
+  reminder_at?: string | null;
+  reminder_completed?: boolean;
 };
 
 type Props = {
@@ -838,6 +855,32 @@ function buildMessage(
   );
 }
 
+function noteReminderLabel(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function noteReminderDue(value?: string | null) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time <= Date.now();
+}
+
+function noteDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
 export default function StudentsClient({
   students,
   branches: branchOptions = [],
@@ -945,6 +988,120 @@ const [pendingDeleteStudentIds, setPendingDeleteStudentIds] = useState<string[]>
 const [messageStudent, setMessageStudent] = useState<StudentListItem | null>(null);
 const [messageType, setMessageType] = useState<MessageType>("smart");
 const [messageText, setMessageText] = useState("");
+
+const [noteStudent, setNoteStudent] = useState<StudentListItem | null>(null);
+const [noteItems, setNoteItems] = useState<StudentNoteItem[]>([]);
+const [noteLoading, setNoteLoading] = useState(false);
+const [noteSaving, setNoteSaving] = useState(false);
+const [noteError, setNoteError] = useState("");
+const [noteBody, setNoteBody] = useState("");
+const [noteType, setNoteType] = useState("general");
+const [noteReminderAt, setNoteReminderAt] = useState("");
+const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+
+async function loadStudentNotes(studentId: string) {
+  setNoteLoading(true);
+  setNoteError("");
+  try {
+    const response = await fetch(`/api/student-notes?studentId=${encodeURIComponent(studentId)}`, {
+      cache: "no-store",
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Notlar yüklenemedi.");
+    setNoteItems((result.notes || []) as StudentNoteItem[]);
+  } catch (error) {
+    setNoteError(error instanceof Error ? error.message : "Notlar yüklenemedi.");
+  } finally {
+    setNoteLoading(false);
+  }
+}
+
+function openStudentNotes(student: StudentListItem) {
+  setNoteStudent(student);
+  setEditingNoteId(null);
+  setNoteBody("");
+  setNoteType("general");
+  setNoteReminderAt("");
+  setNoteError("");
+  void loadStudentNotes(student.id);
+}
+
+function closeStudentNotes() {
+  setNoteStudent(null);
+  setNoteItems([]);
+  setEditingNoteId(null);
+  setNoteBody("");
+  setNoteType("general");
+  setNoteReminderAt("");
+  setNoteError("");
+}
+
+function editStudentNote(note: StudentNoteItem) {
+  setEditingNoteId(note.id);
+  setNoteBody(note.body || "");
+  setNoteType(note.note_type || "general");
+  setNoteReminderAt(noteDateTimeLocal(note.reminder_at));
+  setNoteError("");
+}
+
+function resetStudentNoteForm() {
+  setEditingNoteId(null);
+  setNoteBody("");
+  setNoteType("general");
+  setNoteReminderAt("");
+  setNoteError("");
+}
+
+async function saveStudentNote() {
+  if (!noteStudent || !noteBody.trim() || noteSaving) return;
+  setNoteSaving(true);
+  setNoteError("");
+  try {
+    const response = await fetch("/api/student-notes", {
+      method: editingNoteId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editingNoteId,
+        student_id: noteStudent.id,
+        body: noteBody.trim(),
+        note_type: noteType,
+        reminder_at: noteReminderAt || null,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Not kaydedilemedi.");
+    await loadStudentNotes(noteStudent.id);
+    resetStudentNoteForm();
+    router.refresh();
+  } catch (error) {
+    setNoteError(error instanceof Error ? error.message : "Not kaydedilemedi.");
+  } finally {
+    setNoteSaving(false);
+  }
+}
+
+async function deleteStudentNote(noteId: string) {
+  if (!noteStudent || noteSaving) return;
+  if (!window.confirm("Bu not ve bağlı hatırlatma kalıcı olarak silinsin mi?")) return;
+  setNoteSaving(true);
+  setNoteError("");
+  try {
+    const response = await fetch("/api/student-notes", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: noteId, student_id: noteStudent.id }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Not silinemedi.");
+    await loadStudentNotes(noteStudent.id);
+    if (editingNoteId === noteId) resetStudentNoteForm();
+    router.refresh();
+  } catch (error) {
+    setNoteError(error instanceof Error ? error.message : "Not silinemedi.");
+  } finally {
+    setNoteSaving(false);
+  }
+}
 
 useEffect(() => {
   async function loadPendingStatusRequests() {
@@ -2630,6 +2787,37 @@ function closeLessonAction() {
                 </div>
               )}
 
+              {student.latest_note_body && (
+                <button
+                  type="button"
+                  className={`studentNotePreview ${
+                    noteReminderDue(student.active_note_reminder_at) ? "due" : ""
+                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openStudentNotes(student);
+                  }}
+                >
+                  <span className="studentNoteIcon">📝</span>
+                  <span className="studentNoteCopy">
+                    <strong>
+                      Öğrenci Notu
+                      {student.note_count && student.note_count > 1
+                        ? ` · ${student.note_count} not`
+                        : ""}
+                    </strong>
+                    <small>{student.latest_note_body}</small>
+                  </span>
+                  {student.active_note_reminder_at ? (
+                    <span className="studentNoteReminder">
+                      ⏰ {noteReminderDue(student.active_note_reminder_at) ? "Hatırlatma zamanı" : noteReminderLabel(student.active_note_reminder_at)}
+                    </span>
+                  ) : (
+                    <span className="studentNoteReminder neutral">Aç / Düzenle</span>
+                  )}
+                </button>
+              )}
+
               <div className="mainDetails">
                 <div>
                   <span>Şube</span>
@@ -2765,6 +2953,17 @@ function closeLessonAction() {
     </button>
     <button
       type="button"
+      className="studentActionButton note"
+      onClick={(event) => {
+        event.stopPropagation();
+        openStudentNotes(student);
+      }}
+    >
+      📝 Not {student.note_count ? `(${student.note_count})` : ""}
+    </button>
+
+    <button
+      type="button"
       className="studentActionButton"
       onClick={(event) => {
         event.stopPropagation();
@@ -2859,6 +3058,112 @@ function closeLessonAction() {
             Seçtiğiniz filtrelere uygun öğrenci bulunamadı.
           </div>
         )}
+        {noteStudent && (
+          <div className="noteOverlay" onClick={closeStudentNotes}>
+            <aside className="notePanel" onClick={(event) => event.stopPropagation()}>
+              <div className="notePanelHeader">
+                <div>
+                  <span>ÖĞRENCİ NOTLARI & HATIRLATMA</span>
+                  <h3>{noteStudent.first_name} {noteStudent.last_name}</h3>
+                  <p>Kartta görünen notlar dijital kursiyer dosyasındaki Notlar bölümüne aynı anda işlenir.</p>
+                </div>
+                <button type="button" onClick={closeStudentNotes} aria-label="Not penceresini kapat">×</button>
+              </div>
+
+              <div className="notePanelBody">
+                <div className="noteEditor">
+                  <label>
+                    <span>Not Türü</span>
+                    <select value={noteType} onChange={(event) => setNoteType(event.target.value)}>
+                      <option value="general">Genel Not</option>
+                      <option value="management">Yönetici Notu</option>
+                      <option value="coach">Antrenör Notu</option>
+                      <option value="registration">Kayıt Notu</option>
+                      <option value="payment">Ödeme Notu</option>
+                    </select>
+                  </label>
+
+                  <label className="noteTextArea">
+                    <span>Not</span>
+                    <textarea
+                      value={noteBody}
+                      onChange={(event) => setNoteBody(event.target.value)}
+                      rows={4}
+                      maxLength={4000}
+                      placeholder="Örn. Veli ile 22 Eylül'de kayıt yenileme için tekrar görüşülecek."
+                    />
+                  </label>
+
+                  <label>
+                    <span>Hatırlatma</span>
+                    <input
+                      type="datetime-local"
+                      value={noteReminderAt}
+                      onChange={(event) => setNoteReminderAt(event.target.value)}
+                    />
+                    <small>Hatırlatma zamanı geldiğinde öğrenci kartındaki not ikazı yanıp söner.</small>
+                  </label>
+
+                  {noteError && <div className="noteError">{noteError}</div>}
+
+                  <div className="noteEditorActions">
+                    {editingNoteId && (
+                      <button type="button" className="ghost" onClick={resetStudentNoteForm} disabled={noteSaving}>
+                        Yeni Nota Geç
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={noteSaving || !noteBody.trim()}
+                      onClick={() => void saveStudentNote()}
+                    >
+                      {noteSaving ? "Kaydediliyor…" : editingNoteId ? "Notu Güncelle" : "Notu Kaydet"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="noteHistory">
+                  <div className="noteHistoryTitle">
+                    <strong>Kayıtlı Notlar</strong>
+                    <span>{noteItems.length}</span>
+                  </div>
+
+                  {noteLoading ? (
+                    <div className="noteEmpty">Notlar yükleniyor…</div>
+                  ) : noteItems.length === 0 ? (
+                    <div className="noteEmpty">Henüz not eklenmemiş.</div>
+                  ) : (
+                    noteItems.map((note) => (
+                      <article
+                        key={note.id}
+                        className={`noteHistoryItem ${
+                          noteReminderDue(note.reminder_at) && !note.reminder_completed ? "due" : ""
+                        }`}
+                      >
+                        <div>
+                          <strong>{note.note_type === "management" ? "Yönetici Notu" : note.note_type === "coach" ? "Antrenör Notu" : note.note_type === "registration" ? "Kayıt Notu" : note.note_type === "payment" ? "Ödeme Notu" : "Genel Not"}</strong>
+                          <small>{note.created_at ? new Date(note.created_at).toLocaleString("tr-TR") : ""}</small>
+                        </div>
+                        <p>{note.body}</p>
+                        {note.reminder_at && (
+                          <div className="noteReminderLine">
+                            ⏰ {noteReminderDue(note.reminder_at) ? "Hatırlatma zamanı geldi" : `Hatırlatma: ${noteReminderLabel(note.reminder_at)}`}
+                          </div>
+                        )}
+                        <div className="noteHistoryActions">
+                          <button type="button" onClick={() => editStudentNote(note)}>Düzenle</button>
+                          <button type="button" className="danger" onClick={() => void deleteStudentNote(note.id)}>Sil</button>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </div>
+            </aside>
+          </div>
+        )}
+
         {bulkMode === "transfer" && (
           <div className="bulkOverlay" onClick={closeBulkPanel}>
             <aside
@@ -5712,6 +6017,62 @@ function closeLessonAction() {
 @media (max-width: 480px) {
   .dataActions { grid-template-columns:1fr; }
   .dataAction { min-height:56px; }
+}
+
+.studentNotePreview{
+  width:100%;display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:11px 12px;
+  border:1px solid #d7c9ff;border-radius:14px;background:#f8f5ff;color:#35236d;text-align:left;cursor:pointer;
+}
+.studentNotePreview:hover{border-color:#9f83ef;background:#f4efff}
+.studentNoteIcon{font-size:19px;flex:0 0 auto}
+.studentNoteCopy{display:grid;gap:3px;min-width:0;flex:1}
+.studentNoteCopy strong{font-size:12px;color:#5b3cc4}
+.studentNoteCopy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4f5670;font-weight:650}
+.studentNoteReminder{flex:0 0 auto;padding:6px 8px;border-radius:9px;background:#fff0d6;color:#9a4b00;font-size:10px;font-weight:900}
+.studentNoteReminder.neutral{background:#ece8ff;color:#6548c5}
+.studentNotePreview.due{border-color:#ef8c26;background:#fff6e9;animation:studentNotePulse 1.15s ease-in-out infinite}
+.studentNotePreview.due .studentNoteReminder{background:#e86d00;color:#fff}
+@keyframes studentNotePulse{0%,100%{box-shadow:0 0 0 0 rgba(232,109,0,.05)}50%{box-shadow:0 0 0 5px rgba(232,109,0,.18)}}
+.studentActionButton.note{border-color:#d8cdfd!important;background:#f7f4ff!important;color:#6245c5!important}
+.noteOverlay{position:fixed;inset:0;z-index:1000;background:rgba(9,24,44,.48);display:flex;justify-content:flex-end}
+.notePanel{width:min(720px,96vw);height:100%;background:#f7faff;box-shadow:-20px 0 60px rgba(17,47,83,.2);overflow:auto}
+.notePanelHeader{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;padding:20px;background:#fff;border-bottom:1px solid #dbe5f0}
+.notePanelHeader span{font-size:11px;font-weight:900;color:#6d55c7;letter-spacing:.06em}
+.notePanelHeader h3{margin:4px 0 2px;color:#17345c}
+.notePanelHeader p{margin:0;color:#71839a;font-size:12px}
+.notePanelHeader>button{width:40px;height:40px;border:1px solid #d7e2ef;border-radius:12px;background:#fff;font-size:24px;color:#405a78;cursor:pointer}
+.notePanelBody{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;padding:14px}
+.noteEditor,.noteHistory{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:14px}
+.noteEditor{display:grid;gap:12px;align-content:start}
+.noteEditor label{display:grid;gap:6px;color:#566c86;font-size:12px;font-weight:800}
+.noteEditor input,.noteEditor select,.noteEditor textarea{width:100%;box-sizing:border-box;border:1px solid #ccd9e8;border-radius:11px;background:#fff;padding:10px 11px;font:inherit;color:#17345c}
+.noteEditor textarea{resize:vertical;min-height:110px}
+.noteEditor small{color:#8290a2;line-height:1.35}
+.noteEditorActions{display:flex;justify-content:flex-end;gap:8px}
+.noteEditorActions button,.noteHistoryActions button{border:1px solid #cfdbea;border-radius:10px;background:#fff;color:#28496e;padding:9px 11px;font-weight:800;cursor:pointer}
+.noteEditorActions .primary{background:#176fe8;border-color:#176fe8;color:#fff}
+.noteEditorActions .ghost{background:#f7faff}
+.noteError{padding:9px 10px;border:1px solid #f1b5a9;border-radius:10px;background:#fff0ed;color:#a73520;font-size:12px;font-weight:800}
+.noteHistory{display:grid;gap:10px;align-content:start}
+.noteHistoryTitle{display:flex;justify-content:space-between;align-items:center;color:#17345c}
+.noteHistoryTitle span{display:grid;place-items:center;min-width:28px;height:28px;border-radius:9px;background:#edf4fc;color:#176fe8;font-weight:900}
+.noteHistoryItem{border:1px solid #dbe5f0;border-radius:13px;padding:11px;background:#fbfdff}
+.noteHistoryItem.due{border-color:#ef9b45;background:#fff8ef}
+.noteHistoryItem>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.noteHistoryItem>div:first-child strong{color:#17345c;font-size:12px}
+.noteHistoryItem>div:first-child small{color:#8898aa;font-size:10px}
+.noteHistoryItem p{margin:8px 0;color:#3d526b;font-size:13px;line-height:1.45;white-space:pre-wrap}
+.noteReminderLine{padding:7px 8px;border-radius:9px;background:#fff0d8;color:#955000;font-size:11px;font-weight:900}
+.noteHistoryActions{display:flex;justify-content:flex-end;gap:6px;margin-top:9px}
+.noteHistoryActions button{padding:7px 9px;font-size:11px}
+.noteHistoryActions .danger{border-color:#f3c6c0;background:#fff4f2;color:#b33e2f}
+.noteEmpty{padding:22px 10px;text-align:center;color:#8290a2;font-size:12px}
+@media(max-width:760px){
+  .studentNotePreview{align-items:flex-start}
+  .studentNoteReminder{max-width:120px;text-align:center}
+  .notePanel{width:100vw}
+  .notePanelBody{grid-template-columns:1fr}
+  .notePanelHeader{padding:16px}
 }
 
 /* Mobile final override: must remain after desktop/tablet toolbar rules */
