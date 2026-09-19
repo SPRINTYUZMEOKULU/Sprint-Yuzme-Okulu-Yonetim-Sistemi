@@ -460,12 +460,14 @@ async function seansAktifYap(
 export default async function DersProgramiPage({
   searchParams,
 }: {
-  searchParams?:
-    | Promise<{ durum?: string }>
-    | { durum?: string };
+  searchParams?: Promise<{
+    durum?: string;
+  }>;
 }) {
   const resolvedSearchParams =
-    await Promise.resolve(searchParams);
+    searchParams
+      ? await searchParams
+      : undefined;
 
   const durum =
     resolvedSearchParams?.durum === "pasif" ||
