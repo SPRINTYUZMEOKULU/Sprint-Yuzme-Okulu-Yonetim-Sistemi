@@ -373,7 +373,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
             <article><span>Toplam Borç</span><strong>{money(totalDebt)}</strong><small>Paket + açık ek borçlar</small></article>
             <article><span>Paket Ücreti</span><strong>{money(Number(data?.enrollment?.totalAmount || 0))}</strong><small>{data?.enrollment?.packageName || "Aktif kayıt"}</small></article>
             <article><span>Ödenen</span><strong>{money(Number(data?.enrollment?.totalReceived || 0))}</strong><small>Aktif kayıt dönemi</small></article>
-            <article className={totalDebt > 0 ? "danger" : "success"}><span>Durum</span><strong>{totalDebt > 0 ? "Bekleniyor" : "Ödendi"}</strong><small>{data?.enrollment?.paymentDueDate ? `Vade: ${dateText(data.enrollment.paymentDueDate)}` : "Vade yok"}</small></article>
+            <article className={packageRemaining > 0 ? "danger" : "success"}><span>Durum</span><strong>{packageRemaining > 0 ? "Bekleniyor" : "Ödendi"}</strong><small>{packageRemaining > 0 ? (data?.enrollment?.paymentDueDate ? `Vade: ${dateText(data.enrollment.paymentDueDate)}` : "Vade yok") : (extraRemaining > 0 ? `Paket kapandı · Ek borç: ${money(extraRemaining)}` : "Paket borcu tamamen kapandı")}</small></article>
           </section>
 
           <nav className="sfcTabs">
