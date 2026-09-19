@@ -316,7 +316,7 @@ function printStudentCard(student: StudentListItem) {
 
   popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${escapePrintText(fullName)} - Kursiyer Bilgi Kartı</title><style>
     @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#10233f;background:#fff}.sheet{width:100%;max-width:186mm;margin:0 auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #1268d6;padding-bottom:14px}.brand{font-size:22px;font-weight:900;color:#1268d6}.sub{font-size:11px;letter-spacing:.12em;color:#64748b;margin-top:4px}.status{border:1px solid #d7e5f7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.name{font-size:28px;margin:22px 0 5px}.number{color:#64748b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.box{border:1px solid #dce5ef;border-radius:10px;padding:11px 12px;min-height:62px}.box span{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:#7b8ca3;text-transform:uppercase;margin-bottom:6px}.box strong{font-size:13px;line-height:1.35}.wide{grid-column:1/-1}.rights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.rights .box{text-align:center}.rights strong{font-size:20px}.foot{margin-top:22px;padding-top:10px;border-top:1px solid #dce5ef;display:flex;justify-content:space-between;font-size:10px;color:#64748b}.sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:44px}.sign div{border-top:1px solid #94a3b8;padding-top:7px;text-align:center;font-size:10px;color:#64748b}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sheet{max-width:none}}
-  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
+  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
   popup.document.close();
 }
 
@@ -338,13 +338,22 @@ function formatDate(value?: string | null) {
 
 function ageFromBirthDate(value?: string | null) {
   if (!value) return null;
-  const birth = new Date(value);
-  if (Number.isNaN(birth.getTime())) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+
   const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDifference = today.getMonth() - birth.getMonth();
-  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) age -= 1;
-  return age >= 0 ? age : null;
+  let age = today.getFullYear() - year;
+  const birthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!birthdayPassed) age -= 1;
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+function ageLabel(value?: string | null) {
+  const age = ageFromBirthDate(value);
+  return age == null ? "Yaş bilgisi yok" : `${age} yaş`;
 }
 
 function matchesAgeGroup(value: string, birthDate?: string | null) {
@@ -2007,6 +2016,8 @@ function closeLessonAction() {
         "Sıra": index + 1,
         "SPR Öğrenci No": student.student_number || "",
         "Ad Soyad": `${student.first_name} ${student.last_name}`.trim(),
+        "Yaş": ageFromBirthDate(student.birth_date) ?? "",
+        "Doğum Tarihi": formatDate(student.birth_date),
         "Durum": statusLabels[student.status || ""] || student.status || "",
         "Şube": student.branch_name || "",
         "Grup": student.group_name || "",
@@ -2546,6 +2557,9 @@ function closeLessonAction() {
                   <h3>
                     {student.first_name} {student.last_name}
                   </h3>
+                  <span className="studentAgeBadge" title={student.birth_date ? `Doğum tarihi: ${formatDate(student.birth_date)}` : "Doğum tarihi girilmemiş"}>
+                    {ageLabel(student.birth_date)}
+                  </span>
                 </div>
 
                 <span
@@ -5326,6 +5340,22 @@ function closeLessonAction() {
           margin: 0;
           color: #10233f;
           font-size: 19px;
+        }
+
+        .studentAgeBadge {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          margin-top: 7px;
+          border: 1px solid #bfdbfe;
+          border-radius: 999px;
+          background: #eff6ff;
+          color: #0b63c9;
+          padding: 5px 9px;
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
         }
 
         .statusBadge {
