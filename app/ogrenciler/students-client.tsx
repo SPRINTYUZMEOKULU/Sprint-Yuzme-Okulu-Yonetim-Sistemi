@@ -6003,3 +6003,118 @@ function closeLessonAction() {
   font-size:10px; font-weight:900; letter-spacing:.04em;
 }
 .dataAction.primary .dataActionIcon { background:rgba(255,255,255,.16); color:#fff; }
+.dataAction strong,.dataAction small { display:block; }
+.dataAction strong { font-size:13px; line-height:1.25; }
+.dataAction small { margin-top:4px; font-size:10px; line-height:1.35; color:#71839a; font-weight:600; }
+.dataAction.primary small { color:rgba(255,255,255,.82); }
+.selectionToolbar { margin-top: 16px; }
+@media (max-width: 1050px) {
+  .toolbar { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+  .dataActions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .toolbar input,.toolbar select { min-height:48px !important; font-size:14px !important; }
+  .dataActions { grid-template-columns:1fr 1fr; gap:8px; }
+  .dataAction { min-height:62px; padding:9px 10px; }
+  .dataActionIcon { flex-basis:36px; height:36px; border-radius:10px; }
+  .dataAction small { display:none; }
+}
+@media (max-width: 480px) {
+  .dataActions { grid-template-columns:1fr; }
+  .dataAction { min-height:56px; }
+}
+
+.studentNotePreview{
+  width:100%;display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:11px 12px;
+  border:1px solid #d7c9ff;border-radius:14px;background:#f8f5ff;color:#35236d;text-align:left;cursor:pointer;
+}
+.studentNotePreview:hover{border-color:#9f83ef;background:#f4efff}
+.studentNoteIcon{font-size:19px;flex:0 0 auto}
+.studentNoteCopy{display:grid;gap:3px;min-width:0;flex:1}
+.studentNoteCopy strong{font-size:12px;color:#5b3cc4}
+.studentNoteCopy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4f5670;font-weight:650}
+.studentNoteReminder{flex:0 0 auto;padding:6px 8px;border-radius:9px;background:#fff0d6;color:#9a4b00;font-size:10px;font-weight:900}
+.studentNoteReminder.neutral{background:#ece8ff;color:#6548c5}
+.studentNotePreview.due{border-color:#ef8c26;background:#fff6e9;animation:studentNotePulse 1.15s ease-in-out infinite}
+.studentNotePreview.due .studentNoteReminder{background:#e86d00;color:#fff}
+@keyframes studentNotePulse{0%,100%{box-shadow:0 0 0 0 rgba(232,109,0,.05)}50%{box-shadow:0 0 0 5px rgba(232,109,0,.18)}}
+.studentActionButton.note{border-color:#d8cdfd!important;background:#f7f4ff!important;color:#6245c5!important}
+.noteOverlay{position:fixed;inset:0;z-index:1000;background:rgba(9,24,44,.48);display:flex;justify-content:flex-end}
+.notePanel{width:min(720px,96vw);height:100%;background:#f7faff;box-shadow:-20px 0 60px rgba(17,47,83,.2);overflow:auto}
+.notePanelHeader{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;padding:20px;background:#fff;border-bottom:1px solid #dbe5f0}
+.notePanelHeader span{font-size:11px;font-weight:900;color:#6d55c7;letter-spacing:.06em}
+.notePanelHeader h3{margin:4px 0 2px;color:#17345c}
+.notePanelHeader p{margin:0;color:#71839a;font-size:12px}
+.notePanelHeader>button{width:40px;height:40px;border:1px solid #d7e2ef;border-radius:12px;background:#fff;font-size:24px;color:#405a78;cursor:pointer}
+.notePanelBody{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;padding:14px}
+.noteEditor,.noteHistory{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:14px}
+.noteEditor{display:grid;gap:12px;align-content:start}
+.noteEditor label{display:grid;gap:6px;color:#566c86;font-size:12px;font-weight:800}
+.noteEditor input,.noteEditor select,.noteEditor textarea{width:100%;box-sizing:border-box;border:1px solid #ccd9e8;border-radius:11px;background:#fff;padding:10px 11px;font:inherit;color:#17345c}
+.noteEditor textarea{resize:vertical;min-height:110px}
+.noteEditor small{color:#8290a2;line-height:1.35}
+.noteEditorActions{display:flex;justify-content:flex-end;gap:8px}
+.noteEditorActions button,.noteHistoryActions button{border:1px solid #cfdbea;border-radius:10px;background:#fff;color:#28496e;padding:9px 11px;font-weight:800;cursor:pointer}
+.noteEditorActions .primary{background:#176fe8;border-color:#176fe8;color:#fff}
+.noteEditorActions .ghost{background:#f7faff}
+.noteError{padding:9px 10px;border:1px solid #f1b5a9;border-radius:10px;background:#fff0ed;color:#a73520;font-size:12px;font-weight:800}
+.noteHistory{display:grid;gap:10px;align-content:start}
+.noteHistoryTitle{display:flex;justify-content:space-between;align-items:center;color:#17345c}
+.noteHistoryTitle span{display:grid;place-items:center;min-width:28px;height:28px;border-radius:9px;background:#edf4fc;color:#176fe8;font-weight:900}
+.noteHistoryItem{border:1px solid #dbe5f0;border-radius:13px;padding:11px;background:#fbfdff}
+.noteHistoryItem.due{border-color:#ef9b45;background:#fff8ef}
+.noteHistoryItem>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.noteHistoryItem>div:first-child strong{color:#17345c;font-size:12px}
+.noteHistoryItem>div:first-child small{color:#8898aa;font-size:10px}
+.noteHistoryItem p{margin:8px 0;color:#3d526b;font-size:13px;line-height:1.45;white-space:pre-wrap}
+.noteReminderLine{padding:7px 8px;border-radius:9px;background:#fff0d8;color:#955000;font-size:11px;font-weight:900}
+.noteHistoryActions{display:flex;justify-content:flex-end;gap:6px;margin-top:9px}
+.noteHistoryActions button{padding:7px 9px;font-size:11px}
+.noteHistoryActions .danger{border-color:#f3c6c0;background:#fff4f2;color:#b33e2f}
+.noteEmpty{padding:22px 10px;text-align:center;color:#8290a2;font-size:12px}
+@media(max-width:760px){
+  .studentNotePreview{align-items:flex-start}
+  .studentNoteReminder{max-width:120px;text-align:center}
+  .notePanel{width:100vw}
+  .notePanelBody{grid-template-columns:1fr}
+  .notePanelHeader{padding:16px}
+}
+
+/* Mobile final override: must remain after desktop/tablet toolbar rules */
+@media (max-width: 760px) {
+  .studentCenter .toolbar {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    width:100% !important;
+    max-width:none !important;
+    gap:8px !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar > .searchBox,
+  .studentCenter .toolbar > select,
+  .studentCenter .toolbar > .dataPanelShell {
+    grid-column:1 / -1 !important;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar .searchBox,
+  .studentCenter .toolbar .searchBox input,
+  .studentCenter .toolbar select,
+  .studentCenter .toolbar .dataPanelToggle {
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+  .studentCenter .toolbar select,
+  .studentCenter .toolbar .searchBox input {
+    min-height:46px !important;
+  }
+  .studentCenter .dataPanelShell { margin-top:2px !important; }
+}
+      `}</style>
+    </div>
+  );
+}
