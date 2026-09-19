@@ -429,8 +429,13 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
           // Keep the student's original enrollment start date; effectiveDate only
           // marks when the new group/schedule becomes active.
           start_date: enrollment.start_date || input.effectiveDate,
+          // Transfer must never reset attendance progress. Persist the snapshot
+          // explicitly so used/remaining counts stay consistent across modules.
+          used_lessons: usedLessons,
           total_lessons: newTotalLessons,
           planned_end_date: newNormalEndDate,
+          normal_end_date: newNormalEndDate,
+          compensation_end_date: newCompensationEndDate,
           lesson_weekdays: targetWeekdays.map(isoToJsDay),
           updated_at: now,
         })
