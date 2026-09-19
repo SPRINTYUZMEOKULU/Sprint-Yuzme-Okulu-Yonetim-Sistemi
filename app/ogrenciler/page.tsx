@@ -199,6 +199,7 @@ export default async function StudentsPage() {
     paymentSummariesResult,
     compensationPlansResult,
     lastAttendanceResult,
+    transferLogsResult,
   ] = studentIds.length
     ? await Promise.all([
         supabase
@@ -248,8 +249,17 @@ export default async function StudentsPage() {
           .in("student_id", studentIds)
           .order("lesson_date", { ascending: false })
           .order("updated_at", { ascending: false }),
+
+        supabase
+          .from("student_activity_logs")
+          .select("student_id,new_value,performed_at,created_at")
+          .in("student_id", studentIds)
+          .eq("activity_type", "group_transfer")
+          .order("performed_at", { ascending: false })
+          .order("created_at", { ascending: false }),
       ])
     : [
+        { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
@@ -267,6 +277,7 @@ export default async function StudentsPage() {
     paymentSummariesResult.error,
     compensationPlansResult.error,
     lastAttendanceResult.error,
+    transferLogsResult.error,
   ].filter(Boolean);
 
   if (secondaryErrors.length) {
@@ -346,6 +357,10 @@ export default async function StudentsPage() {
     }
   }
 
+  const transferMap = latestByStudent(
+    (transferLogsResult.data || []) as any[]
+  );
+
   const lastAttendanceMap = new Map<string, any>();
   const lastAbsentMap = new Map<string, any>();
 
@@ -371,6 +386,8 @@ export default async function StudentsPage() {
       const lastAttendance = lastAttendanceMap.get(student.id) as any;
       const lastAbsent = lastAbsentMap.get(student.id) as any;
       const nextCompensation = nextCompensationMap.get(student.id) as any;
+      const latestTransfer = transferMap.get(student.id) as any;
+      const transferData = latestTransfer?.new_value || null;
       const nextCompensationSchedule = nextCompensation?.target_schedule_id
         ? scheduleMap.get(nextCompensation.target_schedule_id)
         : undefined;
@@ -510,6 +527,9 @@ export default async function StudentsPage() {
         id: student.id,
         student_number: student.student_number || null,
         birth_date: student.birth_date || null,
+        transfer_effective_date: transferData?.effective_date || null,
+        transfer_remaining_lessons: transferData?.remaining_lessons ?? null,
+        transfer_end_date: transferData?.planned_end_date || null,
 
         first_name: student.first_name || "",
         last_name: student.last_name || "",
