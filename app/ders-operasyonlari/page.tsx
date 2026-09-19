@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 import LessonOperationsClient from "./lesson-operations-client";
 import OperationSelectionHydrator from "./operation-selection-hydrator";
 import OperationSelectionCookieGuard from "./operation-selection-cookie-guard";
@@ -78,6 +79,12 @@ export default async function LessonOperationsPage({
       : Promise.resolve({ data: [], error: null }),
   ]);
 
+  const activeSchedules = filterEffectivelyActiveSchedules(
+    schedulesResult.data || [],
+    branchesResult.data || [],
+    groupsResult.data || []
+  );
+
   const memberCounts: Record<string, number> = {};
   for (const row of membershipsResult.data || []) {
     if (!row.group_id || !row.student_id) continue;
@@ -138,7 +145,7 @@ export default async function LessonOperationsPage({
         <LessonOperationsClient
           branches={branchesResult.data || []}
           groups={groupsResult.data || []}
-          schedules={schedulesResult.data || []}
+          schedules={activeSchedules}
           memberCounts={memberCounts}
         />
         {initialBranchId && initialGroupId ? (
