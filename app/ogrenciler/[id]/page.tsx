@@ -80,6 +80,21 @@ function money(value: unknown) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function ageFromBirthDate(value?: string | null) {
+  if (!value) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  const birthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!birthdayPassed) age -= 1;
+  return age >= 0 && age <= 120 ? age : null;
+}
+
 export default async function StudentFile({
   params,
   searchParams,
@@ -256,6 +271,7 @@ export default async function StudentFile({
   ]);
 
   const student = studentResult.data;
+  const studentAge = ageFromBirthDate(student.birth_date);
 
   if (!student) {
     notFound();
@@ -714,6 +730,10 @@ export default async function StudentFile({
               {student.status || "aktif"}
             </span>
 
+            <span className="ageBadge">
+              {studentAge != null ? `${studentAge} yaş` : "Yaş bilgisi yok"}
+            </span>
+
             <span>{branchInfo?.name || "Şube atanmadı"}</span>
 
             <span>{groupInfo?.name || "Grup atanmadı"}</span>
@@ -942,6 +962,11 @@ export default async function StudentFile({
           </div>
 
           <div className="infoRows">
+            <div>
+              <span>Yaş</span>
+              <strong>{studentAge != null ? `${studentAge} yaş` : "—"}</strong>
+            </div>
+
             <div>
               <span>Şube</span>
               <strong>{branchInfo?.name || "—"}</strong>
