@@ -857,19 +857,26 @@ export default async function OperasyonPlaniPage({
           </div>
 
           <div style={topButtonsStyle}>
+            {canEdit ? (
+              <Link
+                href="/ders-programi"
+                style={primaryButtonStyle}
+              >
+                + Yeni Seans / Program
+              </Link>
+            ) : null}
+
             <Link
               href="/yoklama"
               style={secondaryButtonStyle}
             >
-              <Icons.check />
               Yoklama
             </Link>
 
             <Link
               href="/"
-              style={primaryButtonStyle}
+              style={secondaryButtonStyle}
             >
-              <Icons.dashboard />
               Ana Sayfa
             </Link>
           </div>
@@ -1513,90 +1520,55 @@ export default async function OperasyonPlaniPage({
                         ...sessionSummaryStyle,
                       }}
                     >
-                      <div>
-                        <div
-                          style={
-                            poolLabelStyle
-                          }
-                        >
-                          <Icons.branch />
-
-                          {branch?.name ||
-                            "Şube Belirtilmemiş"}
-                        </div>
-
-                        <h2
-                          style={
-                            sessionTitleStyle
-                          }
-                        >
-                          {saatGoster(
-                            schedule.start_time
-                          )}
-                          {" – "}
-                          {saatGoster(
-                            schedule.end_time
-                          )}
-                        </h2>
-
-                        <p
-                          style={
-                            sessionSubtitleStyle
-                          }
-                        >
-                          {planScope === "hafta"
-                            ? `${GUNLER[Number(schedule.weekday)] || "Ders"} · `
-                            : ""}
-                          {group?.name ||
-                            "Grup Atanmamış"}
-
-                          {group?.course_type
-                            ? ` · ${group.course_type}`
-                            : ""}
-                        </p>
-                        <div style={sessionCoachLineStyle}>
-                          <span>Eğitmen</span>
-                          <strong>
-                            {sessionCoaches.length > 0
-                              ? sessionCoaches
-                                  .map(
-                                    (coach: any) =>
-                                      coach.full_name ||
-                                      coach.email ||
-                                      "Eğitmen"
-                                  )
-                                  .join(", ")
-                              : "Atanmamış"}
-                          </strong>
-                        </div>
+                      <div style={sessionTimeBlockStyle}>
+                        <strong style={sessionTimeTextStyle}>
+                          {saatGoster(schedule.start_time)} – {saatGoster(schedule.end_time)}
+                        </strong>
+                        <span style={sessionDayTextStyle}>
+                          {GUNLER[Number(schedule.weekday)] || "Ders"}
+                        </span>
                       </div>
 
-                      <div
-                        style={
-                          sessionHeaderStatsStyle
-                        }
-                      >
-                        <MiniStat
-                          value={
-                            groupStudents.length
-                          }
-                          label="Öğrenci"
-                        />
-
-                        <MiniStat
-                          value={
-                            sessionCoaches.length
-                          }
-                          label="Eğitmen"
-                        />
-
-                        <MiniStat
-                          value={
-                            levelsInSession.length
-                          }
-                          label="Seviye"
-                        />
+                      <div style={sessionSummaryItemStyle}>
+                        <span style={sessionSummaryLabelStyle}>HAVUZ</span>
+                        <strong>{branch?.name || "Şube Belirtilmemiş"}</strong>
                       </div>
+
+                      <div style={sessionSummaryItemStyle}>
+                        <span style={sessionSummaryLabelStyle}>GRUP</span>
+                        <strong>{group?.name || "Grup Atanmamış"}</strong>
+                        {group?.course_type ? (
+                          <small style={sessionSummarySubStyle}>{group.course_type}</small>
+                        ) : null}
+                      </div>
+
+                      <div style={sessionSummaryItemStyle}>
+                        <span style={sessionSummaryLabelStyle}>EĞİTMEN</span>
+                        <strong style={{ color: sessionCoaches.length ? "#13233f" : "#dc2626" }}>
+                          {sessionCoaches.length
+                            ? sessionCoaches
+                                .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
+                                .join(", ")
+                            : "Eğitmen atanmamış"}
+                        </strong>
+                      </div>
+
+                      <div style={sessionSummaryItemStyle}>
+                        <span style={sessionSummaryLabelStyle}>ÖĞRENCİ</span>
+                        <strong>{groupStudents.length}{capacity ? ` / ${capacity}` : ""}</strong>
+                      </div>
+
+                      <div style={sessionLevelWrapStyle}>
+                        {levelsInSession.length ? (
+                          levelsInSession.slice(0, 2).map((level: any) => (
+                            <span key={level} style={levelBadgeStyle}>{level}</span>
+                          ))
+                        ) : (
+                          <span style={mutedTextStyle}>Seviye yok</span>
+                        )}
+                      </div>
+
+                      <span style={sessionChevronStyle}>⌄</span>
                     </summary>
 
                     {/* =====================================
@@ -1746,7 +1718,7 @@ export default async function OperasyonPlaniPage({
                             assignmentTitleStyle
                           }
                         >
-                          Personel Ataması
+                          Eğitmen Ataması
                         </div>
 
                         <form
@@ -1825,7 +1797,7 @@ export default async function OperasyonPlaniPage({
                               compactPrimaryButtonStyle
                             }
                           >
-                            + Personel Ata
+                            + Eğitmen Ata
                           </button>
                         </form>
                       </section>
@@ -2739,20 +2711,20 @@ const scheduleGridStyle: React.CSSProperties = {
 const sessionCardStyle: React.CSSProperties = {
   background: "#fff",
   border: "1px solid #dfe7f1",
-  borderRadius: 20,
-  padding: 20,
-  boxShadow:
-    "0 10px 30px rgba(15,23,42,0.05)",
+  borderRadius: 16,
+  padding: 0,
+  overflow: "hidden",
+  boxShadow: "0 5px 18px rgba(15,23,42,0.035)",
 };
 
 const sessionHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 15,
-  flexWrap: "wrap",
-  paddingBottom: 16,
+  display: "grid",
+  gridTemplateColumns: "minmax(120px,.8fr) minmax(170px,1.2fr) minmax(170px,1.2fr) minmax(180px,1.3fr) minmax(100px,.7fr) auto auto",
+  alignItems: "center",
+  gap: 14,
+  padding: "14px 16px",
   borderBottom: "1px solid #edf1f6",
+  background: "#fff",
 };
 
 const sessionSummaryStyle: React.CSSProperties = {
@@ -2761,14 +2733,60 @@ const sessionSummaryStyle: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
 };
 
-const sessionCoachLineStyle: React.CSSProperties = {
-  marginTop: 8,
+const sessionTimeBlockStyle: React.CSSProperties = {
   display: "flex",
-  alignItems: "center",
-  gap: 7,
+  flexDirection: "column",
+  gap: 2,
+  minWidth: 0,
+};
+
+const sessionTimeTextStyle: React.CSSProperties = {
+  fontSize: 16,
+  color: "#13233f",
+  whiteSpace: "nowrap",
+};
+
+const sessionDayTextStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "#7a899f",
+};
+
+const sessionSummaryItemStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  minWidth: 0,
+  fontSize: 12,
+};
+
+const sessionSummaryLabelStyle: React.CSSProperties = {
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: ".08em",
+  color: "#94a3b8",
+};
+
+const sessionSummarySubStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "#7a899f",
+};
+
+const sessionLevelWrapStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 5,
   flexWrap: "wrap",
-  fontSize: 11,
-  color: "#64748b",
+  justifyContent: "flex-end",
+};
+
+const sessionChevronStyle: React.CSSProperties = {
+  fontSize: 20,
+  color: "#1769e8",
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const sessionCoachLineStyle: React.CSSProperties = {
+  display: "none",
 };
 
 const poolLabelStyle: React.CSSProperties = {
