@@ -78,5 +78,15 @@ export async function toggleBranch(formData: FormData) {
 }
 
 function revalidateBranches() {
-  revalidatePath("/subeler"); revalidatePath("/gruplar"); revalidatePath("/on-kayit");
+  [
+    "/subeler",
+    "/gruplar",
+    "/on-kayit",
+    "/on-kayitlar",
+    "/ders-programi",
+    "/operasyon-plani",
+    "/ders-operasyonlari",
+    "/yoklama",
+    "/",
+  ].forEach((path) => revalidatePath(path));
 }

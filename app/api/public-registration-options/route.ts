@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -215,6 +216,12 @@ export async function GET() {
       };
     });
 
+    const effectiveSchedules = filterEffectivelyActiveSchedules(
+      schedulesResult.data || [],
+      branchesResult.data || [],
+      groupsResult.data || []
+    );
+
     const formFields = formFieldsResult.data || [];
     const visibleFormFields = formFields.filter((field) => field.is_visible);
 
@@ -222,7 +229,7 @@ export async function GET() {
       {
         branches: branchesResult.data || [],
         groups: publicGroups,
-        schedules: schedulesResult.data || [],
+        schedules: effectiveSchedules,
         packages: packagesResult.data || [],
         levels,
         formFields,

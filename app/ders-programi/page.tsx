@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { activeSourceIds, isScheduleEffectivelyActive } from "@/lib/schedules/effective";
 
 import DersProgramiFormu from "./DersProgramiFormu";
 
@@ -737,17 +738,21 @@ export default async function DersProgramiPage({
       )
     );
 
-  const hasActiveSource = (item: any) =>
-    branchMap.has(item.branch_id) &&
-    groupMap.has(item.group_id);
+  const activeBranchIds = activeSourceIds(branches);
+  const activeGroupIds = activeSourceIds(groups);
 
-  // Bir şube veya grup pasife alındığında ona bağlı seanslar günlük
-  // çalışma ekranlarında görünmemelidir. Kayıtları silmiyor, yalnızca
-  // aktif kaynaklara bağlı programı gösteriyoruz.
-  const activeSchedules = schedules.filter(
-    (item: any) =>
-      item.is_active === true &&
-      hasActiveSource(item)
+  const hasActiveSource = (item: any) =>
+    activeBranchIds.has(String(item.branch_id || "")) &&
+    activeGroupIds.has(String(item.group_id || ""));
+
+  // Etkin seans tek bir tablodan değil, üç katmanın birlikte durumundan
+  // oluşur: aktif şube + aktif grup + aktif lesson_schedules kaydı.
+  const activeSchedules = schedules.filter((item: any) =>
+    isScheduleEffectivelyActive(
+      item,
+      activeBranchIds,
+      activeGroupIds
+    )
   );
 
   const passiveSchedules =

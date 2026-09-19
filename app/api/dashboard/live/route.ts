@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,11 @@ export async function GET() {
 
   const branches = branchesResult.data || [];
   const groups = groupsResult.data || [];
-  const schedules = schedulesResult.data || [];
+  const schedules = filterEffectivelyActiveSchedules(
+    schedulesResult.data || [],
+    branchesResult.data || [],
+    groupsResult.data || []
+  );
   const enrollments = enrollmentsResult.data || [];
   const attendance = attendanceResult.data || [];
   const students = studentsResult.data || [];
