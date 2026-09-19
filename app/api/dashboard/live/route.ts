@@ -44,7 +44,7 @@ export async function GET() {
   const supabase = await createClient();
   const today = turkeyDateParts();
 
-  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
@@ -55,6 +55,7 @@ export async function GET() {
     supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("cash_status", "handoff_pending"),
     supabase.from("alerts").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "open"),
     supabase.from("students").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pre_registration"),
+    supabase.from("birthday_celebrations").select("id,student_id,celebration_year,status,sent_at,sent_by").eq("organization_id", profile.organization_id).eq("celebration_year", Number(today.iso.slice(0, 4))).eq("status", "sent"),
   ]);
 
   const branches = branchesResult.data || [];
@@ -103,6 +104,8 @@ export async function GET() {
     };
   });
 
+  const celebrationMap = new Map((celebrationsResult.data || []).map((row: any) => [row.student_id, row]));
+
   const birthdays = students
     .filter((student) => {
       if (!student.birth_date) return false;
@@ -115,12 +118,16 @@ export async function GET() {
       const phone = phoneForWhatsApp(student.guardian_phone || student.phone);
       const fullName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
       const message = `🎂 *SPRİNT YÜZME OKULU*\n\nSevgili ${fullName}, doğum gününü kutluyor; sağlık, mutluluk ve başarı dolu nice güzel yaşlar diliyoruz. 🏊‍♂️🎉\n\n*Sprint Yüzme Okulu*`;
+      const celebration = celebrationMap.get(student.id) as any;
       return {
         id: student.id,
         name: fullName,
         age: Number.isFinite(birthYear) ? Math.max(0, currentYear - birthYear) : null,
         branchName: branchMap.get(student.branch_id || "") || "",
         whatsappUrl: phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : null,
+        celebrated: Boolean(celebration),
+        celebratedAt: celebration?.sent_at || null,
+        celebratedBy: celebration?.sent_by || null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
