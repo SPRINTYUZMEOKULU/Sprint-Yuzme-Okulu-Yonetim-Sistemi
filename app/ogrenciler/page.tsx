@@ -254,6 +254,7 @@ export default async function StudentsPage() {
         supabase
           .from("student_notes")
           .select("id,student_id,note_type,body,created_at")
+          .eq("organization_id", organizationId)
           .in("student_id", studentIds)
           .order("created_at", { ascending: false })
           .limit(5000),
@@ -261,6 +262,7 @@ export default async function StudentsPage() {
         supabase
           .from("student_activity_logs")
           .select("id,student_id,source_id,reminder_at,reminder_completed")
+          .eq("organization_id", organizationId)
           .in("student_id", studentIds)
           .eq("activity_type", "student_note_reminder")
           .eq("source_type", "student_note")
@@ -372,7 +374,11 @@ export default async function StudentsPage() {
 
   const lastAttendanceMap = new Map<string, any>();
   const lastAbsentMap = new Map<string, any>();
-  const latestNoteMap = latestByStudent((notesResult.data || []) as any[]);
+  const noteRows = (notesResult.data || []) as any[];
+  const latestNoteMap = latestByStudent(noteRows);
+  const noteByIdMap = new Map<string, any>(
+    noteRows.filter((row) => row?.id).map((row) => [String(row.id), row]),
+  );
   const noteCountMap = new Map<string, number>();
   const activeReminderMap = new Map<string, any>();
 
@@ -410,6 +416,9 @@ export default async function StudentsPage() {
       const nextCompensation = nextCompensationMap.get(student.id) as any;
       const latestNote = latestNoteMap.get(student.id) as any;
       const activeNoteReminder = activeReminderMap.get(student.id) as any;
+      const reminderNote = activeNoteReminder?.source_id
+        ? noteByIdMap.get(String(activeNoteReminder.source_id))
+        : undefined;
       const nextCompensationSchedule = nextCompensation?.target_schedule_id
         ? scheduleMap.get(nextCompensation.target_schedule_id)
         : undefined;
@@ -630,6 +639,7 @@ export default async function StudentsPage() {
         note_count: noteCountMap.get(student.id) || 0,
         active_note_reminder_at: activeNoteReminder?.reminder_at ?? null,
         active_note_reminder_id: activeNoteReminder?.id ?? null,
+        active_note_reminder_note_body: reminderNote?.body ?? null,
 
         created_at: student.created_at || null,
       };
