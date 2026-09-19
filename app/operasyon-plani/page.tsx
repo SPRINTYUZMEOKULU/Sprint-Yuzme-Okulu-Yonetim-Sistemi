@@ -992,6 +992,12 @@ export default async function OperasyonPlaniPage({
                 params.seviye
               );
 
+            if (params.kapsam)
+              qp.set(
+                "kapsam",
+                params.kapsam
+              );
+
             return (
               <Link
                 key={key}
@@ -1031,6 +1037,14 @@ export default async function OperasyonPlaniPage({
               "seans"
             }
           />
+
+          {params.kapsam && (
+            <input
+              type="hidden"
+              name="kapsam"
+              value={params.kapsam}
+            />
+          )}
 
           <div style={filterFieldStyle}>
             <label style={labelStyle}>
