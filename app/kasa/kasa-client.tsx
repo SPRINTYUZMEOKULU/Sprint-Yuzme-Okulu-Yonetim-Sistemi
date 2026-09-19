@@ -44,6 +44,8 @@ export type CashPaymentRow = {
 type Props = {
   rows: CashPaymentRow[];
   currentProfileId: string;
+  dayLabel: string;
+  isToday: boolean;
 };
 
 type FilterKey =
@@ -136,6 +138,8 @@ function cashStatusLabel(
 
 export default function KasaClient({
   rows,
+  dayLabel,
+  isToday,
 }: Props) {
   const router = useRouter();
 
@@ -389,7 +393,9 @@ export default function KasaClient({
           }
         >
           <span>
-            Bugün Toplam Tahsilat
+            {isToday
+              ? "Bugün Toplam Tahsilat"
+              : `${dayLabel} Toplam Tahsilat`}
           </span>
           <strong>{money(total)}</strong>
         </button>
@@ -552,7 +558,9 @@ export default function KasaClient({
             <p>GÜNLÜK HAREKET</p>
 
             <h2>
-              Bugün Alınan Ödemeler
+              {isToday
+                ? "Bugün Alınan Ödemeler"
+                : `${dayLabel} Alınan Ödemeler`}
             </h2>
           </div>
 
