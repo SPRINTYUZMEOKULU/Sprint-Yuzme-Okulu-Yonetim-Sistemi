@@ -154,6 +154,7 @@ async function dersOlustur(
       organizationId
     )
     .eq("id", groupId)
+    .eq("is_active", true)
     .single();
 
   if (
@@ -161,7 +162,24 @@ async function dersOlustur(
     !group
   ) {
     throw new Error(
-      "Seçilen grup bulunamadı."
+      "Seçilen grup aktif değil veya bulunamadı."
+    );
+  }
+
+  const {
+    data: branch,
+    error: branchError,
+  } = await supabase
+    .from("branches")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("id", branchId)
+    .eq("is_active", true)
+    .single();
+
+  if (branchError || !branch) {
+    throw new Error(
+      "Seçilen şube aktif değil veya bulunamadı."
     );
   }
 
@@ -697,19 +715,29 @@ export default async function DersProgramiPage() {
       )
     );
 
-  const activeSchedules =
-    schedules.filter(
-      (item: any) =>
-        item.is_active ===
-        true
-    );
+  const hasActiveSource = (item: any) =>
+    branchMap.has(item.branch_id) &&
+    groupMap.has(item.group_id);
+
+  // Bir şube veya grup pasife alındığında ona bağlı seanslar günlük
+  // çalışma ekranlarında görünmemelidir. Kayıtları silmiyor, yalnızca
+  // aktif kaynaklara bağlı programı gösteriyoruz.
+  const activeSchedules = schedules.filter(
+    (item: any) =>
+      item.is_active === true &&
+      hasActiveSource(item)
+  );
 
   const passiveSchedules =
     schedules.filter(
       (item: any) =>
-        item.is_active !==
-        true
+        item.is_active !== true &&
+        hasActiveSource(item)
     );
+
+  const unavailableSourceSchedules = schedules.filter(
+    (item: any) => !hasActiveSource(item)
+  );
 
   const canEdit = [
     "owner",
@@ -1285,6 +1313,31 @@ export default async function DersProgramiPage() {
               </div>
             </section>
           )}
+
+        {canEdit && unavailableSourceSchedules.length > 0 && (
+          <details style={passiveCardStyle}>
+            <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+              Pasif şube veya gruba bağlı kayıtları göster ({unavailableSourceSchedules.length})
+            </summary>
+            <p style={sectionSubtitleStyle}>
+              Bu kayıtlar aktif ders programına ve Operasyon Planına dahil edilmez.
+            </p>
+            <div style={passiveGridStyle}>
+              {unavailableSourceSchedules.map((schedule: any) => (
+                <div key={schedule.id} style={passiveItemStyle}>
+                  <div>
+                    <strong>
+                      {gunAdi(Number(schedule.weekday))} · {saat(schedule.start_time)}
+                    </strong>
+                    <span style={passiveMetaStyle}>
+                      Pasif şube/grup kaydı · Arşiv
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </main>
   );
