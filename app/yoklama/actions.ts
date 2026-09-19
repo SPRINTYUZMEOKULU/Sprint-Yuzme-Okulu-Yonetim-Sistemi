@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/profile";
+import { createNotification } from "@/lib/notifications/create-notification";
 
 type AttendanceStatus =
   | "present"
@@ -231,6 +232,49 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       };
     }
 
+    // Eğitmen yalnızca kendisine atanmış grup/seanslarda yoklama alabilir.
+    // owner/admin gibi yönetim rolleri kurum genelinde işlem yapmaya devam eder.
+    if (profile.role === "coach") {
+      const { data: coachStaff, error: coachStaffError } = await supabase
+        .from("staff")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("auth_user_id", profile.id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (coachStaffError || !coachStaff?.id) {
+        return {
+          ok: false,
+          count: 0,
+          message: "Eğitmen personel kaydınız bulunamadı. Yoklama yetkisi doğrulanamadı.",
+        };
+      }
+
+      const { data: staffAssignment } = await supabase
+        .from("lesson_staff_assignments")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("coach_id", coachStaff.id)
+        .eq("is_active", true)
+        .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+        .limit(1)
+        .maybeSingle();
+
+      const assignedDirectly =
+        schedule.coach_id === coachStaff.id ||
+        group.primary_coach_id === coachStaff.id ||
+        Boolean(staffAssignment?.id);
+
+      if (!assignedDirectly) {
+        return {
+          ok: false,
+          count: 0,
+          message: "Bu seans size atanmış değil. Yalnızca kendi grup ve seanslarınızın yoklamasını alabilirsiniz.",
+        };
+      }
+    }
+
     const studentIds = uniqueStrings(
       input.records.map((record) => record.studentId)
     );
@@ -326,6 +370,19 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       }
     }
 
+    const { data: previousAttendance } = await supabase
+      .from("attendance_records")
+      .select("student_id,status")
+      .eq("organization_id", organizationId)
+      .eq("group_id", input.groupId)
+      .eq("schedule_id", input.scheduleId)
+      .eq("lesson_date", input.lessonDate)
+      .in("student_id", studentIds);
+
+    const previousStatus = new Map(
+      (previousAttendance || []).map((item: any) => [String(item.student_id), String(item.status || "")])
+    );
+
     const now = new Date().toISOString();
 
     const rows = input.records.map((record) => ({
@@ -420,6 +477,99 @@ export async function saveAttendance(input: SaveAttendanceInput) {
     revalidatePath("/odemeler");
     revalidatePath("/");
     revalidatePath("/veli-paneli");
+    revalidatePath("/veli-devam");
+
+    // Yeni bir "gelmedi" kaydı oluştuğunda yönetim + atanmış eğitmenlere,
+    // portal hesabı olan veli/kursiyer tarafına da bildirim üret.
+    const newlyAbsent = input.records.filter(
+      (record) => record.status === "absent" && previousStatus.get(record.studentId) !== "absent"
+    );
+
+    for (const record of newlyAbsent) {
+      const { data: student } = await supabase
+        .from("students")
+        .select("id,first_name,last_name")
+        .eq("organization_id", organizationId)
+        .eq("id", record.studentId)
+        .maybeSingle();
+
+      const studentName = `${student?.first_name || ""} ${student?.last_name || ""}`.trim() || "Kursiyer";
+      const body = `${studentName}, ${input.lessonDate} tarihli derse katılmadı.`;
+
+      try {
+        await createNotification({
+          organizationId,
+          title: "Devamsızlık kaydedildi",
+          body,
+          category: "attendance",
+          eventKey: `attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
+          notificationType: "attendance_absent",
+          severity: "warning",
+          priority: "high",
+          studentId: record.studentId,
+          sourceType: "schedule",
+          sourceId: input.scheduleId,
+          targetPath: `/ogrenciler/${record.studentId}?tab=yoklama`,
+          metadata: {
+            branchId: schedule.branch_id ?? group.branch_id ?? input.branchId ?? null,
+            groupId: input.groupId,
+            scheduleId: input.scheduleId,
+            coachProfileId: profile.role === "coach" ? profile.id : null,
+          },
+          createdBy: profile.id,
+          push: true,
+        });
+      } catch (notificationError) {
+        console.error("Attendance staff notification:", notificationError);
+      }
+
+      try {
+        const { data: guardianLinks } = await supabase
+          .from("guardian_students")
+          .select("guardian_id")
+          .eq("student_id", record.studentId)
+          .eq("portal_access", true);
+
+        const guardianIds = uniqueStrings((guardianLinks || []).map((item: any) => item.guardian_id));
+        if (guardianIds.length) {
+          const { data: guardians } = await supabase
+            .from("guardians")
+            .select("auth_user_id")
+            .eq("organization_id", organizationId)
+            .in("id", guardianIds)
+            .eq("is_active", true)
+            .eq("login_enabled", true);
+
+          const guardianProfileIds = uniqueStrings((guardians || []).map((item: any) => item.auth_user_id));
+          if (guardianProfileIds.length) {
+            await createNotification({
+              organizationId,
+              title: "Ders katılım bilgisi",
+              body: `${studentName}, ${input.lessonDate} tarihli derse katılmadı. Detayları Dersler & Yoklama ekranından görebilirsiniz.`,
+              category: "attendance",
+              eventKey: `guardian_attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
+              notificationType: "guardian_attendance_absent",
+              severity: "warning",
+              priority: "high",
+              studentId: record.studentId,
+              sourceType: "schedule",
+              sourceId: input.scheduleId,
+              targetPath: `/veli-devam?child=${record.studentId}`,
+              recipientProfileIds: guardianProfileIds,
+              metadata: {
+                branchId: schedule.branch_id ?? group.branch_id ?? input.branchId ?? null,
+                groupId: input.groupId,
+                scheduleId: input.scheduleId,
+              },
+              createdBy: profile.id,
+              push: true,
+            });
+          }
+        }
+      } catch (guardianNotificationError) {
+        console.error("Attendance guardian notification:", guardianNotificationError);
+      }
+    }
 
     for (const studentId of syncResult.studentIds) {
       revalidatePath(`/ogrenciler/${studentId}`);
