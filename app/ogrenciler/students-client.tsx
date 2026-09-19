@@ -5966,13 +5966,24 @@ function closeLessonAction() {
   }
   .studentStatusTabs button{
     min-width:0;
-    min-height:40px;
-    padding:0 5px;
-    font-size:11px;
-    line-height:1.15;
+    min-height:48px;
+    padding:5px 3px;
+    font-size:10px;
+    line-height:1.05;
     text-align:center;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    overflow:hidden;
   }
-  .studentStatusTabs b{margin-left:2px;font-size:11px}
+  .studentStatusTabs button b{
+    margin-left:0;
+    font-size:10px;
+    line-height:1;
+    font-weight:900;
+  }
   .dataPanelToggle{min-height:54px}
 }
 
