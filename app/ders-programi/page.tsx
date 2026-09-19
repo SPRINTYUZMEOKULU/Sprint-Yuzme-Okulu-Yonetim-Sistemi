@@ -349,7 +349,7 @@ async function seansPasifYap(
   const supabase =
     await createClient();
 
-  const { error } =
+  const { data: updatedSchedule, error } =
     await supabase
       .from(
         "lesson_schedules"
@@ -364,11 +364,19 @@ async function seansPasifYap(
       .eq(
         "id",
         scheduleId
-      );
+      )
+      .select("id,is_active")
+      .maybeSingle();
 
   if (error) {
     throw new Error(
       `Seans pasif yapılamadı: ${error.message}`
+    );
+  }
+
+  if (!updatedSchedule || updatedSchedule.is_active !== false) {
+    throw new Error(
+      "Seans pasife alınamadı. Kayıt güncellenmedi."
     );
   }
 
@@ -421,7 +429,45 @@ async function seansAktifYap(
   const supabase =
     await createClient();
 
-  const { error } =
+  const { data: schedule, error: scheduleLoadError } =
+    await supabase
+      .from("lesson_schedules")
+      .select("id,branch_id,group_id")
+      .eq("organization_id", organizationId)
+      .eq("id", scheduleId)
+      .maybeSingle();
+
+  if (scheduleLoadError || !schedule) {
+    throw new Error(
+      "Seans kaydı bulunamadı."
+    );
+  }
+
+  const [branchResult, groupResult] = await Promise.all([
+    supabase
+      .from("branches")
+      .select("id,is_active")
+      .eq("organization_id", organizationId)
+      .eq("id", schedule.branch_id)
+      .maybeSingle(),
+    supabase
+      .from("training_groups")
+      .select("id,is_active")
+      .eq("organization_id", organizationId)
+      .eq("id", schedule.group_id)
+      .maybeSingle(),
+  ]);
+
+  if (
+    branchResult.data?.is_active !== true ||
+    groupResult.data?.is_active !== true
+  ) {
+    throw new Error(
+      "Bu seans pasif bir şube veya gruba bağlı. Önce ilgili şube ve grubu aktif hale getirin."
+    );
+  }
+
+  const { data: updatedSchedule, error } =
     await supabase
       .from(
         "lesson_schedules"
@@ -436,11 +482,19 @@ async function seansAktifYap(
       .eq(
         "id",
         scheduleId
-      );
+      )
+      .select("id,is_active")
+      .maybeSingle();
 
   if (error) {
     throw new Error(
       `Seans tekrar etkinleştirilemedi: ${error.message}`
+    );
+  }
+
+  if (!updatedSchedule || updatedSchedule.is_active !== true) {
+    throw new Error(
+      "Seans aktif hale getirilemedi. Kayıt güncellenmedi."
     );
   }
 
@@ -771,6 +825,13 @@ export default async function DersProgramiPage({
       )
   );
 
+  // Kaynağı aktif olan fakat seans kaydı pasif edilenler.
+  const directlyPassiveSchedules = passiveSchedules.filter(
+    (item: any) => hasActiveSource(item) && item.is_active !== true
+  );
+
+  // Şube veya grup kapalıysa kayıt arşivde tutulur; doğrudan tekrar
+  // aktifleştirilmez. Önce kaynak şube/grup açılmalıdır.
   const unavailableSourceSchedules = passiveSchedules.filter(
     (item: any) => !hasActiveSource(item)
   );
@@ -1307,7 +1368,7 @@ export default async function DersProgramiPage({
 
         {canEdit &&
           showPassive &&
-          passiveSchedules.length >
+          directlyPassiveSchedules.length >
             0 && (
             <section
               style={
@@ -1343,7 +1404,7 @@ export default async function DersProgramiPage({
                   passiveGridStyle
                 }
               >
-                {passiveSchedules.map(
+                {directlyPassiveSchedules.map(
                   (
                     schedule: any
                   ) => {
