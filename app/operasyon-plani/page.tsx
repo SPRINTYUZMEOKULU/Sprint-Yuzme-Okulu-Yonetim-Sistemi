@@ -887,17 +887,17 @@ export default async function OperasyonPlaniPage({
           <div style={operationActionGridStyle}>
             <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
               <span style={operationIconStyle}><Icons.branch /></span>
-              <span><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
+              <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
             <Link href="/ders-operasyonlari" style={operationActionStyle}>
               <span style={operationIconStyle}><Icons.calendar /></span>
-              <span><b>Ders Yapılmadı / Telafi</b><small>Seans iptali · hak düşme · telafi planla</small></span>
+              <span style={operationActionTextStyle}><b>Ders Yapılmadı / Telafi</b><small>Seans iptali · hak düşme · telafi planla</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
             <Link href="/yoklama" style={operationActionStyle}>
               <span style={operationIconStyle}><Icons.check /></span>
-              <span><b>Yoklama</b><small>Katılımı kaydet · merkezi bakiyeyi güncelle</small></span>
+              <span style={operationActionTextStyle}><b>Yoklama</b><small>Katılımı kaydet · merkezi bakiyeyi güncelle</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
           </div>
@@ -2495,6 +2495,7 @@ const operationActionGridStyle = { display: "grid", gridTemplateColumns: "repeat
 const operationActionStyle = { minHeight: 72, display: "flex", alignItems: "center", gap: 11, textDecoration: "none", background: "#f8fbff", border: "1px solid #dce7f5", borderRadius: 15, padding: "12px 13px", color: "#13233f" } as const;
 const operationActionPrimaryStyle = { ...operationActionStyle, background: "#1769e8", borderColor: "#1769e8", color: "#fff" } as const;
 const operationIconStyle = { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.18)", flexShrink: 0 } as const;
+const operationActionTextStyle = { display:"flex", minWidth:0, flexDirection:"column", gap:3, lineHeight:1.25 } as const;
 const operationArrowStyle = { marginLeft: "auto", fontSize: 20, fontWeight: 800 } as const;
 
 const pageStyle: React.CSSProperties = {
