@@ -9,6 +9,7 @@ import DersProgramiFormu from "./DersProgramiFormu";
 
 export const dynamic = "force-dynamic";
 
+// PostgreSQL / JS ortak hafta standardı: 0=Pazar, 1=Pazartesi ... 6=Cumartesi.
 const GUNLER = [
   { id: 1, ad: "Pazartesi" },
   { id: 2, ad: "Salı" },
@@ -16,7 +17,7 @@ const GUNLER = [
   { id: 4, ad: "Perşembe" },
   { id: 5, ad: "Cuma" },
   { id: 6, ad: "Cumartesi" },
-  { id: 7, ad: "Pazar" },
+  { id: 0, ad: "Pazar" },
 ];
 
 function gunAdi(value: number) {
@@ -91,8 +92,8 @@ async function dersOlustur(
         .filter(
           (item) =>
             Number.isInteger(item) &&
-            item >= 1 &&
-            item <= 7
+            item >= 0 &&
+            item <= 6
         )
     )
   );
@@ -548,10 +549,6 @@ export default async function DersProgramiPage({
         "organization_id",
         organizationId
       )
-      .eq(
-        "is_active",
-        true
-      )
       .order("name"),
 
     supabase
@@ -564,10 +561,6 @@ export default async function DersProgramiPage({
       .eq(
         "organization_id",
         organizationId
-      )
-      .eq(
-        "is_active",
-        true
       )
       .order("name"),
 
@@ -694,6 +687,15 @@ export default async function DersProgramiPage({
     groupsResult.data ||
     [];
 
+  // Tek gerçek kaynak: şube + grup + seans aktiflik zinciri.
+  // Listeleme için tüm kaynakları tutuyoruz; seçim ekranlarına yalnız aktifleri veriyoruz.
+  const activeBranches = branches.filter((item: any) => item.is_active === true);
+  const activeGroups = groups.filter(
+    (item: any) =>
+      item.is_active === true &&
+      activeBranches.some((branch: any) => branch.id === item.branch_id)
+  );
+
   const coaches =
     coachesResult.data ||
     [];
@@ -757,20 +759,23 @@ export default async function DersProgramiPage({
     )
   );
 
-  const passiveSchedules =
-    schedules.filter(
-      (item: any) =>
-        item.is_active !== true &&
-        hasActiveSource(item)
-    );
+  // Pasif sekmesi yalnız lesson_schedules.is_active=false kayıtlarını değil,
+  // pasif şube/gruba bağlı kayıtları da kapsar. Böylece bir kayıt iki sekmede
+  // aynı anda görünemez.
+  const passiveSchedules = schedules.filter(
+    (item: any) =>
+      !isScheduleEffectivelyActive(
+        item,
+        activeBranchIds,
+        activeGroupIds
+      )
+  );
 
-  const unavailableSourceSchedules = schedules.filter(
+  const unavailableSourceSchedules = passiveSchedules.filter(
     (item: any) => !hasActiveSource(item)
   );
 
-  const passiveTotal =
-    passiveSchedules.length +
-    unavailableSourceSchedules.length;
+  const passiveTotal = passiveSchedules.length;
 
   const currentProgramHref =
     durum === "aktif"
@@ -871,7 +876,7 @@ export default async function DersProgramiPage({
           <SummaryCard
             title="Aktif Grup"
             value={
-              groups.length
+              activeGroups.length
             }
           />
 
@@ -892,7 +897,7 @@ export default async function DersProgramiPage({
           <SummaryCard
             title="Havuz / Şube"
             value={
-              branches.length
+              activeBranches.length
             }
           />
         </section>
@@ -948,9 +953,9 @@ export default async function DersProgramiPage({
 
             <DersProgramiFormu
               branches={
-                branches
+                activeBranches
               }
-              groups={groups}
+              groups={activeGroups}
               coaches={
                 coaches
               }
