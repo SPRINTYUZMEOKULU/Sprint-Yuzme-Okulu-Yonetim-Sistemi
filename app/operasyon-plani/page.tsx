@@ -536,10 +536,15 @@ export default async function OperasyonPlaniPage({
     groups
   );
 
-  const schedules = allSchedules.filter(
-    (schedule: any) =>
-      Number(schedule.weekday) === selectedWeekday
-  );
+  const planScope = params.kapsam || "hafta";
+
+  const schedules =
+    planScope === "hafta"
+      ? allSchedules
+      : allSchedules.filter(
+          (schedule: any) =>
+            Number(schedule.weekday) === selectedWeekday
+        );
 
   const coachMap = new Map(
     coaches.map((item: any) => [
@@ -905,32 +910,47 @@ export default async function OperasyonPlaniPage({
         <section style={controlPanelStyle}>
           <div style={scopeSwitchStyle}>
             <Link
-              href={`/operasyon-plani?tarih=${selectedDate}&gorunum=ogrenci&kapsam=tumu`}
+              href={`/operasyon-plani?tarih=${selectedDate}&kapsam=hafta`}
               style={
-                params.kapsam === "tumu"
+                planScope === "hafta"
                   ? scopeButtonActiveStyle
                   : scopeButtonStyle
               }
             >
-              <span>👥</span>
-              <span>
-                <b>Tüm Aktif Kursiyerler</b>
-                <small>Kalıcı grup · seviye · eğitmen planı</small>
+              <span>🗓️</span>
+              <span style={scopeTextStyle}>
+                <b>Haftalık Planlama</b>
+                <small>Tüm aktif seanslar · grup · eğitmen · öğrenci</small>
               </span>
             </Link>
 
             <Link
-              href={`/operasyon-plani?tarih=${selectedDate}`}
+              href={`/operasyon-plani?tarih=${selectedDate}&kapsam=gun`}
               style={
-                params.kapsam !== "tumu"
+                planScope === "gun"
                   ? scopeButtonActiveStyle
                   : scopeButtonStyle
               }
             >
               <span>📅</span>
-              <span>
-                <b>Günlük Seans Planı</b>
-                <small>Bugünün havuz ve yoklama akışı</small>
+              <span style={scopeTextStyle}>
+                <b>Günlük Seans</b>
+                <small>Seçili günün havuz ve yoklama akışı</small>
+              </span>
+            </Link>
+
+            <Link
+              href={`/operasyon-plani?tarih=${selectedDate}&gorunum=ogrenci&kapsam=tumu`}
+              style={
+                planScope === "tumu"
+                  ? scopeButtonActiveStyle
+                  : scopeButtonStyle
+              }
+            >
+              <span>👥</span>
+              <span style={scopeTextStyle}>
+                <b>Tüm Aktif Kursiyerler</b>
+                <small>Kalıcı grup · seviye · eğitmen planı</small>
               </span>
             </Link>
           </div>
@@ -940,7 +960,11 @@ export default async function OperasyonPlaniPage({
               <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
               <p style={controlPanelTextStyle}>Seansları ihtiyacınıza göre tek dokunuşla gruplayın ve filtreleyin.</p>
             </div>
-            <span style={controlDateBadgeStyle}>{GUNLER[selectedWeekday]} · {selectedDate.split("-").reverse().join(".")}</span>
+            <span style={controlDateBadgeStyle}>
+              {planScope === "hafta"
+                ? "Haftalık aktif plan"
+                : `${GUNLER[selectedWeekday]} · ${selectedDate.split("-").reverse().join(".")}`}
+            </span>
           </div>
           <div style={viewBarStyle}>
           {[
@@ -1260,9 +1284,9 @@ export default async function OperasyonPlaniPage({
         <section style={dayTitleStyle}>
           <div>
             <span style={dayBadgeStyle}>
-              {GUNLER[
-                selectedWeekday
-              ]}
+              {planScope === "hafta"
+                ? "Haftalık"
+                : GUNLER[selectedWeekday]}
             </span>
 
             <strong
@@ -1270,18 +1294,20 @@ export default async function OperasyonPlaniPage({
                 marginLeft: 10,
               }}
             >
-              {new Intl.DateTimeFormat(
-                "tr-TR",
-                {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                }
-              ).format(
-                new Date(
-                  `${selectedDate}T12:00:00+03:00`
-                )
-              )}
+              {planScope === "hafta"
+                ? "Tüm aktif seans planı"
+                : new Intl.DateTimeFormat(
+                    "tr-TR",
+                    {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    }
+                  ).format(
+                    new Date(
+                      `${selectedDate}T12:00:00+03:00`
+                    )
+                  )}
             </strong>
           </div>
 
@@ -1291,10 +1317,7 @@ export default async function OperasyonPlaniPage({
               fontSize: 13,
             }}
           >
-            {
-              filteredSchedules.length
-            }{" "}
-            aktif seans
+            {filteredSchedules.length} aktif seans
           </span>
         </section>
         )}
@@ -1475,20 +1498,20 @@ export default async function OperasyonPlaniPage({
                     : 0;
 
                 return (
-                  <article
-                    key={
-                      schedule.id
-                    }
+                  <details
+                    key={schedule.id}
                     style={sessionCardStyle}
+                    open={filteredSchedules.length === 1}
                   >
                     {/* =====================================
                         SEANS BAŞLIĞI
                     ===================================== */}
 
-                    <header
-                      style={
-                        sessionHeaderStyle
-                      }
+                    <summary
+                      style={{
+                        ...sessionHeaderStyle,
+                        ...sessionSummaryStyle,
+                      }}
                     >
                       <div>
                         <div
@@ -1521,6 +1544,9 @@ export default async function OperasyonPlaniPage({
                             sessionSubtitleStyle
                           }
                         >
+                          {planScope === "hafta"
+                            ? `${GUNLER[Number(schedule.weekday)] || "Ders"} · `
+                            : ""}
                           {group?.name ||
                             "Grup Atanmamış"}
 
@@ -1528,6 +1554,21 @@ export default async function OperasyonPlaniPage({
                             ? ` · ${group.course_type}`
                             : ""}
                         </p>
+                        <div style={sessionCoachLineStyle}>
+                          <span>Eğitmen</span>
+                          <strong>
+                            {sessionCoaches.length > 0
+                              ? sessionCoaches
+                                  .map(
+                                    (coach: any) =>
+                                      coach.full_name ||
+                                      coach.email ||
+                                      "Eğitmen"
+                                  )
+                                  .join(", ")
+                              : "Atanmamış"}
+                          </strong>
+                        </div>
                       </div>
 
                       <div
@@ -1556,7 +1597,7 @@ export default async function OperasyonPlaniPage({
                           label="Seviye"
                         />
                       </div>
-                    </header>
+                    </summary>
 
                     {/* =====================================
                         SEVİYE + KAPASİTE
@@ -2216,10 +2257,10 @@ export default async function OperasyonPlaniPage({
                                         }
                                       >
                                         <option value="">
-                                          Eğitmen Ata
+                                          Eğitmen seç / kaldır
                                         </option>
 
-                                        {sessionCoaches.map(
+                                        {coaches.map(
                                           (
                                             coach: any
                                           ) => (
@@ -2345,7 +2386,7 @@ export default async function OperasyonPlaniPage({
                         </Link>
                       </section>
                     )}
-                  </article>
+                  </details>
                 );
               }
             )}
@@ -2428,8 +2469,9 @@ const sessionDangerButtonStyle = { ...sessionBaseButtonStyle, color:"#a43a22", b
 const sessionPurpleButtonStyle = { ...sessionBaseButtonStyle, color:"#6d36c9", background:"#f8f4ff", borderColor:"#e2d5ff" } as const;
 const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", background:"#fff", borderColor:"#cfe0f5" } as const;
 
-const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:8, marginBottom:12 } as const;
-const scopeButtonStyle = { display:"flex", alignItems:"center", gap:10, minHeight:58, padding:"10px 12px", border:"1px solid #dce7f5", borderRadius:13, background:"#f8fbff", color:"#38516f", textDecoration:"none" } as const;
+const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:8, marginBottom:12 } as const;
+const scopeButtonStyle = { display:"flex", alignItems:"center", gap:10, minHeight:68, padding:"11px 12px", border:"1px solid #dce7f5", borderRadius:13, background:"#f8fbff", color:"#38516f", textDecoration:"none", minWidth:0 } as const;
+const scopeTextStyle = { display:"flex", minWidth:0, flexDirection:"column", gap:3, lineHeight:1.25 } as const;
 const scopeButtonActiveStyle = { ...scopeButtonStyle, borderColor:"#1769e8", background:"#1769e8", color:"#fff", boxShadow:"0 8px 18px rgba(23,105,232,.18)" } as const;
 
 const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
@@ -2710,6 +2752,22 @@ const sessionHeaderStyle: React.CSSProperties = {
   flexWrap: "wrap",
   paddingBottom: 16,
   borderBottom: "1px solid #edf1f6",
+};
+
+const sessionSummaryStyle: React.CSSProperties = {
+  cursor: "pointer",
+  listStyle: "none",
+  WebkitTapHighlightColor: "transparent",
+};
+
+const sessionCoachLineStyle: React.CSSProperties = {
+  marginTop: 8,
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  flexWrap: "wrap",
+  fontSize: 11,
+  color: "#64748b",
 };
 
 const poolLabelStyle: React.CSSProperties = {
