@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 
 import { Icons } from "@/app/components/dashboard-icons";
 import UstGezinme from "@/app/components/UstGezinme";
@@ -527,12 +528,12 @@ export default async function OperasyonPlaniPage({
     ])
   );
 
-  // Pasife alınmış şube veya grupların eski seans kayıtları veritabanında
-  // geçmiş için korunur; operasyon ekranında ise kesinlikle çalışmaz.
-  const allSchedules = rawSchedules.filter(
-    (schedule: any) =>
-      branchMap.has(schedule.branch_id) &&
-      groupMap.has(schedule.group_id)
+  // Operasyonun tek doğruluk kuralı:
+  // aktif şube + aktif grup + aktif seans.
+  const allSchedules = filterEffectivelyActiveSchedules(
+    rawSchedules,
+    branches,
+    groups
   );
 
   const schedules = allSchedules.filter(
