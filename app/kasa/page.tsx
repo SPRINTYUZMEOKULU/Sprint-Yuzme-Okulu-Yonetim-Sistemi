@@ -1,4 +1,5 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import Link from "next/link";
 
 import FinanceQuickNav from "@/app/components/finance-quick-nav";
 import { requireProfile } from "@/lib/auth/profile";
@@ -34,7 +35,7 @@ function createFinanceAdminClient() {
   });
 }
 
-function getIstanbulTodayBounds() {
+function getIstanbulTodayKey() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
@@ -42,9 +43,41 @@ function getIstanbulTodayBounds() {
     day: "2-digit",
   }).formatToParts(new Date());
 
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const day = Number(parts.find((part) => part.type === "day")?.value);
+  const year = parts.find((part) => part.type === "year")?.value || "";
+  const month = parts.find((part) => part.type === "month")?.value || "";
+  const day = parts.find((part) => part.type === "day")?.value || "";
+
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeSelectedDate(value: string | undefined, todayKey: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return todayKey;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return todayKey;
+  }
+
+  return value > todayKey ? todayKey : value;
+}
+
+function shiftDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+
+  return shifted.toISOString().slice(0, 10);
+}
+
+function getIstanbulDayBounds(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
 
   // Türkiye kalıcı olarak UTC+03:00 kullanıyor. Kasa günü İstanbul yerel
   // saatine göre 00:00–24:00 aralığında hesaplanır; Vercel sunucu saatine bağlı kalmaz.
@@ -57,7 +90,30 @@ function getIstanbulTodayBounds() {
   };
 }
 
-export default async function CashPage() {
+function formatDayLabel(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    timeZone: "Europe/Istanbul",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, day, 12, 0, 0)));
+}
+
+export default async function CashPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const { date } = await searchParams;
+  const todayKey = getIstanbulTodayKey();
+  const selectedDateKey = normalizeSelectedDate(date, todayKey);
+  const selectedDayLabel = formatDayLabel(selectedDateKey);
+  const previousDateKey = shiftDateKey(selectedDateKey, -1);
+  const nextDateKey = shiftDateKey(selectedDateKey, 1);
+  const isToday = selectedDateKey === todayKey;
+  const canGoNext = nextDateKey <= todayKey;
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -110,7 +166,7 @@ export default async function CashPage() {
     );
   }
 
-  const { startIso, endIso } = getIstanbulTodayBounds();
+  const { startIso, endIso } = getIstanbulDayBounds(selectedDateKey);
 
   const [paymentsResult, studentsResult, profilesResult] = await Promise.all([
     supabase
@@ -211,15 +267,142 @@ export default async function CashPage() {
           <p>SPRİNTOS · FİNANS VE KASA</p>
           <h1>Günlük Kasa</h1>
           <span>
-            Bugün alınan ödemeleri, ödeme yöntemlerini, personeldeki nakdi ve
-            ana kasa teslim durumunu tek ekrandan yönetin.
+            {isToday ? "Bugün" : selectedDayLabel} alınan ödemeleri, ödeme
+            yöntemlerini, personeldeki nakdi ve ana kasa teslim durumunu tek
+            ekrandan yönetin.
           </span>
         </div>
       </header>
 
       <FinanceQuickNav />
 
-      <KasaClient rows={rows} currentProfileId={profile.id} />
+      <section className="cashDateNavigator" aria-label="Kasa tarihi">
+        <Link href={`/kasa?date=${previousDateKey}`} className="cashDateArrow">
+          ← Önceki Gün
+        </Link>
+
+        <div className="cashDateCurrent">
+          <small>{isToday ? "BUGÜN" : "SEÇİLİ GÜN"}</small>
+          <strong>{selectedDayLabel}</strong>
+        </div>
+
+        {canGoNext ? (
+          <Link href={`/kasa?date=${nextDateKey}`} className="cashDateArrow">
+            Sonraki Gün →
+          </Link>
+        ) : (
+          <span className="cashDateArrow disabled" aria-disabled="true">
+            Sonraki Gün →
+          </span>
+        )}
+      </section>
+
+      {!isToday ? (
+        <div className="cashTodayShortcut">
+          <Link href="/kasa">Bugünün Kasasına Dön</Link>
+        </div>
+      ) : null}
+
+      <KasaClient
+        rows={rows}
+        currentProfileId={profile.id}
+        dayLabel={selectedDayLabel}
+        isToday={isToday}
+      />
+
+      <style>{`
+        .cashDateNavigator {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+          align-items: center;
+          gap: 14px;
+          margin: 18px 0;
+          padding: 14px;
+          border: 1px solid #d7e4f4;
+          border-radius: 22px;
+          background: #ffffff;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+        }
+
+        .cashDateArrow {
+          min-height: 48px;
+          padding: 0 16px;
+          border: 1px solid #d7e4f4;
+          border-radius: 15px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #16345c;
+          background: #f8fbff;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        .cashDateArrow:last-child {
+          justify-self: end;
+        }
+
+        .cashDateArrow.disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        .cashDateCurrent {
+          min-width: 220px;
+          text-align: center;
+          display: grid;
+          gap: 3px;
+        }
+
+        .cashDateCurrent small {
+          color: #2372e8;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          font-size: 11px;
+        }
+
+        .cashDateCurrent strong {
+          color: #102542;
+          font-size: 17px;
+        }
+
+        .cashTodayShortcut {
+          margin: -4px 0 16px;
+          text-align: center;
+        }
+
+        .cashTodayShortcut a {
+          color: #2372e8;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        @media (max-width: 720px) {
+          .cashDateNavigator {
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            border-radius: 18px;
+          }
+
+          .cashDateCurrent {
+            grid-column: 1 / -1;
+            grid-row: 1;
+            min-width: 0;
+            padding: 4px 0 8px;
+          }
+
+          .cashDateArrow {
+            width: 100%;
+            min-height: 46px;
+            padding: 0 10px;
+            font-size: 14px;
+          }
+
+          .cashDateArrow:last-child {
+            justify-self: stretch;
+          }
+        }
+      `}</style>
     </main>
   );
 }
