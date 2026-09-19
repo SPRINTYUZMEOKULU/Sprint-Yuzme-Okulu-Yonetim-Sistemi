@@ -457,7 +457,27 @@ async function seansAktifYap(
    DERS PROGRAMI SAYFASI
 ========================================================= */
 
-export default async function DersProgramiPage() {
+export default async function DersProgramiPage({
+  searchParams,
+}: {
+  searchParams?:
+    | Promise<{ durum?: string }>
+    | { durum?: string };
+}) {
+  const resolvedSearchParams =
+    await Promise.resolve(searchParams);
+
+  const durum =
+    resolvedSearchParams?.durum === "pasif" ||
+    resolvedSearchParams?.durum === "tumu"
+      ? resolvedSearchParams.durum
+      : "aktif";
+
+  const showActive =
+    durum !== "pasif";
+
+  const showPassive =
+    durum !== "aktif";
   const profile =
     await requireProfile([
       "owner",
@@ -739,6 +759,15 @@ export default async function DersProgramiPage() {
     (item: any) => !hasActiveSource(item)
   );
 
+  const passiveTotal =
+    passiveSchedules.length +
+    unavailableSourceSchedules.length;
+
+  const currentProgramHref =
+    durum === "aktif"
+      ? "/ders-programi"
+      : `/ders-programi?durum=${durum}`;
+
   const canEdit = [
     "owner",
     "admin",
@@ -973,18 +1002,72 @@ export default async function DersProgramiPage() {
               </p>
             </div>
 
-            <Link
-              href="/operasyon-plani"
-              style={
-                operationLinkStyle
-              }
-            >
-              Operasyon Planında
-              Gör →
-            </Link>
+            <div style={programHeaderActionsStyle}>
+              <div
+                style={filterBarStyle}
+                aria-label="Ders programı görünüm filtresi"
+              >
+                <Link
+                  href="/ders-programi"
+                  style={{
+                    ...filterButtonStyle,
+                    ...(durum === "aktif"
+                      ? filterButtonActiveStyle
+                      : {}),
+                  }}
+                >
+                  Aktif ({activeSchedules.length})
+                </Link>
+
+                {canEdit && (
+                  <Link
+                    href="/ders-programi?durum=pasif"
+                    style={{
+                      ...filterButtonStyle,
+                      ...(durum === "pasif"
+                        ? filterButtonPassiveActiveStyle
+                        : {}),
+                    }}
+                  >
+                    Pasif ({passiveTotal})
+                  </Link>
+                )}
+
+                {canEdit && (
+                  <Link
+                    href="/ders-programi?durum=tumu"
+                    style={{
+                      ...filterButtonStyle,
+                      ...(durum === "tumu"
+                        ? filterButtonActiveStyle
+                        : {}),
+                    }}
+                  >
+                    Tümü ({activeSchedules.length + passiveTotal})
+                  </Link>
+                )}
+              </div>
+
+              <div style={programHeaderLinksStyle}>
+                <Link
+                  href={currentProgramHref}
+                  style={refreshLinkStyle}
+                >
+                  Yenile ↻
+                </Link>
+
+                <Link
+                  href="/operasyon-plani"
+                  style={operationLinkStyle}
+                >
+                  Operasyon Planında Gör →
+                </Link>
+              </div>
+            </div>
           </div>
 
-          {activeSchedules.length ===
+          {showActive && (
+            activeSchedules.length ===
           0 ? (
             <div
               style={emptyStyle}
@@ -1191,6 +1274,16 @@ export default async function DersProgramiPage() {
                 }
               )}
             </div>
+          )
+          )}
+
+          {!showActive && (
+            <div style={emptyStyle}>
+              <strong>Aktif seanslar gizlendi.</strong>
+              <span>
+                Aktif programı görmek için yukarıdaki “Aktif” butonunu kullanabilirsiniz.
+              </span>
+            </div>
           )}
         </section>
 
@@ -1199,6 +1292,7 @@ export default async function DersProgramiPage() {
         ========================================== */}
 
         {canEdit &&
+          showPassive &&
           passiveSchedules.length >
             0 && (
             <section
@@ -1314,7 +1408,7 @@ export default async function DersProgramiPage() {
             </section>
           )}
 
-        {canEdit && unavailableSourceSchedules.length > 0 && (
+        {canEdit && showPassive && unavailableSourceSchedules.length > 0 && (
           <details style={passiveCardStyle}>
             <summary style={{ cursor: "pointer", fontWeight: 800 }}>
               Pasif şube veya gruba bağlı kayıtları göster ({unavailableSourceSchedules.length})
@@ -1563,6 +1657,68 @@ const operationLinkStyle: React.CSSProperties =
     color: "#1769e8",
     fontSize: 12,
     fontWeight: 850,
+  };
+
+const programHeaderActionsStyle: React.CSSProperties =
+  {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexWrap: "wrap",
+  };
+
+const programHeaderLinksStyle: React.CSSProperties =
+  {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  };
+
+const filterBarStyle: React.CSSProperties =
+  {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: 4,
+    border: "1px solid #dbe4ef",
+    borderRadius: 10,
+    background: "#f8fafc",
+  };
+
+const filterButtonStyle: React.CSSProperties =
+  {
+    padding: "7px 10px",
+    borderRadius: 7,
+    textDecoration: "none",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 850,
+    whiteSpace: "nowrap",
+  };
+
+const filterButtonActiveStyle: React.CSSProperties =
+  {
+    background: "#1769e8",
+    color: "#fff",
+    boxShadow: "0 2px 8px rgba(23,105,232,.18)",
+  };
+
+const filterButtonPassiveActiveStyle: React.CSSProperties =
+  {
+    background: "#fff1f2",
+    color: "#be123c",
+    boxShadow: "0 2px 8px rgba(190,18,60,.10)",
+  };
+
+const refreshLinkStyle: React.CSSProperties =
+  {
+    ...operationLinkStyle,
+    padding: "7px 10px",
+    borderRadius: 8,
+    border: "1px solid #dbe4ef",
+    background: "#fff",
   };
 
 const weekGridStyle: React.CSSProperties =
