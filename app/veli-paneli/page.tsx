@@ -26,6 +26,13 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const packagePrice = Number(data.coursePackage?.price || data.enrollment?.package_price || 0);
   const debt = Math.max(0, packagePrice - paidTotal);
   const selectedId = data.selected.id;
+  const recentAttendance = [...data.attendance].sort((a:any,b:any)=>String(b.lesson_date||"").localeCompare(String(a.lesson_date||"")));
+  let absenceStreak = 0;
+  for (const item of recentAttendance) {
+    if (item.status === "absent") absenceStreak += 1;
+    else break;
+  }
+  const latestAbsence = recentAttendance.find((item:any)=>item.status === "absent") || null;
 
   return <main className="guardianShell">
     <GuardianHeader name={profile.full_name || "Değerli Velimiz"} students={data.students} selectedId={selectedId} />
@@ -34,6 +41,13 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         <div className="guardianHeroMain"><small>ÖĞRENCİ PANELİ · GÜNCEL VERİ</small><h1>{data.selected.first_name} {data.selected.last_name}</h1><p>{data.branch?.name || "Şube belirlenmedi"} · {data.group?.name || "Grup belirlenmedi"}</p><div className="guardianHeroMeta"><span><i/> Sistem verileri otomatik güncellenir</span></div></div>
         <div className="lessonRing"><b>{remaining}</b><span>Kalan ders</span></div>
       </section>
+
+      {latestAbsence ? <section className="guardianAttendanceAlert" style={{margin:"0 0 16px",padding:"15px 17px",border:"1px solid #f3c9c9",borderRadius:16,background:"#fff7f7",color:"#7f1d1d"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+          <div><small style={{display:"block",fontWeight:900,letterSpacing:".08em",color:"#b42318"}}>DEVAMSIZLIK BİLDİRİMİ</small><strong style={{display:"block",marginTop:4,fontSize:16}}>{absenceStreak >= 2 ? `${absenceStreak} ders üst üste katılım sağlanmadı` : "Son derse katılım sağlanmadı"}</strong><span style={{display:"block",marginTop:4,fontSize:12,color:"#8b4a4a"}}>{formatDate(latestAbsence.lesson_date)} tarihli yoklama kaydı. Yoklama güncellendiğinde bu bilgi otomatik yenilenir.</span></div>
+          <Link href={`/veli-devam?child=${selectedId}`} style={{padding:"8px 11px",border:"1px solid #efb4b4",borderRadius:10,background:"#fff",color:"#9f1d1d",fontWeight:900,textDecoration:"none",fontSize:12}}>Yoklama Detayı</Link>
+        </div>
+      </section> : null}
 
       <section className="guardianStats">
         <article className="guardianStat"><span>Mevcut Seviye</span><strong>{data.selected.swimming_level || "Belirlenmedi"}</strong></article>
