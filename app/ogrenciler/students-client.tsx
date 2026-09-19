@@ -2438,9 +2438,9 @@ function closeLessonAction() {
       <nav className="studentStatusTabs" aria-label="Öğrenci durum filtreleri">
         <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü <b>{status === "all" ? filteredStudents.length : counts.total}</b></button>
         <button className={status === "active" ? "active" : ""} onClick={() => setStatus("active")}>Aktif <b>{status === "active" ? filteredStudents.length : counts.active}</b></button>
-        <button className={status === "starting" ? "active" : ""} onClick={() => setStatus("starting")}>Başlayacak <b>{counts.starting}</b></button>
-        <button className={status === "passive" ? "active" : ""} onClick={() => setStatus("passive")}>Pasif</button>
-        <button className={status === "pre_registration" ? "active" : ""} onClick={() => setStatus("pre_registration")}>Ön Kayıt</button>
+        <button className={status === "starting" ? "active" : ""} onClick={() => setStatus("starting")}>Başlayacak <b>{status === "starting" ? filteredStudents.length : counts.starting}</b></button>
+        <button className={status === "passive" ? "active" : ""} onClick={() => setStatus("passive")}>Pasif <b>{status === "passive" ? filteredStudents.length : counts.passive}</b></button>
+        <button className={status === "pre_registration" ? "active" : ""} onClick={() => setStatus("pre_registration")}>Ön Kayıt <b>{status === "pre_registration" ? filteredStudents.length : counts.preRegistration}</b></button>
       </nav>
 
       <section className="toolbar">
@@ -5953,8 +5953,26 @@ function closeLessonAction() {
   .mobileProfessionalHeader h2{font-size:24px!important}
   .professionalQuickActions{grid-template-columns:1fr 1fr!important}
   .summaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  .studentStatusTabs{position:sticky;top:0;z-index:8}
-  .studentStatusTabs button{min-height:40px;padding:0 13px;font-size:12px}
+  .studentStatusTabs{
+    position:sticky;
+    top:0;
+    z-index:8;
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:4px;
+    overflow:visible;
+    width:100%;
+    box-sizing:border-box;
+  }
+  .studentStatusTabs button{
+    min-width:0;
+    min-height:40px;
+    padding:0 5px;
+    font-size:11px;
+    line-height:1.15;
+    text-align:center;
+  }
+  .studentStatusTabs b{margin-left:2px;font-size:11px}
   .dataPanelToggle{min-height:54px}
 }
 
