@@ -492,14 +492,7 @@ export default async function OperasyonPlaniPage({
   const groups =
     groupsResult.data || [];
 
-  const allSchedules =
-    schedulesResult.data || [];
-
-  const schedules =
-    allSchedules.filter(
-      (schedule: any) =>
-        Number(schedule.weekday) === selectedWeekday
-    );
+  const rawSchedules = schedulesResult.data || [];
 
   const coaches =
     coachesResult.data || [];
@@ -532,6 +525,19 @@ export default async function OperasyonPlaniPage({
       item.id,
       item,
     ])
+  );
+
+  // Pasife alınmış şube veya grupların eski seans kayıtları veritabanında
+  // geçmiş için korunur; operasyon ekranında ise kesinlikle çalışmaz.
+  const allSchedules = rawSchedules.filter(
+    (schedule: any) =>
+      branchMap.has(schedule.branch_id) &&
+      groupMap.has(schedule.group_id)
+  );
+
+  const schedules = allSchedules.filter(
+    (schedule: any) =>
+      Number(schedule.weekday) === selectedWeekday
   );
 
   const coachMap = new Map(
