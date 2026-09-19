@@ -12,7 +12,7 @@ export async function GET() {
     const supabase = await createClient();
 
   // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
-  await supabase.rpc("sync_scheduled_used_lessons");
+  await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
     const organizationId = profile.organization_id;
 
     const { data: students, error: studentError } = await supabase
