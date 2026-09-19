@@ -458,13 +458,15 @@ async function seansAktifYap(
    DERS PROGRAMI SAYFASI
 ========================================================= */
 
-export default async function DersProgramiPage({
-  searchParams,
-}: {
+type DersProgramiPageProps = {
   searchParams?: Promise<{
     durum?: string;
   }>;
-}) {
+};
+
+export default async function DersProgramiPage({
+  searchParams,
+}: DersProgramiPageProps) {
   const resolvedSearchParams =
     searchParams
       ? await searchParams
