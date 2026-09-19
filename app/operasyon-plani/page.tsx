@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 
 import { Icons } from "@/app/components/dashboard-icons";
 import UstGezinme from "@/app/components/UstGezinme";
+import OperationStudentManager, {
+  type OperationStudentRow,
+} from "./operation-student-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,7 @@ type SearchParams = {
   grup?: string;
   seviye?: string;
   gorunum?: string;
+  kapsam?: string;
 };
 
 /* =========================================================
@@ -404,7 +408,7 @@ export default async function OperasyonPlaniPage({
       )
       .eq("organization_id", organizationId)
       .eq("is_active", true)
-      .eq("weekday", selectedWeekday)
+      .order("weekday")
       .order("start_time"),
 
     supabase
@@ -488,8 +492,14 @@ export default async function OperasyonPlaniPage({
   const groups =
     groupsResult.data || [];
 
-  const schedules =
+  const allSchedules =
     schedulesResult.data || [];
+
+  const schedules =
+    allSchedules.filter(
+      (schedule: any) =>
+        Number(schedule.weekday) === selectedWeekday
+    );
 
   const coaches =
     coachesResult.data || [];
@@ -554,15 +564,22 @@ export default async function OperasyonPlaniPage({
     .sort();
 
   const levels = Array.from(
-    new Set(
-      students
+    new Set([
+      "Başlangıç",
+      "2. Seviye",
+      "Orta",
+      "İleri",
+      "Takım Alt Yapı",
+      ...students
         .map(
           (student: any) =>
             student.swimming_level
         )
-        .filter(Boolean)
-    )
-  ).sort();
+        .filter(Boolean),
+    ])
+  ).sort((a, b) =>
+    String(a).localeCompare(String(b), "tr")
+  );
 
   /* =======================================================
      SEANS FİLTRELEME
@@ -702,6 +719,89 @@ export default async function OperasyonPlaniPage({
     "branch_manager",
   ].includes(profile.role);
 
+  const activeStudentPlans: OperationStudentRow[] = students.map(
+    (student: any) => {
+      const membership = memberships.find(
+        (item: any) => item.student_id === student.id
+      );
+      const group = membership?.group_id
+        ? groupMap.get(membership.group_id)
+        : null;
+      const branch = group?.branch_id
+        ? branchMap.get(group.branch_id)
+        : null;
+      const groupSchedules = allSchedules
+        .filter(
+          (schedule: any) =>
+            schedule.group_id === membership?.group_id
+        )
+        .sort((a: any, b: any) => {
+          const dayDiff =
+            Number(a.weekday || 0) -
+            Number(b.weekday || 0);
+          if (dayDiff !== 0) return dayDiff;
+          return String(a.start_time || "").localeCompare(
+            String(b.start_time || "")
+          );
+        });
+
+      const groupScheduleIds = new Set(
+        groupSchedules.map((schedule: any) => schedule.id)
+      );
+      const studentAssignment = studentAssignments.find(
+        (assignment: any) =>
+          assignment.student_id === student.id &&
+          groupScheduleIds.has(assignment.schedule_id) &&
+          assignment.coach_id
+      );
+
+      const fallbackCoachId =
+        group?.primary_coach_id ||
+        groupSchedules.find((schedule: any) => schedule.coach_id)
+          ?.coach_id ||
+        null;
+
+      const coachId =
+        studentAssignment?.coach_id ||
+        fallbackCoachId ||
+        null;
+      const coach = coachId
+        ? coachMap.get(coachId)
+        : null;
+
+      const scheduleText = groupSchedules
+        .map((schedule: any) => {
+          const day =
+            GUNLER[Number(schedule.weekday)] || "Ders";
+          const start =
+            saatGoster(schedule.start_time);
+          const end =
+            saatGoster(schedule.end_time);
+          return `${day} · ${start}${end !== "—" ? `–${end}` : ""}`;
+        })
+        .join("\n");
+
+      return {
+        id: student.id,
+        name: adSoyad(student),
+        student_number: student.student_number || null,
+        level: student.swimming_level || null,
+        group_id: membership?.group_id || null,
+        group_name: group?.name || null,
+        branch_name: branch?.name || null,
+        coach_id: coachId,
+        coach_name:
+          coach?.full_name ||
+          coach?.email ||
+          null,
+        schedule_text: scheduleText || null,
+        guardian_name: student.guardian_name || null,
+        guardian_phone: student.guardian_phone || null,
+        phone: student.phone || null,
+      };
+    }
+  );
+
   function gorunumHref(gorunum: string) {
     const qp = new URLSearchParams();
 
@@ -713,6 +813,7 @@ export default async function OperasyonPlaniPage({
     if (params.egitmen) qp.set("egitmen", params.egitmen);
     if (params.grup) qp.set("grup", params.grup);
     if (params.seviye) qp.set("seviye", params.seviye);
+    if (params.kapsam) qp.set("kapsam", params.kapsam);
 
     return `/operasyon-plani?${qp.toString()}`;
   }
@@ -795,6 +896,38 @@ export default async function OperasyonPlaniPage({
         ================================================= */}
 
         <section style={controlPanelStyle}>
+          <div style={scopeSwitchStyle}>
+            <Link
+              href={`/operasyon-plani?tarih=${selectedDate}&gorunum=ogrenci&kapsam=tumu`}
+              style={
+                params.kapsam === "tumu"
+                  ? scopeButtonActiveStyle
+                  : scopeButtonStyle
+              }
+            >
+              <span>👥</span>
+              <span>
+                <b>Tüm Aktif Kursiyerler</b>
+                <small>Kalıcı grup · seviye · eğitmen planı</small>
+              </span>
+            </Link>
+
+            <Link
+              href={`/operasyon-plani?tarih=${selectedDate}`}
+              style={
+                params.kapsam !== "tumu"
+                  ? scopeButtonActiveStyle
+                  : scopeButtonStyle
+              }
+            >
+              <span>📅</span>
+              <span>
+                <b>Günlük Seans Planı</b>
+                <small>Bugünün havuz ve yoklama akışı</small>
+              </span>
+            </Link>
+          </div>
+
           <div style={controlPanelHeaderStyle}>
             <div>
               <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
@@ -1077,21 +1210,32 @@ export default async function OperasyonPlaniPage({
         </form>
         </details>
 
+        {params.kapsam === "tumu" && (
+          <OperationStudentManager
+            students={activeStudentPlans}
+            coaches={coaches}
+            levels={levels as string[]}
+          />
+        )}
+
         {/* =================================================
             ÖZET KARTLARI
         ================================================= */}
 
+        {params.kapsam !== "tumu" && (
         <section style={compactSummaryStyle}>
           <Link href={gorunumHref("seans")} style={compactStatStyle}><b>{filteredSchedules.length}</b><span>Seans</span></Link>
           <Link href={gorunumHref("egitmen")} style={compactStatStyle}><b>{shownCoachIds.size}</b><span>Eğitmen</span></Link>
           <Link href={gorunumHref("ogrenci")} style={compactStatStyle}><b>{shownStudentIds.size}</b><span>Öğrenci</span></Link>
           <Link href={gorunumHref("grup")} style={compactStatStyle}><b>{shownGroupIds.size}</b><span>Grup</span></Link>
         </section>
+        )}
 
         {/* =================================================
             TARİH BAŞLIĞI
         ================================================= */}
 
+        {params.kapsam !== "tumu" && (
         <section style={dayTitleStyle}>
           <div>
             <span style={dayBadgeStyle}>
@@ -1132,12 +1276,13 @@ export default async function OperasyonPlaniPage({
             aktif seans
           </span>
         </section>
+        )}
 
         {/* =================================================
             SEANSLAR
         ================================================= */}
 
-        {filteredSchedules.length ===
+        {params.kapsam !== "tumu" && (filteredSchedules.length ===
         0 ? (
           <section style={emptyStyle}>
             <div style={emptyIconStyle}>
@@ -2184,7 +2329,7 @@ export default async function OperasyonPlaniPage({
               }
             )}
           </section>
-        )}
+        ))}
         </div>
       </main>
     </>
@@ -2261,6 +2406,10 @@ const sessionBaseButtonStyle = { display:"flex", alignItems:"center", gap:9, min
 const sessionDangerButtonStyle = { ...sessionBaseButtonStyle, color:"#a43a22", background:"#fff7f3", borderColor:"#ffd5c7" } as const;
 const sessionPurpleButtonStyle = { ...sessionBaseButtonStyle, color:"#6d36c9", background:"#f8f4ff", borderColor:"#e2d5ff" } as const;
 const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", background:"#fff", borderColor:"#cfe0f5" } as const;
+
+const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:8, marginBottom:12 } as const;
+const scopeButtonStyle = { display:"flex", alignItems:"center", gap:10, minHeight:58, padding:"10px 12px", border:"1px solid #dce7f5", borderRadius:13, background:"#f8fbff", color:"#38516f", textDecoration:"none" } as const;
+const scopeButtonActiveStyle = { ...scopeButtonStyle, borderColor:"#1769e8", background:"#1769e8", color:"#fff", boxShadow:"0 8px 18px rgba(23,105,232,.18)" } as const;
 
 const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
 const controlPanelHeaderStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" } as const;
