@@ -77,6 +77,42 @@ function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number)
   return days.includes(enrollmentWeekday(scheduleWeekday));
 }
 
+function enrollmentDaysText(enrollment: any) {
+  const days = Array.isArray(enrollment?.lesson_weekdays)
+    ? Array.from(new Set(enrollment.lesson_weekdays.map(Number)))
+    : [];
+
+  if (!days.length) return "Grup programı";
+
+  const uiDays = days
+    .map((day: number) => (day === 0 ? 7 : day))
+    .sort((a: number, b: number) => a - b);
+
+  return `${uiDays.length} gün · ${uiDays
+    .map((day: number) => GUNLER[day] || "Ders")
+    .join(" + ")}`;
+}
+
+function ageOnDate(birthDate?: string | null, referenceDate?: string | null) {
+  if (!birthDate) return null;
+
+  const birth = new Date(`${birthDate.slice(0, 10)}T12:00:00+03:00`);
+  const ref = referenceDate
+    ? new Date(`${referenceDate.slice(0, 10)}T12:00:00+03:00`)
+    : new Date();
+
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(ref.getTime())) return null;
+
+  let age = ref.getFullYear() - birth.getFullYear();
+  const monthDiff = ref.getMonth() - birth.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && ref.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 function saatGoster(value?: string | null) {
   if (!value) return "—";
 
@@ -447,7 +483,7 @@ export default async function OperasyonPlaniPage({
     supabase
       .from("students")
       .select(
-        "id,first_name,last_name,student_number,swimming_level,medical_note,general_note,guardian_name,guardian_phone,phone,status"
+        "id,first_name,last_name,student_number,birth_date,swimming_level,medical_note,general_note,guardian_name,guardian_phone,phone,status"
       )
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
@@ -935,6 +971,125 @@ export default async function OperasyonPlaniPage({
     }
   );
 
+  /* =======================================================
+     SEÇİLİ GÜNÜN ORTAK SEANSLARI
+  ======================================================= */
+
+  const selectedDaySchedules = allSchedules.filter((schedule: any) => {
+    if (Number(schedule.weekday) !== selectedWeekday) return false;
+
+    const scheduleBranchId =
+      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+
+    if (params.sube && scheduleBranchId !== params.sube) return false;
+
+    if (
+      params.saat &&
+      String(schedule.start_time || "").slice(0, 5) !== params.saat
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const selectedDaySharedSlotsMap = new Map<string, any[]>();
+
+  selectedDaySchedules.forEach((schedule: any) => {
+    const scheduleBranchId =
+      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+    const key = [
+      scheduleBranchId,
+      String(schedule.start_time || "").slice(0, 5),
+      String(schedule.end_time || "").slice(0, 5),
+    ].join("|");
+
+    const rows = selectedDaySharedSlotsMap.get(key) || [];
+    rows.push(schedule);
+    selectedDaySharedSlotsMap.set(key, rows);
+  });
+
+  const selectedDaySharedSlots = Array.from(selectedDaySharedSlotsMap.entries())
+    .map(([key, slotSchedules]) => {
+      const uniqueGroupSchedules = Array.from(
+        new Map(
+          slotSchedules
+            .filter((schedule: any) => schedule.group_id)
+            .map((schedule: any) => [schedule.group_id, schedule])
+        ).values()
+      );
+
+      if (uniqueGroupSchedules.length < 2) return null;
+
+      const firstSchedule: any = uniqueGroupSchedules[0];
+      const branchId =
+        firstSchedule.branch_id ||
+        groupMap.get(firstSchedule.group_id)?.branch_id ||
+        "";
+      const branch = branchMap.get(branchId);
+
+      const groupRows = uniqueGroupSchedules.map((slotSchedule: any) => {
+        const slotGroup = groupMap.get(slotSchedule.group_id);
+        const slotMemberships = memberships.filter(
+          (membership: any) =>
+            membership.group_id === slotSchedule.group_id
+        );
+
+        const dayStudents = slotMemberships
+          .map((membership: any) => {
+            const enrollment = enrollments.find(
+              (item: any) =>
+                item.student_id === membership.student_id &&
+                item.group_id === slotSchedule.group_id
+            );
+
+            if (
+              !enrollmentIncludesScheduleDay(
+                enrollment,
+                Number(slotSchedule.weekday)
+              )
+            ) {
+              return null;
+            }
+
+            const student = studentMap.get(membership.student_id);
+            if (!student) return null;
+
+            return {
+              ...student,
+              enrollment,
+              age: ageOnDate(student.birth_date, selectedDate),
+            };
+          })
+          .filter(Boolean)
+          .sort((a: any, b: any) =>
+            adSoyad(a).localeCompare(adSoyad(b), "tr")
+          );
+
+        return {
+          scheduleId: slotSchedule.id,
+          groupId: slotSchedule.group_id,
+          groupName: slotGroup?.name || "Grup Atanmamış",
+          courseType: slotGroup?.course_type || null,
+          capacity: Number(slotGroup?.capacity || 0),
+          students: dayStudents,
+        };
+      });
+
+      return {
+        key,
+        branchName: branch?.name || "Şube / havuz",
+        startTime: saatGoster(firstSchedule.start_time),
+        endTime: saatGoster(firstSchedule.end_time),
+        groups: groupRows,
+        totalStudents: groupRows.reduce(
+          (sum: number, row: any) => sum + row.students.length,
+          0
+        ),
+      };
+    })
+    .filter(Boolean) as any[];
+
   function gorunumHref(gorunum: string) {
     const qp = new URLSearchParams();
 
@@ -956,6 +1111,92 @@ export default async function OperasyonPlaniPage({
       <UstGezinme />
       <main style={pageStyle}>
       <div style={containerStyle}>
+        {selectedDaySharedSlots.length > 0 ? (
+          <section style={dailySharedSectionStyle}>
+            <div style={dailySharedHeaderStyle}>
+              <div>
+                <div style={dailySharedEyebrowStyle}>SEÇİLİ GÜN · ORTAK SEANSLAR</div>
+                <strong style={dailySharedTitleStyle}>
+                  {GUNLER[selectedWeekday]} günü birlikte çalışan gruplar
+                </strong>
+                <p style={dailySharedTextStyle}>
+                  Yalnız bu günü kayıt sırasında seçmiş öğrenciler gösterilir. İki/üç günlük kayıt ayrımı, seviye ve yaş bilgisi öğrenci satırında görünür.
+                </p>
+              </div>
+              <span style={dailySharedCountStyle}>
+                {selectedDaySharedSlots.length} ortak saat
+              </span>
+            </div>
+
+            <div style={dailySharedGridStyle}>
+              {selectedDaySharedSlots.map((slot: any) => (
+                <details key={slot.key} style={dailySharedCardStyle}>
+                  <summary style={dailySharedSummaryStyle}>
+                    <span>
+                      <strong style={dailySharedTimeStyle}>
+                        {slot.startTime} – {slot.endTime}
+                      </strong>
+                      <small style={dailySharedPoolStyle}>{slot.branchName}</small>
+                    </span>
+                    <span style={dailySharedSummaryRightStyle}>
+                      <b>{slot.groups.length} grup</b>
+                      <small>{slot.totalStudents} öğrenci</small>
+                    </span>
+                  </summary>
+
+                  <div style={dailySharedBodyStyle}>
+                    {slot.groups.map((groupRow: any) => (
+                      <details key={groupRow.scheduleId} style={dailySharedGroupStyle}>
+                        <summary style={dailySharedGroupSummaryStyle}>
+                          <span>
+                            <strong>{groupRow.groupName}</strong>
+                            <small>
+                              {groupRow.courseType || "Kurs"} · {groupRow.students.length}
+                              {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
+                            </small>
+                          </span>
+                          <span style={dailySharedOpenStyle}>Öğrencileri Aç</span>
+                        </summary>
+
+                        <div style={dailySharedStudentListStyle}>
+                          {groupRow.students.length ? (
+                            groupRow.students.map((student: any) => (
+                              <div key={student.id} style={dailySharedStudentRowStyle}>
+                                <span style={{ minWidth: 0 }}>
+                                  <strong style={dailySharedStudentNameStyle}>
+                                    {adSoyad(student)}
+                                  </strong>
+                                  <small style={dailySharedStudentMetaStyle}>
+                                    {student.swimming_level || "Seviye yok"}
+                                    {" · "}
+                                    {student.age !== null ? `${student.age} yaş` : "Yaş bilgisi yok"}
+                                    {" · "}
+                                    {enrollmentDaysText(student.enrollment)}
+                                  </small>
+                                </span>
+                                <Link
+                                  href={`/ogrenciler/${student.id}`}
+                                  style={dailySharedStudentLinkStyle}
+                                >
+                                  Kartı Aç
+                                </Link>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={smallEmptyStyle}>
+                              Bu gün için seçili öğrenci yok.
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* =================================================
             ÜST ALAN
         ================================================= */}
@@ -3690,4 +3931,154 @@ const emptyIconStyle: React.CSSProperties = {
 const mutedTextStyle: React.CSSProperties = {
   color: "#94a3b8",
   fontSize: 10,
+};
+
+
+const dailySharedSectionStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #d9e4f2",
+  borderRadius: 20,
+  padding: 16,
+  marginBottom: 16,
+  boxShadow: "0 8px 24px rgba(31,76,135,.05)",
+};
+const dailySharedHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: 12,
+};
+const dailySharedEyebrowStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: ".11em",
+  color: "#7e22ce",
+  marginBottom: 4,
+};
+const dailySharedTitleStyle: React.CSSProperties = {
+  display: "block",
+  color: "#172554",
+  fontSize: 16,
+};
+const dailySharedTextStyle: React.CSSProperties = {
+  margin: "4px 0 0",
+  color: "#64748b",
+  fontSize: 11,
+  lineHeight: 1.45,
+};
+const dailySharedCountStyle: React.CSSProperties = {
+  padding: "7px 10px",
+  borderRadius: 999,
+  background: "#f3e8ff",
+  color: "#7e22ce",
+  fontSize: 10,
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+};
+const dailySharedGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+const dailySharedCardStyle: React.CSSProperties = {
+  border: "1px solid #e9d5ff",
+  borderRadius: 14,
+  overflow: "hidden",
+  background: "#fcfaff",
+};
+const dailySharedSummaryStyle: React.CSSProperties = {
+  listStyle: "none",
+  cursor: "pointer",
+  padding: "12px 13px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+};
+const dailySharedTimeStyle: React.CSSProperties = {
+  display: "block",
+  color: "#2e1065",
+  fontSize: 15,
+};
+const dailySharedPoolStyle: React.CSSProperties = {
+  display: "block",
+  marginTop: 3,
+  color: "#64748b",
+  fontSize: 10,
+};
+const dailySharedSummaryRightStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: 2,
+  color: "#6d28d9",
+  fontSize: 11,
+};
+const dailySharedBodyStyle: React.CSSProperties = {
+  padding: "0 12px 12px",
+  display: "grid",
+  gap: 8,
+};
+const dailySharedGroupStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: 11,
+  background: "#fff",
+  overflow: "hidden",
+};
+const dailySharedGroupSummaryStyle: React.CSSProperties = {
+  listStyle: "none",
+  cursor: "pointer",
+  padding: "10px 11px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+};
+const dailySharedOpenStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  borderRadius: 8,
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: 9,
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+};
+const dailySharedStudentListStyle: React.CSSProperties = {
+  borderTop: "1px solid #f1f5f9",
+  padding: 9,
+  display: "grid",
+  gap: 6,
+};
+const dailySharedStudentRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 9px",
+  borderRadius: 9,
+  background: "#f8fafc",
+};
+const dailySharedStudentNameStyle: React.CSSProperties = {
+  display: "block",
+  color: "#1e293b",
+  fontSize: 12,
+};
+const dailySharedStudentMetaStyle: React.CSSProperties = {
+  display: "block",
+  marginTop: 2,
+  color: "#64748b",
+  fontSize: 10,
+  lineHeight: 1.35,
+};
+const dailySharedStudentLinkStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  borderRadius: 8,
+  border: "1px solid #dbeafe",
+  background: "#fff",
+  color: "#1d4ed8",
+  fontSize: 9,
+  fontWeight: 900,
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };
