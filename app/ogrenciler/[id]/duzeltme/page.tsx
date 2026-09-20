@@ -74,6 +74,13 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
           <aside><strong>{student.first_name} {student.last_name}</strong><span>{studentAge != null ? `${studentAge} yaş` : "Yaş bilgisi yok"}{student.birth_date ? ` · Doğum: ${student.birth_date}` : ""}</span><span>Aktif kayıt: {enrollmentResult.data ? "Bulundu" : "Bulunamadı"}</span><small>Yalnız Owner / Admin erişebilir</small></aside>
         </section>
 
+        {query.identitySaved === "1" ? (
+          <div className="correctionNotice success">
+            <strong>✓ Kimlik ve iletişim bilgileri kaydedildi.</strong>
+            <span>Bilgiler öğrenci kartına işlendi ve işlem geçmişine denetim kaydı eklendi.</span>
+          </div>
+        ) : null}
+
         {query.saved === "1" ? (
           <div className="correctionNotice success">
             <strong>✓ Düzeltme uygulandı.</strong>
