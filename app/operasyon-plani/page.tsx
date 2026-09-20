@@ -379,6 +379,49 @@ async function ogrenciAta(formData: FormData) {
 }
 
 /* =========================================================
+   ORTAK SEANS / AYRI TUT TERCİHİ
+========================================================= */
+
+async function ortakSeansModuAyarla(formData: FormData) {
+  "use server";
+
+  const profile = await requireProfile(["owner", "admin", "branch_manager"]);
+  const organizationId = profile.organization_id;
+
+  if (!organizationId) {
+    throw new Error("Organizasyon bilgisi bulunamadı.");
+  }
+
+  const scheduleId = String(formData.get("schedule_id") || "");
+  const mode = String(formData.get("mode") || "auto");
+
+  if (!scheduleId || !["auto", "shared", "separate"].includes(mode)) {
+    throw new Error("Ortak seans tercihi geçersiz.");
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("lesson_shared_session_preferences")
+    .upsert(
+      {
+        organization_id: organizationId,
+        schedule_id: scheduleId,
+        mode,
+        created_by: profile.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "organization_id,schedule_id" }
+    );
+
+  if (error) {
+    throw new Error(`Ortak seans tercihi kaydedilemedi: ${error.message}`);
+  }
+
+  revalidatePath("/operasyon-plani");
+}
+
+/* =========================================================
    ANA SAYFA
 ========================================================= */
 
@@ -438,6 +481,7 @@ export default async function OperasyonPlaniPage({
     enrollmentsResult,
     staffAssignmentsResult,
     studentAssignmentsResult,
+    sharedPreferencesResult,
   ] = await Promise.all([
     supabase
       .from("branches")
@@ -521,6 +565,11 @@ export default async function OperasyonPlaniPage({
       )
       .eq("organization_id", organizationId)
       .eq("is_active", true),
+
+    supabase
+      .from("lesson_shared_session_preferences")
+      .select("schedule_id,mode,lane_label")
+      .eq("organization_id", organizationId),
   ]);
 
   const criticalError =
@@ -576,6 +625,16 @@ export default async function OperasyonPlaniPage({
 
   const studentAssignments =
     studentAssignmentsResult.data || [];
+
+  const sharedPreferences =
+    sharedPreferencesResult.data || [];
+
+  const sharedPreferenceMap = new Map(
+    sharedPreferences.map((item: any) => [item.schedule_id, item])
+  );
+
+  const sharedModeOf = (scheduleId?: string | null) =>
+    String(sharedPreferenceMap.get(scheduleId || "")?.mode || "auto");
 
   /* =======================================================
      HARİTALAR
@@ -976,6 +1035,7 @@ export default async function OperasyonPlaniPage({
   ======================================================= */
 
   const selectedDaySchedules = allSchedules.filter((schedule: any) => {
+    if (sharedModeOf(schedule.id) === "separate") return false;
     if (Number(schedule.weekday) !== selectedWeekday) return false;
 
     const scheduleBranchId =
@@ -1073,6 +1133,7 @@ export default async function OperasyonPlaniPage({
           courseType: slotGroup?.course_type || null,
           capacity: Number(slotGroup?.capacity || 0),
           students: dayStudents,
+          sharedMode: sharedModeOf(slotSchedule.id),
         };
       });
 
@@ -1145,6 +1206,36 @@ export default async function OperasyonPlaniPage({
                   </summary>
 
                   <div style={dailySharedBodyStyle}>
+                    {allSchedules
+                      .filter(
+                        (candidate: any) =>
+                          sharedModeOf(candidate.id) === "separate" &&
+                          Number(candidate.weekday) === selectedWeekday &&
+                          String(candidate.start_time || "").slice(0, 5) === slot.startTime &&
+                          (candidate.branch_id || groupMap.get(candidate.group_id)?.branch_id) ===
+                            allSchedules.find((s: any) => s.id === slot.groups[0]?.scheduleId)?.branch_id
+                      )
+                      .map((candidate: any) => {
+                        const candidateGroup = groupMap.get(candidate.group_id);
+                        return (
+                          <div key={candidate.id} style={dailySharedSeparatedRowStyle}>
+                            <span>
+                              <strong>{candidateGroup?.name || "Grup"}</strong>
+                              <small>Ayrı tutuluyor · ortak seansa dahil değil</small>
+                            </span>
+                            {canEdit ? (
+                              <form action={ortakSeansModuAyarla}>
+                                <input type="hidden" name="schedule_id" value={candidate.id} />
+                                <input type="hidden" name="mode" value="shared" />
+                                <button type="submit" style={dailySharedJoinButtonStyle}>
+                                  Ortak Seansa Al
+                                </button>
+                              </form>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+
                     {slot.groups.map((groupRow: any) => (
                       <details key={groupRow.scheduleId} style={dailySharedGroupStyle}>
                         <summary style={dailySharedGroupSummaryStyle}>
@@ -1155,7 +1246,22 @@ export default async function OperasyonPlaniPage({
                               {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
                             </small>
                           </span>
-                          <span style={dailySharedOpenStyle}>Öğrencileri Aç</span>
+                          <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {canEdit ? (
+                              <form action={ortakSeansModuAyarla}>
+                                <input type="hidden" name="schedule_id" value={groupRow.scheduleId} />
+                                <input type="hidden" name="mode" value="separate" />
+                                <button
+                                  type="submit"
+                                  style={dailySharedSeparateButtonStyle}
+                                  title="Bu grubu bu ortak seansın dışında tut"
+                                >
+                                  Ayrı Tut
+                                </button>
+                              </form>
+                            ) : null}
+                            <span style={dailySharedOpenStyle}>Öğrencileri Aç</span>
+                          </span>
                         </summary>
 
                         <div style={dailySharedStudentListStyle}>
@@ -1895,15 +2001,20 @@ export default async function OperasyonPlaniPage({
                       )
                     : 0;
 
-                const sharedSlotSchedules = filteredSchedules.filter(
-                  (item: any) =>
-                    item.id !== schedule.id &&
-                    Number(item.weekday) === Number(schedule.weekday) &&
-                    String(item.start_time || "").slice(0, 5) ===
-                      String(schedule.start_time || "").slice(0, 5) &&
-                    (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
-                      (schedule.branch_id || group?.branch_id)
-                );
+                const currentSharedMode = sharedModeOf(schedule.id);
+                const sharedSlotSchedules =
+                  currentSharedMode === "separate"
+                    ? []
+                    : filteredSchedules.filter(
+                        (item: any) =>
+                          item.id !== schedule.id &&
+                          sharedModeOf(item.id) !== "separate" &&
+                          Number(item.weekday) === Number(schedule.weekday) &&
+                          String(item.start_time || "").slice(0, 5) ===
+                            String(schedule.start_time || "").slice(0, 5) &&
+                          (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
+                            (schedule.branch_id || group?.branch_id)
+                      );
 
                 const sharedSlotRows = [schedule, ...sharedSlotSchedules].map(
                   (slotSchedule: any) => {
@@ -4081,4 +4192,40 @@ const dailySharedStudentLinkStyle: React.CSSProperties = {
   fontWeight: 900,
   textDecoration: "none",
   whiteSpace: "nowrap",
+};
+
+
+const dailySharedSeparateButtonStyle: React.CSSProperties = {
+  border: "1px solid #fecaca",
+  background: "#fff7f7",
+  color: "#b42318",
+  borderRadius: 8,
+  padding: "6px 8px",
+  fontSize: 9,
+  fontWeight: 900,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+const dailySharedJoinButtonStyle: React.CSSProperties = {
+  border: "1px solid #bbf7d0",
+  background: "#f0fdf4",
+  color: "#15803d",
+  borderRadius: 8,
+  padding: "6px 8px",
+  fontSize: 9,
+  fontWeight: 900,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+const dailySharedSeparatedRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "9px 10px",
+  borderRadius: 10,
+  border: "1px dashed #fecaca",
+  background: "#fffafa",
+  color: "#7f1d1d",
+  fontSize: 10,
 };
