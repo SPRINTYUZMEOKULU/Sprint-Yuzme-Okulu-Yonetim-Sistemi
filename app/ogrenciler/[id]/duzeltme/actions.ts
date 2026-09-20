@@ -58,6 +58,73 @@ function calculatePlannedEndDate(
   return remaining === 0 ? cursor.toISOString().slice(0, 10) : null;
 }
 
+
+export async function saveStudentIdentity(formData: FormData) {
+  const profile = await requireProfile(["owner", "admin"]);
+  const organizationId = profile.organization_id;
+  const studentId = text(formData, "student_id");
+  if (!organizationId || !studentId) redirect("/ogrenciler?error=Öğrenci bilgisi bulunamadı");
+
+  const supabase = await createClient();
+  const current = await supabase
+    .from("students")
+    .select("first_name,last_name,birth_date,phone,email,guardian_name,guardian_phone,guardian_email")
+    .eq("organization_id", organizationId)
+    .eq("id", studentId)
+    .maybeSingle();
+
+  if (current.error || !current.data) {
+    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Öğrenci bilgileri okunamadı.")}`);
+  }
+
+  const next = {
+    first_name: text(formData, "first_name"),
+    last_name: text(formData, "last_name"),
+    birth_date: nullable(formData, "birth_date"),
+    phone: nullable(formData, "phone"),
+    email: nullable(formData, "email"),
+    guardian_name: nullable(formData, "guardian_name"),
+    guardian_phone: nullable(formData, "guardian_phone"),
+    guardian_email: nullable(formData, "guardian_email"),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!next.first_name || !next.last_name) {
+    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Ad ve soyad zorunludur.")}`);
+  }
+
+  const updated = await supabase
+    .from("students")
+    .update(next)
+    .eq("organization_id", organizationId)
+    .eq("id", studentId);
+
+  if (updated.error) {
+    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kimlik ve iletişim bilgileri kaydedilemedi: ${updated.error.message}`)}`);
+  }
+
+  await supabase.from("student_activity_logs").insert({
+    organization_id: organizationId,
+    student_id: studentId,
+    activity_type: "manager_identity_correction",
+    title: "Kimlik ve iletişim bilgileri güncellendi",
+    description: "Yönetici düzeltme merkezinden kaydedildi.",
+    old_value: current.data,
+    new_value: next,
+    source_type: "manager_correction_center",
+    source_id: studentId,
+    performed_by: profile.id,
+    approved_by: profile.id,
+    performed_at: new Date().toISOString(),
+    approved_at: new Date().toISOString(),
+  });
+
+  revalidatePath(`/ogrenciler/${studentId}`);
+  revalidatePath(`/ogrenciler/${studentId}/duzeltme`);
+  revalidatePath("/ogrenciler");
+  redirect(`/ogrenciler/${studentId}/duzeltme?identitySaved=1`);
+}
+
 export async function applyManagerCorrection(formData: FormData) {
   const profile = await requireProfile(["owner", "admin"]);
   const organizationId = profile.organization_id;
