@@ -186,6 +186,24 @@ function shortTime(value?: string | null) {
   return value ? value.slice(0, 5) : "";
 }
 
+function educationGroupLabel(student: Pick<StudentListItem, "group_name" | "course_type" | "swimming_level">) {
+  const type = normalizeText(student.course_type);
+  const level = (student.swimming_level || "").trim();
+
+  if (type.includes("takım") || type.includes("performans")) return "Takım / Altyapı";
+  if (type.includes("özel") || type.includes("ozel")) return "Özel Ders";
+  if (type.includes("çocuk") || type.includes("cocuk")) {
+    return level && !normalizeText(level).includes("takım")
+      ? `Çocuk Yüzme · ${level}`
+      : "Çocuk Yüzme";
+  }
+  if (type.includes("yetişkin") || type.includes("yetiskin")) {
+    return level ? `Yetişkin Yüzme · ${level}` : "Yetişkin Yüzme";
+  }
+
+  return student.group_name || "Grup yok";
+}
+
 function scheduleLabel(student: StudentListItem) {
   if (student.schedule_slots?.length) {
     return student.schedule_slots
@@ -334,7 +352,7 @@ function printStudentCard(student: StudentListItem) {
 
   popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${escapePrintText(fullName)} - Kursiyer Bilgi Kartı</title><style>
     @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#10233f;background:#fff}.sheet{width:100%;max-width:186mm;margin:0 auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #1268d6;padding-bottom:14px}.brand{font-size:22px;font-weight:900;color:#1268d6}.sub{font-size:11px;letter-spacing:.12em;color:#64748b;margin-top:4px}.status{border:1px solid #d7e5f7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.name{font-size:28px;margin:22px 0 5px}.number{color:#64748b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.box{border:1px solid #dce5ef;border-radius:10px;padding:11px 12px;min-height:62px}.box span{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:#7b8ca3;text-transform:uppercase;margin-bottom:6px}.box strong{font-size:13px;line-height:1.35}.wide{grid-column:1/-1}.rights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.rights .box{text-align:center}.rights strong{font-size:20px}.foot{margin-top:22px;padding-top:10px;border-top:1px solid #dce5ef;display:flex;justify-content:space-between;font-size:10px;color:#64748b}.sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:44px}.sign div{border-top:1px solid #94a3b8;padding-top:7px;text-align:center;font-size:10px;color:#64748b}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sheet{max-width:none}}
-  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
+  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(educationGroupLabel(student))}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
   popup.document.close();
 }
 
@@ -585,7 +603,7 @@ function buildMessage(
 
   const compensationGroup =
     student.next_compensation_group ||
-    student.group_name ||
+    educationGroupLabel(student) ||
     "—";
 
   const lastAbsent = formatDate(student.last_absent_date);
@@ -593,7 +611,7 @@ function buildMessage(
     student.schedule_text || "• Program bilgisi bulunamadı";
 
   const branchText = student.branch_name || "—";
-  const groupText = student.group_name || "—";
+  const groupText = educationGroupLabel(student) || "—";
 
   const packageText =
     student.package_name ||
@@ -1378,17 +1396,18 @@ function closeLessonAction() {
   }, [students]);
 
   const groups = useMemo(() => {
-    return Array.from(
-      new Set(
-        students
-          .filter(
-            (student) =>
-              branch === "all" || student.branch_name === branch
-          )
-          .map((student) => student.group_name)
-          .filter((value): value is string => Boolean(value))
-      )
-    ).sort((a, b) => a.localeCompare(b, "tr"));
+    const map = new Map<string, { id: string; label: string }>();
+
+    for (const student of students) {
+      if (branch !== "all" && student.branch_name !== branch) continue;
+      const id = student.group_id || student.group_name || "";
+      if (!id || map.has(id)) continue;
+      map.set(id, { id, label: educationGroupLabel(student) });
+    }
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "tr")
+    );
   }, [students, branch]);
 
   const levels = useMemo(() => {
@@ -1547,7 +1566,8 @@ function closeLessonAction() {
         branch === "all" || student.branch_name === branch;
 
       const groupMatch =
-        group === "all" || student.group_name === group;
+        group === "all" ||
+        (student.group_id || student.group_name || "") === group;
 
       const levelMatch =
         level === "all" || student.swimming_level === level;
@@ -2179,7 +2199,7 @@ function closeLessonAction() {
         "Doğum Tarihi": formatDate(student.birth_date),
         "Durum": statusLabels[student.status || ""] || student.status || "",
         "Şube": student.branch_name || "",
-        "Grup": student.group_name || "",
+        "Grup": educationGroupLabel(student) || "",
         "Program": scheduleLabel(student) || "",
         "Seviye": student.swimming_level || "",
         "Paket": student.package_name || "",
@@ -2226,7 +2246,7 @@ function closeLessonAction() {
     const escape = (value: unknown) => String(value ?? "")
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-    const body = rows.map((student) => `<tr><td>${escape(`${student.first_name} ${student.last_name}`)}</td><td>${escape(statusLabels[student.status || ""] || student.status || "")}</td><td>${escape(student.branch_name)}</td><td>${escape(student.group_name)}</td><td>${escape(student.swimming_level)}</td><td>${escape(student.package_name)}</td><td>${numberValue(student.used_lessons)}</td><td>${numberValue(student.remaining_lessons)}</td><td>${escape(formatDate(student.end_date))}</td><td>${escape(student.phone || student.guardian_phone)}</td></tr>`).join("");
+    const body = rows.map((student) => `<tr><td>${escape(`${student.first_name} ${student.last_name}`)}</td><td>${escape(statusLabels[student.status || ""] || student.status || "")}</td><td>${escape(student.branch_name)}</td><td>${escape(educationGroupLabel(student))}</td><td>${escape(student.swimming_level)}</td><td>${escape(student.package_name)}</td><td>${numberValue(student.used_lessons)}</td><td>${numberValue(student.remaining_lessons)}</td><td>${escape(formatDate(student.end_date))}</td><td>${escape(student.phone || student.guardian_phone)}</td></tr>`).join("");
     const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SprintOS Öğrenci Listesi</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#10213a;margin:0}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #176de9;padding-bottom:10px;margin-bottom:14px}.head h1{margin:0;font-size:22px}.head p{margin:4px 0 0;color:#64748b;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{padding:7px 6px;border:1px solid #dbe4ef;text-align:left;vertical-align:top}th{background:#edf5ff;color:#174a7c}.foot{margin-top:10px;color:#64748b;font-size:9px;text-align:right}</style></head><body><div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt</p></div><strong>SprintOS</strong></div><table><thead><tr><th>Öğrenci</th><th>Durum</th><th>Şube</th><th>Grup</th><th>Seviye</th><th>Paket</th><th>Kullanılan</th><th>Kalan</th><th>Bitiş</th><th>Telefon</th></tr></thead><tbody>${body}</tbody></table><div class="foot">${escape(new Date().toLocaleString("tr-TR"))}</div><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`;
     const popup = window.open("", "_blank");
     if (!popup) {
@@ -2474,9 +2494,9 @@ function closeLessonAction() {
         >
           <option value="all">Tüm Gruplar</option>
 
-          {groups.map((groupName) => (
-            <option key={groupName} value={groupName}>
-              {groupName}
+          {groups.map((groupOption) => (
+            <option key={groupOption.id} value={groupOption.id}>
+              {groupOption.label}
             </option>
           ))}
         </select>
@@ -2738,7 +2758,7 @@ function closeLessonAction() {
 
               <div className="studentProgramLine">
                 <span>📍 {student.branch_name || "Şube yok"}</span>
-                <span>👥 {student.group_name || "Grup yok"}</span>
+                <span>👥 {educationGroupLabel(student)}</span>
                 <strong>
                   🗓 {scheduleLabel(student) || "Program tanımlı değil"}
                 </strong>
@@ -2832,7 +2852,7 @@ function closeLessonAction() {
 
                 <div>
                   <span>Grup</span>
-                  <strong>{student.group_name || "—"}</strong>
+                  <strong>{educationGroupLabel(student)}</strong>
                 </div>
 
                 <div>
@@ -3195,7 +3215,7 @@ function closeLessonAction() {
                     <strong>
                       {selectedStudents.length === 1
                         ? `${selectedStudents[0].branch_name || "—"} · ${
-                            selectedStudents[0].group_name || "—"
+                            educationGroupLabel(selectedStudents[0]) || "—"
                           }`
                         : `${selectedStudents.length} seçili öğrenci`}
                     </strong>
@@ -3655,7 +3675,7 @@ function closeLessonAction() {
             <p>
               {actionStudent.branch_name || "Şube yok"}
               {" · "}
-              {actionStudent.group_name || "Grup yok"}
+              {educationGroupLabel(actionStudent)}
             </p>
           )}
         </div>
@@ -3822,7 +3842,7 @@ function closeLessonAction() {
           <p>
             {statusActionStudent.branch_name || "Şube yok"}
             {" · "}
-            {statusActionStudent.group_name || "Grup yok"}
+            {educationGroupLabel(statusActionStudent)}
           </p>
         </div>
 
@@ -4018,7 +4038,7 @@ function closeLessonAction() {
                 <p>
                   {messageStudent.student_number || "Öğrenci No Yok"}
                   {" · "}
-                  {messageStudent.group_name || "Grup yok"}
+                  {educationGroupLabel(messageStudent)}
                 </p>
               </div>
 
@@ -4178,7 +4198,7 @@ function closeLessonAction() {
                 <p>
                   {deleteActionStudent.branch_name || "Şube yok"}
                   {" · "}
-                  {deleteActionStudent.group_name || "Grup yok"}
+                  {educationGroupLabel(deleteActionStudent)}
                 </p>
               </div>
 
