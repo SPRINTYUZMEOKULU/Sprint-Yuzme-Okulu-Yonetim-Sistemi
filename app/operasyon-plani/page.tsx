@@ -60,6 +60,22 @@ function gunNo(tarih: string) {
   return jsDay === 0 ? 7 : jsDay;
 }
 
+function dateForWeekday(baseDate: string, targetWeekday: number) {
+  const base = new Date(`${baseDate}T12:00:00+03:00`);
+  const baseWeekday = gunNo(baseDate);
+  const mondayOffset = 1 - baseWeekday;
+  const targetOffset = targetWeekday - 1;
+  const result = new Date(base);
+  result.setDate(base.getDate() + mondayOffset + targetOffset);
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(result);
+}
+
 function enrollmentWeekday(value: number) {
   // student_enrollments.lesson_weekdays Postgres DOW kullanır: Pazar=0.
   // Operasyon ekranında Pazar 7 olarak gösterildiği için yalnız bu noktada normalize edilir.
@@ -1239,6 +1255,15 @@ export default async function OperasyonPlaniPage({
     })
     .filter(Boolean) as any[];
 
+  function dayShortcutHref(weekday: number) {
+    const qp = new URLSearchParams();
+    qp.set("tarih", dateForWeekday(selectedDate, weekday));
+    qp.set("kapsam", "gun");
+    qp.set("gorunum", "ortak");
+
+    return `/operasyon-plani?${qp.toString()}#ortak-seanslar`;
+  }
+
   function gorunumHref(gorunum: string) {
     const qp = new URLSearchParams();
 
@@ -1262,7 +1287,7 @@ export default async function OperasyonPlaniPage({
       <main style={pageStyle}>
       <div style={containerStyle}>
         {selectedDaySharedSlots.length > 0 ? (
-          <section style={dailySharedSectionStyle}>
+          <section id="ortak-seanslar" style={dailySharedSectionStyle}>
             <div style={dailySharedHeaderStyle}>
               <div>
                 <div style={dailySharedEyebrowStyle}>SEÇİLİ GÜN · ORTAK SEANSLAR</div>
@@ -1711,6 +1736,34 @@ export default async function OperasyonPlaniPage({
             <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye · yaş</small></span>
             <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
           </summary>
+        <div style={dayShortcutWrapStyle}>
+          <span style={dayShortcutLabelStyle}>Hızlı Gün</span>
+          <div style={dayShortcutGridStyle}>
+            {Object.entries(GUNLER).map(([dayNumber, dayName]) => {
+              const weekday = Number(dayNumber);
+              const active =
+                planScope === "gun" &&
+                selectedWeekday === weekday;
+
+              return (
+                <Link
+                  key={weekday}
+                  href={dayShortcutHref(weekday)}
+                  style={{
+                    ...dayShortcutButtonStyle,
+                    ...(active ? dayShortcutButtonActiveStyle : {}),
+                  }}
+                >
+                  {String(dayName).slice(0, 3)}
+                </Link>
+              );
+            })}
+          </div>
+          <small style={dayShortcutHelpStyle}>
+            Güne dokunun; günlük + ortak grup filtresi otomatik seçilir ve ortak seanslara iner.
+          </small>
+        </div>
+
         <form
           method="get"
           style={filterPanelCompactStyle}
@@ -4470,4 +4523,52 @@ const quickInfoStyle: React.CSSProperties = {
   minHeight: 40,
   color: "#475569",
   fontSize: 11,
+};
+
+
+const dayShortcutWrapStyle: React.CSSProperties = {
+  padding: "12px 12px 2px",
+  borderTop: "1px solid #eef3f8",
+  background: "#fff",
+};
+const dayShortcutLabelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: 7,
+  color: "#475569",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: ".04em",
+  textTransform: "uppercase",
+};
+const dayShortcutGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+  gap: 5,
+};
+const dayShortcutButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 34,
+  padding: "6px 4px",
+  borderRadius: 9,
+  border: "1px solid #dbe6f3",
+  background: "#f8fbff",
+  color: "#52647d",
+  fontSize: 10,
+  fontWeight: 900,
+  textDecoration: "none",
+};
+const dayShortcutButtonActiveStyle: React.CSSProperties = {
+  borderColor: "#2563eb",
+  background: "#2563eb",
+  color: "#fff",
+  boxShadow: "0 5px 14px rgba(37,99,235,.18)",
+};
+const dayShortcutHelpStyle: React.CSSProperties = {
+  display: "block",
+  marginTop: 7,
+  color: "#8492a6",
+  fontSize: 9,
+  lineHeight: 1.4,
 };
