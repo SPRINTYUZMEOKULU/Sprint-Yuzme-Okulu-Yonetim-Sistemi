@@ -1664,6 +1664,48 @@ export default async function OperasyonPlaniPage({
                       (schedule.branch_id || group?.branch_id)
                 );
 
+                const sharedSlotRows = [schedule, ...sharedSlotSchedules].map(
+                  (slotSchedule: any) => {
+                    const slotGroup = groupMap.get(slotSchedule.group_id);
+                    const slotMemberships = memberships.filter(
+                      (membership: any) =>
+                        membership.group_id === slotSchedule.group_id
+                    );
+
+                    const studentCount = slotMemberships.filter(
+                      (membership: any) => {
+                        const enrollment = enrollments.find(
+                          (item: any) =>
+                            item.student_id === membership.student_id &&
+                            item.group_id === slotSchedule.group_id
+                        );
+
+                        return enrollmentIncludesScheduleDay(
+                          enrollment,
+                          Number(slotSchedule.weekday)
+                        );
+                      }
+                    ).length;
+
+                    return {
+                      scheduleId: slotSchedule.id,
+                      groupName: slotGroup?.name || "Grup Atanmamış",
+                      studentCount,
+                      capacity: Number(slotGroup?.capacity || 0),
+                    };
+                  }
+                );
+
+                const sharedSlotTotalStudents = sharedSlotRows.reduce(
+                  (total: number, item: any) => total + item.studentCount,
+                  0
+                );
+
+                const sharedSlotTotalCapacity = sharedSlotRows.reduce(
+                  (total: number, item: any) => total + item.capacity,
+                  0
+                );
+
                 return (
                   <details
                     key={schedule.id}
@@ -1743,6 +1785,152 @@ export default async function OperasyonPlaniPage({
 
                       <span className="opSessionChevron" style={sessionChevronStyle}>⌄</span>
                     </summary>
+
+                    {sharedSlotSchedules.length > 0 ? (
+                      <section
+                        style={{
+                          margin: "0 16px 14px",
+                          padding: "14px",
+                          borderRadius: 14,
+                          border: "1px solid #e9d5ff",
+                          background: "linear-gradient(135deg,#faf5ff 0%,#ffffff 100%)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            flexWrap: "wrap",
+                            marginBottom: 10,
+                          }}
+                        >
+                          <div>
+                            <span
+                              style={{
+                                display: "block",
+                                color: "#7e22ce",
+                                fontSize: 11,
+                                fontWeight: 900,
+                                letterSpacing: ".05em",
+                              }}
+                            >
+                              ORTAK SEANS
+                            </span>
+                            <strong
+                              style={{
+                                display: "block",
+                                marginTop: 2,
+                                color: "#2e1065",
+                                fontSize: 15,
+                              }}
+                            >
+                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)}
+                            </strong>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                padding: "6px 9px",
+                                borderRadius: 999,
+                                background: "#ede9fe",
+                                color: "#6d28d9",
+                                fontSize: 11,
+                                fontWeight: 900,
+                              }}
+                            >
+                              {sharedSlotRows.length} grup
+                            </span>
+                            <span
+                              style={{
+                                padding: "6px 9px",
+                                borderRadius: 999,
+                                background: "#eff6ff",
+                                color: "#1d4ed8",
+                                fontSize: 11,
+                                fontWeight: 900,
+                              }}
+                            >
+                              Toplam {sharedSlotTotalStudents} öğrenci
+                            </span>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                            gap: 8,
+                          }}
+                        >
+                          {sharedSlotRows.map((item: any) => (
+                            <div
+                              key={item.scheduleId}
+                              style={{
+                                padding: "10px 12px",
+                                borderRadius: 11,
+                                border: "1px solid #e5e7eb",
+                                background: "#fff",
+                                minWidth: 0,
+                              }}
+                            >
+                              <strong
+                                style={{
+                                  display: "block",
+                                  color: "#1f2937",
+                                  fontSize: 13,
+                                  lineHeight: 1.35,
+                                  overflowWrap: "anywhere",
+                                }}
+                              >
+                                {item.groupName}
+                              </strong>
+                              <span
+                                style={{
+                                  display: "block",
+                                  marginTop: 4,
+                                  color: "#64748b",
+                                  fontSize: 11,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {item.studentCount} öğrenci
+                                {item.capacity ? ` · kapasite ${item.capacity}` : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 10,
+                            paddingTop: 10,
+                            borderTop: "1px dashed #d8b4fe",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            color: "#5b21b6",
+                            fontSize: 12,
+                            fontWeight: 900,
+                          }}
+                        >
+                          <span>Birlikte çalışacak öğrenci: {sharedSlotTotalStudents}</span>
+                          {sharedSlotTotalCapacity > 0 ? (
+                            <span>Toplam kapasite: {sharedSlotTotalCapacity}</span>
+                          ) : null}
+                        </div>
+                      </section>
+                    ) : null}
 
                     {/* =====================================
                         SEVİYE + KAPASİTE
