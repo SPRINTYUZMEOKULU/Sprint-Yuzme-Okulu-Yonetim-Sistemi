@@ -59,6 +59,24 @@ function gunNo(tarih: string) {
   return jsDay === 0 ? 7 : jsDay;
 }
 
+function enrollmentWeekday(value: number) {
+  // student_enrollments.lesson_weekdays Postgres DOW kullanır: Pazar=0.
+  // Operasyon ekranında Pazar 7 olarak gösterildiği için yalnız bu noktada normalize edilir.
+  return Number(value) === 7 ? 0 : Number(value);
+}
+
+function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number) {
+  const days = Array.isArray(enrollment?.lesson_weekdays)
+    ? enrollment.lesson_weekdays.map(Number)
+    : [];
+
+  // Eski kayıtlarda lesson_weekdays boş olabilir. Geriye dönük uyumluluk için
+  // bu kayıtlar grup programını kullanmaya devam eder.
+  if (!days.length) return true;
+
+  return days.includes(enrollmentWeekday(scheduleWeekday));
+}
+
 function saatGoster(value?: string | null) {
   if (!value) return "—";
 
@@ -381,6 +399,7 @@ export default async function OperasyonPlaniPage({
     coachesResult,
     studentsResult,
     membershipsResult,
+    enrollmentsResult,
     staffAssignmentsResult,
     studentAssignmentsResult,
   ] = await Promise.all([
@@ -444,6 +463,14 @@ export default async function OperasyonPlaniPage({
       .eq("is_active", true),
 
     supabase
+      .from("student_enrollments")
+      .select(
+        "id,organization_id,student_id,group_id,lesson_weekdays,total_lessons,used_lessons,start_date,planned_end_date,status"
+      )
+      .eq("organization_id", organizationId)
+      .eq("status", "active"),
+
+    supabase
       .from("lesson_staff_assignments")
       .select(
         "id,organization_id,branch_id,schedule_id,group_id,coach_id,assignment_role,lane_label,sort_order,is_active"
@@ -466,7 +493,8 @@ export default async function OperasyonPlaniPage({
     schedulesResult.error ||
     coachesResult.error ||
     studentsResult.error ||
-    membershipsResult.error;
+    membershipsResult.error ||
+    enrollmentsResult.error;
 
   if (criticalError) {
     return (
@@ -503,6 +531,9 @@ export default async function OperasyonPlaniPage({
 
   const memberships =
     membershipsResult.data || [];
+
+  const enrollments =
+    enrollmentsResult.data || [];
 
   const staffAssignments =
     staffAssignmentsResult.data || [];
@@ -748,21 +779,23 @@ export default async function OperasyonPlaniPage({
         .filter(Boolean)
     );
 
-  const shownStudentIds =
-    new Set(
-      memberships
-        .filter(
-          (membership: any) =>
-            shownGroupIds.has(
-              membership.group_id
-            )
-        )
-        .map(
-          (membership: any) =>
-            membership.student_id
-        )
-        .filter(Boolean)
-    );
+  const shownStudentIds = new Set<string>();
+
+  filteredSchedules.forEach((schedule: any) => {
+    memberships
+      .filter((membership: any) => membership.group_id === schedule.group_id)
+      .forEach((membership: any) => {
+        const enrollment = enrollments.find(
+          (item: any) =>
+            item.student_id === membership.student_id &&
+            item.group_id === schedule.group_id
+        );
+
+        if (enrollmentIncludesScheduleDay(enrollment, Number(schedule.weekday))) {
+          shownStudentIds.add(membership.student_id);
+        }
+      });
+  });
 
   const shownCoachIds =
     new Set<string>();
@@ -820,10 +853,20 @@ export default async function OperasyonPlaniPage({
       const branch = group?.branch_id
         ? branchMap.get(group.branch_id)
         : null;
+      const activeEnrollment = enrollments.find(
+        (item: any) =>
+          item.student_id === student.id &&
+          item.group_id === membership?.group_id
+      );
+
       const groupSchedules = allSchedules
         .filter(
           (schedule: any) =>
-            schedule.group_id === membership?.group_id
+            schedule.group_id === membership?.group_id &&
+            enrollmentIncludesScheduleDay(
+              activeEnrollment,
+              Number(schedule.weekday)
+            )
         )
         .sort((a: any, b: any) => {
           const dayDiff =
@@ -1472,6 +1515,18 @@ export default async function OperasyonPlaniPage({
 
                 let groupStudents =
                   groupMemberships
+                    .filter((membership: any) => {
+                      const enrollment = enrollments.find(
+                        (item: any) =>
+                          item.student_id === membership.student_id &&
+                          item.group_id === schedule.group_id
+                      );
+
+                      return enrollmentIncludesScheduleDay(
+                        enrollment,
+                        Number(schedule.weekday)
+                      );
+                    })
                     .map(
                       (
                         membership: any
@@ -1599,6 +1654,16 @@ export default async function OperasyonPlaniPage({
                       )
                     : 0;
 
+                const sharedSlotSchedules = filteredSchedules.filter(
+                  (item: any) =>
+                    item.id !== schedule.id &&
+                    Number(item.weekday) === Number(schedule.weekday) &&
+                    String(item.start_time || "").slice(0, 5) ===
+                      String(schedule.start_time || "").slice(0, 5) &&
+                    (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
+                      (schedule.branch_id || group?.branch_id)
+                );
+
                 return (
                   <details
                     key={schedule.id}
@@ -1655,6 +1720,18 @@ export default async function OperasyonPlaniPage({
                       </div>
 
                       <div className="opSessionLevels" style={sessionLevelWrapStyle}>
+                        {sharedSlotSchedules.length > 0 ? (
+                          <span
+                            style={{
+                              ...levelBadgeStyle,
+                              background: "#f3e8ff",
+                              borderColor: "#e9d5ff",
+                              color: "#7e22ce",
+                            }}
+                          >
+                            Ortak saat · {sharedSlotSchedules.length + 1} grup
+                          </span>
+                        ) : null}
                         {levelsInSession.length ? (
                           levelsInSession.slice(0, 2).map((level: any) => (
                             <span key={level} style={levelBadgeStyle}>{level}</span>
