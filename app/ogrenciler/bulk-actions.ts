@@ -84,6 +84,11 @@ function cleanPhone(value?: string | null) {
   return (value || "").replace(/\D/g, "");
 }
 
+function normalizeIsoWeekday(value: unknown) {
+  const day = Number(value);
+  return day === 0 ? 7 : day;
+}
+
 function isoToJsDay(day: number) {
   return day === 7 ? 0 : day;
 }
@@ -273,7 +278,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
     const targetWeekdays = Array.from(
       new Set(
         targetSchedules
-          .map((schedule) => Number(schedule.weekday))
+          .map((schedule) => normalizeIsoWeekday(schedule.weekday))
           .filter((day) => Number.isInteger(day) && day >= 1 && day <= 7),
       ),
     ).sort((a, b) => a - b);
@@ -356,7 +361,7 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
       })
       .map(
         (schedule: any) =>
-          `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} ${timeText(
+          `${DAY_NAMES[normalizeIsoWeekday(schedule.weekday)] || "Ders"} ${timeText(
             schedule.start_time,
           )}-${timeText(schedule.end_time)}`,
       )
