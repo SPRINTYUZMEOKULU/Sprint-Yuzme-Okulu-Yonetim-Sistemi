@@ -11,6 +11,7 @@ import {
 
 import GroupActionButton from "./group-action-button";
 import GroupEditor from "./group-editor";
+import AddGroupToSession from "./add-group-to-session";
 
 import "./groups.css";
 import "./groups-integrated.css";
@@ -585,6 +586,29 @@ export default async function GroupsPage({
             </span>
           </div>
         </div>
+
+        {!archived && firstSchedule && session.groups[0] ? (
+          <div className="sessionGroupToolbar">
+            <div>
+              <strong>Eğitim grupları</strong>
+              <span>
+                Bu seansın gün ve saatini koruyarak Başlangıç, Orta, İleri veya
+                diğer seviyelerde yeni bir grup ekleyin.
+              </span>
+            </div>
+
+            <AddGroupToSession
+              branchId={session.groups[0].branch_id}
+              weekdays={Array.from(
+                new Set(session.schedules.map((item) => item.weekday))
+              )}
+              startTime={cleanTime(firstSchedule.start_time)}
+              endTime={cleanTime(firstSchedule.end_time)}
+              defaultCourseType={session.groups[0].course_type}
+              levels={levels}
+            />
+          </div>
+        ) : null}
 
         <div className="sessionGroups integratedSessionGroups">
           {session.groups.map((group) => {
