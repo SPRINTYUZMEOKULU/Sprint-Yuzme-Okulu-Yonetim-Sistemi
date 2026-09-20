@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { applyManagerCorrection } from "./actions";
+import { applyManagerCorrection, saveStudentIdentity } from "./actions";
 
 type Branch = { id: string; name: string };
 type Group = { id: string; name: string; branch_id: string | null };
@@ -260,6 +260,16 @@ export default function CorrectionForm({
               defaultValue={student.guardian_email || ""}
             />
           </label>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+          <button
+            type="submit"
+            formAction={saveStudentIdentity}
+            formNoValidate
+            className="saveCorrection"
+          >
+            Kimlik ve İletişim Bilgilerini Kaydet
+          </button>
         </div>
       </section>
 
