@@ -78,18 +78,19 @@ function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number)
 }
 
 function enrollmentDaysText(enrollment: any) {
-  const days = Array.isArray(enrollment?.lesson_weekdays)
-    ? Array.from(new Set(enrollment.lesson_weekdays.map(Number)))
+  const rawDays: number[] = Array.isArray(enrollment?.lesson_weekdays)
+    ? enrollment.lesson_weekdays.map((day: unknown) => Number(day))
     : [];
+  const days: number[] = Array.from(new Set<number>(rawDays));
 
   if (!days.length) return "Grup programı";
 
-  const uiDays = days
-    .map((day: number) => (day === 0 ? 7 : day))
-    .sort((a: number, b: number) => a - b);
+  const uiDays: number[] = days
+    .map((day) => (day === 0 ? 7 : day))
+    .sort((a, b) => a - b);
 
   return `${uiDays.length} gün · ${uiDays
-    .map((day: number) => GUNLER[day] || "Ders")
+    .map((day) => GUNLER[day] || "Ders")
     .join(" + ")}`;
 }
 
