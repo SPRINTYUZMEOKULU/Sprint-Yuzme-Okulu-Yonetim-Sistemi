@@ -245,3 +245,239 @@
     width: 100% !important;
   }
 }
+
+
+/* =========================================================
+   OPERASYON PLANI — RESPONSIVE CONTROL + SESSION SUMMARY
+   Mobilde inline stillerin sabit kolonlarını güvenli biçimde ezer.
+========================================================= */
+
+.opControlPanel,
+.opFilterDetails,
+.opScheduleGrid,
+.opDayTitle,
+.opCompactSummary {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opViewBar {
+  min-width: 0;
+}
+
+.opViewButton {
+  min-height: 42px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.opViewButton:active {
+  transform: scale(.97);
+}
+
+.opFilterSummary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.opSessionSummary {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.opSessionSummary::-webkit-details-marker {
+  display: none;
+}
+
+.opSessionMeta,
+.opSessionTime,
+.opSessionLevels {
+  min-width: 0;
+}
+
+.opSessionMeta strong,
+.opSessionMeta small {
+  overflow-wrap: anywhere;
+}
+
+details[open] > .opSessionSummary .opSessionChevron {
+  transform: rotate(180deg);
+}
+
+.opSessionChevron {
+  transition: transform .18s ease;
+}
+
+@media (max-width: 760px) {
+  .opControlPanel {
+    padding: 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .opControlHeader {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: start !important;
+    gap: 8px !important;
+  }
+
+  .opControlHeader > span {
+    width: fit-content;
+  }
+
+  .opViewBar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    padding: 7px !important;
+    margin-bottom: 0 !important;
+    border-radius: 14px !important;
+  }
+
+  .opViewButton {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 9px 8px !important;
+    border-radius: 10px !important;
+    font-size: 12px !important;
+    line-height: 1.1;
+  }
+
+  .opViewButton.isActive {
+    box-shadow: 0 6px 14px rgba(23, 105, 232, .18);
+  }
+
+  .opFilterSummary {
+    padding: 13px 14px !important;
+    align-items: flex-start !important;
+  }
+
+  .opFilterSummary > span:first-child {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .opFilterSummary small {
+    display: block;
+    line-height: 1.35;
+  }
+
+  .opFilterDetails form {
+    grid-template-columns: 1fr !important;
+    padding: 12px !important;
+  }
+
+  .opFilterDetails input,
+  .opFilterDetails select,
+  .opFilterDetails button,
+  .opFilterDetails a {
+    min-height: 44px !important;
+    font-size: 14px !important;
+  }
+
+  .opCompactSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .opCompactSummary > a {
+    min-height: 64px !important;
+  }
+
+  .opDayTitle {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: start !important;
+    gap: 8px !important;
+    padding: 12px 13px !important;
+  }
+
+  .opDayTitle > div {
+    min-width: 0;
+  }
+
+  .opDayTitle strong {
+    display: inline;
+    overflow-wrap: anywhere;
+  }
+
+  .opScheduleGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .opSessionSummary {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 10px 12px !important;
+    align-items: start !important;
+    padding: 14px !important;
+  }
+
+  .opSessionTime {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .opSessionTime strong {
+    font-size: 18px !important;
+    white-space: normal !important;
+  }
+
+  .opSessionMeta {
+    grid-column: 1 / -1;
+    padding-top: 9px;
+    border-top: 1px solid #edf2f7;
+    font-size: 13px !important;
+  }
+
+  .opSessionMeta strong {
+    display: block;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .opSessionLevels {
+    grid-column: 1;
+    justify-content: flex-start !important;
+    align-items: center;
+    padding-top: 2px;
+  }
+
+  .opSessionChevron {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: #eef5ff;
+  }
+
+  .opSessionSummary + div {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .opViewBar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .opCompactSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
