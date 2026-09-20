@@ -1427,22 +1427,43 @@ function closeLessonAction() {
             );
           });
 
-        const scheduleText = slots
-          .map(
-            (schedule) =>
-              `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} ${shortTime(
-                schedule.start_time
-              )}`
+        const times = Array.from(
+          new Set(slots.map((schedule) => shortTime(schedule.start_time)).filter(Boolean))
+        );
+
+        const days = Array.from(
+          new Set(
+            slots
+              .map((schedule) => DAY_NAMES[Number(schedule.weekday)] || "")
+              .filter(Boolean)
           )
-          .join(" · ");
+        );
+
+        const sameTime = times.length === 1;
+        const compactSchedule = slots.length
+          ? sameTime
+            ? `${times[0]} · ${days.join("–")}`
+            : slots
+                .map(
+                  (schedule) =>
+                    `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} ${shortTime(
+                      schedule.start_time
+                    )}`
+                )
+                .join(" · ")
+          : "";
+
+        const normalizedGroupName = normalizeText(item.name);
+        const normalizedCourseType = normalizeText(item.course_type);
+        const showCourseType =
+          Boolean(item.course_type) &&
+          !normalizedGroupName.includes(normalizedCourseType) &&
+          !normalizedCourseType.includes(normalizedGroupName);
 
         const details = [
           item.name,
-          item.course_type &&
-          !normalizeText(item.name).includes(normalizeText(item.course_type))
-            ? item.course_type
-            : null,
-          scheduleText || null,
+          showCourseType ? item.course_type : null,
+          compactSchedule || null,
         ].filter(Boolean);
 
         return {
