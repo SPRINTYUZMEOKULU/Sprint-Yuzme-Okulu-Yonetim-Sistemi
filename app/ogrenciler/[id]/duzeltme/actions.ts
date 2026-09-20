@@ -15,6 +15,11 @@ function nullable(formData: FormData, key: string) {
   return value || null;
 }
 
+function normalizeIsoWeekday(value: unknown) {
+  const day = Number(value);
+  return day === 0 ? 7 : day;
+}
+
 function isoToJsDay(day: number) {
   return day === 7 ? 0 : day;
 }
@@ -222,7 +227,7 @@ export async function applyManagerCorrection(formData: FormData) {
   const isoWeekdays = Array.from(
     new Set(
       schedules
-        .map((row: any) => Number(row.weekday))
+        .map((row: any) => normalizeIsoWeekday(row.weekday))
         .filter((day: number) => Number.isInteger(day) && day >= 1 && day <= 7),
     ),
   ).sort((a, b) => a - b);
