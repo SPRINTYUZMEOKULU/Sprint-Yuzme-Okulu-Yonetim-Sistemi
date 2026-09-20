@@ -458,10 +458,23 @@ function daysUntil(value?: string | null) {
   );
 }
 
-function paymentLabel(student: StudentListItem) {
-  const outstanding = numberValue(student.payment_outstanding);
+function hasOutstandingPayment(student: StudentListItem) {
+  const paymentStatus = normalizeText(student.payment_status);
+  const explicitlyPaid = [
+    "paid",
+    "odendi",
+    "ödendi",
+    "completed",
+    "complete",
+    "tamamlandı",
+    "tamamlandi",
+  ].includes(paymentStatus);
 
-  if (outstanding > 0) {
+  return !explicitlyPaid && numberValue(student.payment_outstanding) > 0.01;
+}
+
+function paymentLabel(student: StudentListItem) {
+  if (hasOutstandingPayment(student)) {
     return {
       text: "Ödeme Bekleniyor",
       className: "paymentWarn",
@@ -477,13 +490,12 @@ function paymentLabel(student: StudentListItem) {
 function informationNeed(student: StudentListItem) {
   if (student.status !== "active") return null;
 
-  const outstanding = numberValue(student.payment_outstanding);
   const remaining = numberValue(student.remaining_lessons);
   const plannedCompensation = numberValue(
     student.planned_compensation_lessons
   );
 
-  if (outstanding > 0) {
+  if (hasOutstandingPayment(student)) {
     return {
       type: "payment" as MessageType,
       level: "important",
@@ -1378,18 +1390,68 @@ function closeLessonAction() {
   }, [students]);
 
   const groups = useMemo(() => {
-    return Array.from(
-      new Set(
-        students
-          .filter(
-            (student) =>
-              branch === "all" || student.branch_name === branch
-          )
-          .map((student) => student.group_name)
-          .filter((value): value is string => Boolean(value))
+    const selectedBranchId =
+      branch === "all"
+        ? null
+        : branchOptions.find((item) => item.name === branch)?.id || null;
+
+    const visibleStudentGroupIds = new Set(
+      students
+        .filter(
+          (student) =>
+            branch === "all" || student.branch_name === branch
+        )
+        .map((student) => student.group_id)
+        .filter((value): value is string => Boolean(value))
+    );
+
+    return groupOptions
+      .filter(
+        (item) =>
+          visibleStudentGroupIds.has(item.id) &&
+          (!selectedBranchId || item.branch_id === selectedBranchId)
       )
-    ).sort((a, b) => a.localeCompare(b, "tr"));
-  }, [students, branch]);
+      .map((item) => {
+        const slots = scheduleOptions
+          .filter(
+            (schedule) =>
+              schedule.group_id === item.id &&
+              schedule.weekday != null
+          )
+          .slice()
+          .sort((a, b) => {
+            const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
+            if (dayDiff !== 0) return dayDiff;
+            return String(a.start_time || "").localeCompare(
+              String(b.start_time || "")
+            );
+          });
+
+        const scheduleText = slots
+          .map(
+            (schedule) =>
+              `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} ${shortTime(
+                schedule.start_time
+              )}`
+          )
+          .join(" · ");
+
+        const details = [
+          item.name,
+          item.course_type &&
+          !normalizeText(item.name).includes(normalizeText(item.course_type))
+            ? item.course_type
+            : null,
+          scheduleText || null,
+        ].filter(Boolean);
+
+        return {
+          id: item.id,
+          label: details.join(" · "),
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, "tr"));
+  }, [students, branch, branchOptions, groupOptions, scheduleOptions]);
 
   const levels = useMemo(() => {
     return Array.from(
@@ -1508,10 +1570,7 @@ function closeLessonAction() {
           student.status === "active" &&
           numberValue(student.remaining_lessons) <= 0
       ).length,
-      paymentWaiting: students.filter(
-        (student) =>
-          numberValue(student.payment_outstanding) > 0
-      ).length,
+      paymentWaiting: students.filter(hasOutstandingPayment).length,
       compensationWaiting: students.filter(
         (student) =>
           student.status === "active" &&
@@ -1547,7 +1606,7 @@ function closeLessonAction() {
         branch === "all" || student.branch_name === branch;
 
       const groupMatch =
-        group === "all" || student.group_name === group;
+        group === "all" || student.group_id === group;
 
       const levelMatch =
         level === "all" || student.swimming_level === level;
@@ -1606,7 +1665,7 @@ function closeLessonAction() {
       }
 
       if (status === "payment_waiting") {
-        statusMatch = numberValue(student.payment_outstanding) > 0;
+        statusMatch = hasOutstandingPayment(student);
       }
 
       if (status === "compensation_waiting") {
@@ -1698,6 +1757,25 @@ function closeLessonAction() {
     sort,
   ]);
 
+
+  useEffect(() => {
+    const visibleIds = new Set(
+      filteredStudents.map((student) => student.id)
+    );
+
+    setSelectedStudentIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+
+      if (
+        next.length === current.length &&
+        next.every((id, index) => id === current[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [filteredStudents]);
 
   function toggleStudentSelection(studentId: string) {
     setSelectedStudentIds((current) =>
@@ -2474,9 +2552,9 @@ function closeLessonAction() {
         >
           <option value="all">Tüm Gruplar</option>
 
-          {groups.map((groupName) => (
-            <option key={groupName} value={groupName}>
-              {groupName}
+          {groups.map((groupOption) => (
+            <option key={groupOption.id} value={groupOption.id}>
+              {groupOption.label}
             </option>
           ))}
         </select>
@@ -2607,6 +2685,11 @@ function closeLessonAction() {
 
         <div>
           <strong>{selectedStudentIds.length}</strong> öğrenci seçili
+          {filteredStudents.length > 0 && (
+            <span className="selectionScope">
+              {" "}· {filteredStudents.length} görünür
+            </span>
+          )}
         </div>
 
         {selectedStudentIds.length > 0 && (
@@ -2738,7 +2821,15 @@ function closeLessonAction() {
 
               <div className="studentProgramLine">
                 <span>📍 {student.branch_name || "Şube yok"}</span>
-                <span>👥 {student.group_name || "Grup yok"}</span>
+                <span>
+                  👥 {student.group_name || "Grup yok"}
+                  {student.course_type &&
+                  !normalizeText(student.group_name).includes(
+                    normalizeText(student.course_type)
+                  )
+                    ? ` · ${student.course_type}`
+                    : ""}
+                </span>
                 <strong>
                   🗓 {scheduleLabel(student) || "Program tanımlı değil"}
                 </strong>
@@ -2832,7 +2923,15 @@ function closeLessonAction() {
 
                 <div>
                   <span>Grup</span>
-                  <strong>{student.group_name || "—"}</strong>
+                  <strong>
+                    {student.group_name || "—"}
+                    {student.course_type &&
+                    !normalizeText(student.group_name).includes(
+                      normalizeText(student.course_type)
+                    )
+                      ? ` · ${student.course_type}`
+                      : ""}
+                  </strong>
                 </div>
 
                 <div>
