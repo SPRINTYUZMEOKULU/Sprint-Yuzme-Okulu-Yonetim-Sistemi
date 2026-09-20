@@ -656,6 +656,84 @@ export default async function OperasyonPlaniPage({
       return true;
     });
 
+  const currentView = params.gorunum || "seans";
+
+  // Görünüm düğmeleri yalnızca aktif renk değiştirmesin; seçilen görünüme
+  // göre seansları gerçekten yeniden sırala. Bu sayede mobilde de tıklama
+  // sonucunun ekranda net bir karşılığı olur.
+  const scheduleCoachName = (schedule: any) => {
+    const explicit = staffAssignments.find(
+      (assignment: any) =>
+        assignment.schedule_id === schedule.id &&
+        assignment.coach_id
+    );
+    const group = groupMap.get(schedule.group_id);
+    const coachId =
+      explicit?.coach_id ||
+      schedule.coach_id ||
+      group?.primary_coach_id ||
+      "";
+    const coach = coachId ? coachMap.get(coachId) : null;
+    return String(coach?.full_name || coach?.email || "ZZZ");
+  };
+
+  const scheduleFirstLevel = (schedule: any) => {
+    const level = memberships
+      .filter((item: any) => item.group_id === schedule.group_id)
+      .map((item: any) => studentMap.get(item.student_id)?.swimming_level)
+      .find(Boolean);
+    return String(level || "ZZZ");
+  };
+
+  filteredSchedules = [...filteredSchedules].sort((a: any, b: any) => {
+    const byDayTime = () => {
+      const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
+      if (dayDiff !== 0) return dayDiff;
+      return String(a.start_time || "").localeCompare(String(b.start_time || ""));
+    };
+
+    if (currentView === "egitmen") {
+      return (
+        scheduleCoachName(a).localeCompare(scheduleCoachName(b), "tr") ||
+        byDayTime()
+      );
+    }
+
+    if (currentView === "grup") {
+      return (
+        String(groupMap.get(a.group_id)?.name || "").localeCompare(
+          String(groupMap.get(b.group_id)?.name || ""),
+          "tr"
+        ) || byDayTime()
+      );
+    }
+
+    if (currentView === "seviye") {
+      return (
+        scheduleFirstLevel(a).localeCompare(scheduleFirstLevel(b), "tr") ||
+        byDayTime()
+      );
+    }
+
+    if (currentView === "havuz") {
+      return (
+        String(branchMap.get(a.branch_id || groupMap.get(a.group_id)?.branch_id)?.name || "").localeCompare(
+          String(branchMap.get(b.branch_id || groupMap.get(b.group_id)?.branch_id)?.name || ""),
+          "tr"
+        ) || byDayTime()
+      );
+    }
+
+    if (currentView === "saat") {
+      return (
+        String(a.start_time || "").localeCompare(String(b.start_time || "")) ||
+        Number(a.weekday || 0) - Number(b.weekday || 0)
+      );
+    }
+
+    return byDayTime();
+  });
+
   /* =======================================================
      ÖZETLER
   ======================================================= */
@@ -914,7 +992,7 @@ export default async function OperasyonPlaniPage({
             GÖRÜNÜM / FİLTRE KONTROLÜ
         ================================================= */}
 
-        <section style={controlPanelStyle}>
+        <section className="opControlPanel" style={controlPanelStyle}>
           <div style={scopeSwitchStyle}>
             <Link
               href={`/operasyon-plani?tarih=${selectedDate}&kapsam=hafta`}
@@ -962,7 +1040,7 @@ export default async function OperasyonPlaniPage({
             </Link>
           </div>
 
-          <div style={controlPanelHeaderStyle}>
+          <div className="opControlHeader" style={controlPanelHeaderStyle}>
             <div>
               <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
               <p style={controlPanelTextStyle}>Seansları ihtiyacınıza göre tek dokunuşla gruplayın ve filtreleyin.</p>
@@ -973,7 +1051,7 @@ export default async function OperasyonPlaniPage({
                 : `${GUNLER[selectedWeekday]} · ${selectedDate.split("-").reverse().join(".")}`}
             </span>
           </div>
-          <div style={viewBarStyle}>
+          <div className="opViewBar" style={viewBarStyle}>
           {[
             ["seans", "Seans"],
             ["egitmen", "Eğitmen"],
@@ -983,9 +1061,7 @@ export default async function OperasyonPlaniPage({
             ["havuz", "Havuz"],
             ["saat", "Saat"],
           ].map(([key, label]) => {
-            const active =
-              (params.gorunum ||
-                "seans") === key;
+            const active = currentView === key;
 
             const qp =
               new URLSearchParams();
@@ -1036,9 +1112,16 @@ export default async function OperasyonPlaniPage({
                 params.kapsam
               );
 
+            if (key === "ogrenci") {
+              qp.set("kapsam", "tumu");
+            } else if (qp.get("kapsam") === "tumu") {
+              qp.set("kapsam", planScope === "gun" ? "gun" : "hafta");
+            }
+
             return (
               <Link
                 key={key}
+                className={active ? "opViewButton isActive" : "opViewButton"}
                 href={`/operasyon-plani?${qp.toString()}`}
                 style={{
                   ...viewButtonStyle,
@@ -1058,8 +1141,8 @@ export default async function OperasyonPlaniPage({
             FİLTRELER
         ================================================= */}
 
-        <details style={filterDetailsStyle}>
-          <summary style={filterSummaryStyle}>
+        <details className="opFilterDetails" style={filterDetailsStyle}>
+          <summary className="opFilterSummary" style={filterSummaryStyle}>
             <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye</small></span>
             <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
           </summary>
@@ -1275,7 +1358,7 @@ export default async function OperasyonPlaniPage({
         ================================================= */}
 
         {params.kapsam !== "tumu" && (
-        <section style={compactSummaryStyle}>
+        <section className="opCompactSummary" style={compactSummaryStyle}>
           <Link href={gorunumHref("seans")} style={compactStatStyle}><b>{filteredSchedules.length}</b><span>Seans</span></Link>
           <Link href={gorunumHref("egitmen")} style={compactStatStyle}><b>{shownCoachIds.size}</b><span>Eğitmen</span></Link>
           <Link href={gorunumHref("ogrenci")} style={compactStatStyle}><b>{shownStudentIds.size}</b><span>Öğrenci</span></Link>
@@ -1288,7 +1371,7 @@ export default async function OperasyonPlaniPage({
         ================================================= */}
 
         {params.kapsam !== "tumu" && (
-        <section style={dayTitleStyle}>
+        <section className="opDayTitle" style={dayTitleStyle}>
           <div>
             <span style={dayBadgeStyle}>
               {planScope === "hafta"
@@ -1302,7 +1385,19 @@ export default async function OperasyonPlaniPage({
               }}
             >
               {planScope === "hafta"
-                ? "Tüm aktif seans planı"
+                ? currentView === "seans"
+                  ? "Tüm aktif seans planı"
+                  : currentView === "egitmen"
+                  ? "Eğitmene göre aktif seans planı"
+                  : currentView === "grup"
+                  ? "Gruba göre aktif seans planı"
+                  : currentView === "seviye"
+                  ? "Seviyeye göre aktif seans planı"
+                  : currentView === "havuz"
+                  ? "Havuza göre aktif seans planı"
+                  : currentView === "saat"
+                  ? "Saate göre aktif seans planı"
+                  : "Tüm aktif seans planı"
                 : new Intl.DateTimeFormat(
                     "tr-TR",
                     {
@@ -1352,7 +1447,7 @@ export default async function OperasyonPlaniPage({
             </p>
           </section>
         ) : (
-          <section style={scheduleGridStyle}>
+          <section className="opScheduleGrid" style={scheduleGridStyle}>
             {filteredSchedules.map(
               (schedule: any) => {
                 const group =
@@ -1515,12 +1610,13 @@ export default async function OperasyonPlaniPage({
                     ===================================== */}
 
                     <summary
+                      className="opSessionSummary"
                       style={{
                         ...sessionHeaderStyle,
                         ...sessionSummaryStyle,
                       }}
                     >
-                      <div style={sessionTimeBlockStyle}>
+                      <div className="opSessionTime" style={sessionTimeBlockStyle}>
                         <strong style={sessionTimeTextStyle}>
                           {saatGoster(schedule.start_time)} – {saatGoster(schedule.end_time)}
                         </strong>
@@ -1529,12 +1625,12 @@ export default async function OperasyonPlaniPage({
                         </span>
                       </div>
 
-                      <div style={sessionSummaryItemStyle}>
+                      <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <span style={sessionSummaryLabelStyle}>HAVUZ</span>
                         <strong>{branch?.name || "Şube Belirtilmemiş"}</strong>
                       </div>
 
-                      <div style={sessionSummaryItemStyle}>
+                      <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <span style={sessionSummaryLabelStyle}>GRUP</span>
                         <strong>{group?.name || "Grup Atanmamış"}</strong>
                         {group?.course_type ? (
@@ -1542,7 +1638,7 @@ export default async function OperasyonPlaniPage({
                         ) : null}
                       </div>
 
-                      <div style={sessionSummaryItemStyle}>
+                      <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <span style={sessionSummaryLabelStyle}>EĞİTMEN</span>
                         <strong style={{ color: sessionCoaches.length ? "#13233f" : "#dc2626" }}>
                           {sessionCoaches.length
@@ -1553,12 +1649,12 @@ export default async function OperasyonPlaniPage({
                         </strong>
                       </div>
 
-                      <div style={sessionSummaryItemStyle}>
+                      <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <span style={sessionSummaryLabelStyle}>ÖĞRENCİ</span>
                         <strong>{groupStudents.length}{capacity ? ` / ${capacity}` : ""}</strong>
                       </div>
 
-                      <div style={sessionLevelWrapStyle}>
+                      <div className="opSessionLevels" style={sessionLevelWrapStyle}>
                         {levelsInSession.length ? (
                           levelsInSession.slice(0, 2).map((level: any) => (
                             <span key={level} style={levelBadgeStyle}>{level}</span>
@@ -1568,7 +1664,7 @@ export default async function OperasyonPlaniPage({
                         )}
                       </div>
 
-                      <span style={sessionChevronStyle}>⌄</span>
+                      <span className="opSessionChevron" style={sessionChevronStyle}>⌄</span>
                     </summary>
 
                     {/* =====================================
