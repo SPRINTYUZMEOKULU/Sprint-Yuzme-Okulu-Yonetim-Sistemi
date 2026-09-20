@@ -26,7 +26,6 @@ function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanb
 function weekday(value:string){const day=new Date(`${value}T12:00:00`).getDay();return day===0?7:day}
 function scheduleWeekday(value?:number|null){const day=Number(value);return day===0?7:day}
 function enrollmentHasDay(enrollment:Enrollment|undefined,uiDay:number){const days=Array.isArray(enrollment?.lesson_weekdays)?enrollment!.lesson_weekdays!.map(Number):[];if(!days.length)return true;const postgresDay=uiDay===7?0:uiDay;return days.includes(postgresDay)}
-function attendanceDayLabel(enrollment:Enrollment|undefined){const days=Array.isArray(enrollment?.lesson_weekdays)?enrollment!.lesson_weekdays!.map(Number):[];if(!days.length)return"Grup programı";const labels=days.map(value=>DAYS[value===0?7:value]).filter(Boolean);return `${days.length} gün · ${labels.join(" + ")}`}
 function shift(value:string,amount:number){const date=new Date(`${value}T12:00:00`);date.setDate(date.getDate()+amount);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`}
 function trDate(value?:string|null){if(!value)return"—";return new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${value}T12:00:00`))}
 function tm(value?:string|null){return value?.slice(0,5)||"—"}
