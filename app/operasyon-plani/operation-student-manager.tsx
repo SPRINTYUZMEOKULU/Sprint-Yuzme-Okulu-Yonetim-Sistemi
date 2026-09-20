@@ -57,6 +57,16 @@ function ageFromBirthDate(value?: string | null) {
   return age >= 0 && age < 120 ? age : null;
 }
 
+function groupDisplayLabel(group?: GroupMeta | null) {
+  if (!group) return "Eğitim Grubu";
+  const type = (group.course_type || "").toLocaleLowerCase("tr-TR");
+  if (type.includes("takım") || type.includes("performans")) return "Takım / Altyapı";
+  if (type.includes("çocuk")) return "Çocuk Yüzme";
+  if (type.includes("yetişkin") || type.includes("yetiskin")) return "Yetişkin Yüzme";
+  if (type.includes("özel") || type.includes("ozel")) return "Özel Ders";
+  return group.name || "Eğitim Grubu";
+}
+
 function groupScheduleText(group: GroupMeta) {
   const items = (group.schedules || [])
     .slice()
@@ -126,15 +136,18 @@ export default function OperationStudentManager({
     return counts;
   }, [students]);
 
-  const groupNames = useMemo(
-    () => Array.from(new Set(students.map((student) => student.group_name).filter(Boolean) as string[])).sort(),
-    [students],
+  const groupOptions = useMemo(
+    () =>
+      groups
+        .map((group) => ({ id: group.id, label: groupDisplayLabel(group), name: group.name }))
+        .sort((a, b) => a.label.localeCompare(b.label, "tr")),
+    [groups],
   );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
     return students.filter((student) => {
-      if (groupFilter && student.group_name !== groupFilter) return false;
+      if (groupFilter && student.group_id !== groupFilter) return false;
       if (coachFilter && student.coach_id !== coachFilter) return false;
       if (!q) return true;
       const age = ageFromBirthDate(studentMeta[student.id]?.birth_date);
@@ -239,11 +252,11 @@ export default function OperationStudentManager({
             <button
               key={group.id}
               type="button"
-              className={groupFilter === group.name ? "groupOverviewCard active" : "groupOverviewCard"}
-              onClick={() => setGroupFilter((current) => (current === group.name ? "" : group.name))}
+              className={groupFilter === group.id ? "groupOverviewCard active" : "groupOverviewCard"}
+              onClick={() => setGroupFilter((current) => (current === group.id ? "" : group.id))}
             >
-              <span>{group.course_type || "Eğitim Grubu"}</span>
-              <strong>{group.name}</strong>
+              <span>Eğitim Grubu</span>
+              <strong>{groupDisplayLabel(group)}</strong>
               <b>{count}{capacity ? ` / ${capacity}` : ""} öğrenci</b>
               <small>{group.branch_name || "Şube"}{groupScheduleText(group) ? ` · ${groupScheduleText(group)}` : ""}</small>
             </button>
@@ -259,7 +272,7 @@ export default function OperationStudentManager({
         />
         <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
           <option value="">Tüm Gruplar</option>
-          {groupNames.map((group) => <option key={group} value={group}>{group}</option>)}
+          {groupOptions.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)
         </select>
         <select value={coachFilter} onChange={(event) => setCoachFilter(event.target.value)}>
           <option value="">Tüm Eğitmenler</option>
@@ -280,7 +293,7 @@ export default function OperationStudentManager({
             <option value="">Toplu grup seç</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>
-                {group.name} · {groupCounts.get(group.id) ?? group.student_count ?? 0}{group.capacity ? `/${group.capacity}` : ""}
+                {groupDisplayLabel(group)} · {groupCounts.get(group.id) ?? group.student_count ?? 0}{group.capacity ? `/${group.capacity}` : ""}
               </option>
             ))}
           </select>
@@ -340,7 +353,7 @@ export default function OperationStudentManager({
               <div className="rosterFacts">
                 <div>
                   <span>Grup</span>
-                  <b>{student.group_name || "Grup Yok"}</b>
+                  <b>{groupDisplayLabel(currentGroup) || student.group_name || "Grup Yok"}</b>
                   <small>{student.group_id ? `${currentCount}${capacity ? `/${capacity}` : ""} öğrenci` : "Atama yok"}</small>
                 </div>
                 <div><span>Şube</span><b>{student.branch_name || "Şube Yok"}</b></div>
@@ -364,7 +377,7 @@ export default function OperationStudentManager({
                     <option value="">Grup Ata</option>
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>
-                        {group.name} · {groupCounts.get(group.id) ?? group.student_count ?? 0}{group.capacity ? `/${group.capacity}` : ""}
+                        {groupDisplayLabel(group)} · {groupCounts.get(group.id) ?? group.student_count ?? 0}{group.capacity ? `/${group.capacity}` : ""}
                       </option>
                     ))}
                   </select>
