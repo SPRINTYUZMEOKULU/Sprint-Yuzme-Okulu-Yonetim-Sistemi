@@ -9,6 +9,7 @@ import "./duzeltme.css";
 export const dynamic = "force-dynamic";
 
 const DAYS: Record<number, string> = { 1: "Pazartesi", 2: "Salı", 3: "Çarşamba", 4: "Perşembe", 5: "Cuma", 6: "Cumartesi", 7: "Pazar" };
+const normalizeIsoWeekday = (value: unknown) => Number(value) === 0 ? 7 : Number(value);
 const shortTime = (value?: string | null) => String(value || "").slice(0, 5);
 const ageFromBirthDate = (value?: string | null) => {
   if (!value) return null;
@@ -54,10 +55,10 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
   const savedBranch = (branchesResult.data || []).find((branch) => branch.id === savedEnrollment?.branch_id);
   const savedGroup = (groupsResult.data || []).find((group) => group.id === savedEnrollment?.group_id);
   const savedPackage = (packagesResult.data || []).find((coursePackage) => coursePackage.id === savedEnrollment?.package_id);
-  const selectedDays = new Set((planResult.data?.selected_weekdays || []).map(Number));
+  const selectedDays = new Set((planResult.data?.selected_weekdays || []).map(normalizeIsoWeekday));
   const savedSessions = (schedulesResult.data || [])
-    .filter((schedule) => schedule.group_id === savedEnrollment?.group_id && selectedDays.has(Number(schedule.weekday)))
-    .map((schedule) => `${DAYS[Number(schedule.weekday)] || "Ders"} ${shortTime(schedule.start_time)}-${shortTime(schedule.end_time)}`);
+    .filter((schedule) => schedule.group_id === savedEnrollment?.group_id && selectedDays.has(normalizeIsoWeekday(schedule.weekday)))
+    .map((schedule) => `${DAYS[normalizeIsoWeekday(schedule.weekday)] || "Ders"} ${shortTime(schedule.start_time)}-${shortTime(schedule.end_time)}`);
   const savedProgramLabel = savedSessions.length ? savedSessions.join(" · ") : (savedGroup?.name || "—");
 
   return (
