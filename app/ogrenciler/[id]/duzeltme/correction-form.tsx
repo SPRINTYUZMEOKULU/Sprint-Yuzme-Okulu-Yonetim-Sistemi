@@ -41,6 +41,11 @@ const DAYS: Record<number, string> = {
   7: "Pazar",
 };
 
+function normalizeIsoWeekday(value: unknown) {
+  const day = Number(value);
+  return day === 0 ? 7 : day;
+}
+
 function time(value?: string | null) {
   return String(value || "").slice(0, 5);
 }
@@ -120,7 +125,9 @@ export default function CorrectionForm({
       "",
   );
   const initialIsoDays = Array.isArray(attendancePlan?.selected_weekdays)
-    ? attendancePlan.selected_weekdays.map(Number)
+    ? attendancePlan.selected_weekdays
+        .map(normalizeIsoWeekday)
+        .filter((day: number) => Number.isInteger(day) && day >= 1 && day <= 7)
     : [];
 
   const [branchId, setBranchId] = useState(initialBranchId);
@@ -133,7 +140,7 @@ export default function CorrectionForm({
       .filter(
         (s) =>
           s.group_id === initialGroupId &&
-          initialIsoDays.includes(Number(s.weekday)),
+          initialIsoDays.includes(normalizeIsoWeekday(s.weekday)),
       )
       .map((s) => s.id),
   );
@@ -160,7 +167,7 @@ export default function CorrectionForm({
         new Set(
           schedules
             .filter((schedule) => selectedScheduleIds.includes(schedule.id))
-            .map((schedule) => Number(schedule.weekday))
+            .map((schedule) => normalizeIsoWeekday(schedule.weekday))
             .filter((day) => Number.isInteger(day) && day >= 1 && day <= 7),
         ),
       ),
@@ -438,7 +445,7 @@ export default function CorrectionForm({
                         )
                       }
                     />
-                    <strong>{DAYS[Number(schedule.weekday)] || "Ders"}</strong>
+                    <strong>{DAYS[normalizeIsoWeekday(schedule.weekday)] || "Ders"}</strong>
                     <span>
                       {time(schedule.start_time)}-{time(schedule.end_time)}
                     </span>
