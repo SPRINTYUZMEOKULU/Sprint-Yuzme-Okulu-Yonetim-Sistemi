@@ -1672,8 +1672,8 @@ export default async function OperasyonPlaniPage({
                         membership.group_id === slotSchedule.group_id
                     );
 
-                    const studentCount = slotMemberships.filter(
-                      (membership: any) => {
+                    const slotStudents = slotMemberships
+                      .filter((membership: any) => {
                         const enrollment = enrollments.find(
                           (item: any) =>
                             item.student_id === membership.student_id &&
@@ -1684,13 +1684,28 @@ export default async function OperasyonPlaniPage({
                           enrollment,
                           Number(slotSchedule.weekday)
                         );
-                      }
-                    ).length;
+                      })
+                      .map((membership: any) => studentMap.get(membership.student_id))
+                      .filter(Boolean)
+                      .sort((a: any, b: any) =>
+                        adSoyad(a).localeCompare(adSoyad(b), "tr")
+                      );
+
+                    const slotLevels = Array.from(
+                      new Set(
+                        slotStudents
+                          .map((student: any) => student.swimming_level)
+                          .filter(Boolean)
+                      )
+                    );
 
                     return {
                       scheduleId: slotSchedule.id,
                       groupName: slotGroup?.name || "Grup Atanmamış",
-                      studentCount,
+                      courseType: slotGroup?.course_type || null,
+                      students: slotStudents,
+                      levels: slotLevels,
+                      studentCount: slotStudents.length,
                       capacity: Number(slotGroup?.capacity || 0),
                     };
                   }
@@ -1771,7 +1786,7 @@ export default async function OperasyonPlaniPage({
                               color: "#7e22ce",
                             }}
                           >
-                            Ortak saat · {sharedSlotSchedules.length + 1} grup
+                            Ortak seans · aynı havuz + aynı saat
                           </span>
                         ) : null}
                         {levelsInSession.length ? (
@@ -1826,8 +1841,19 @@ export default async function OperasyonPlaniPage({
                                 fontSize: 15,
                               }}
                             >
-                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)}
+                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
                             </strong>
+                            <span
+                              style={{
+                                display: "block",
+                                marginTop: 5,
+                                color: "#6b7280",
+                                fontSize: 12,
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {sharedSlotRows.map((item: any) => item.groupName).join(" + ")} grupları bu saatte birlikte çalışıyor.
+                            </span>
                           </div>
 
                           <div
@@ -1873,40 +1899,179 @@ export default async function OperasyonPlaniPage({
                           }}
                         >
                           {sharedSlotRows.map((item: any) => (
-                            <div
+                            <details
                               key={item.scheduleId}
                               style={{
-                                padding: "10px 12px",
                                 borderRadius: 11,
                                 border: "1px solid #e5e7eb",
                                 background: "#fff",
                                 minWidth: 0,
+                                overflow: "hidden",
                               }}
                             >
-                              <strong
+                              <summary
                                 style={{
-                                  display: "block",
-                                  color: "#1f2937",
-                                  fontSize: 13,
-                                  lineHeight: 1.35,
-                                  overflowWrap: "anywhere",
+                                  padding: "10px 12px",
+                                  cursor: "pointer",
+                                  listStyle: "none",
+                                  display: "grid",
+                                  gridTemplateColumns: "minmax(0,1fr) auto",
+                                  gap: 10,
+                                  alignItems: "center",
                                 }}
                               >
-                                {item.groupName}
-                              </strong>
-                              <span
+                                <span style={{ minWidth: 0 }}>
+                                  <strong
+                                    style={{
+                                      display: "block",
+                                      color: "#1f2937",
+                                      fontSize: 13,
+                                      lineHeight: 1.35,
+                                      overflowWrap: "anywhere",
+                                    }}
+                                  >
+                                    {item.groupName}
+                                  </strong>
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      marginTop: 4,
+                                      color: "#64748b",
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    {item.studentCount} öğrenci
+                                    {item.capacity ? ` · kapasite ${item.capacity}` : ""}
+                                    {item.courseType ? ` · ${item.courseType}` : ""}
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: "flex",
+                                      gap: 5,
+                                      flexWrap: "wrap",
+                                      marginTop: 7,
+                                    }}
+                                  >
+                                    {item.levels.length ? item.levels.map((level: string) => (
+                                      <span
+                                        key={level}
+                                        style={{
+                                          padding: "3px 7px",
+                                          borderRadius: 999,
+                                          background: "#f8fafc",
+                                          border: "1px solid #e2e8f0",
+                                          color: "#475569",
+                                          fontSize: 10,
+                                          fontWeight: 800,
+                                        }}
+                                      >
+                                        {level}
+                                      </span>
+                                    )) : (
+                                      <span style={{ color: "#94a3b8", fontSize: 10 }}>
+                                        Seviye bilgisi yok
+                                      </span>
+                                    )}
+                                  </span>
+                                </span>
+                                <span
+                                  style={{
+                                    padding: "7px 9px",
+                                    borderRadius: 9,
+                                    background: "#eef2ff",
+                                    color: "#4338ca",
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Öğrencileri Aç
+                                </span>
+                              </summary>
+
+                              <div
                                 style={{
-                                  display: "block",
-                                  marginTop: 4,
-                                  color: "#64748b",
-                                  fontSize: 11,
-                                  fontWeight: 800,
+                                  padding: "0 12px 12px",
+                                  borderTop: "1px solid #f1f5f9",
                                 }}
                               >
-                                {item.studentCount} öğrenci
-                                {item.capacity ? ` · kapasite ${item.capacity}` : ""}
-                              </span>
-                            </div>
+                                {item.students.length ? (
+                                  <div
+                                    style={{
+                                      display: "grid",
+                                      gap: 6,
+                                      paddingTop: 10,
+                                    }}
+                                  >
+                                    {item.students.map((student: any) => (
+                                      <div
+                                        key={student.id}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "space-between",
+                                          gap: 10,
+                                          padding: "8px 9px",
+                                          borderRadius: 9,
+                                          background: "#f8fafc",
+                                        }}
+                                      >
+                                        <span style={{ minWidth: 0 }}>
+                                          <strong
+                                            style={{
+                                              display: "block",
+                                              color: "#1e293b",
+                                              fontSize: 12,
+                                              overflowWrap: "anywhere",
+                                            }}
+                                          >
+                                            {adSoyad(student)}
+                                          </strong>
+                                          <small
+                                            style={{
+                                              display: "block",
+                                              marginTop: 2,
+                                              color: "#64748b",
+                                              fontSize: 10,
+                                            }}
+                                          >
+                                            {student.swimming_level || "Seviye yok"}
+                                            {student.student_number ? ` · ${student.student_number}` : ""}
+                                          </small>
+                                        </span>
+                                        <Link
+                                          href={`/ogrenciler/${student.id}`}
+                                          style={{
+                                            padding: "6px 8px",
+                                            borderRadius: 8,
+                                            border: "1px solid #dbeafe",
+                                            background: "#fff",
+                                            color: "#1d4ed8",
+                                            fontSize: 10,
+                                            fontWeight: 900,
+                                            textDecoration: "none",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          Kartı Aç
+                                        </Link>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      paddingTop: 10,
+                                      color: "#94a3b8",
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    Bu gün için seçili öğrenci yok.
+                                  </div>
+                                )}
+                              </div>
+                            </details>
                           ))}
                         </div>
 
