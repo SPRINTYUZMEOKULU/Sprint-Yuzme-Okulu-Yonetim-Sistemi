@@ -34,6 +34,7 @@ type SearchParams = {
   egitmen?: string;
   grup?: string;
   seviye?: string;
+  yas?: string;
   gorunum?: string;
   kapsam?: string;
 };
@@ -112,6 +113,19 @@ function ageOnDate(birthDate?: string | null, referenceDate?: string | null) {
   }
 
   return age >= 0 ? age : null;
+}
+
+function ageMatchesFilter(age: number | null, filter?: string) {
+  if (!filter) return true;
+  if (age === null) return false;
+
+  if (filter === "3-5") return age >= 3 && age <= 5;
+  if (filter === "6-8") return age >= 6 && age <= 8;
+  if (filter === "9-11") return age >= 9 && age <= 11;
+  if (filter === "12-14") return age >= 12 && age <= 14;
+  if (filter === "15+") return age >= 15;
+
+  return true;
 }
 
 function saatGoster(value?: string | null) {
@@ -724,6 +738,54 @@ export default async function OperasyonPlaniPage({
      SEANS FİLTRELEME
   ======================================================= */
 
+  const scheduleHasAgeMatch = (schedule: any) =>
+    memberships
+      .filter((membership: any) => membership.group_id === schedule.group_id)
+      .some((membership: any) => {
+        const enrollment = enrollments.find(
+          (item: any) =>
+            item.student_id === membership.student_id &&
+            item.group_id === schedule.group_id
+        );
+
+        if (
+          !enrollmentIncludesScheduleDay(
+            enrollment,
+            Number(schedule.weekday)
+          )
+        ) {
+          return false;
+        }
+
+        const student = studentMap.get(membership.student_id);
+        return ageMatchesFilter(
+          ageOnDate(student?.birth_date, selectedDate),
+          params.yas
+        );
+      });
+
+  const isSharedScheduleCandidate = (schedule: any, source: any[]) => {
+    if (sharedModeOf(schedule.id) === "separate") return false;
+
+    const scheduleBranchId =
+      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+
+    return source.some((item: any) => {
+      if (item.id === schedule.id) return false;
+      if (sharedModeOf(item.id) === "separate") return false;
+
+      const itemBranchId =
+        item.branch_id || groupMap.get(item.group_id)?.branch_id || "";
+
+      return (
+        Number(item.weekday) === Number(schedule.weekday) &&
+        String(item.start_time || "").slice(0, 5) ===
+          String(schedule.start_time || "").slice(0, 5) &&
+        itemBranchId === scheduleBranchId
+      );
+    });
+  };
+
   let filteredSchedules =
     schedules.filter((schedule: any) => {
       if (
@@ -745,6 +807,10 @@ export default async function OperasyonPlaniPage({
         params.grup &&
         schedule.group_id !== params.grup
       ) {
+        return false;
+      }
+
+      if (params.yas && !scheduleHasAgeMatch(schedule)) {
         return false;
       }
 
@@ -784,6 +850,12 @@ export default async function OperasyonPlaniPage({
     });
 
   const currentView = params.gorunum || "seans";
+
+  if (currentView === "ortak") {
+    filteredSchedules = filteredSchedules.filter((schedule: any) =>
+      isSharedScheduleCandidate(schedule, filteredSchedules)
+    );
+  }
 
   // Görünüm düğmeleri yalnızca aktif renk değiştirmesin; seçilen görünüme
   // göre seansları gerçekten yeniden sırala. Bu sayede mobilde de tıklama
@@ -840,6 +912,21 @@ export default async function OperasyonPlaniPage({
         scheduleFirstLevel(a).localeCompare(scheduleFirstLevel(b), "tr") ||
         byDayTime()
       );
+    }
+
+    if (currentView === "yas") {
+      const firstAge = (schedule: any) => {
+        const ages = memberships
+          .filter((item: any) => item.group_id === schedule.group_id)
+          .map((item: any) =>
+            ageOnDate(studentMap.get(item.student_id)?.birth_date, selectedDate)
+          )
+          .filter((value: any) => value !== null) as number[];
+
+        return ages.length ? Math.min(...ages) : 999;
+      };
+
+      return firstAge(a) - firstAge(b) || byDayTime();
     }
 
     if (currentView === "havuz") {
@@ -1163,6 +1250,7 @@ export default async function OperasyonPlaniPage({
     if (params.egitmen) qp.set("egitmen", params.egitmen);
     if (params.grup) qp.set("grup", params.grup);
     if (params.seviye) qp.set("seviye", params.seviye);
+    if (params.yas) qp.set("yas", params.yas);
     if (params.kapsam) qp.set("kapsam", params.kapsam);
 
     return `/operasyon-plani?${qp.toString()}`;
@@ -1449,6 +1537,8 @@ export default async function OperasyonPlaniPage({
             ["ogrenci", "Öğrenci"],
             ["grup", "Grup"],
             ["seviye", "Seviye"],
+            ["yas", "Yaş / Seviye"],
+            ["ortak", "Ortak Gruplar"],
             ["havuz", "Havuz"],
             ["saat", "Saat"],
           ].map(([key, label]) => {
@@ -1497,6 +1587,12 @@ export default async function OperasyonPlaniPage({
                 params.seviye
               );
 
+            if (params.yas)
+              qp.set(
+                "yas",
+                params.yas
+              );
+
             if (params.kapsam)
               qp.set(
                 "kapsam",
@@ -1526,6 +1622,84 @@ export default async function OperasyonPlaniPage({
             );
           })}
           </div>
+
+          {(currentView === "yas" || currentView === "ortak") ? (
+            <details open style={quickViewDetailsStyle}>
+              <summary style={quickViewSummaryStyle}>
+                <span>
+                  <b>
+                    {currentView === "ortak"
+                      ? "Ortak grup seçimi"
+                      : "Yaş / seviye seçimi"}
+                  </b>
+                  <small style={filterSummaryTextStyle}>
+                    {currentView === "ortak"
+                      ? " Aynı havuz ve aynı saatte birlikte çalışan grupları açın."
+                      : " Yaş aralığı ve seviyeye göre planı daraltın."}
+                  </small>
+                </span>
+                <span style={filterSummaryBadgeStyle}>Seç / Filtrele</span>
+              </summary>
+
+              <form method="get" style={quickViewFormStyle}>
+                <input type="hidden" name="tarih" value={selectedDate} />
+                <input type="hidden" name="gorunum" value={currentView} />
+                {params.kapsam ? (
+                  <input type="hidden" name="kapsam" value={params.kapsam} />
+                ) : null}
+                {params.sube ? (
+                  <input type="hidden" name="sube" value={params.sube} />
+                ) : null}
+                {params.saat ? (
+                  <input type="hidden" name="saat" value={params.saat} />
+                ) : null}
+
+                {currentView === "yas" ? (
+                  <>
+                    <div style={filterFieldStyle}>
+                      <label style={labelStyle}>Yaş Aralığı</label>
+                      <select name="yas" defaultValue={params.yas || ""} style={inputStyle}>
+                        <option value="">Tüm Yaşlar</option>
+                        <option value="3-5">3–5 Yaş</option>
+                        <option value="6-8">6–8 Yaş</option>
+                        <option value="9-11">9–11 Yaş</option>
+                        <option value="12-14">12–14 Yaş</option>
+                        <option value="15+">15+ / Yetişkin</option>
+                      </select>
+                    </div>
+
+                    <div style={filterFieldStyle}>
+                      <label style={labelStyle}>Seviye</label>
+                      <select name="seviye" defaultValue={params.seviye || ""} style={inputStyle}>
+                        <option value="">Tüm Seviyeler</option>
+                        {levels.map((level: any) => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div style={quickInfoStyle}>
+                    <strong>{selectedDaySharedSlots.length} ortak saat</strong>
+                    <span>
+                      Kartı açtığınızda grupları ve yalnız o güne seçili öğrencileri birlikte görebilirsiniz.
+                    </span>
+                  </div>
+                )}
+
+                <button type="submit" style={filterButtonStyle}>
+                  Uygula
+                </button>
+
+                <Link
+                  href={`/operasyon-plani?tarih=${selectedDate}&gorunum=${currentView}&kapsam=${planScope}`}
+                  style={clearButtonStyle}
+                >
+                  Temizle
+                </Link>
+              </form>
+            </details>
+          ) : null}
         </section>
 
         {/* =================================================
@@ -1534,7 +1708,7 @@ export default async function OperasyonPlaniPage({
 
         <details className="opFilterDetails" style={filterDetailsStyle}>
           <summary className="opFilterSummary" style={filterSummaryStyle}>
-            <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye</small></span>
+            <span><b>Filtreler</b><small style={filterSummaryTextStyle}> Tarih · havuz · saat · eğitmen · grup · seviye · yaş</small></span>
             <span style={filterSummaryBadgeStyle}>Aç / Kapat</span>
           </summary>
         <form
@@ -1720,6 +1894,24 @@ export default async function OperasyonPlaniPage({
             </select>
           </div>
 
+          <div style={filterFieldStyle}>
+            <label style={labelStyle}>
+              Yaş
+            </label>
+            <select
+              name="yas"
+              defaultValue={params.yas || ""}
+              style={inputStyle}
+            >
+              <option value="">Tüm Yaşlar</option>
+              <option value="3-5">3–5 Yaş</option>
+              <option value="6-8">6–8 Yaş</option>
+              <option value="9-11">9–11 Yaş</option>
+              <option value="12-14">12–14 Yaş</option>
+              <option value="15+">15+ / Yetişkin</option>
+            </select>
+          </div>
+
           <button
             type="submit"
             style={filterButtonStyle}
@@ -1784,6 +1976,10 @@ export default async function OperasyonPlaniPage({
                   ? "Gruba göre aktif seans planı"
                   : currentView === "seviye"
                   ? "Seviyeye göre aktif seans planı"
+                  : currentView === "yas"
+                  ? "Yaş ve seviyeye göre aktif seans planı"
+                  : currentView === "ortak"
+                  ? "Ortak çalışan grup ve seanslar"
                   : currentView === "havuz"
                   ? "Havuza göre aktif seans planı"
                   : currentView === "saat"
@@ -1896,6 +2092,15 @@ export default async function OperasyonPlaniPage({
                         student.swimming_level ===
                         params.seviye
                     );
+                }
+
+                if (params.yas) {
+                  groupStudents = groupStudents.filter((student: any) =>
+                    ageMatchesFilter(
+                      ageOnDate(student.birth_date, selectedDate),
+                      params.yas
+                    )
+                  );
                 }
 
                 const explicitStaff =
@@ -4229,4 +4434,40 @@ const dailySharedSeparatedRowStyle: React.CSSProperties = {
   background: "#fffafa",
   color: "#7f1d1d",
   fontSize: 10,
+};
+
+
+const quickViewDetailsStyle: React.CSSProperties = {
+  marginTop: 10,
+  border: "1px solid #dce7f5",
+  borderRadius: 14,
+  background: "#f8fbff",
+  overflow: "hidden",
+};
+const quickViewSummaryStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  padding: "11px 12px",
+  cursor: "pointer",
+  color: "#13233f",
+};
+const quickViewFormStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
+  gap: 9,
+  padding: 12,
+  borderTop: "1px solid #e7eef7",
+  background: "#fff",
+  alignItems: "end",
+};
+const quickInfoStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 3,
+  justifyContent: "center",
+  minHeight: 40,
+  color: "#475569",
+  fontSize: 11,
 };
