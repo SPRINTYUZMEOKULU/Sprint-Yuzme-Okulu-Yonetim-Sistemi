@@ -11,8 +11,29 @@ const staffRoles = [
   "coach",
 ] as const;
 
+const allowedNoteTypes = new Set([
+  "general",
+  "management",
+  "coach",
+  "health",
+  "finance",
+  "crm",
+]);
+
+const noteTypeAliases: Record<string, string> = {
+  manager: "management",
+  payment: "finance",
+  registration: "crm",
+};
+
 function text(value: unknown, max = 4000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function normalizeNoteType(value: unknown) {
+  const raw = text(value, 50).toLowerCase();
+  const normalized = noteTypeAliases[raw] || raw || "general";
+  return allowedNoteTypes.has(normalized) ? normalized : "general";
 }
 
 function reminderIso(value: unknown) {
@@ -136,7 +157,7 @@ export async function POST(request: NextRequest) {
   const payload = await request.json().catch(() => ({}));
   const studentId = text(payload.student_id, 100);
   const body = text(payload.body, 4000);
-  const noteType = text(payload.note_type, 50) || "general";
+  const noteType = normalizeNoteType(payload.note_type);
   const reminderAt = reminderIso(payload.reminder_at);
 
   if (!organizationId || !studentId || !body) {
@@ -198,7 +219,7 @@ export async function PATCH(request: NextRequest) {
   const studentId = text(payload.student_id, 100);
   const noteId = text(payload.id, 100);
   const body = text(payload.body, 4000);
-  const noteType = text(payload.note_type, 50) || "general";
+  const noteType = normalizeNoteType(payload.note_type);
   const reminderAt = reminderIso(payload.reminder_at);
 
   if (!organizationId || !studentId || !noteId || !body) {
