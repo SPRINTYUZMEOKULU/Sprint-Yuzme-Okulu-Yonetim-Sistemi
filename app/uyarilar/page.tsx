@@ -59,7 +59,7 @@ export default async function AlertsPage() {
   ]);
 
   const alerts = ((alertsResult.data || []) as AlertRow[]);
-  const open = alerts.filter((item) => (item.status || "open") === "open");
+  const open = alerts.filter((item) => ["open", "in_progress"].includes(item.status || "open"));
   const resolved = alerts.filter((item) => (item.status || "open") !== "open");
   const schedules = schedulesResult.data || [];
   const enrollments = enrollmentsResult.data || [];
@@ -128,7 +128,7 @@ export default async function AlertsPage() {
             return <article className={`alertRow ${severity(item)}`} key={item.id}>
               <div className="alertPulse" aria-hidden="true" />
               <div className="alertBody"><div className="alertMeta"><span>{text(item,["category","alert_type","type"],"Sistem")}</span>{formatAlertDate(item.created_at) ? <small>{formatAlertDate(item.created_at)}</small> : null}</div><h3>{title}</h3><p>{body}</p></div>
-              <div className="alertActions">{target !== "/uyarilar" ? <Link href={target}>İşleme Git</Link> : null}<form action={resolveAlert}><input type="hidden" name="id" value={item.id}/><button>Tamamlandı</button></form></div>
+              <div className="alertActions">{target !== "/uyarilar" ? <Link href={target}>İşleme Git</Link> : null}<form action={resolveAlert}><input type="hidden" name="id" value={item.id}/><button>Tamamla</button></form></div>
             </article>;
           })}
           {!open.length ? <div className="alertsEmpty"><div>✓</div><strong>Şu anda açık sistem uyarısı yok</strong><span>Yoklama ve diğer operasyonlar yukarıdaki kartlarda ayrıca canlı takip edilir.</span></div> : null}
