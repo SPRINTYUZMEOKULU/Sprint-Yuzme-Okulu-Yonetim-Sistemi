@@ -490,6 +490,8 @@ export default function PaymentsClient({
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] =
     useState("all");
+  const [showPassive, setShowPassive] =
+    useState(false);
   const [quickFilter, setQuickFilter] =
     useState<QuickFilter>("all");
 
@@ -552,6 +554,26 @@ export default function PaymentsClient({
     [payments]
   );
 
+  const activeStudents = useMemo(
+    () =>
+      students.filter(
+        (student) =>
+          String(student.status || "")
+            .toLocaleLowerCase("tr-TR") === "active"
+      ),
+    [students]
+  );
+
+  const passiveCount = useMemo(
+    () =>
+      students.filter(
+        (student) =>
+          String(student.status || "")
+            .toLocaleLowerCase("tr-TR") === "passive"
+      ).length,
+    [students]
+  );
+
   const todayCollection = useMemo(
     () =>
       validPayments
@@ -590,7 +612,7 @@ export default function PaymentsClient({
 
   const outstandingTotal = useMemo(
     () =>
-      students.reduce(
+      activeStudents.reduce(
         (sum, student) =>
           sum +
           numberValue(
@@ -598,22 +620,22 @@ export default function PaymentsClient({
           ),
         0
       ),
-    [students]
+    [activeStudents]
   );
 
-  const unpaidCount = students.filter(
+  const unpaidCount = activeStudents.filter(
     (student) =>
       student.package_price > 0 &&
       student.total_paid <= 0
   ).length;
 
-  const partialCount = students.filter(
+  const partialCount = activeStudents.filter(
     (student) =>
       student.total_paid > 0 &&
       student.remaining_payment > 0
   ).length;
 
-  const paidCount = students.filter(
+  const paidCount = activeStudents.filter(
     (student) =>
       student.package_price > 0 &&
       student.remaining_payment <= 0
@@ -665,6 +687,13 @@ export default function PaymentsClient({
       .toLocaleLowerCase("tr-TR");
 
     let result = students.filter((student) => {
+      const status = String(student.status || "")
+        .toLocaleLowerCase("tr-TR");
+
+      if (!showPassive && status === "passive") {
+        return false;
+      }
+
       const searchable = [
         studentName(student),
         student.student_number,
@@ -815,6 +844,7 @@ export default function PaymentsClient({
     students,
     search,
     branchFilter,
+    showPassive,
     quickFilter,
   ]);
 
@@ -1260,9 +1290,24 @@ export default function PaymentsClient({
 
         <button
           type="button"
+          className={showPassive ? "passiveToggle active" : "passiveToggle"}
+          aria-pressed={showPassive}
+          onClick={() => setShowPassive((value) => !value)}
+        >
+          <span className="passiveToggleDot" aria-hidden="true" />
+          <span>
+            {showPassive
+              ? `Pasifler Gösteriliyor (${passiveCount})`
+              : `Pasifleri Göster (${passiveCount})`}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => {
             setSearch("");
             setBranchFilter("all");
+            setShowPassive(false);
             setQuickFilter("all");
           }}
         >
@@ -1290,7 +1335,11 @@ export default function PaymentsClient({
 
             return (
               <article
-                className="paymentStudentCard"
+                className={
+                  String(student.status || "").toLocaleLowerCase("tr-TR") === "passive"
+                    ? "paymentStudentCard passiveStudentCard"
+                    : "paymentStudentCard"
+                }
                 key={student.id}
               >
                 <div className="paymentCardTop">
@@ -1315,15 +1364,21 @@ export default function PaymentsClient({
                     </span>
                   </div>
 
-                  <div
-                    className={
-                      student.remaining_payment >
-                      0
-                        ? "paymentState debt"
-                        : "paymentState paid"
-                    }
-                  >
-                    {paymentStatus}
+                  <div className="paymentStatusStack">
+                    {String(student.status || "").toLocaleLowerCase("tr-TR") === "passive" ? (
+                      <span className="studentPassiveBadge">Pasif Öğrenci</span>
+                    ) : null}
+
+                    <div
+                      className={
+                        student.remaining_payment >
+                        0
+                          ? "paymentState debt"
+                          : "paymentState paid"
+                      }
+                    >
+                      {paymentStatus}
+                    </div>
                   </div>
                 </div>
 
@@ -1448,6 +1503,8 @@ export default function PaymentsClient({
                   <button
                     type="button"
                     className="primaryPaymentButton"
+                    disabled={String(student.status || "").toLocaleLowerCase("tr-TR") === "passive"}
+                    title={String(student.status || "").toLocaleLowerCase("tr-TR") === "passive" ? "Pasif öğrenciye yeni tahsilat girilemez." : undefined}
                     onClick={() =>
                       openPaymentModal(
                         student
@@ -1472,6 +1529,8 @@ export default function PaymentsClient({
 
                   <button
                     type="button"
+                    disabled={String(student.status || "").toLocaleLowerCase("tr-TR") === "passive"}
+                    title={String(student.status || "").toLocaleLowerCase("tr-TR") === "passive" ? "Pasif öğrenci için aktif vade değişikliği yapılamaz." : undefined}
                     onClick={() =>
                       openDueDateModal(
                         student
@@ -2233,9 +2292,11 @@ export default function PaymentsClient({
           display: grid;
           grid-template-columns:
             minmax(0, 1fr)
-            260px
+            240px
+            auto
             auto;
           gap: 10px;
+          align-items: center;
         }
 
         .paymentToolbar input,
@@ -2258,6 +2319,37 @@ export default function PaymentsClient({
           width: auto;
           cursor: pointer;
           font-weight: 800;
+          min-height: 44px;
+        }
+
+        .paymentToolbar .passiveToggle {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          white-space: nowrap;
+          background: #f8fafc;
+          color: #475569;
+        }
+
+        .paymentToolbar .passiveToggle.active {
+          background: #fff7ed;
+          border-color: #fdba74;
+          color: #9a3412;
+        }
+
+        .passiveToggleDot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: #94a3b8;
+          box-shadow: 0 0 0 4px rgba(148, 163, 184, .12);
+          flex: 0 0 10px;
+        }
+
+        .passiveToggle.active .passiveToggleDot {
+          background: #f97316;
+          box-shadow: 0 0 0 4px rgba(249, 115, 22, .14);
         }
 
         .paymentStudentGrid {
@@ -2274,6 +2366,29 @@ export default function PaymentsClient({
           border: 1px solid #dbe5f1;
           border-radius: 20px;
           padding: 18px;
+        }
+
+        .paymentStudentCard.passiveStudentCard {
+          border-color: #f1c7a6;
+          background: linear-gradient(180deg, #fffdfb 0%, #fffaf5 100%);
+        }
+
+        .paymentStatusStack {
+          display: grid;
+          justify-items: end;
+          gap: 7px;
+        }
+
+        .studentPassiveBadge {
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 6px 9px;
+          background: #fff1e8;
+          color: #b54708;
+          font-size: 10px;
+          font-weight: 900;
+          white-space: nowrap;
         }
 
         .paymentCardTop {
@@ -2460,6 +2575,13 @@ export default function PaymentsClient({
         .paymentActions a:hover {
           border-color: #b9cbe0;
           box-shadow: 0 6px 16px rgba(15, 45, 80, .08);
+        }
+
+        .paymentActions button:disabled {
+          cursor: not-allowed;
+          opacity: .48;
+          box-shadow: none;
+          transform: none;
         }
 
         .paymentActions
