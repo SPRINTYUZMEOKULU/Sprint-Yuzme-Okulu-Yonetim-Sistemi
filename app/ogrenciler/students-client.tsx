@@ -2428,6 +2428,12 @@ function closeLessonAction() {
         <td>${escape(student.guardian_name)}</td>
         <td>${escape(student.guardian_phone)}</td>
         <td>${escape(student.email || student.guardian_email)}</td>
+        <td>${escape(paymentLabel(student).text)}</td>
+        <td class="num">${numberValue(student.payment_total_received).toLocaleString("tr-TR")} ₺</td>
+        <td class="num">${numberValue(student.payment_package_outstanding).toLocaleString("tr-TR")} ₺</td>
+        <td class="num">${numberValue(student.payment_extra_outstanding).toLocaleString("tr-TR")} ₺</td>
+        <td class="num">${numberValue(student.payment_outstanding).toLocaleString("tr-TR")} ₺</td>
+        <td>${escape(formatDate(student.last_payment_at))}</td>
       </tr>`;
     }).join("");
 
@@ -2452,19 +2458,21 @@ th:nth-child(7){width:6%}th:nth-child(8){width:6.7%}th:nth-child(9){width:8.5%}
 th:nth-child(10){width:4.6%}th:nth-child(11){width:5.5%}
 th:nth-child(12),th:nth-child(13),th:nth-child(14),th:nth-child(15),th:nth-child(16){width:3%}
 th:nth-child(17),th:nth-child(18){width:5%}th:nth-child(19){width:6%}
-th:nth-child(20){width:6.5%}th:nth-child(21){width:6%}th:nth-child(22){width:7%}
+th:nth-child(20){width:5.2%}th:nth-child(21){width:5%}th:nth-child(22){width:5.8%}
+th:nth-child(23){width:5.4%}th:nth-child(24),th:nth-child(25),th:nth-child(26),th:nth-child(27){width:4.4%}th:nth-child(28){width:5%}
 thead{display:table-header-group}tr{break-inside:avoid}
 .foot{margin-top:6px;color:#64748b;font-size:6px;text-align:right}
 </style>
 </head>
 <body>
-<div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt · PDF çıktısında Excel ile aynı temel alanlar</p></div><div class="brand">SprintOS</div></div>
+<div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt · PDF çıktısında öğrenci ve ödeme alanları birlikte</p></div><div class="brand">SprintOS</div></div>
 <table>
 <thead><tr>
 <th>#</th><th>SPR No</th><th>Ad Soyad</th><th>Yaş</th><th>Doğum</th><th>Durum</th>
 <th>Şube</th><th>Grup</th><th>Program</th><th>Seviye</th><th>Paket</th>
 <th>Normal</th><th>Telafi</th><th>Toplam</th><th>Kull.</th><th>Kalan</th>
 <th>Başlangıç</th><th>Bitiş</th><th>Telefon</th><th>Veli</th><th>Veli Tel.</th><th>E-posta</th>
+<th>Ödeme Durumu</th><th>Ödenen</th><th>Paket Borcu</th><th>Ek Borç</th><th>Toplam Borç</th><th>Son Ödeme</th>
 </tr></thead>
 <tbody>${body}</tbody>
 </table>
