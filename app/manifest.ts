@@ -4,8 +4,8 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
 
-    name: "SprintOS - Yüzme Okulu Yönetimi",
-    short_name: "SprintOS",
+    name: "SPRİNT YÜZME OKULU - SprintOS Yönetim Paneli",
+    short_name: "SPRİNT",
 
     description:
       "Sprint Yüzme Okulu yönetim, öğrenci, ödeme, yoklama ve operasyon sistemi.",
