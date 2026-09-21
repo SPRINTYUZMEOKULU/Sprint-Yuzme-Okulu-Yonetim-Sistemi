@@ -8,6 +8,7 @@ export type OperationStudentRow = {
   id: string;
   name: string;
   student_number?: string | null;
+  age?: number | null;
   level?: string | null;
   group_id?: string | null;
   group_name?: string | null;
@@ -196,7 +197,9 @@ export default function OperationStudentManager({
                 </label>
                 <div className="rosterIdentity">
                   <strong>{student.name}</strong>
-                  <span>{student.student_number || "Öğrenci No Yok"}</span>
+                  <span>
+                    {student.student_number || "Öğrenci No Yok"} · {student.age === null || student.age === undefined ? "Yaş bilgisi yok" : `${student.age} yaş`}
+                  </span>
                 </div>
                 <span className="levelPill">{student.level || "Seviye Yok"}</span>
               </div>
