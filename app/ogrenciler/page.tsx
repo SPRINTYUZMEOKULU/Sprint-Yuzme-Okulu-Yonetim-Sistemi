@@ -612,6 +612,12 @@ export default async function StudentsPage() {
         payment_total_received: toNumber(
           paymentSummary?.total_received ?? 0
         ),
+        payment_package_outstanding: toNumber(
+          paymentSummary?.package_outstanding ?? 0
+        ),
+        payment_extra_outstanding: toNumber(
+          paymentSummary?.extra_outstanding ?? 0
+        ),
         payment_outstanding: outstandingBalance,
         last_payment_at:
           paymentSummary?.last_payment_at ?? null,
