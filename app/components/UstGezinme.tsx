@@ -98,8 +98,8 @@ export default function UstGezinme() {
               <Image src="/icons/icon-192.png" alt="Sprint Yüzme Okulu" width={38} height={38} priority />
             </span>
             <span className="navBrandText">
-              <strong>SprintOS</strong>
-              <small>Yüzme Okulu Yönetimi</small>
+              <strong>SPRİNT YÜZME OKULU</strong>
+              <small>SprintOS Yönetim Paneli</small>
             </span>
           </Link>
 
