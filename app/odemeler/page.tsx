@@ -129,7 +129,7 @@ export default async function PaymentsPage({
       .select("*")
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
-      .eq("status", "active")
+      .in("status", ["active", "passive"])
       .order("first_name", {
         ascending: true,
       }),
@@ -138,7 +138,6 @@ export default async function PaymentsPage({
       .from("student_enrollments")
       .select("*")
       .eq("organization_id", organizationId)
-      .eq("status", "active")
       .order("created_at", {
         ascending: false,
       }),
@@ -275,11 +274,14 @@ export default async function PaymentsPage({
   >();
 
   for (const enrollment of enrollments) {
+    if (!enrollment.student_id) continue;
+
+    const existing = enrollmentMap.get(enrollment.student_id);
+
     if (
-      enrollment.student_id &&
-      !enrollmentMap.has(
-        enrollment.student_id
-      )
+      !existing ||
+      (normalizeText(enrollment.status) === "active" &&
+        normalizeText(existing.status) !== "active")
     ) {
       enrollmentMap.set(
         enrollment.student_id,
