@@ -2260,7 +2260,51 @@ function closeLessonAction() {
     return filteredStudents.filter((student) => selected.has(student.id));
   }
 
-  function exportCSV() {
+  function isIOSExportEnvironment() {
+    if (typeof navigator === "undefined") return false;
+    return (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    );
+  }
+
+  async function deliverExportFile(blob: Blob, filename: string) {
+    const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+
+    // iPhone/iPad uygulama içi tarayıcılarda doğrudan dosya URL'sine gitmek
+    // Quick Look ekranında kullanıcıyı kilitleyebiliyor. Paylaşım sayfası açıldığında
+    // kullanıcı işlemi tamamlayıp/iptal edip doğrudan SprintOS ekranına döner.
+    if (isIOSExportEnvironment() && typeof navigator.share === "function") {
+      try {
+        const canShareFiles =
+          typeof navigator.canShare !== "function" ||
+          navigator.canShare({ files: [file] });
+
+        if (canShareFiles) {
+          await navigator.share({ files: [file], title: filename });
+          return "shared" as const;
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return "cancelled" as const;
+        }
+        // Paylaşım desteklenmezse normal indirmeye düş.
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return "downloaded" as const;
+  }
+
+  async function exportCSV() {
     const studentsToExport = exportStudents();
     if (!studentsToExport.length) {
       setImportResult("Excel için öğrenci bulunamadı.");
@@ -2304,22 +2348,35 @@ function closeLessonAction() {
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
-    worksheet["!autofilter"] = { ref: worksheet["!ref"] || "A1:T1" };
+    worksheet["!autofilter"] = { ref: worksheet["!ref"] || "A1:V1" };
     worksheet["!cols"] = [
-      { wch: 7 }, { wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 24 },
-      { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 20 }, { wch: 12 },
-      { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
-      { wch: 14 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 28 },
+      { wch: 7 }, { wch: 18 }, { wch: 28 }, { wch: 8 }, { wch: 14 },
+      { wch: 16 }, { wch: 24 }, { wch: 26 }, { wch: 34 }, { wch: 16 },
+      { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+      { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 24 },
+      { wch: 18 }, { wch: 28 },
     ];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Öğrenciler");
-    XLSX.writeFile(
-      workbook,
-      `SprintOS-Ogrenci-Listesi-${new Date().toISOString().slice(0, 10)}.xlsx`,
-      { compression: true }
+    const bytes = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+      compression: true,
+    });
+    const filename = `SprintOS-Ogrenci-Listesi-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const result = await deliverExportFile(
+      new Blob([bytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      filename
     );
-    setImportResult(`${studentsToExport.length} öğrenci Excel dosyasına aktarıldı.`);
+
+    setImportResult(
+      result === "cancelled"
+        ? "Excel paylaşımı iptal edildi. Öğrenci Merkezi açık kaldı."
+        : `${studentsToExport.length} öğrenci Excel dosyasına aktarıldı. SprintOS ekranınız açık kaldı.`
+    );
   }
 
   function exportPDF() {
@@ -2328,20 +2385,167 @@ function closeLessonAction() {
       setImportResult("PDF için öğrenci bulunamadı.");
       return;
     }
+
     const escape = (value: unknown) => String(value ?? "")
-      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-    const body = rows.map((student) => `<tr><td>${escape(`${student.first_name} ${student.last_name}`)}</td><td>${escape(statusLabels[student.status || ""] || student.status || "")}</td><td>${escape(student.branch_name)}</td><td>${escape(student.group_name)}</td><td>${escape(student.swimming_level)}</td><td>${escape(student.package_name)}</td><td>${numberValue(student.used_lessons)}</td><td>${numberValue(student.remaining_lessons)}</td><td>${escape(formatDate(student.end_date))}</td><td>${escape(student.phone || student.guardian_phone)}</td></tr>`).join("");
-    const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SprintOS Öğrenci Listesi</title><style>@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#10213a;margin:0}.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #176de9;padding-bottom:10px;margin-bottom:14px}.head h1{margin:0;font-size:22px}.head p{margin:4px 0 0;color:#64748b;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{padding:7px 6px;border:1px solid #dbe4ef;text-align:left;vertical-align:top}th{background:#edf5ff;color:#174a7c}.foot{margin-top:10px;color:#64748b;font-size:9px;text-align:right}</style></head><body><div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt</p></div><strong>SprintOS</strong></div><table><thead><tr><th>Öğrenci</th><th>Durum</th><th>Şube</th><th>Grup</th><th>Seviye</th><th>Paket</th><th>Kullanılan</th><th>Kalan</th><th>Bitiş</th><th>Telefon</th></tr></thead><tbody>${body}</tbody></table><div class="foot">${escape(new Date().toLocaleString("tr-TR"))}</div><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`;
-    const popup = window.open("", "_blank");
-    if (!popup) {
-      setImportResult("PDF penceresi tarayıcı tarafından engellendi.");
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+
+    const body = rows.map((student, index) => {
+      const normalLessons = numberValue(student.package_lesson_count);
+      const compensation = numberValue(student.compensation_lessons);
+      const totalRights = normalLessons + compensation;
+      const remaining =
+        student.total_remaining_lessons != null
+          ? numberValue(student.total_remaining_lessons)
+          : numberValue(student.remaining_lessons);
+      const endDate =
+        student.compensation_end_date ||
+        student.normal_end_date ||
+        student.end_date;
+
+      return `<tr>
+        <td>${index + 1}</td>
+        <td>${escape(student.student_number)}</td>
+        <td><strong>${escape(`${student.first_name} ${student.last_name}`.trim())}</strong></td>
+        <td>${escape(ageFromBirthDate(student.birth_date) ?? "—")}</td>
+        <td>${escape(formatDate(student.birth_date))}</td>
+        <td>${escape(statusLabels[student.status || ""] || student.status || "")}</td>
+        <td>${escape(student.branch_name)}</td>
+        <td>${escape(student.group_name)}</td>
+        <td class="program">${escape(scheduleLabel(student) || "—")}</td>
+        <td>${escape(student.swimming_level)}</td>
+        <td>${escape(student.package_name)}</td>
+        <td class="num">${normalLessons}</td>
+        <td class="num">${compensation}</td>
+        <td class="num">${totalRights}</td>
+        <td class="num">${numberValue(student.used_lessons)}</td>
+        <td class="num">${remaining}</td>
+        <td>${escape(formatDate(student.start_date))}</td>
+        <td>${escape(formatDate(endDate))}</td>
+        <td>${escape(student.phone)}</td>
+        <td>${escape(student.guardian_name)}</td>
+        <td>${escape(student.guardian_phone)}</td>
+        <td>${escape(student.email || student.guardian_email)}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>SprintOS Öğrenci Listesi</title>
+<style>
+@page{size:A4 landscape;margin:6mm}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff;color:#10213a;font-family:Arial,Helvetica,sans-serif}
+.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #176de9;padding:0 0 7px;margin:0 0 8px}
+.head h1{margin:0;font-size:16px}.head p{margin:3px 0 0;color:#64748b;font-size:8px}.brand{font-size:9px;font-weight:900;color:#176de9}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:5.7px}
+th,td{padding:3px 2px;border:1px solid #dbe4ef;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+th{background:#edf5ff;color:#174a7c;font-size:5.6px;line-height:1.15}
+td{line-height:1.2}.num{text-align:center;font-weight:700}.program{font-size:5.2px}
+th:nth-child(1){width:2.2%}th:nth-child(2){width:5.5%}th:nth-child(3){width:8%}
+th:nth-child(4){width:2.6%}th:nth-child(5){width:5%}th:nth-child(6){width:4.7%}
+th:nth-child(7){width:6%}th:nth-child(8){width:6.7%}th:nth-child(9){width:8.5%}
+th:nth-child(10){width:4.6%}th:nth-child(11){width:5.5%}
+th:nth-child(12),th:nth-child(13),th:nth-child(14),th:nth-child(15),th:nth-child(16){width:3%}
+th:nth-child(17),th:nth-child(18){width:5%}th:nth-child(19){width:6%}
+th:nth-child(20){width:6.5%}th:nth-child(21){width:6%}th:nth-child(22){width:7%}
+thead{display:table-header-group}tr{break-inside:avoid}
+.foot{margin-top:6px;color:#64748b;font-size:6px;text-align:right}
+</style>
+</head>
+<body>
+<div class="head"><div><h1>SPRİNT YÜZME OKULU</h1><p>Öğrenci listesi · ${rows.length} kayıt · PDF çıktısında Excel ile aynı temel alanlar</p></div><div class="brand">SprintOS</div></div>
+<table>
+<thead><tr>
+<th>#</th><th>SPR No</th><th>Ad Soyad</th><th>Yaş</th><th>Doğum</th><th>Durum</th>
+<th>Şube</th><th>Grup</th><th>Program</th><th>Seviye</th><th>Paket</th>
+<th>Normal</th><th>Telafi</th><th>Toplam</th><th>Kull.</th><th>Kalan</th>
+<th>Başlangıç</th><th>Bitiş</th><th>Telefon</th><th>Veli</th><th>Veli Tel.</th><th>E-posta</th>
+</tr></thead>
+<tbody>${body}</tbody>
+</table>
+<div class="foot">${escape(new Date().toLocaleString("tr-TR"))} · SprintOS üzerinden oluşturulmuştur.</div>
+</body>
+</html>`;
+
+    // Yeni sekme açmak yerine görünmez iframe içinde yazdırma çağrısı yapıyoruz.
+    // Böylece iPhone/iPad'de PDF/yazdırma ekranı kapatıldığında kullanıcı aynı
+    // Öğrenci Merkezi ekranına geri döner; uygulamayı kapatıp açması gerekmez.
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "1px";
+    iframe.style.height = "1px";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    const frameWindow = iframe.contentWindow;
+    const frameDocument = iframe.contentDocument;
+    if (!frameWindow || !frameDocument) {
+      cleanup();
+      setImportResult("PDF ekranı açılamadı. Lütfen tekrar deneyin.");
       return;
     }
-    try { popup.opener = null; } catch {}
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
+
+    frameWindow.addEventListener("afterprint", cleanup, { once: true });
+    frameDocument.open();
+    frameDocument.write(html);
+    frameDocument.close();
+
+    window.setTimeout(() => {
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+        setImportResult(`${rows.length} öğrenci PDF/yazdırma ekranına hazırlandı. Kapatınca aynı SprintOS ekranına döneceksiniz.`);
+      } catch {
+        cleanup();
+        setImportResult("PDF/yazdırma ekranı açılamadı. Lütfen tekrar deneyin.");
+      }
+    }, 250);
+
+    window.setTimeout(cleanup, 120000);
+  }
+
+  async function downloadImportTemplate() {
+    setImportResult("İçe aktarma şablonu hazırlanıyor…");
+    try {
+      const response = await fetch("/api/student-import", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Şablon indirilemedi.");
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get("content-disposition") || "";
+      const filenameMatch =
+        contentDisposition.match(/filename\*=UTF-8''([^;]+)/i) ||
+        contentDisposition.match(/filename="?([^";]+)"?/i);
+      const filename = filenameMatch?.[1]
+        ? decodeURIComponent(filenameMatch[1])
+        : "SprintOS-Ogrenci-Ice-Aktarma-Sablonu.xlsx";
+
+      const result = await deliverExportFile(blob, filename);
+      setImportResult(
+        result === "cancelled"
+          ? "Şablon paylaşımı iptal edildi. Öğrenci Merkezi açık kaldı."
+          : "İçe aktarma şablonu hazırlandı. SprintOS ekranınız açık kaldı."
+      );
+    } catch (error) {
+      setImportResult(
+        error instanceof Error ? error.message : "Şablon indirilemedi."
+      );
+    }
   }
 
   async function importStudents(file?: File) {
@@ -2673,10 +2877,10 @@ function closeLessonAction() {
                 <span className="dataActionIcon">PDF</span>
                 <span><strong>{selectedStudentIds.length ? "Seçilenleri PDF’ye Aktar" : "PDF’ye Aktar"}</strong><small>A4 yatay yazdırma / PDF ekranını aç</small></span>
               </button>
-              <a className="dataAction subtle" href="/api/student-import">
+              <button className="dataAction subtle" type="button" onClick={() => void downloadImportTemplate()}>
                 <span className="dataActionIcon">↓</span>
-                <span><strong>İçe Aktarma Şablonu</strong><small>Doğru kolon yapısındaki örnek şablonu indir</small></span>
-              </a>
+                <span><strong>İçe Aktarma Şablonu</strong><small>Şablonu açarken SprintOS ekranını açık tut</small></span>
+              </button>
               <button className="dataAction subtle" type="button" disabled={importSubmitting} onClick={() => importInputRef.current?.click()}>
                 <span className="dataActionIcon">↑</span>
                 <span><strong>{importSubmitting ? "Aktarılıyor…" : "Excel / CSV İçe Aktar"}</strong><small>Hazırladığınız dosyayı kontrol ederek sisteme aktar</small></span>
