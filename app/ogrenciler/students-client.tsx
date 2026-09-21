@@ -51,6 +51,8 @@ export type StudentListItem = {
 
   payment_status?: string | null;
   payment_total_received?: number | null;
+  payment_package_outstanding?: number | null;
+  payment_extra_outstanding?: number | null;
   payment_outstanding?: number | null;
   last_payment_at?: string | null;
 
@@ -582,6 +584,8 @@ function buildMessage(
 
   const endText = formatDate(endDate);
   const startText = formatDate(student.start_date);
+  const packageOutstanding = numberValue(student.payment_package_outstanding);
+  const extraOutstanding = numberValue(student.payment_extra_outstanding);
   const outstanding = numberValue(student.payment_outstanding);
 
   const compensationDate = formatDate(
@@ -809,8 +813,10 @@ function buildMessage(
       `_*ÖDEME HATIRLATMASI*_\n\n` +
       `${greeting}\n\n` +
       `💳 *Aktif Paket:* ${packageText}\n` +
-      `💰 *Bekleyen Ödeme:* ${amount}\n\n` +
-      `Aktif kayıt paketine ait yukarıdaki tutarda bekleyen ödeme bulunmaktadır. Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
+      `💰 *Paket Borcu:* ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(packageOutstanding)}\n` +
+      `${extraOutstanding > 0 ? `➕ *Ek Borç:* ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(extraOutstanding)}\n` : ""}` +
+      `📌 *Toplam Bekleyen:* ${amount}\n\n` +
+      `Bekleyen tutar, aktif paket borcu ve varsa ayrıca oluşturulmuş ek borçların toplamıdır. Ödeme planıyla ilgili bilgi almak için bizimle iletişime geçebilirsiniz.` +
       footer
     );
   }
@@ -4222,7 +4228,27 @@ function closeLessonAction() {
                   <strong>{formatDate(messageStudent.next_compensation_date)}</strong>
                 </div>
                 <div>
-                  <span>Bekleyen Ödeme</span>
+                  <span>Paket Borcu</span>
+                  <strong>
+                    {new Intl.NumberFormat("tr-TR", {
+                      style: "currency",
+                      currency: "TRY",
+                      maximumFractionDigits: 0,
+                    }).format(numberValue(messageStudent.payment_package_outstanding))}
+                  </strong>
+                </div>
+                <div>
+                  <span>Ek Borç</span>
+                  <strong>
+                    {new Intl.NumberFormat("tr-TR", {
+                      style: "currency",
+                      currency: "TRY",
+                      maximumFractionDigits: 0,
+                    }).format(numberValue(messageStudent.payment_extra_outstanding))}
+                  </strong>
+                </div>
+                <div>
+                  <span>Toplam Bekleyen</span>
                   <strong>
                     {new Intl.NumberFormat("tr-TR", {
                       style: "currency",
