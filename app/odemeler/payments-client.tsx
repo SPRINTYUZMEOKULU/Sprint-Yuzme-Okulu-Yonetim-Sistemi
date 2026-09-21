@@ -118,6 +118,70 @@ type PaymentMethod =
   | "eft"
   | "other";
 
+type PaymentIconName =
+  | "users"
+  | "clock"
+  | "calendar"
+  | "refresh"
+  | "wallet"
+  | "alert"
+  | "split"
+  | "check"
+  | "history"
+  | "cash"
+  | "message"
+  | "file"
+  | "card"
+  | "bank"
+  | "spark";
+
+function PaymentIcon({ name }: { name: PaymentIconName }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "users":
+      return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case "clock":
+      return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>;
+    case "calendar":
+      return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>;
+    case "refresh":
+      return <svg {...common}><path d="M20 7h-5V2"/><path d="M20 7a8 8 0 1 0 1 7"/></svg>;
+    case "wallet":
+      return <svg {...common}><path d="M3 7a3 3 0 0 1 3-3h12a2 2 0 0 1 2 2v14H6a3 3 0 0 1-3-3z"/><path d="M3 8h17"/><path d="M15 13h5v4h-5a2 2 0 0 1 0-4z"/></svg>;
+    case "alert":
+      return <svg {...common}><path d="M10.3 3.4 2.5 17a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.4a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>;
+    case "split":
+      return <svg {...common}><path d="M8 3v4a5 5 0 0 0 5 5h7"/><path d="m17 9 3 3-3 3"/><path d="M8 21v-4a5 5 0 0 1 5-5"/></svg>;
+    case "check":
+      return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>;
+    case "history":
+      return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>;
+    case "cash":
+      return <svg {...common}><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9H5v2M17 15h2v-2"/></svg>;
+    case "message":
+      return <svg {...common}><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>;
+    case "file":
+      return <svg {...common}><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/><path d="M9 12h6M9 16h6"/></svg>;
+    case "card":
+      return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>;
+    case "bank":
+      return <svg {...common}><path d="M3 10h18L12 4z"/><path d="M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/></svg>;
+    case "spark":
+      return <svg {...common}><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>;
+  }
+}
+
 function numberValue(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -953,61 +1017,75 @@ export default function PaymentsClient({
   const quickButtons: {
     key: QuickFilter;
     label: string;
+    icon: PaymentIconName;
   }[] = [
-    { key: "all", label: "Tümü" },
+    { key: "all", label: "Tümü", icon: "users" },
     {
       key: "three_lessons",
       label: "3 Ders Kalan",
+      icon: "clock",
     },
     {
       key: "two_lessons",
       label: "2 Ders Kalan",
+      icon: "clock",
     },
     {
       key: "one_lesson",
       label: "1 Ders Kalan",
+      icon: "clock",
     },
     {
       key: "ending_week",
       label: "Son Haftaya Girenler",
+      icon: "calendar",
     },
     {
       key: "finished",
       label: "Ders Hakkı Biten",
+      icon: "alert",
     },
     {
       key: "renew_week",
       label:
         "Bu Hafta Yenileyecek",
+      icon: "refresh",
     },
     {
       key: "payment_week",
       label:
         "Bu Hafta Ödeme Yapacak",
+      icon: "calendar",
     },
     {
       key: "renew_and_payment",
       label: "Ödeme + Yenileme",
+      icon: "wallet",
     },
     {
       key: "no_payment",
       label: "Ödeme Yapmayan",
+      icon: "alert",
     },
     {
       key: "partial",
       label: "Kısmi Ödeme",
+      icon: "split",
     },
     {
       key: "paid",
       label: "Tam Ödeme",
+      icon: "check",
     },
     {
       key: "latest_payment",
       label: "Son Ödeme Yapanlar",
+      icon: "history",
     },
     {
       key: "cash_pending",
       label: "Kasa Teslim Bekleyen",
+      icon: "cash",
     },
   ];
 
@@ -1134,7 +1212,10 @@ export default function PaymentsClient({
                   )
                 }
               >
-                {button.label}
+                <span className="paymentQuickIcon">
+                  <PaymentIcon name={button.icon} />
+                </span>
+                <span className="paymentQuickLabel">{button.label}</span>
               </button>
             )
           )}
@@ -1329,8 +1410,9 @@ export default function PaymentsClient({
 
                 <div className="paymentSuggestion">
                   <div>
-                    <span>
-                      💡 Önerilen Mesaj
+                    <span className="paymentSuggestionLabel">
+                      <PaymentIcon name="spark" />
+                      Önerilen Mesaj
                     </span>
 
                     <strong>
@@ -1372,7 +1454,8 @@ export default function PaymentsClient({
                       )
                     }
                   >
-                    + Ödeme Al
+                    <PaymentIcon name="wallet" />
+                    <span>Ödeme Al</span>
                   </button>
 
                   <button
@@ -1383,7 +1466,8 @@ export default function PaymentsClient({
                       )
                     }
                   >
-                    Ödeme Geçmişi
+                    <PaymentIcon name="history" />
+                    <span>Ödeme Geçmişi</span>
                   </button>
 
                   <button
@@ -1394,7 +1478,8 @@ export default function PaymentsClient({
                       )
                     }
                   >
-                    📅 Vade Belirle
+                    <PaymentIcon name="calendar" />
+                    <span>Vade Belirle</span>
                   </button>
 
                   <button
@@ -1406,13 +1491,15 @@ export default function PaymentsClient({
                       )
                     }
                   >
-                    WhatsApp Mesaj
+                    <PaymentIcon name="message" />
+                    <span>WhatsApp Mesaj</span>
                   </button>
 
                   <Link
                     href={`/ogrenciler/${student.id}`}
                   >
-                    Öğrenci Dosyası
+                    <PaymentIcon name="file" />
+                    <span>Öğrenci Dosyası</span>
                   </Link>
                 </div>
 
@@ -1554,19 +1641,19 @@ export default function PaymentsClient({
                 }
               >
                 <option value="cash">
-                  💵 Nakit
+                  Nakit
                 </option>
 
                 <option value="card">
-                  💳 Kart
+                  Kart
                 </option>
 
                 <option value="bank_transfer">
-                  🏦 Havale
+                  Havale
                 </option>
 
                 <option value="eft">
-                  🏦 EFT
+                  EFT
                 </option>
 
                 <option value="other">
@@ -1598,7 +1685,7 @@ export default function PaymentsClient({
             {paymentMethod ===
             "cash" ? (
               <div className="cashInfoBox">
-                💵 Nakit ödeme,
+                Nakit ödeme,
                 <strong>
                   {" "}
                   personelde / kasaya teslim bekliyor
@@ -1607,7 +1694,7 @@ export default function PaymentsClient({
               </div>
             ) : (
               <div className="nonCashInfoBox">
-                ✓ Bu ödeme fiziki nakit teslimi gerektirmeyen ödeme yöntemiyle kaydedilecektir.
+                Bu ödeme fiziki nakit teslimi gerektirmeyen ödeme yöntemiyle kaydedilecektir.
               </div>
             )}
 
@@ -1651,7 +1738,7 @@ export default function PaymentsClient({
               >
                 {isPaymentPending
                   ? "Kaydediliyor..."
-                  : "✓ Ödemeyi Kaydet"}
+                  : "Ödemeyi Kaydet"}
               </button>
             </div>
           </div>
@@ -2098,16 +2185,47 @@ export default function PaymentsClient({
         .paymentQuickButtons button {
           border: 1px solid #dbe5f1;
           background: #f8fafc;
-          border-radius: 12px;
-          padding: 9px 12px;
+          border-radius: 14px;
+          padding: 10px 12px;
           font-weight: 800;
           color: #334155;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 44px;
+          transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
+        }
+
+        .paymentQuickButtons button:active {
+          transform: scale(.985);
+        }
+
+        .paymentQuickIcon {
+          width: 30px;
+          height: 30px;
+          border-radius: 10px;
+          display: inline-grid;
+          place-items: center;
+          background: #eaf2ff;
+          color: #156ff5;
+          flex: 0 0 30px;
+        }
+
+        .paymentQuickLabel {
+          line-height: 1.15;
         }
 
         .paymentQuickButtons button.active {
           background: #156ff5;
           border-color: #156ff5;
+          color: #fff;
+          box-shadow: 0 8px 20px rgba(21, 111, 245, .2);
+        }
+
+        .paymentQuickButtons button.active .paymentQuickIcon {
+          background: rgba(255,255,255,.16);
           color: #fff;
         }
 
@@ -2282,6 +2400,13 @@ export default function PaymentsClient({
           color: #2563eb;
         }
 
+        .paymentSuggestion .paymentSuggestionLabel {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-weight: 900;
+        }
+
         .paymentSuggestion strong {
           color: #10213a;
           font-size: 13px;
@@ -2310,14 +2435,31 @@ export default function PaymentsClient({
         .paymentActions button,
         .paymentActions a {
           border: 1px solid #dbe5f1;
-          border-radius: 10px;
+          border-radius: 12px;
           background: #fff;
           color: #10213a;
-          padding: 9px 11px;
+          padding: 10px 12px;
           font-size: 12px;
           font-weight: 800;
           text-decoration: none;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          min-height: 42px;
+          transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+        }
+
+        .paymentActions button:active,
+        .paymentActions a:active {
+          transform: scale(.985);
+        }
+
+        .paymentActions button:hover,
+        .paymentActions a:hover {
+          border-color: #b9cbe0;
+          box-shadow: 0 6px 16px rgba(15, 45, 80, .08);
         }
 
         .paymentActions
@@ -2611,6 +2753,23 @@ export default function PaymentsClient({
             width: 100%;
             text-align: center;
             box-sizing: border-box;
+          }
+
+          .paymentQuickButtons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .paymentQuickButtons button {
+            min-width: 0;
+            padding: 9px 8px;
+            gap: 6px;
+          }
+
+          .paymentQuickIcon {
+            width: 28px;
+            height: 28px;
+            flex-basis: 28px;
           }
         }
       `}</style>
