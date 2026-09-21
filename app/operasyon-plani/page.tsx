@@ -2328,6 +2328,29 @@ export default async function OperasyonPlaniPage({
                     )
                     .filter(Boolean);
 
+                const primaryAssignment = explicitStaff.find(
+                  (assignment: any) => assignment.assignment_role === "coach"
+                );
+                const backupAssignment = explicitStaff.find(
+                  (assignment: any) => assignment.assignment_role === "backup"
+                );
+                const primaryCoachId =
+                  primaryAssignment?.coach_id ||
+                  schedule.coach_id ||
+                  group?.primary_coach_id ||
+                  null;
+                const backupCoachId = backupAssignment?.coach_id || null;
+                const primaryCoach = primaryCoachId
+                  ? coachMap.get(primaryCoachId)
+                  : null;
+                const backupCoach = backupCoachId
+                  ? coachMap.get(backupCoachId)
+                  : null;
+                const primaryCoachName =
+                  primaryCoach?.full_name || primaryCoach?.email || null;
+                const backupCoachName =
+                  backupCoach?.full_name || backupCoach?.email || null;
+
                 const sessionStudentAssignments =
                   studentAssignments.filter(
                     (
@@ -3607,15 +3630,41 @@ export default async function OperasyonPlaniPage({
                           </button>
                         </form>
 
-                        <Link
-                          href={`/yoklama?grup=${schedule.group_id || ""}&seans=${schedule.id}&tarih=${selectedDate}`}
-                          style={
-                            attendanceButtonStyle
-                          }
-                        >
-                          <Icons.check />
-                          Yoklama Al
-                        </Link>
+                        <div style={footerRightActionsStyle}>
+                          <SessionRosterPrintButton
+                            date={selectedDate}
+                            weekday={GUNLER[Number(schedule.weekday)] || "Ders"}
+                            pool={branch?.name || "Şube / havuz"}
+                            startTime={saatGoster(schedule.start_time)}
+                            endTime={saatGoster(schedule.end_time)}
+                            group={group?.name || null}
+                            primaryCoach={primaryCoachName}
+                            backupCoach={backupCoachName}
+                            students={groupStudents
+                              .slice()
+                              .sort((a: any, b: any) =>
+                                adSoyad(a).localeCompare(adSoyad(b), "tr")
+                              )
+                              .map((student: any) => ({
+                                id: student.id,
+                                name: adSoyad(student),
+                                age: ageOnDate(student.birth_date, selectedDate),
+                                level: student.swimming_level || null,
+                                group: group?.name || null,
+                              }))}
+                            label="Seans Çıktısı"
+                          />
+
+                          <Link
+                            href={`/yoklama?grup=${schedule.group_id || ""}&seans=${schedule.id}&tarih=${selectedDate}`}
+                            style={
+                              attendanceButtonStyle
+                            }
+                          >
+                            <Icons.check />
+                            Yoklama Al
+                          </Link>
+                        </div>
                       </section>
                     )}
                   </details>
@@ -4368,6 +4417,13 @@ const footerActionsStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 8,
+  flexWrap: "wrap",
+};
+
+const footerRightActionsStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
   flexWrap: "wrap",
 };
 
