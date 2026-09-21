@@ -10,6 +10,7 @@ import UstGezinme from "@/app/components/UstGezinme";
 import OperationStudentManager, {
   type OperationStudentRow,
 } from "./operation-student-manager";
+import SessionRosterPrintButton from "./session-roster-print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -199,6 +200,14 @@ async function personelAta(formData: FormData) {
   const branchId =
     String(formData.get("branch_id") || "") || null;
 
+  const assignmentRole = String(
+    formData.get("assignment_role") || "coach"
+  );
+
+  if (!["coach", "backup"].includes(assignmentRole)) {
+    throw new Error("Eğitmen rolü geçersiz.");
+  }
+
   if (!scheduleId || !coachId) {
     throw new Error(
       "Ders seansı ve eğitmen seçilmelidir."
@@ -206,6 +215,23 @@ async function personelAta(formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  const { error: deactivateError } = await supabase
+    .from("lesson_staff_assignments")
+    .update({
+      is_active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", organizationId)
+    .eq("schedule_id", scheduleId)
+    .eq("assignment_role", assignmentRole)
+    .eq("is_active", true);
+
+  if (deactivateError) {
+    throw new Error(
+      `Mevcut eğitmen ataması güncellenemedi: ${deactivateError.message}`
+    );
+  }
 
   const { error } = await supabase
     .from("lesson_staff_assignments")
@@ -216,7 +242,7 @@ async function personelAta(formData: FormData) {
         schedule_id: scheduleId,
         group_id: groupId,
         coach_id: coachId,
-        assignment_role: "coach",
+        assignment_role: assignmentRole,
         is_active: true,
         updated_at: new Date().toISOString(),
       },
@@ -229,6 +255,20 @@ async function personelAta(formData: FormData) {
     throw new Error(
       `Personel atanamadı: ${error.message}`
     );
+  }
+
+  if (assignmentRole === "coach") {
+    const { error: scheduleCoachError } = await supabase
+      .from("lesson_schedules")
+      .update({ coach_id: coachId })
+      .eq("id", scheduleId)
+      .eq("organization_id", organizationId);
+
+    if (scheduleCoachError) {
+      throw new Error(
+        `Ana eğitmen seansa işlenemedi: ${scheduleCoachError.message}`
+      );
+    }
   }
 
   revalidatePath("/operasyon-plani");
@@ -1230,6 +1270,24 @@ export default async function OperasyonPlaniPage({
             adSoyad(a).localeCompare(adSoyad(b), "tr")
           );
 
+        const slotStaff = staffAssignments.filter(
+          (assignment: any) => assignment.schedule_id === slotSchedule.id
+        );
+        const primaryAssignment = slotStaff.find(
+          (assignment: any) => assignment.assignment_role === "coach"
+        );
+        const backupAssignment = slotStaff.find(
+          (assignment: any) => assignment.assignment_role === "backup"
+        );
+        const primaryCoachId =
+          primaryAssignment?.coach_id ||
+          slotSchedule.coach_id ||
+          slotGroup?.primary_coach_id ||
+          null;
+        const backupCoachId = backupAssignment?.coach_id || null;
+        const primaryCoach = primaryCoachId ? coachMap.get(primaryCoachId) : null;
+        const backupCoach = backupCoachId ? coachMap.get(backupCoachId) : null;
+
         return {
           scheduleId: slotSchedule.id,
           groupId: slotSchedule.group_id,
@@ -1237,6 +1295,10 @@ export default async function OperasyonPlaniPage({
           courseType: slotGroup?.course_type || null,
           capacity: Number(slotGroup?.capacity || 0),
           students: dayStudents,
+          primaryCoachName:
+            primaryCoach?.full_name || primaryCoach?.email || null,
+          backupCoachName:
+            backupCoach?.full_name || backupCoach?.email || null,
           sharedMode: sharedModeOf(slotSchedule.id),
         };
       });
@@ -1320,6 +1382,32 @@ export default async function OperasyonPlaniPage({
                   </summary>
 
                   <div style={dailySharedBodyStyle}>
+                    <div style={dailySharedPrintRowStyle}>
+                      <SessionRosterPrintButton
+                        date={selectedDate}
+                        weekday={GUNLER[selectedWeekday]}
+                        pool={slot.branchName}
+                        startTime={slot.startTime}
+                        endTime={slot.endTime}
+                        primaryCoach={
+                          slot.groups.find((item: any) => item.primaryCoachName)?.primaryCoachName || null
+                        }
+                        backupCoach={
+                          slot.groups.find((item: any) => item.backupCoachName)?.backupCoachName || null
+                        }
+                        students={slot.groups.flatMap((item: any) =>
+                          item.students.map((student: any) => ({
+                            id: student.id,
+                            name: adSoyad(student),
+                            age: student.age,
+                            level: student.swimming_level || null,
+                            group: item.groupName,
+                          }))
+                        )}
+                        label="Ortak Seans Çıktısı"
+                      />
+                    </div>
+
                     {allSchedules
                       .filter(
                         (candidate: any) =>
@@ -1374,6 +1462,24 @@ export default async function OperasyonPlaniPage({
                                 </button>
                               </form>
                             ) : null}
+                            <SessionRosterPrintButton
+                              compact
+                              date={selectedDate}
+                              weekday={GUNLER[selectedWeekday]}
+                              pool={slot.branchName}
+                              startTime={slot.startTime}
+                              endTime={slot.endTime}
+                              group={groupRow.groupName}
+                              primaryCoach={groupRow.primaryCoachName}
+                              backupCoach={groupRow.backupCoachName}
+                              students={groupRow.students.map((student: any) => ({
+                                id: student.id,
+                                name: adSoyad(student),
+                                age: student.age,
+                                level: student.swimming_level || null,
+                                group: groupRow.groupName,
+                              }))}
+                            />
                             <span style={dailySharedOpenStyle}>Öğrencileri Aç</span>
                           </span>
                         </summary>
@@ -2855,7 +2961,7 @@ export default async function OperasyonPlaniPage({
                             assignmentTitleStyle
                           }
                         >
-                          Eğitmen Ataması
+                          Eğitmen Ataması · Ana / Yedek
                         </div>
 
                         <form
@@ -2892,6 +2998,18 @@ export default async function OperasyonPlaniPage({
                               ""
                             }
                           />
+
+                          <select
+                            name="assignment_role"
+                            required
+                            style={
+                              compactInputStyle
+                            }
+                            defaultValue="coach"
+                          >
+                            <option value="coach">Ana Eğitmen</option>
+                            <option value="backup">Yedek Eğitmen</option>
+                          </select>
 
                           <select
                             name="coach_id"
@@ -2934,7 +3052,7 @@ export default async function OperasyonPlaniPage({
                               compactPrimaryButtonStyle
                             }
                           >
-                            + Eğitmen Ata
+                            + Ata / Güncelle
                           </button>
                         </form>
                       </section>
@@ -3066,10 +3184,11 @@ export default async function OperasyonPlaniPage({
                                           coachMetaStyle
                                         }
                                       >
-                                        {
-                                          coachStudents.length
-                                        }{" "}
-                                        öğrenci
+                                        {explicitAssignment?.assignment_role === "backup"
+                                          ? "Yedek Eğitmen"
+                                          : "Ana Eğitmen"}
+                                        {" · "}
+                                        {coachStudents.length} öğrenci
                                       </span>
                                     </div>
 
@@ -3142,6 +3261,10 @@ export default async function OperasyonPlaniPage({
                                                 {adSoyad(
                                                   student
                                                 )}
+                                                {" · "}
+                                                {ageOnDate(student.birth_date, selectedDate) !== null
+                                                  ? `${ageOnDate(student.birth_date, selectedDate)} yaş`
+                                                  : "Yaş yok"}
                                               </span>
 
                                               <b>
@@ -4414,6 +4537,13 @@ const dailySharedOpenStyle: React.CSSProperties = {
   fontWeight: 900,
   whiteSpace: "nowrap",
 };
+const dailySharedPrintRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
 const dailySharedStudentListStyle: React.CSSProperties = {
   borderTop: "1px solid #f1f5f9",
   padding: 9,
