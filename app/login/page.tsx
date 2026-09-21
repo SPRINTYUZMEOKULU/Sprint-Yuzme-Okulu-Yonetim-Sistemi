@@ -20,24 +20,24 @@ function FeatureIcon({ name }: { name: (typeof featureItems)[number]["icon"] }) 
 export default function LoginPage() {
   return (
     <main className="v2LoginPage compactLogin">
-      <section className="v2BrandPanel" aria-label="SprintOS Bulut2026 tanıtımı">
+      <section className="v2BrandPanel" aria-label="SPRİNT Yüzme Okulu yönetim platformu">
         <div className="v2WaterGlow" aria-hidden="true" />
         <div className="v2BrandContent">
           <div className="v2LogoFrame compactLogoFrame">
             <span className="v2LogoHalo" aria-hidden="true" />
             <Image src="/sprint-logo.png" alt="Sprint Yüzme Okulu" width={520} height={520} priority className="v2BrandLogo" />
           </div>
-          <p className="cloudLabel">SPRINTOS</p>
+          <p className="cloudLabel">SPRİNT YÜZME OKULU</p>
           <div className="v2Slogan compactSlogan">
-            <span>Bulut2026</span>
-            <strong>Yönetim Platformu</strong>
+            <span>SprintOS</span>
+            <strong>Yönetim Paneli</strong>
           </div>
           <p className="brandDescription">Öğrenci, grup, eğitmen, ödeme ve günlük operasyonları tek merkezden yönetin.</p>
           <div className="v2SloganLine" aria-hidden="true" />
           <div className="v2FeatureGrid">
             {featureItems.map((item) => <div className="v2Feature" key={item.title}><FeatureIcon name={item.icon}/><span>{item.title}</span></div>)}
           </div>
-          <p className="poweredBy">Powered by Sprint Yüzme Okulu</p>
+          <p className="poweredBy">SPRİNT Yüzme Okulu · SprintOS</p>
         </div>
         <div className="v2WaveArt" aria-hidden="true"><span/><span/><span/></div>
       </section>
