@@ -766,11 +766,11 @@ export default async function HomePage() {
 
           <div>
             <strong>
-              SprintOS
+              SPRİNT YÜZME OKULU
             </strong>
 
             <span>
-              Yüzme Okulu Yönetimi
+              SprintOS Yönetim Paneli
             </span>
           </div>
         </Link>
