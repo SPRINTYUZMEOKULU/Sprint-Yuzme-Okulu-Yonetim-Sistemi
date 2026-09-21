@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { createNotification } from "@/lib/notifications/create-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +51,14 @@ export async function POST(request: Request) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    let account: { id: string; organization_id: string | null; full_name: string | null; email: string | null; phone: string | null; role: string | null } | null = null;
+    let account: {
+      id: string;
+      organization_id: string | null;
+      full_name: string | null;
+      email: string | null;
+      phone: string | null;
+      role: string | null;
+    } | null = null;
 
     if (method === "email") {
       const { data } = await admin
@@ -76,7 +82,12 @@ export async function POST(request: Request) {
 
     let organizationId = account?.organization_id || null;
     if (!organizationId) {
-      const { data: organization } = await admin.from("organizations").select("id").limit(1).maybeSingle();
+      const { data: organization } = await admin
+        .from("organizations")
+        .select("id")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
       organizationId = organization?.id || null;
     }
 
@@ -84,43 +95,121 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Kurum kaydı bulunamadı." }, { status: 500 });
     }
 
-    const { data: managers } = await admin
+    const { data: managers, error: managersError } = await admin
       .from("profiles")
       .select("id")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .in("role", MANAGEMENT_ROLES);
 
+    if (managersError) {
+      console.error("SPRINTOS LOGIN SUPPORT MANAGERS", managersError);
+      return NextResponse.json({ ok: false, message: "Yönetici hesapları okunamadı." }, { status: 500 });
+    }
+
     const managerIds = (managers || []).map((item) => String(item.id));
     if (!managerIds.length) {
       return NextResponse.json({ ok: false, message: "Destek talebini alacak yönetici bulunamadı." }, { status: 500 });
     }
 
-    const kindLabel = kind === "password" ? "Şifre yenileme talebi" : kind === "login_error" ? "Giriş sorunu" : "İletişim talebi";
+    const kindLabel =
+      kind === "password"
+        ? "Şifre yenileme talebi"
+        : kind === "login_error"
+          ? "Giriş sorunu"
+          : "İletişim talebi";
     const roleLabel = role === "guardian" ? "Veli" : role === "coach" ? "Eğitmen" : "Yönetici";
     const accountLabel = account?.full_name || identifier;
+    const eventKey = `login_support_${kind}`;
+    const targetPath = account
+      ? `/kullanicilar-ve-yetkiler?profile=${encodeURIComponent(account.id)}`
+      : "/bildirimler";
+    const requestBody = `${roleLabel} giriş ekranından destek talebi gönderildi. ${message}`;
+    const requestMessage =
+      `${kindLabel}\nKullanıcı: ${accountLabel}\nİletişim: ${identifier}\nRol: ${roleLabel}\nMesaj: ${message}`;
 
-    await createNotification({
-      organizationId,
-      title: `${kindLabel}: ${accountLabel}`,
-      body: `${roleLabel} giriş ekranından destek talebi gönderildi. ${message}`,
-      message: `${kindLabel}\nKullanıcı: ${accountLabel}\nİletişim: ${identifier}\nRol: ${roleLabel}\nMesaj: ${message}`,
-      category: "accounts",
-      eventKey: `login_support_${kind}`,
-      notificationType: "login_support_request",
-      severity: kind === "login_error" ? "warning" : "info",
-      priority: kind === "password" || kind === "login_error" ? "high" : "normal",
-      sourceType: "login_support",
-      sourceId: account?.id || null,
-      entityType: account ? "profile" : "login_contact",
-      entityId: account?.id || null,
-      targetPath: account ? `/kullanicilar-ve-yetkiler?profile=${encodeURIComponent(account.id)}` : "/bildirimler",
-      metadata: { kind, login_role: role, login_method: method, identifier, account_found: Boolean(account), requested_message: message },
-      recipientProfileIds: managerIds,
-      push: true,
+    // Login destek akışı oturum açmadan çalıştığı için genel bildirim yönlendirme
+    // motoruna bağımlı değildir. Böylece tercih/kapsam/push tarafındaki bir hata,
+    // kullanıcının destek talebini kaybetmesine yol açmaz.
+    const duplicateSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    let duplicateQuery = admin
+      .from("system_notifications")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("event_key", eventKey)
+      .eq("is_read", false)
+      .gte("created_at", duplicateSince)
+      .limit(1);
+
+    if (account?.id) {
+      duplicateQuery = duplicateQuery.eq("source_id", account.id);
+    } else {
+      duplicateQuery = duplicateQuery.contains("metadata", {
+        identifier,
+        login_role: role,
+        login_method: method,
+      });
+    }
+
+    const { data: recentDuplicate, error: duplicateError } = await duplicateQuery.maybeSingle();
+    if (duplicateError) {
+      console.error("SPRINTOS LOGIN SUPPORT DUPLICATE CHECK", duplicateError);
+    }
+
+    if (!recentDuplicate) {
+      const rows = managerIds.map((managerId) => ({
+        organization_id: organizationId,
+        recipient_profile_id: managerId,
+        recipient_user_id: managerId,
+        notification_type: "login_support_request",
+        title: `${kindLabel}: ${accountLabel}`,
+        body: requestBody,
+        message: requestMessage,
+        priority: kind === "password" || kind === "login_error" ? "high" : "normal",
+        severity: kind === "login_error" ? "warning" : "info",
+        category: "accounts",
+        student_id: null,
+        source_type: "login_support",
+        source_id: account?.id || null,
+        target_path: targetPath,
+        event_key: eventKey,
+        is_read: false,
+        push_required: false,
+        push_requested: false,
+        push_sent: false,
+        push_sent_at: null,
+        entity_type: account ? "profile" : "login_contact",
+        entity_id: account?.id || null,
+        metadata: {
+          kind,
+          login_role: role,
+          login_method: method,
+          identifier,
+          account_found: Boolean(account),
+          requested_message: message,
+          requested_at: new Date().toISOString(),
+        },
+        created_by: null,
+      }));
+
+      const { error: insertError } = await admin.from("system_notifications").insert(rows);
+      if (insertError) {
+        console.error("SPRINTOS LOGIN SUPPORT INSERT", insertError);
+        return NextResponse.json(
+          { ok: false, message: "Talep yönetim ekranına kaydedilemedi. Lütfen tekrar deneyin." },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      duplicate: Boolean(recentDuplicate),
+      account_found: Boolean(account),
+      message: recentDuplicate
+        ? "Talebiniz zaten yönetime iletilmiş durumda."
+        : "Talebiniz yönetime iletildi.",
     });
-
-    return NextResponse.json({ ok: true, message: "Talebiniz yönetime iletildi." });
   } catch (error) {
     console.error("SPRINTOS LOGIN SUPPORT REQUEST", error);
     return NextResponse.json({ ok: false, message: "Talep gönderilemedi. Lütfen tekrar deneyin." }, { status: 500 });
