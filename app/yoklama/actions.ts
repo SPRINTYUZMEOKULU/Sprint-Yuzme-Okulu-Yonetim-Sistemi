@@ -33,6 +33,13 @@ type DailyAttendanceInput = {
   lessonDate: string;
 };
 
+type ClearAttendanceInput = {
+  studentId: string;
+  groupId: string;
+  scheduleId: string;
+  lessonDate: string;
+};
+
 type MonthlyAttendanceInput = {
   groupId: string;
   month: string;
@@ -589,6 +596,144 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         error instanceof Error
           ? `Yoklama kaydedilemedi: ${error.message}`
           : "Yoklama kaydedilirken beklenmeyen hata oluştu.",
+    };
+  }
+}
+
+export async function clearAttendance(input: ClearAttendanceInput) {
+  try {
+    const profile = await getAuthorizedProfile();
+    const supabase = await createClient();
+    const organizationId = profile.organization_id;
+
+    if (!organizationId) {
+      return { ok: false, message: "Organizasyon bilgisi bulunamadı." };
+    }
+
+    if (!input.studentId || !input.groupId || !input.scheduleId || !input.lessonDate) {
+      return { ok: false, message: "Öğrenci, grup, seans ve tarih bilgisi zorunludur." };
+    }
+
+    const { data: group, error: groupError } = await supabase
+      .from("training_groups")
+      .select("id,primary_coach_id")
+      .eq("organization_id", organizationId)
+      .eq("id", input.groupId)
+      .maybeSingle();
+
+    const { data: schedule, error: scheduleError } = await supabase
+      .from("lesson_schedules")
+      .select("id,coach_id")
+      .eq("organization_id", organizationId)
+      .eq("id", input.scheduleId)
+      .eq("group_id", input.groupId)
+      .maybeSingle();
+
+    if (groupError || scheduleError || !group || !schedule) {
+      return { ok: false, message: "Seçilen grup veya ders seansı bulunamadı." };
+    }
+
+    if (profile.role === "coach") {
+      const { data: coachStaff } = await supabase
+        .from("staff")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("auth_user_id", profile.id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!coachStaff?.id) {
+        return { ok: false, message: "Eğitmen personel kaydınız bulunamadı." };
+      }
+
+      const { data: staffAssignment } = await supabase
+        .from("lesson_staff_assignments")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("coach_id", coachStaff.id)
+        .eq("is_active", true)
+        .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+        .limit(1)
+        .maybeSingle();
+
+      const assignedDirectly =
+        schedule.coach_id === coachStaff.id ||
+        group.primary_coach_id === coachStaff.id ||
+        Boolean(staffAssignment?.id);
+
+      if (!assignedDirectly) {
+        return { ok: false, message: "Bu seans size atanmış değil." };
+      }
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("attendance_records")
+      .select("id,enrollment_id")
+      .eq("organization_id", organizationId)
+      .eq("student_id", input.studentId)
+      .eq("group_id", input.groupId)
+      .eq("schedule_id", input.scheduleId)
+      .eq("lesson_date", input.lessonDate)
+      .maybeSingle();
+
+    if (existingError) {
+      return { ok: false, message: `Yoklama kaydı okunamadı: ${existingError.message}` };
+    }
+
+    if (!existing?.id) {
+      return { ok: true, message: "Yoklama seçimi zaten temiz." };
+    }
+
+    const { error: deleteError } = await supabase
+      .from("attendance_records")
+      .delete()
+      .eq("organization_id", organizationId)
+      .eq("id", existing.id);
+
+    if (deleteError) {
+      return { ok: false, message: `Yoklama seçimi temizlenemedi: ${deleteError.message}` };
+    }
+
+    if (existing.enrollment_id) {
+      const syncResult = await syncEnrollmentUsedLessons({
+        supabase,
+        organizationId,
+        enrollmentIds: [existing.enrollment_id],
+      });
+
+      if (!syncResult.ok) {
+        return {
+          ok: false,
+          message: `Yoklama seçimi temizlendi ancak ders hakkı güncellenemedi. ${syncResult.message}`,
+        };
+      }
+    } else {
+      const { error: syncError } = await supabase.rpc("sync_scheduled_used_lessons", {
+        p_organization_id: organizationId,
+      });
+      if (syncError) {
+        return {
+          ok: false,
+          message: `Yoklama seçimi temizlendi ancak ders hakkı güncellenemedi: ${syncError.message}`,
+        };
+      }
+    }
+
+    revalidatePath("/yoklama");
+    revalidatePath("/ogrenciler");
+    revalidatePath("/");
+    revalidatePath("/veli-paneli");
+    revalidatePath("/veli-devam");
+    revalidatePath(`/ogrenciler/${input.studentId}`);
+
+    return { ok: true, message: "Yoklama seçimi temizlendi ve ders hakkı yeniden hesaplandı." };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? `Yoklama seçimi temizlenemedi: ${error.message}`
+          : "Yoklama seçimi temizlenirken beklenmeyen hata oluştu.",
     };
   }
 }
