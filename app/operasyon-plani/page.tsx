@@ -1157,6 +1157,7 @@ export default async function OperasyonPlaniPage({
         id: student.id,
         name: adSoyad(student),
         student_number: student.student_number || null,
+        age: ageOnDate(student.birth_date, selectedDate),
         level: student.swimming_level || null,
         group_id: membership?.group_id || null,
         group_name: group?.name || null,
@@ -3404,6 +3405,10 @@ export default async function OperasyonPlaniPage({
                                     >
                                       {student.student_number ||
                                         "Öğrenci No Yok"}
+                                      {" · "}
+                                      {ageOnDate(student.birth_date, selectedDate) !== null
+                                        ? `${ageOnDate(student.birth_date, selectedDate)} yaş`
+                                        : "Yaş bilgisi yok"}
                                     </span>
                                   </div>
 
