@@ -129,6 +129,7 @@ export default async function PaymentsPage({
       .select("*")
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
+      .eq("status", "active")
       .order("first_name", {
         ascending: true,
       }),
