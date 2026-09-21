@@ -102,8 +102,68 @@ function fmtBirthDate(value: string | null | undefined) {
   }
 }
 
+function ageFromBirthDate(
+  value: string | null | undefined,
+  referenceDate?: string | null | undefined
+) {
+  if (!value) return null;
+
+  const birthParts = value.slice(0, 10).split("-").map(Number);
+  if (birthParts.length !== 3 || birthParts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+
+  const reference = referenceDate ? new Date(referenceDate) : new Date();
+  if (Number.isNaN(reference.getTime())) return null;
+
+  const [birthYear, birthMonth, birthDay] = birthParts;
+  let age = reference.getFullYear() - birthYear;
+  const monthDelta = reference.getMonth() + 1 - birthMonth;
+
+  if (
+    monthDelta < 0 ||
+    (monthDelta === 0 && reference.getDate() < birthDay)
+  ) {
+    age -= 1;
+  }
+
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+function ageLabel(
+  value: string | null | undefined,
+  referenceDate?: string | null | undefined
+) {
+  const age = ageFromBirthDate(value, referenceDate);
+  return age === null ? "Belirtilmedi" : `${age} yaş`;
+}
+
 function yesNo(value: boolean | null | undefined) {
   return value ? "Evet ✓" : "Hayır";
+}
+
+function snapshotValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Evet ✓" : "Hayır";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function formatMoney(value: unknown) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 function contactLabel(value: string | null | undefined) {
@@ -602,6 +662,12 @@ export default function PreRegistrationCenter({
                     <Info label="Doğum Tarihi">
                       {fmtBirthDate(selected.birth_date)}
                     </Info>
+                    <Info label="Yaş">
+                      {ageLabel(
+                        selected.birth_date,
+                        selectedConsent?.accepted_at || selected.created_at
+                      )}
+                    </Info>
                     <Info label="Telefon">
                       {selected.phone || "Belirtilmedi"}
                     </Info>
@@ -1070,6 +1136,7 @@ export default function PreRegistrationCenter({
                   <div className="prePrintGrid">
                     <PrintInfo label="Ad Soyad">{selected.first_name} {selected.last_name}</PrintInfo>
                     <PrintInfo label="Doğum Tarihi">{fmtBirthDate(selected.birth_date)}</PrintInfo>
+                    <PrintInfo label="Yaş">{ageLabel(selected.birth_date, selectedConsent?.accepted_at || selected.created_at)}</PrintInfo>
                     <PrintInfo label="Telefon">{selected.phone || "Belirtilmedi"}</PrintInfo>
                     <PrintInfo label="Veli">{selected.guardian_name || "Yetişkin kayıt"}</PrintInfo>
                     <PrintInfo label="Veli Telefonu">{selected.guardian_phone || "Belirtilmedi"}</PrintInfo>
@@ -1224,11 +1291,33 @@ function SnapshotView({
           {snapshot.student?.first_name || "—"}{" "}
           {snapshot.student?.last_name || ""}
         </Info>
+        <Info label="Doğum Tarihi">
+          {fmtBirthDate(snapshot.student?.birth_date)}
+        </Info>
+        <Info label="Yaş">
+          {ageLabel(
+            snapshot.student?.birth_date,
+            snapshot.technical?.accepted_at
+          )}
+        </Info>
         <Info label="Telefon">
           {snapshot.student?.phone || "—"}
         </Info>
+        <Info label="Kayıt Türü">
+          {snapshot.registration_for === "adult"
+            ? "Yetişkin"
+            : snapshot.registration_for === "child"
+            ? "Çocuk"
+            : "—"}
+        </Info>
         <Info label="Veli">
           {snapshot.guardian?.full_name || "Yetişkin kayıt"}
+        </Info>
+        <Info label="Veli Telefonu">
+          {snapshot.guardian?.phone || "—"}
+        </Info>
+        <Info label="Kurs Türü">
+          {snapshot.course?.course_type || "—"}
         </Info>
         <Info label="Şube">
           {snapshot.course?.branch_name || "—"}
@@ -1238,6 +1327,15 @@ function SnapshotView({
         </Info>
         <Info label="Paket">
           {snapshot.course?.package_name || "—"}
+        </Info>
+        <Info label="Paket Ders Sayısı">
+          {snapshot.course?.package_lesson_count ?? "—"}
+        </Info>
+        <Info label="Paket Ücreti">
+          {snapshot.course?.package_price === null ||
+          snapshot.course?.package_price === undefined
+            ? "—"
+            : formatMoney(snapshot.course.package_price)}
         </Info>
         <Info label="Tercih Günleri">
           {snapshot.course?.preferred_days || "—"}
@@ -1252,6 +1350,39 @@ function SnapshotView({
           {contactLabel(snapshot.contact_request)}
         </Info>
       </div>
+
+      {Array.isArray(snapshot.custom_responses) &&
+        snapshot.custom_responses.some(
+          (item: any) =>
+            item?.value !== null &&
+            item?.value !== undefined &&
+            item?.value !== ""
+        ) && (
+          <div className="preSnapshot">
+            <h3>Formda Doldurulan Ek Bilgiler</h3>
+            <div className="preInfoGrid">
+              {snapshot.custom_responses
+                .filter(
+                  (item: any) =>
+                    item?.value !== null &&
+                    item?.value !== undefined &&
+                    item?.value !== ""
+                )
+                .map((item: any, index: number) => (
+                  <Info
+                    key={item?.field_id || item?.field_key || index}
+                    label={
+                      item?.field_label ||
+                      item?.field_key ||
+                      `Ek Bilgi ${index + 1}`
+                    }
+                  >
+                    {snapshotValue(item?.value)}
+                  </Info>
+                ))}
+            </div>
+          </div>
+        )}
 
       <div className="preNoteBox">
         <span>İlk Gönderilen Not</span>
@@ -1360,7 +1491,14 @@ function FormArchive({
                     {student?.student_number || "FORM KAYDI"}
                   </span>
                   <h3>{name}</h3>
-                  <p>{fmtDate(consent.accepted_at)}</p>
+                  <p>
+                    {fmtDate(consent.accepted_at)}
+                    {" · "}
+                    {ageLabel(
+                      snapshot?.student?.birth_date || student?.birth_date,
+                      consent.accepted_at
+                    )}
+                  </p>
                 </div>
 
                 <div className="preArchiveBadges">
