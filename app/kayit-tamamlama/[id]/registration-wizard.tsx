@@ -1159,6 +1159,56 @@ export default function RegistrationWizard({
 
   /*
    * ==========================================================
+   * YAŞ / KURS TÜRÜ UYARI KONTROLÜ
+   * ==========================================================
+   *
+   * 14 yaş ve üzeri için yetişkin, 14 yaş altı için çocuk
+   * programı önerilir. Bu yalnızca operasyonel uyarıdır;
+   * yönetici/personel seçimini engellemez.
+   */
+  const studentAge = useMemo(() => {
+    if (!student.birth_date) return null;
+    const [year, month, day] = String(student.birth_date)
+      .slice(0, 10)
+      .split("-")
+      .map(Number);
+    if (!year || !month || !day) return null;
+
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const birthdayPassed =
+      today.getMonth() + 1 > month ||
+      (today.getMonth() + 1 === month && today.getDate() >= day);
+
+    if (!birthdayPassed) age -= 1;
+    return age >= 0 && age <= 120 ? age : null;
+  }, [student.birth_date]);
+
+  const ageCourseWarning = useMemo(() => {
+    if (studentAge == null || !selectedGroup?.course_type) return "";
+
+    const courseType = selectedGroup.course_type
+      .toLocaleLowerCase("tr-TR")
+      .replaceAll("ı", "i");
+
+    const isAdultCourse =
+      courseType.includes("yetiskin") || courseType.includes("adult");
+    const isChildCourse =
+      courseType.includes("cocuk") || courseType.includes("child");
+
+    if (studentAge >= 14 && isChildCourse) {
+      return `${studentAge} yaşındaki kursiyer için yetişkin programı önerilir. Çocuk grubu seçimine devam edebilirsiniz; bu yalnızca bir uyarıdır.`;
+    }
+
+    if (studentAge < 14 && isAdultCourse) {
+      return `${studentAge} yaşındaki kursiyer için çocuk programı önerilir. Yetişkin grubu seçimine devam edebilirsiniz; bu yalnızca bir uyarıdır.`;
+    }
+
+    return "";
+  }, [studentAge, selectedGroup?.course_type]);
+
+  /*
+   * ==========================================================
    * ŞUBEYE GÖRE GRUP
    * ==========================================================
    */
@@ -2088,6 +2138,26 @@ _Antalya'nın En Köklü Yüzme Okulu_`
             />
 
           </label>
+
+          {ageCourseWarning ? (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                gridColumn: "1 / -1",
+                border: "1px solid #f2c46d",
+                background: "#fff8e8",
+                color: "#7a4a00",
+                borderRadius: 12,
+                padding: "11px 13px",
+                fontSize: 13,
+                fontWeight: 800,
+                lineHeight: 1.45,
+              }}
+            >
+              ⚠️ Yaş / kurs türü kontrolü: {ageCourseWarning}
+            </div>
+          ) : null}
 
           <label>
 
