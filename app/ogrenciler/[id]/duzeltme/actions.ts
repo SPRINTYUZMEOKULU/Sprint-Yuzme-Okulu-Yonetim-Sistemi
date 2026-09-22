@@ -311,9 +311,9 @@ export async function applyManagerCorrection(formData: FormData) {
   const totalLessons = baseTotalLessons + additionalLessons;
 
   const usedLessons = Math.max(0, Number(enrollment.used_lessons || 0));
-  if (!totalLessons || totalLessons < usedLessons) {
+  if (!totalLessons) {
     redirect(
-      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Toplam ders sayısı kullanılan ders sayısından (${usedLessons}) az olamaz.`)}`,
+      `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Toplam ders sayısı en az 1 olmalıdır.")}`,
     );
   }
   const plannedEndDate = calculatePlannedEndDate(
@@ -455,6 +455,34 @@ export async function applyManagerCorrection(formData: FormData) {
         `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt ek bilgileri düzeltilemedi: ${message}`)}`,
       );
     }
+  }
+
+  // Kullanılan ders sayısı, paket/program düzeltmesinden sonra eski paketin
+  // sayacına göre doğrulanmamalı. Merkezi tüketim motoru yeni başlangıç tarihi,
+  // seçili günler, seanslar ve kapanış istisnalarına göre doğru değeri yeniden hesaplar.
+  const recalculatedUsage = await supabase.rpc("scheduled_used_lessons", {
+    p_enrollment_id: enrollment.id,
+  });
+
+  if (!recalculatedUsage.error) {
+    const recalculatedUsedLessons = Math.min(
+      totalLessons,
+      Math.max(0, Number(recalculatedUsage.data || 0)),
+    );
+
+    const usageUpdate = await supabase
+      .from("student_enrollments")
+      .update({ used_lessons: recalculatedUsedLessons, updated_at: now })
+      .eq("organization_id", organizationId)
+      .eq("id", enrollment.id);
+
+    if (usageUpdate.error) {
+      redirect(
+        `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kullanılan ders sayısı yeniden hesaplanamadı: ${usageUpdate.error.message}`)}`,
+      );
+    }
+  } else {
+    console.error("MANAGER CORRECTION USED LESSON RECALC ERROR", recalculatedUsage.error);
   }
 
   const updatedEnrollmentResult = await supabase
