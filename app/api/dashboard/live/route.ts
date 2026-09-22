@@ -44,12 +44,14 @@ export async function GET() {
   const supabase = await createClient();
   const today = turkeyDateParts();
 
-  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
-    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,status").eq("organization_id", profile.organization_id).eq("status", "active"),
+    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,status").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
+    supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
+    supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
     supabase.from("students").select("id,first_name,last_name,birth_date,phone,guardian_phone,guardian_name,branch_id,status").eq("organization_id", profile.organization_id).eq("status", "active"),
     supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pending"),
     supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("cash_status", "handoff_pending"),
@@ -72,6 +74,14 @@ export async function GET() {
   const branchMap = new Map(branches.map((row) => [row.id, row.name]));
   const groupMap = new Map(groups.map((row) => [row.id, row.name]));
   const enrolledByGroup = new Map<string, Set<string>>();
+  const attendedEver = new Set((attendanceEverResult.data || []).map((row: any) => String(row.student_id)).filter(Boolean));
+  const transferStarted = new Set((transferStartedResult.data || []).map((row: any) => String(row.student_id)).filter(Boolean));
+  const latestEnrollmentByStudent = new Map<string, any>();
+
+  for (const enrollment of enrollments) {
+    const studentId = String(enrollment.student_id || "");
+    if (studentId && !latestEnrollmentByStudent.has(studentId)) latestEnrollmentByStudent.set(studentId, enrollment);
+  }
 
   for (const enrollment of enrollments) {
     if (!enrollment.group_id) continue;
@@ -134,6 +144,31 @@ export async function GET() {
 
   const pendingAttendance = sessions.filter((session) => !session.attendanceComplete).length;
 
+  // Başlayacak Kursiyerler merkeziyle aynı mantık: aktif kaydı olan, daha önce
+  // yoklaması bulunmayan ve eski aktarım başlangıcıyla işaretlenmemiş öğrencinin
+  // ilk aktif seansı bugünse ana sayfadaki Yapılacak İşlemler alanına eklenir.
+  const scheduleByGroup = new Map<string, any[]>();
+  for (const schedule of schedules) {
+    const groupId = String(schedule.group_id || "");
+    if (!groupId) continue;
+    const rows = scheduleByGroup.get(groupId) || [];
+    rows.push(schedule);
+    scheduleByGroup.set(groupId, rows);
+  }
+
+  const todayStartingStudents = students.filter((student) => {
+    const studentId = String(student.id);
+    if (attendedEver.has(studentId) || transferStarted.has(studentId)) return false;
+
+    const enrollment = latestEnrollmentByStudent.get(studentId);
+    if (!enrollment?.group_id) return false;
+    if (enrollment.start_date && String(enrollment.start_date) > today.iso) return false;
+
+    return (scheduleByGroup.get(String(enrollment.group_id)) || []).some(
+      (schedule) => Number(schedule.weekday) === today.weekday,
+    );
+  }).length;
+
   return NextResponse.json({
     ok: true,
     date: today.iso,
@@ -147,6 +182,7 @@ export async function GET() {
       pendingCash: cashResult.count || 0,
       openAlerts: alertsResult.count || 0,
       preRegistrations: preregResult.count || 0,
+      todayStartingStudents,
     },
   });
 }
