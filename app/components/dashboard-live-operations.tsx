@@ -38,6 +38,7 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
     pendingCash: number;
     openAlerts: number;
     preRegistrations: number;
+    todayStartingStudents: number;
   };
 };
 
@@ -71,7 +72,7 @@ function OperationPanel() {
 
   const actionCount = useMemo(() => {
     if (!data) return 0;
-    return data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts;
+    return data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents;
   }, [data]);
 
   async function celebrateBirthday(birthday: LiveData["birthdays"][number]) {
@@ -187,6 +188,7 @@ function OperationPanel() {
             {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i /><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git →</b></a>}
             {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i /><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git →</b></a>}
             {data.summary.openAlerts > 0 && <a href="/uyarilar" className="priorityRow urgent"><i /><div><strong>{data.summary.openAlerts} açık uyarı var</strong><span>Öncelikli işlemleri kontrol edin.</span></div><b>İşleme Git →</b></a>}
+            {data.summary.todayStartingStudents > 0 && <a href="/baslayacak-kursiyerler?filter=today#kursiyer-listesi" className="priorityRow info"><i /><div><strong>{data.summary.todayStartingStudents} kursiyer bugün başlayacak</strong><span>İlk dersine başlayacak kursiyerleri kontrol edin.</span></div><b>Aç →</b></a>}
             {data.summary.preRegistrations > 0 && <a href="/on-kayitlar" className="priorityRow info"><i /><div><strong>{data.summary.preRegistrations} ön kayıt takipte</strong><span>Geri dönüş bekleyen kayıtları görüntüleyin.</span></div><b>Aç →</b></a>}
             {actionCount === 0 && <div className="priorityRow success"><i /><div><strong>Operasyon düzenli</strong><span>Şu anda kritik bekleyen işlem görünmüyor.</span></div></div>}
           </div>
