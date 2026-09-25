@@ -11,10 +11,10 @@ const DAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", 
 const clean = (v: FormDataEntryValue | null, max = 200) => String(v || "").trim().slice(0, max);
 const time = (v: FormDataEntryValue | null) => clean(v, 5);
 
-function automaticName(branchName: string, weekdays: number[], startTime: string, courseType: string) {
+function automaticName(branchName: string, weekdays: number[], startTime: string, courseType: string, levelName?: string | null) {
   const dayText = [...weekdays].sort((a, b) => a - b).map((d) => DAYS[d]).filter(Boolean).join("-");
   const typeText = courseType === "Çocuk Yüzme Kursu" ? "Çocuk" : courseType === "Yetişkin Yüzme Kursu" ? "Yetişkin" : courseType === "Takım / Performans" ? "Takım" : courseType;
-  return [branchName, dayText, startTime, typeText].filter(Boolean).join(" · ");
+  return [branchName, dayText, startTime, typeText, levelName].filter(Boolean).join(" · ");
 }
 
 function refresh() {
@@ -30,7 +30,7 @@ export async function updateGroupMulti(formData: FormData) {
 
   const groupId = clean(formData.get("group_id"), 80);
   const branchId = clean(formData.get("branch_id"), 80);
-  const levelId = clean(formData.get("level_id"), 80) || null;
+  const levelIds = Array.from(new Set(formData.getAll("level_ids").map((v) => clean(v, 80)).filter(Boolean)));
   const coachId = clean(formData.get("primary_coach_id"), 80) || null;
   const capacity = Math.min(50, Math.max(1, Number(formData.get("capacity") || 6)));
   const description = clean(formData.get("description"), 500) || null;
@@ -45,10 +45,20 @@ export async function updateGroupMulti(formData: FormData) {
   if (!weekdays.length) throw new Error("En az bir ders günü seçmelisiniz.");
   if (!startTime || !endTime || endTime <= startTime) throw new Error("Ders saatlerini kontrol edin.");
 
-  const { data: existing, error: existingError } = await supabase.from("training_groups").select("id,course_type").eq("id", groupId).eq("organization_id", organizationId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase.from("training_groups").select("id,course_type,level_id").eq("id", groupId).eq("organization_id", organizationId).maybeSingle();
   if (existingError) throw existingError;
   if (!existing) throw new Error("Düzenlenecek grup bulunamadı.");
   if (!courseTypes.includes(existing.course_type)) throw new Error("Mevcut grup programı kaldırılamaz; grup geçmişini korumak için seçili bırakılmalıdır.");
+  if (existing.level_id && !levelIds.includes(existing.level_id)) throw new Error("Mevcut seviye kaldırılamaz; grup geçmişini korumak için seçili bırakılmalıdır.");
+  if (!levelIds.length && existing.level_id) levelIds.push(existing.level_id);
+
+  const { data: levelRows, error: levelsError } = levelIds.length
+    ? await supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).in("id", levelIds)
+    : { data: [], error: null };
+  if (levelsError) throw levelsError;
+  if (levelRows && levelRows.length !== levelIds.length) throw new Error("Seçilen seviyelerden biri bulunamadı.");
+  const levelNameById = new Map((levelRows || []).map((l) => [l.id, l.name]));
+  const currentLevelId = existing.level_id || levelIds[0] || null;
 
   const { data: branch, error: branchError } = await supabase.from("branches").select("id,name").eq("id", branchId).eq("organization_id", organizationId).eq("is_active", true).maybeSingle();
   if (branchError) throw branchError;
@@ -59,8 +69,8 @@ export async function updateGroupMulti(formData: FormData) {
     if (!coach) throw new Error("Seçilen eğitmen bulunamadı veya aktif değil.");
   }
 
-  const currentName = automaticName(branch.name, weekdays, startTime, existing.course_type);
-  const { error: updateError } = await supabase.from("training_groups").update({ branch_id: branchId, level_id: levelId, primary_coach_id: coachId, name: currentName, capacity, description, public_registration: publicRegistration }).eq("id", groupId).eq("organization_id", organizationId);
+  const currentName = automaticName(branch.name, weekdays, startTime, existing.course_type, currentLevelId ? levelNameById.get(currentLevelId) : null);
+  const { error: updateError } = await supabase.from("training_groups").update({ branch_id: branchId, level_id: currentLevelId, primary_coach_id: coachId, name: currentName, capacity, description, public_registration: publicRegistration }).eq("id", groupId).eq("organization_id", organizationId);
   if (updateError) throw updateError;
 
   const { error: deleteScheduleError } = await supabase.from("lesson_schedules").delete().eq("group_id", groupId).eq("organization_id", organizationId);
@@ -69,10 +79,12 @@ export async function updateGroupMulti(formData: FormData) {
   const { error: currentScheduleError } = await supabase.from("lesson_schedules").insert(currentSchedules);
   if (currentScheduleError) throw currentScheduleError;
 
-  const extraTypes = courseTypes.filter((type) => type !== existing.course_type);
+  const combinations = courseTypes.flatMap((courseType) =>
+    (levelIds.length ? levelIds : [null]).map((levelId) => ({ courseType, levelId }))
+  ).filter(({ courseType, levelId }) => !(courseType === existing.course_type && levelId === currentLevelId));
   const created: string[] = [];
-  for (const courseType of extraTypes) {
-    const name = automaticName(branch.name, weekdays, startTime, courseType);
+  for (const { courseType, levelId } of combinations) {
+    const name = automaticName(branch.name, weekdays, startTime, courseType, levelId ? levelNameById.get(levelId) : null);
     const { data: sameName } = await supabase.from("training_groups").select("id").eq("organization_id", organizationId).eq("name", name).eq("is_active", true).maybeSingle();
     if (sameName) continue;
 
@@ -85,6 +97,6 @@ export async function updateGroupMulti(formData: FormData) {
   }
 
   refresh();
-  const message = created.length ? `Grup güncellendi ve ${created.length} ek kurs programı aynı seansa eklendi.` : "Grup başarıyla güncellendi.";
+  const message = created.length ? `Grup güncellendi ve ${created.length} ek seviye/program grubu aynı seansa eklendi.` : "Grup başarıyla güncellendi.";
   redirect(`/gruplar?success=${encodeURIComponent(message)}`);
 }
