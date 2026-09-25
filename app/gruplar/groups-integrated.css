@@ -606,3 +606,287 @@
     align-self: flex-start;
   }
 }
+
+
+.sessionGroupToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 16px 0;
+  padding: 13px 14px;
+  border: 1px solid #dce7f4;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.sessionGroupToolbar > div {
+  min-width: 0;
+}
+
+.sessionGroupToolbar strong,
+.sessionGroupToolbar span {
+  display: block;
+}
+
+.sessionGroupToolbar strong {
+  color: #15355f;
+  font-size: 12px;
+}
+
+.sessionGroupToolbar span {
+  margin-top: 3px;
+  color: #7b899d;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.sessionAddGroupButton {
+  flex: 0 0 auto;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border: 1px solid #b8d3f8;
+  border-radius: 10px;
+  background: #edf5ff;
+  color: #1769e8;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sessionAddGroupButton span {
+  margin: 0;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sessionAddGroupDialog {
+  width: min(620px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 22px;
+  background: #fff;
+  color: #10213f;
+  box-shadow: 0 30px 90px rgba(3, 19, 45, 0.32);
+}
+
+.sessionAddGroupDialog::backdrop {
+  background: rgba(3, 15, 35, 0.66);
+  backdrop-filter: blur(5px);
+}
+
+.sessionAddGroupForm {
+  max-height: calc(100dvh - 28px);
+  display: flex;
+  flex-direction: column;
+}
+
+.sessionAddGroupHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 21px 23px;
+  background: linear-gradient(135deg, #082a58, #0d6bca);
+  color: #fff;
+}
+
+.sessionAddGroupHeader span {
+  color: #8ec5ff;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.sessionAddGroupHeader h2 {
+  margin: 6px 0 4px;
+  font-size: 22px;
+}
+
+.sessionAddGroupHeader p {
+  margin: 0;
+  color: #d9eaff;
+  font-size: 11px;
+}
+
+.sessionAddGroupClose {
+  width: 39px;
+  height: 39px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 11px;
+  background: rgba(255,255,255,.13);
+  color: #fff;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.sessionAddGroupBody {
+  padding: 21px 23px;
+  overflow-y: auto;
+}
+
+.sessionFixedInfo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 17px;
+}
+
+.sessionFixedInfo span {
+  padding: 11px 12px;
+  border: 1px solid #dce7f4;
+  border-radius: 11px;
+  background: #f8fbff;
+  color: #52647f;
+  font-size: 10px;
+}
+
+.sessionFixedInfo b {
+  display: block;
+  margin-bottom: 3px;
+  color: #17375f;
+  font-size: 10px;
+}
+
+.sessionAddGroupGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+}
+
+.sessionAddGroupGrid label {
+  color: #42536f;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.sessionAddGroupGrid input,
+.sessionAddGroupGrid select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 45px;
+  display: block;
+  margin-top: 6px;
+  padding: 11px 12px;
+  border: 1px solid #d8e2ef;
+  border-radius: 11px;
+  outline: none;
+  background: #fbfcff;
+  color: #13233f;
+  font: inherit;
+}
+
+.sessionAddGroupWide {
+  grid-column: 1 / -1;
+}
+
+.sessionAddGroupPublish {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #d6e7fd;
+  border-radius: 12px;
+  background: #f2f7ff;
+}
+
+.sessionAddGroupPublish input {
+  width: 18px;
+  height: 18px;
+  accent-color: #1769e8;
+}
+
+.sessionAddGroupPublish span {
+  display: flex;
+  flex-direction: column;
+}
+
+.sessionAddGroupPublish strong {
+  color: #17375f;
+  font-size: 11px;
+}
+
+.sessionAddGroupPublish small {
+  margin-top: 3px;
+  color: #71809a;
+  font-size: 9px;
+}
+
+.sessionAddGroupFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 15px 23px;
+  border-top: 1px solid #e7edf5;
+  background: #f8fafd;
+}
+
+.sessionAddGroupFooter button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 900;
+}
+
+.sessionAddGroupCancel {
+  border: 1px solid #d7e0ec;
+  background: #fff;
+  color: #344765;
+}
+
+.sessionAddGroupSave {
+  border: 0;
+  background: linear-gradient(135deg, #1774f0, #0754c6);
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .sessionGroupToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sessionAddGroupButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .sessionAddGroupDialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .sessionAddGroupHeader {
+    padding: 19px;
+  }
+
+  .sessionAddGroupBody {
+    padding: 17px;
+  }
+
+  .sessionFixedInfo,
+  .sessionAddGroupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sessionAddGroupWide {
+    grid-column: auto;
+  }
+
+  .sessionAddGroupFooter {
+    padding: 13px 17px;
+  }
+
+  .sessionAddGroupFooter button {
+    flex: 1;
+  }
+}
