@@ -66,6 +66,9 @@ export default function QuickAttendanceClient(p:Props){
 
  const total=groups.reduce((n,g)=>n+g.students.length,0);
  const marked=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[`${g.group.id}:${s.id}`]).length,0);
+ const presentCount=groups.reduce((n,g)=>n+g.students.filter(s=>{const st=statuses[`${g.group.id}:${s.id}`];return st==="present"||st==="compensation"}).length,0);
+ const absentCount=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[`${g.group.id}:${s.id}`]==="absent").length,0);
+ const excusedCount=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[`${g.group.id}:${s.id}`]==="excused").length,0);
 
  function setStatus(g:(typeof groups)[number],s:Student,status:"present"|"absent"|"excused"){
    const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const isComp=g.compensationIds.has(s.id);
@@ -100,6 +103,11 @@ export default function QuickAttendanceClient(p:Props){
        <select value={time} onChange={e=>setTime(e.target.value)} disabled={!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
      </div>
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işlendi</span></div>
+     <div className="qaSummary" aria-label="Yoklama özeti">
+       <div className="present"><strong>{presentCount}</strong><span>✓ Geldi</span></div>
+       <div className="absent"><strong>{absentCount}</strong><span>✕ Gelmedi</span></div>
+       <div className="excused"><strong>{excusedCount}</strong><span>○ İzinli</span></div>
+     </div>
    </section>
 
    {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=><section className="qaGroup" key={g.group.id}>
@@ -120,6 +128,7 @@ export default function QuickAttendanceClient(p:Props){
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}
      .qaTop{padding:14px;margin-bottom:10px}.qaTop small{font-size:9px;font-weight:900;color:#1769e0;letter-spacing:.12em}.qaTop h1{font-size:18px;margin:3px 0 10px}.qaSelectors{display:grid;grid-template-columns:1fr 1fr 110px;gap:7px}.qaSelectors input,.qaSelectors select{height:42px;border:1px solid #d7e2ed;border-radius:10px;background:#fff;padding:0 8px;font-size:12px}.qaProgress{display:flex;gap:6px;align-items:baseline;margin-top:9px}.qaProgress b{font-size:17px}.qaProgress span{font-size:10px;color:#72839a}
+     .qaSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:9px}.qaSummary>div{min-height:42px;border:1px solid #dfe7f0;border-radius:10px;padding:7px 8px;display:flex;align-items:center;justify-content:center;gap:6px;background:#f8fafc}.qaSummary strong{font-size:15px;line-height:1}.qaSummary span{font-size:9px;font-weight:900;white-space:nowrap}.qaSummary .present{background:#eef9f2;border-color:#c6e8d1;color:#14733a}.qaSummary .absent{background:#fff3f4;border-color:#f2c8ce;color:#b42333}.qaSummary .excused{background:#fff9eb;border-color:#eddca5;color:#8a6200}
      .qaGroup{margin:10px 0;overflow:hidden}.qaGroup header{padding:11px 12px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center;gap:10px}.qaGroup header div{display:grid;gap:2px}.qaGroup header b{font-size:13px}.qaGroup header span{font-size:9px;color:#7a8a9c}.qaGroup header button{border:1px solid #bad5f4;background:#f4f9ff;color:#1769d2;border-radius:9px;min-height:36px;padding:0 10px;font-size:10px;font-weight:900}
      .qaList{display:grid}.qaList article{padding:11px 12px;border-bottom:1px solid #edf1f5}.qaList article:last-child{border-bottom:0}.qaList article.last{background:#fffaf0}.qaList article.expired{background:#fff1f2}.qaStudent{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.qaStudent b{font-size:13px}.qaStudent span{font-size:9px;font-weight:850;color:#607287}.last .qaStudent span{color:#a56800}.expired .qaStudent span{color:#b42333}
      .qaButtons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.qaButtons button{min-height:42px;border:1px solid #d8e2ec;border-radius:10px;background:#fff;font-size:10px;font-weight:900;color:#53677e}.qaButtons button.on.present{background:#eaf9ef;border-color:#9bd8af;color:#14733a}.qaButtons button.on.absent{background:#fff0f2;border-color:#f1b6bf;color:#b42333}.qaButtons button.on.excused{background:#fff8e8;border-color:#ebd08b;color:#8a6200}.qaButtons button:disabled{opacity:.45}
