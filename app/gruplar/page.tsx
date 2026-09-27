@@ -105,21 +105,55 @@ function cleanTime(value?: string | null) {
 }
 
 function getScheduleSignature(schedules: ScheduleItem[]) {
-  return [...schedules]
-    .sort((a, b) => {
-      if (a.weekday !== b.weekday) {
-        return a.weekday - b.weekday;
-      }
+  const canonical = Array.from(
+    new Set(
+      schedules.map(
+        (schedule) =>
+          `${schedule.weekday}-${cleanTime(schedule.start_time)}-${cleanTime(
+            schedule.end_time
+          )}`
+      )
+    )
+  );
 
-      return String(a.start_time).localeCompare(String(b.start_time));
-    })
-    .map(
-      (schedule) =>
+  return canonical.sort((a, b) => a.localeCompare(b)).join("|");
+}
+
+function formatSchedulePlan(schedules: ScheduleItem[]) {
+  if (!schedules.length) return "Saat tanımlanmamış";
+
+  const unique = Array.from(
+    new Map(
+      schedules.map((schedule) => [
         `${schedule.weekday}-${cleanTime(schedule.start_time)}-${cleanTime(
           schedule.end_time
-        )}`
-    )
-    .join("|");
+        )}`,
+        schedule,
+      ])
+    ).values()
+  );
+
+  const byTime = new Map<string, number[]>();
+
+  for (const schedule of unique) {
+    const timeKey = `${cleanTime(schedule.start_time)}–${cleanTime(
+      schedule.end_time
+    )}`;
+    const days = byTime.get(timeKey) || [];
+    if (!days.includes(schedule.weekday)) days.push(schedule.weekday);
+    byTime.set(timeKey, days);
+  }
+
+  return Array.from(byTime.entries())
+    .map(([timeText, weekdays]) => {
+      const dayText = [...weekdays]
+        .sort((a, b) => a - b)
+        .map((weekday) => dayNames[weekday] || "")
+        .filter(Boolean)
+        .join(" • ");
+      return `${dayText} · ${timeText}`;
+    })
+    .join(" / ");
 }
 
 function courseTypeLabel(courseType: string) {
@@ -514,6 +548,7 @@ export default async function GroupsPage({
       .sort((a, b) => a - b)
       .map((weekday) => dayNames[weekday] || "")
       .filter(Boolean);
+    const sessionScheduleText = formatSchedulePlan(session.schedules);
 
     const sessionStudentIds = new Set<string>();
     let sessionPreRegistrationCount = 0;
@@ -554,15 +589,7 @@ export default async function GroupsPage({
             <h3>{session.branchName}</h3>
 
             <p className="sessionPrimaryLine">
-              {sessionDays.length
-                ? sessionDays.join(" • ")
-                : "Gün tanımlanmamış"}
-              {" · "}
-              {firstSchedule
-                ? `${cleanTime(firstSchedule.start_time)}–${cleanTime(
-                    firstSchedule.end_time
-                  )}`
-                : "Saat tanımlanmamış"}
+              {sessionScheduleText}
             </p>
           </div>
 
@@ -684,14 +711,13 @@ export default async function GroupsPage({
                               <div>
                                 <strong>{bucket.name}</strong>
                                 <small>
-                                  {bucketDays.length
-                                    ? bucketDays.join(" • ")
-                                    : sessionDays.join(" • ") || "Seans günleri"}
-                                  {firstSchedule
-                                    ? ` · ${cleanTime(
-                                        firstSchedule.start_time
-                                      )}–${cleanTime(firstSchedule.end_time)}`
-                                    : ""}
+                                  {formatSchedulePlan(
+                                    (scheduleMap.get(group.id) || []).filter(
+                                      (schedule) =>
+                                        !bucket.weekdays.size ||
+                                        bucket.weekdays.has(schedule.weekday)
+                                    )
+                                  )}
                                 </small>
                               </div>
                             </div>
