@@ -133,7 +133,9 @@ function bindFinanceActions(target: HTMLElement) {
 function syncAlertCount() {
   const head = document.querySelector<HTMLElement>(".smartAlertHead > strong");
   if (!head) return;
-  const count = document.querySelectorAll(".smartAlertGrid > a").length;
+  const count = Array.from(
+    document.querySelectorAll<HTMLElement>(".smartAlertGrid > a"),
+  ).filter((item) => item.dataset.financeAlertHidden !== "1").length;
   head.textContent = count ? `${count} işlem bekliyor` : "✓ Her şey yolunda";
 }
 
@@ -157,7 +159,10 @@ function normalizePaymentAlert({
   );
 
   if (remaining <= 0) {
-    paymentAlerts.forEach((item) => item.remove());
+    paymentAlerts.forEach((item) => {
+      item.style.display = "none";
+      item.dataset.financeAlertHidden = "1";
+    });
     syncAlertCount();
     return;
   }
@@ -176,7 +181,12 @@ function normalizePaymentAlert({
   if (title) title.textContent = overdue ? "Ödeme vadesi geçti" : "Ödeme bekliyor";
   if (description) description.textContent = statusMessage;
 
-  paymentAlerts.slice(1).forEach((item) => item.remove());
+  primary.style.removeProperty("display");
+  delete primary.dataset.financeAlertHidden;
+  paymentAlerts.slice(1).forEach((item) => {
+    item.style.display = "none";
+    item.dataset.financeAlertHidden = "1";
+  });
   syncAlertCount();
 }
 
