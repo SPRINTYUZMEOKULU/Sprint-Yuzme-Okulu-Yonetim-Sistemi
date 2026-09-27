@@ -68,7 +68,12 @@ export default function StudentPaymentStatusEnhancer() {
         const headTotal = panel.querySelector<HTMLElement>(".panelHead > strong");
         if (headTotal) headTotal.textContent = `Toplam Tahsilat: ${money(received)}`;
 
-        panel.querySelectorAll<HTMLElement>(".empty").forEach((node) => node.remove());
+        // React'in oluşturduğu düğümleri DOM'dan silmek sonraki render/hydration
+        // sırasında removeChild/NotFoundError türü istemci çökmelerine neden olabilir.
+        panel.querySelectorAll<HTMLElement>(".empty").forEach((node) => {
+          node.style.display = "none";
+          node.dataset.paymentStatusHidden = "1";
+        });
 
         let live = panel.querySelector<HTMLElement>("[data-payment-status-live='1']");
         if (!live) {
