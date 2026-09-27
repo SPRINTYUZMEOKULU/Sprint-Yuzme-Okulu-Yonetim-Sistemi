@@ -64,11 +64,28 @@ export default function PaymentInfoShortcut() {
     `;
     if (!document.querySelector("style[data-secure-payment-inline='true']")) document.head.appendChild(style);
 
+    // React/Next tarafından yönetilen tüm body ağacını MutationObserver ile sürekli
+    // izlemek öğrenci dosyasında yeniden render sırasında DOM çakışmasına yol açabiliyor.
+    // Bunun yerine kısa süreli, sınırlı ve idempotent denemeler yapıyoruz.
+    let disposed = false;
+    let attempts = 0;
     enhancePaymentAreas();
-    const observer = new MutationObserver(enhancePaymentAreas);
-    observer.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setInterval(() => {
+      if (disposed) return;
+      attempts += 1;
+      enhancePaymentAreas();
+      if (
+        attempts >= 8 ||
+        (document.querySelector(".securePaymentInline") &&
+          document.querySelector(".securePaymentFinance"))
+      ) {
+        window.clearInterval(timer);
+      }
+    }, 250);
+
     return () => {
-      observer.disconnect();
+      disposed = true;
+      window.clearInterval(timer);
       document.querySelectorAll(".securePaymentInline,.securePaymentFinance").forEach((node) => node.remove());
       document.querySelector("style[data-secure-payment-inline='true']")?.remove();
     };
