@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { bulkTransferStudents } from "../bulk-actions";
 import { createStudentPayment } from "../../odemeler/actions";
-import { matchingGroupForSessions } from "@/lib/scheduling/group-day-match";
+import { matchingGroupForActiveDays, matchingGroupForSessions } from "@/lib/scheduling/group-day-match";
 
 type BranchOption = {
   id: string;
@@ -45,6 +45,7 @@ type Props = {
     group_name?: string | null;
   };
   enrollmentId?: string | null;
+  activeWeekdays?: number[];
   remainingPayment?: number;
   totalReceived?: number;
   paymentDueDate?: string | null;
@@ -155,6 +156,7 @@ function FileIcon({ name }: { name: FileIconName }) {
 export default function StudentFileOperations({
   student,
   enrollmentId,
+  activeWeekdays = [],
   remainingPayment = 0,
   totalReceived = 0,
   paymentDueDate,
@@ -178,7 +180,9 @@ export default function StudentFileOperations({
   const [targetGroupId, setTargetGroupId] = useState("");
   const [targetScheduleIds, setTargetScheduleIds] = useState<string[]>([]);
   const [effectiveDate, setEffectiveDate] = useState(
-    new Date().toISOString().slice(0, 10),
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date()),
   );
 
   const [lessonCount, setLessonCount] = useState("1");
@@ -255,6 +259,22 @@ export default function StudentFileOperations({
   const matchingProgram = matchingGroupForSessions(
     targetBranchId, targetGroupId, targetScheduleIds, groups, schedules,
   );
+
+  function openTransfer() {
+    setResult("");
+    const branchId = student.branch_id || "";
+    const currentGroupId = student.group_id || "";
+    const match = matchingGroupForActiveDays(
+      branchId, currentGroupId, activeWeekdays, groups, schedules,
+    );
+    setTargetBranchId(branchId);
+    setTargetGroupId(match?.groupId || currentGroupId);
+    setTargetScheduleIds(match?.scheduleIds || schedules
+      .filter((schedule) => schedule.group_id === currentGroupId &&
+        activeWeekdays.includes(Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)))
+      .map((schedule) => schedule.id));
+    setPanel("transfer");
+  }
 
   const fullName =
     `${student.first_name || ""} ${student.last_name || ""}`.trim();
@@ -510,10 +530,7 @@ export default function StudentFileOperations({
           <button
             type="button"
             className="blue"
-            onClick={() => {
-              setResult("");
-              setPanel("transfer");
-            }}
+            onClick={openTransfer}
           >
             <FileIcon name="transfer" /> Grup / Şube Değiştir
           </button>

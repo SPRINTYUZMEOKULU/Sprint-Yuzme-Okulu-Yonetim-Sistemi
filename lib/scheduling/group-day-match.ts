@@ -52,3 +52,36 @@ export function matchingGroupForSessions(
   ));
   return mapped.every(Boolean) ? { groupId: target.id, scheduleIds: mapped.map((schedule) => schedule!.id) } : null;
 }
+
+export function matchingGroupForActiveDays(
+  branchId: string,
+  currentGroupId: string,
+  activeDays: number[],
+  groups: Group[],
+  schedules: Schedule[],
+) {
+  const days = dayKey(activeDays.map(isoDay));
+  const current = groups.find((group) => group.id === currentGroupId);
+  if (!current || !days || namedDays(current.name) === days) return null;
+  const reference = schedules.filter((schedule) =>
+    schedule.group_id === currentGroupId && activeDays.includes(isoDay(schedule.weekday)),
+  );
+  if (!reference.length) return null;
+  const times = [...new Set(reference.map((schedule) => String(schedule.start_time || "").slice(0, 5)))];
+  if (times.length !== 1) return null;
+  const candidates = groups.filter((group) =>
+    group.id !== currentGroupId && group.branch_id === branchId &&
+    group.course_type === current.course_type && namedDays(group.name) === days,
+  ).map((group) => ({
+    groupId: group.id,
+    sessions: schedules.filter((schedule) => schedule.group_id === group.id &&
+      String(schedule.start_time || "").slice(0, 5) === times[0] &&
+      activeDays.includes(isoDay(schedule.weekday))),
+  })).filter((candidate) =>
+    dayKey(candidate.sessions.map((session) => isoDay(session.weekday))) === days &&
+    candidate.sessions.length === new Set(activeDays).size,
+  );
+  return candidates.length === 1
+    ? { groupId: candidates[0].groupId, scheduleIds: candidates[0].sessions.map((session) => session.id) }
+    : null;
+}

@@ -137,13 +137,17 @@ export default function CorrectionForm({
     String(enrollment?.package_id || student?.preferred_package_id || ""),
   );
   const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>(() =>
-    schedules
-      .filter(
-        (s) =>
-          s.group_id === initialGroupId &&
-          initialIsoDays.includes(normalizeIsoWeekday(s.weekday)),
-      )
-      .map((s) => s.id),
+    (() => {
+      const matching = schedules.filter((s) =>
+        s.group_id === initialGroupId &&
+        initialIsoDays.includes(normalizeIsoWeekday(s.weekday)),
+      );
+      const availableDays = new Set(matching.map((s) => normalizeIsoWeekday(s.weekday)));
+      // Do not silently turn an existing three-day plan into a one-day plan.
+      return availableDays.size === new Set(initialIsoDays).size
+        ? matching.map((s) => s.id)
+        : [];
+    })(),
   );
   const [totalLessons, setTotalLessons] = useState(
     String(enrollment?.total_lessons || ""),
@@ -446,6 +450,11 @@ export default function CorrectionForm({
             <strong>Ders gün / seansları</strong>
             <span>En az bir seans seçilmelidir.</span>
           </div>
+          {initialIsoDays.length && !selectedScheduleIds.length && groupId === initialGroupId ? (
+            <div className="emptySchedules" role="alert">
+              Aktif katılım günleri bu gruptaki seanslarla uyuşmuyor. Günleri korumak için önce uygun grubu seçin.
+            </div>
+          ) : null}
           {visibleSchedules.length ? (
             <div className="scheduleChoices">
               {visibleSchedules.map((schedule) => {

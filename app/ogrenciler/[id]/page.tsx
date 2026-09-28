@@ -632,16 +632,21 @@ export default async function StudentFile({
       ? enrollment.lesson_weekdays.length
       : null);
 
-  // A training group's name is a shared template. A student's selected days
-  // can differ from that template, so the active file must describe the plan.
-  const activeGroupName = (() => {
-    const name = String(groupInfo?.name || "");
-    if (!name || attendanceDays === "—") return name;
-    const dayPattern = /(?<!\p{L})(?:Pazartesi|Çarşamba|Perşembe|Cumartesi|Salı|Cuma|Pazar)(?:\s*[-–/]\s*(?:Pazartesi|Çarşamba|Perşembe|Cumartesi|Salı|Cuma|Pazar))*(?!\p{L})/iu;
-    return dayPattern.test(name)
-      ? name.replace(dayPattern, attendanceDays.replaceAll(" • ", "-"))
-      : name;
-  })();
+  const activeGroupName = String(groupInfo?.name || "");
+  const groupWords = new Set(
+    (activeGroupName.match(/[A-Za-zÇĞİÖŞÜçğıöşü]+/g) || [])
+      .map((word) => word.toLocaleLowerCase("tr-TR")),
+  );
+  const groupDays = Object.entries(isoDays)
+    .filter(([, day]) => groupWords.has(day.toLocaleLowerCase("tr-TR")))
+    .map(([day]) => Number(day)).sort();
+  const planDays = Array.isArray(attendancePlan?.selected_weekdays)
+    ? attendancePlan.selected_weekdays.map(Number).sort()
+    : Array.isArray(enrollment?.lesson_weekdays)
+      ? enrollment.lesson_weekdays.map((day: number) => day === 0 ? 7 : day).sort()
+      : [];
+  const programMismatch = Boolean(groupDays.length && planDays.length &&
+    groupDays.join(",") !== planDays.join(","));
 
   /*
    * =========================================================
@@ -748,6 +753,7 @@ export default async function StudentFile({
             <span>{branchInfo?.name || "Şube atanmadı"}</span>
 
             <span>{activeGroupName || "Grup atanmadı"}</span>
+            {programMismatch ? <span>Katılım: {attendanceDays}</span> : null}
           </div>
         </div>
 
@@ -774,6 +780,7 @@ export default async function StudentFile({
           group_name: activeGroupName || null,
         }}
         enrollmentId={enrollment?.id ?? null}
+        activeWeekdays={planDays}
         totalReceived={activeEnrollmentTotalReceived}
         remainingPayment={activeEnrollmentRemainingPayment}
         paymentDueDate={fmtDate(
@@ -783,6 +790,12 @@ export default async function StudentFile({
         groups={operationGroups}
         schedules={operationSchedules}
       />
+
+      {programMismatch ? (
+        <div className="notice errorNotice" role="status">
+          Grup adı ile aktif katılım günleri farklı. Grup / Şube Değiştir bölümünde uygun grubu kontrol edip kaydedin.
+        </div>
+      ) : null}
 
       {query.saved === "registration" ? (
         <div className="notice successNotice" role="status" aria-live="polite">
