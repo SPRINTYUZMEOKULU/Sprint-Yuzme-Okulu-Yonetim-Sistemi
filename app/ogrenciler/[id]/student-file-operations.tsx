@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { bulkTransferStudents } from "../bulk-actions";
 import { createStudentPayment } from "../../odemeler/actions";
+import { matchingGroupForSessions } from "@/lib/scheduling/group-day-match";
 
 type BranchOption = {
   id: string;
@@ -251,6 +252,10 @@ export default function StudentFileOperations({
     [schedules, targetGroupId],
   );
 
+  const matchingProgram = matchingGroupForSessions(
+    targetBranchId, targetGroupId, targetScheduleIds, groups, schedules,
+  );
+
   const fullName =
     `${student.first_name || ""} ${student.last_name || ""}`.trim();
 
@@ -345,8 +350,8 @@ export default function StudentFileOperations({
       const response = await bulkTransferStudents({
         studentIds: [student.id],
         targetBranchId,
-        targetGroupId,
-        targetScheduleIds,
+        targetGroupId: matchingProgram?.groupId || targetGroupId,
+        targetScheduleIds: matchingProgram?.scheduleIds || targetScheduleIds,
         effectiveDate,
         prepareMessages: true,
         updateAttendancePlans: true,
@@ -762,6 +767,10 @@ export default function StudentFileOperations({
                       );
                     })}
                   </div>
+
+                  {matchingProgram ? (
+                    <p role="status">Seçilen günler kaydedilirken {groups.find((group) => group.id === matchingProgram.groupId)?.name} grubuyla otomatik eşleştirilecek.</p>
+                  ) : null}
 
                   <label>
                     <span>Başlangıç Tarihi</span>

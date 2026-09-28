@@ -37,7 +37,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     supabase.from("student_enrollments").select("*").eq("organization_id", organizationId).eq("student_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("student_attendance_plans").select("*").eq("organization_id", organizationId).eq("student_id", id).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("branches").select("id,name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
-    supabase.from("training_groups").select("id,name,branch_id").eq("organization_id", organizationId).eq("is_active", true).order("name"),
+    supabase.from("training_groups").select("id,name,branch_id,course_type").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("course_packages").select("id,name,lesson_count,price").eq("organization_id", organizationId).order("name"),
     supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id", organizationId).eq("is_active", true).order("weekday").order("start_time"),
     supabase.from("student_payments").select("id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,cash_handover_status,cancelled_at").eq("organization_id", organizationId).eq("student_id", id).order("received_at", { ascending: false }),

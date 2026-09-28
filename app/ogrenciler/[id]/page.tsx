@@ -449,15 +449,15 @@ export default async function StudentFile({
    * =========================================================
    * GRUP
    * Öncelik:
-   * membership.group_id
    * enrollment.group_id
+   * membership.group_id
    * attendancePlan.group_id
    * =========================================================
    */
 
   const groupId =
-    membership?.group_id ??
     enrollment?.group_id ??
+    membership?.group_id ??
     attendancePlan?.group_id ??
     null;
 
@@ -632,6 +632,17 @@ export default async function StudentFile({
       ? enrollment.lesson_weekdays.length
       : null);
 
+  // A training group's name is a shared template. A student's selected days
+  // can differ from that template, so the active file must describe the plan.
+  const activeGroupName = (() => {
+    const name = String(groupInfo?.name || "");
+    if (!name || attendanceDays === "—") return name;
+    const dayPattern = /(?<!\p{L})(?:Pazartesi|Çarşamba|Perşembe|Cumartesi|Salı|Cuma|Pazar)(?:\s*[-–/]\s*(?:Pazartesi|Çarşamba|Perşembe|Cumartesi|Salı|Cuma|Pazar))*(?!\p{L})/iu;
+    return dayPattern.test(name)
+      ? name.replace(dayPattern, attendanceDays.replaceAll(" • ", "-"))
+      : name;
+  })();
+
   /*
    * =========================================================
    * UYARI
@@ -736,7 +747,7 @@ export default async function StudentFile({
 
             <span>{branchInfo?.name || "Şube atanmadı"}</span>
 
-            <span>{groupInfo?.name || "Grup atanmadı"}</span>
+            <span>{activeGroupName || "Grup atanmadı"}</span>
           </div>
         </div>
 
@@ -760,7 +771,7 @@ export default async function StudentFile({
           branch_id: branchInfo?.id ?? student.branch_id ?? null,
           branch_name: branchInfo?.name ?? null,
           group_id: groupInfo?.id ?? null,
-          group_name: groupInfo?.name ?? null,
+          group_name: activeGroupName || null,
         }}
         enrollmentId={enrollment?.id ?? null}
         totalReceived={activeEnrollmentTotalReceived}
@@ -777,7 +788,7 @@ export default async function StudentFile({
         <div className="notice successNotice" role="status" aria-live="polite">
           <strong>✓ Kayıt kesinleşti.</strong> {student.first_name}{" "}
           {student.last_name} aktif öğrenci kaydına alındı
-          {groupInfo?.name ? ` ve ${groupInfo.name} grubuna aktarıldı` : ""}.
+          {activeGroupName ? ` ve ${activeGroupName} grubuna aktarıldı` : ""}.
           Ders planı ve kayıt bilgileri başarıyla oluşturuldu.
         </div>
       ) : query.saved ? (
@@ -974,7 +985,7 @@ export default async function StudentFile({
 
             <div>
               <span>Grup</span>
-              <strong>{groupInfo?.name || "—"}</strong>
+              <strong>{activeGroupName || "—"}</strong>
             </div>
 
             <div>

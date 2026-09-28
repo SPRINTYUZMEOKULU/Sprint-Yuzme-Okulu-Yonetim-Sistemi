@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { applyManagerCorrection, saveStudentIdentity } from "./actions";
+import { matchingGroupForSessions } from "@/lib/scheduling/group-day-match";
 
 type Branch = { id: string; name: string };
-type Group = { id: string; name: string; branch_id: string | null };
+type Group = { id: string; name: string; branch_id: string | null; course_type?: string | null };
 type Package = {
   id: string;
   name: string;
@@ -160,6 +161,18 @@ export default function CorrectionForm({
     () => schedules.filter((s) => s.group_id === groupId),
     [schedules, groupId],
   );
+  const matchingProgram = matchingGroupForSessions(
+    branchId, groupId, selectedScheduleIds, groups, schedules,
+  );
+
+  async function submitCorrection(formData: FormData) {
+    if (matchingProgram) {
+      formData.set("group_id", matchingProgram.groupId);
+      formData.delete("schedule_ids");
+      matchingProgram.scheduleIds.forEach((id) => formData.append("schedule_ids", id));
+    }
+    await applyManagerCorrection(formData);
+  }
   const selectedPackage = packages.find((p) => p.id === packageId) || null;
   const selectedWeekdays = useMemo(
     () =>
@@ -190,7 +203,7 @@ export default function CorrectionForm({
   }
 
   return (
-    <form action={applyManagerCorrection} className="correctionForm">
+    <form action={submitCorrection} className="correctionForm">
       <input type="hidden" name="student_id" value={student.id} />
 
       <section className="correctionSection">
@@ -468,6 +481,9 @@ export default function CorrectionForm({
               Seçili grupta aktif ders seansı bulunamadı.
             </div>
           )}
+          {matchingProgram ? (
+            <p role="status">Seçilen günler kaydedilirken {groups.find((group) => group.id === matchingProgram.groupId)?.name} grubuyla otomatik eşleştirilecek.</p>
+          ) : null}
         </div>
       </section>
 
