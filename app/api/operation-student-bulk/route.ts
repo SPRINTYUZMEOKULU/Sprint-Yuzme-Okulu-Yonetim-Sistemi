@@ -56,10 +56,9 @@ export async function POST(request: NextRequest) {
 
     const { data: levelRow, error: levelLookupError } = await supabase
       .from("swimming_levels")
-      .select("id,name")
+      .select("id,name,is_active")
       .eq("organization_id", organizationId)
       .ilike("name", level)
-      .eq("is_active", true)
       .limit(1)
       .maybeSingle();
 
@@ -68,6 +67,24 @@ export async function POST(request: NextRequest) {
     }
 
     let canonicalLevel = levelRow;
+    if (canonicalLevel && canonicalLevel.is_active === false) {
+      const { data: reactivatedLevel, error: reactivateLevelError } = await supabase
+        .from("swimming_levels")
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq("id", canonicalLevel.id)
+        .eq("organization_id", organizationId)
+        .select("id,name,is_active")
+        .single();
+
+      if (reactivateLevelError || !reactivatedLevel) {
+        return NextResponse.json(
+          { error: reactivateLevelError?.message || "Seviye kaydı aktifleştirilemedi." },
+          { status: 500 },
+        );
+      }
+      canonicalLevel = reactivatedLevel;
+    }
+
     if (!canonicalLevel) {
       const { data: createdLevel, error: createLevelError } = await supabase
         .from("swimming_levels")
@@ -77,7 +94,7 @@ export async function POST(request: NextRequest) {
           is_active: true,
           updated_at: new Date().toISOString(),
         })
-        .select("id,name")
+        .select("id,name,is_active")
         .single();
 
       if (createLevelError || !createdLevel) {
