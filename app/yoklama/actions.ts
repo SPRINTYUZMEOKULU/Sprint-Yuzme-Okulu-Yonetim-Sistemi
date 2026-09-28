@@ -278,16 +278,30 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         staffAssignment = assignmentResult.data;
       }
 
+      const recordStudentIds = uniqueStrings(input.records.map((record) => record.studentId));
+      let assignedStudentIds = new Set<string>();
+      if (coachIds.length && recordStudentIds.length) {
+        const { data: studentAssignments } = await supabase
+          .from("lesson_student_assignments")
+          .select("student_id")
+          .eq("organization_id", organizationId)
+          .eq("schedule_id", input.scheduleId)
+          .in("coach_id", coachIds)
+          .eq("is_active", true)
+          .in("student_id", recordStudentIds);
+        assignedStudentIds = new Set((studentAssignments || []).map((item: any) => String(item.student_id)));
+      }
+
       const assignedDirectly =
         (schedule.coach_id ? coachIds.includes(schedule.coach_id) : false) ||
         (group.primary_coach_id ? coachIds.includes(group.primary_coach_id) : false) ||
         Boolean(staffAssignment?.id);
 
-      if (!assignedDirectly) {
+      if (!assignedDirectly && assignedStudentIds.size !== recordStudentIds.length) {
         return {
           ok: false,
           count: 0,
-          message: "Bu seans size atanmış değil. Yalnızca kendi grup ve seanslarınızın yoklamasını alabilirsiniz.",
+          message: "Bu seans veya seçili öğrenciler size atanmış değil. Yalnızca kendi öğrenci, grup ve seanslarınızın yoklamasını alabilirsiniz.",
         };
       }
     }
