@@ -54,14 +54,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Seviye seçilmelidir." }, { status: 400 });
     }
 
+    const { data: levelRow, error: levelLookupError } = await supabase
+      .from("swimming_levels")
+      .select("id,name")
+      .eq("organization_id", organizationId)
+      .ilike("name", level)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (levelLookupError) {
+      return NextResponse.json({ error: levelLookupError.message }, { status: 500 });
+    }
+
+    let canonicalLevel = levelRow;
+    if (!canonicalLevel) {
+      const { data: createdLevel, error: createLevelError } = await supabase
+        .from("swimming_levels")
+        .insert({
+          organization_id: organizationId,
+          name: level,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        })
+        .select("id,name")
+        .single();
+
+      if (createLevelError || !createdLevel) {
+        return NextResponse.json(
+          { error: createLevelError?.message || "Seviye kaydı oluşturulamadı." },
+          { status: 500 },
+        );
+      }
+      canonicalLevel = createdLevel;
+    }
+
     const { error } = await supabase
       .from("students")
-      .update({ swimming_level: level })
+      .update({ swimming_level: canonicalLevel.name })
       .eq("organization_id", organizationId)
       .in("id", validIds);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const { error: membershipLevelError } = await supabase
+      .from("student_group_memberships")
+      .update({
+        level_id: canonicalLevel.id,
+      })
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .in("student_id", validIds);
+
+    if (membershipLevelError) {
+      return NextResponse.json({ error: membershipLevelError.message }, { status: 500 });
     }
 
     await supabase.from("student_timeline_events").insert(
@@ -70,12 +118,18 @@ export async function POST(request: NextRequest) {
         student_id: studentId,
         event_type: "level_updated",
         title: "Yüzme seviyesi güncellendi",
-        description: level,
+        description: canonicalLevel.name,
         created_by: profile.id,
       })),
     );
 
-    return NextResponse.json({ ok: true, updated: validIds.length, action: "level" });
+    return NextResponse.json({
+      ok: true,
+      updated: validIds.length,
+      action: "level",
+      level_id: canonicalLevel.id,
+      level: canonicalLevel.name,
+    });
   }
 
   if (action === "coach") {
