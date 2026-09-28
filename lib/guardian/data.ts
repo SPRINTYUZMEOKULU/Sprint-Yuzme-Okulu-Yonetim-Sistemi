@@ -136,8 +136,19 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     const { data } = await admin.from("course_packages").select("*").eq("organization_id", profile.organization_id).eq("id", enrollment.package_id).maybeSingle();
     coursePackage = data || null;
   }
-  if (group?.primary_coach_id) {
-    const { data } = await admin.from("profiles").select("id,full_name").eq("organization_id", profile.organization_id).eq("id", group.primary_coach_id).maybeSingle();
+  const { data: directCoachAssignment } = await admin
+    .from("lesson_student_assignments")
+    .select("coach_id")
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", selected.id)
+    .eq("is_active", true)
+    .not("coach_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+
+  const resolvedCoachId = directCoachAssignment?.coach_id || group?.primary_coach_id || null;
+  if (resolvedCoachId) {
+    const { data } = await admin.from("profiles").select("id,full_name").eq("organization_id", profile.organization_id).eq("id", resolvedCoachId).maybeSingle();
     coach = data || null;
   }
   if (group?.id) {
