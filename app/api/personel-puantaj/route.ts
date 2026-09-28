@@ -105,34 +105,49 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
   const branchMap = new Map((branches || []).map((b) => [String(b.id), b]));
   const groupMap = new Map((groups || []).map((g) => [String(g.id), g]));
   const staffMap = new Map((staffRows || []).map((s) => [String(s.id), s]));
+  // Operasyon Planı geçmişte profile.id, puantaj ise staff.id kullanabildi.
+  // Aynı eğitmeni her iki kimlikle de çözerek tek personel kaydına bağlıyoruz.
+  const staffIdentityMap = new Map<string, any>();
+  for (const person of staffRows || []) {
+    staffIdentityMap.set(String(person.id), person);
+    if (person.auth_user_id) staffIdentityMap.set(String(person.auth_user_id), person);
+  }
   const checkinMap = new Map((todayCheckins || []).map((c) => [`${c.staff_id}:${c.schedule_id}`, c]));
-  const assignmentMap = new Map<string, string[]>();
+  const assignmentMap = new Map<string, Array<{ coachId: string; role: string }>>();
   for (const row of assignments || []) {
     const key = String(row.schedule_id);
     const current = assignmentMap.get(key) || [];
-    current.push(String(row.coach_id));
+    current.push({ coachId: String(row.coach_id), role: String(row.assignment_role || "coach") });
     assignmentMap.set(key, current);
   }
 
   const rows: Array<Record<string, unknown>> = [];
   for (const schedule of schedules || []) {
-    const coachIds = new Set<string>();
-    if (schedule.coach_id) coachIds.add(String(schedule.coach_id));
-    for (const coachId of assignmentMap.get(String(schedule.id)) || []) coachIds.add(coachId);
-    if (!coachIds.size) continue;
+    const rawAssignments = new Map<string, string>();
+    if (schedule.coach_id) rawAssignments.set(String(schedule.coach_id), "coach");
+    for (const item of assignmentMap.get(String(schedule.id)) || []) {
+      rawAssignments.set(item.coachId, item.role);
+    }
+    if (!rawAssignments.size) continue;
 
-    for (const coachId of coachIds) {
-      if (!manager && currentStaff?.id !== coachId) continue;
-      const person = staffMap.get(coachId);
+    const resolvedStaffIds = new Set<string>();
+    for (const [rawCoachId, assignmentRole] of rawAssignments.entries()) {
+      const person = staffIdentityMap.get(rawCoachId);
       if (!person) continue;
+      const staffId = String(person.id);
+      if (resolvedStaffIds.has(staffId)) continue;
+      resolvedStaffIds.add(staffId);
+      if (!manager && String(currentStaff?.id || "") !== staffId) continue;
+
       const branch = branchMap.get(String(schedule.branch_id));
       const group = groupMap.get(String(schedule.group_id));
-      const checkin = checkinMap.get(`${coachId}:${schedule.id}`);
+      const checkin = checkinMap.get(`${staffId}:${schedule.id}`);
       rows.push({
         scheduleId: schedule.id,
-        staffId: coachId,
+        staffId,
         staffName: `${person.first_name || ""} ${person.last_name || ""}`.trim(),
         title: person.title || "Eğitmen",
+        assignmentRole: assignmentRole === "backup" ? "backup" : "coach",
         branchId: schedule.branch_id,
         branchName: branch?.short_name || branch?.name || "Şube",
         branchLocationConfigured: Number.isFinite(Number(branch?.latitude)) && Number.isFinite(Number(branch?.longitude)),
@@ -141,7 +156,7 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
         startTime: String(schedule.start_time || "").slice(0, 5),
         endTime: String(schedule.end_time || "").slice(0, 5),
         checkin: checkin || null,
-        isMine: currentStaff?.id === coachId,
+        isMine: String(currentStaff?.id || "") === staffId,
       });
     }
   }
@@ -235,9 +250,17 @@ export async function POST(request: NextRequest) {
     const { data: schedule } = await ctx.admin.from("lesson_schedules").select("id, organization_id, branch_id, group_id, coach_id, weekday, start_time, end_time, is_active").eq("id", scheduleId).eq("organization_id", ctx.organizationId).eq("is_active", true).maybeSingle();
     if (!schedule || Number(schedule.weekday) !== weekday) return NextResponse.json({ error: "Bu ders bugün için aktif değil." }, { status: 400 });
 
-    let assigned = String(schedule.coach_id || "") === String(ctx.staff.id);
+    const acceptedCoachIds = Array.from(new Set([String(ctx.staff.id), String(ctx.user.id)].filter(Boolean)));
+    let assigned = acceptedCoachIds.includes(String(schedule.coach_id || ""));
     if (!assigned) {
-      const { data: assignment } = await ctx.admin.from("lesson_staff_assignments").select("id").eq("schedule_id", scheduleId).eq("coach_id", ctx.staff.id).eq("is_active", true).maybeSingle();
+      const { data: assignment } = await ctx.admin
+        .from("lesson_staff_assignments")
+        .select("id")
+        .eq("schedule_id", scheduleId)
+        .in("coach_id", acceptedCoachIds)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
       assigned = Boolean(assignment);
     }
     if (!assigned) return NextResponse.json({ error: "Bu ders size atanmış değil." }, { status: 403 });
