@@ -250,27 +250,37 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (coachStaffError || !coachStaff?.id) {
+      if (coachStaffError) {
         return {
           ok: false,
           count: 0,
-          message: "Eğitmen personel kaydınız bulunamadı. Yoklama yetkisi doğrulanamadı.",
+          message: "Eğitmen personel kaydı doğrulanamadı.",
         };
       }
 
-      const { data: staffAssignment } = await supabase
-        .from("lesson_staff_assignments")
-        .select("id")
-        .eq("organization_id", organizationId)
-        .eq("coach_id", coachStaff.id)
-        .eq("is_active", true)
-        .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
-        .limit(1)
-        .maybeSingle();
+      // Operasyon planı seans/eğitmen atamalarında profile.id kullanıyor.
+      // Personel/puantaj tarafında staff.id kullanılan eski/ek kayıtlarla da
+      // uyumlu kalmak için her iki kimliği yetkili eğitmen kimliği kabul ediyoruz.
+      const coachIds = uniqueStrings([profile.id, coachStaff?.id]);
+
+      let staffAssignment: { id: string } | null = null;
+      if (coachIds.length) {
+        const assignmentResult = await supabase
+          .from("lesson_staff_assignments")
+          .select("id")
+          .eq("organization_id", organizationId)
+          .in("coach_id", coachIds)
+          .eq("is_active", true)
+          .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+          .limit(1)
+          .maybeSingle();
+
+        staffAssignment = assignmentResult.data;
+      }
 
       const assignedDirectly =
-        schedule.coach_id === coachStaff.id ||
-        group.primary_coach_id === coachStaff.id ||
+        (schedule.coach_id ? coachIds.includes(schedule.coach_id) : false) ||
+        (group.primary_coach_id ? coachIds.includes(group.primary_coach_id) : false) ||
         Boolean(staffAssignment?.id);
 
       if (!assignedDirectly) {
