@@ -1613,7 +1613,9 @@ export default async function OperasyonPlaniPage({
                   : scopeButtonStyle
               }
             >
-              <span>🗓️</span>
+              <span style={{ ...scopeIconStyle, ...(planScope === "hafta" ? scopeIconActiveStyle : {}) }}>
+                <Icons.calendar />
+              </span>
               <span style={scopeTextStyle}>
                 <b>Haftalık Planlama</b>
                 <small>Tüm aktif seanslar · grup · eğitmen · öğrenci</small>
@@ -1628,7 +1630,9 @@ export default async function OperasyonPlaniPage({
                   : scopeButtonStyle
               }
             >
-              <span>📅</span>
+              <span style={{ ...scopeIconStyle, ...(planScope === "gun" ? scopeIconActiveStyle : {}) }}>
+                <Icons.clock />
+              </span>
               <span style={scopeTextStyle}>
                 <b>Günlük Seans</b>
                 <small>Seçili günün havuz ve yoklama akışı</small>
@@ -1643,7 +1647,9 @@ export default async function OperasyonPlaniPage({
                   : scopeButtonStyle
               }
             >
-              <span>👥</span>
+              <span style={{ ...scopeIconStyle, ...(planScope === "tumu" ? scopeIconActiveStyle : {}) }}>
+                <Icons.users />
+              </span>
               <span style={scopeTextStyle}>
                 <b>Tüm Aktif Kursiyerler</b>
                 <small>Kalıcı grup · seviye · eğitmen planı</small>
@@ -1664,16 +1670,10 @@ export default async function OperasyonPlaniPage({
           </div>
           <div className="opViewBar" style={viewBarStyle}>
           {[
-            ["seans", "Seans"],
-            ["egitmen", "Eğitmen"],
-            ["ogrenci", "Öğrenci"],
-            ["grup", "Grup"],
-            ["seviye", "Seviye"],
-            ["yas", "Yaş / Seviye"],
-            ["ortak", "Ortak Gruplar"],
-            ["havuz", "Havuz"],
-            ["saat", "Saat"],
-          ].map(([key, label]) => {
+            ["seans", "Seans Planı", "calendar"],
+            ["yas", "Yaş / Seviye", "cake"],
+            ["ortak", "Ortak Gruplar", "users"],
+          ].map(([key, label, iconName]) => {
             const active = currentView === key;
 
             const qp =
@@ -1749,7 +1749,10 @@ export default async function OperasyonPlaniPage({
                     : {}),
                 }}
               >
-                {label}
+                <span style={viewButtonIconStyle}>
+                  {iconName === "calendar" ? <Icons.calendar /> : iconName === "cake" ? <Icons.cake /> : <Icons.users />}
+                </span>
+                <span>{label}</span>
               </Link>
             );
           })}
@@ -3762,7 +3765,9 @@ const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", 
 const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:10, marginBottom:14 } as const;
 const scopeButtonStyle = { display:"flex", alignItems:"center", gap:11, minHeight:72, padding:"12px 14px", border:"1px solid #dce7f5", borderRadius:14, background:"#fbfdff", color:"#38516f", textDecoration:"none", minWidth:0, boxShadow:"0 3px 10px rgba(15,23,42,.025)" } as const;
 const scopeTextStyle = { display:"flex", minWidth:0, flexDirection:"column", gap:3, lineHeight:1.25 } as const;
-const scopeButtonActiveStyle = { ...scopeButtonStyle, borderColor:"#1769e8", background:"#1769e8", color:"#fff", boxShadow:"0 8px 18px rgba(23,105,232,.18)" } as const;
+const scopeIconStyle = { width:38, height:38, borderRadius:11, display:"grid", placeItems:"center", flexShrink:0, background:"#eaf3ff", border:"1px solid #d7e7fb", color:"#1769e8" } as const;
+const scopeIconActiveStyle = { background:"rgba(255,255,255,.16)", border:"1px solid rgba(255,255,255,.22)", color:"#fff" } as const;
+const scopeButtonActiveStyle = { ...scopeButtonStyle, borderColor:"#1769e8", background:"linear-gradient(135deg,#1769e8 0%,#0f5fd8 100%)", color:"#fff", boxShadow:"0 8px 18px rgba(23,105,232,.18)" } as const;
 
 const controlPanelStyle = { background:"#fff", border:"1px solid #d9e4f2", borderRadius:18, padding:14, marginBottom:12 } as const;
 const controlPanelHeaderStyle = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" } as const;
@@ -3860,10 +3865,10 @@ const secondaryButtonStyle: React.CSSProperties = {
 const backButtonStyle = secondaryButtonStyle;
 
 const viewBarStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 7,
-  flexWrap: "wrap",
-  background: "#fff",
+  display: "grid",
+  gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+  gap: 8,
+  background: "#f8fbff",
   border: "1px solid #e1e8f2",
   borderRadius: 15,
   padding: 7,
@@ -3871,17 +3876,31 @@ const viewBarStyle: React.CSSProperties = {
 };
 
 const viewButtonStyle: React.CSSProperties = {
-  padding: "9px 14px",
+  minHeight: 44,
+  padding: "9px 12px",
   borderRadius: 10,
   color: "#64748b",
   textDecoration: "none",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 850,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+};
+
+const viewButtonIconStyle: React.CSSProperties = {
+  width: 20,
+  height: 20,
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
 };
 
 const viewButtonActiveStyle: React.CSSProperties = {
-  background: "#1769e8",
+  background: "linear-gradient(135deg,#1769e8 0%,#0f5fd8 100%)",
   color: "#fff",
+  boxShadow: "0 5px 12px rgba(23,105,232,.16)",
 };
 
 const filterPanelStyle: React.CSSProperties = {
