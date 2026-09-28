@@ -29,10 +29,11 @@ export default async function PersonelPuantajPage() {
               <p className="ppEyebrow">SPRİNTOS · PERSONEL OPERASYONU</p>
               <h1>Personel & Puantaj</h1>
               <p className="ppIntro">
-                Ders girişleri, konum doğrulama, aylık puantaj, hakediş ve personel ödeme takibi tek ekranda.
+                Yüzme dersleri, antrenör girişleri, seans görevlendirmeleri, aylık puantaj ve hakediş takibi tek ekranda.
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {["owner", "admin", "branch_manager"].includes(profile.role) ? <Link href="/operasyon-plani" className="ppBack">Antrenör / Seans Düzenle</Link> : null}
               {canManagePay ? <Link href="/personel-puantaj/ucret-ayarlari" className="ppBack">Ücret Ayarları</Link> : null}
               <Link href="/" className="ppBack">Ana Sayfa</Link>
             </div>
