@@ -303,22 +303,25 @@ export default function OperationStudentManager({
         .rosterFacts>div,.guardianLine{border:1px solid #e4ebf3;border-radius:10px;padding:8px 9px;background:#fbfdff;min-width:0}
         .rosterFacts span,.guardianLine span{display:block;font-size:9px;color:#8a99ad;margin-bottom:3px;text-transform:uppercase;font-weight:800;letter-spacing:.025em}
         .rosterFacts b,.guardianLine b{display:block;color:#263c59;font-size:11px;line-height:1.35;white-space:normal}
-        .scheduleValue{white-space:pre-line!important}.guardianLine{margin-top:7px}
+        .scheduleValue{white-space:pre-line!important}.guardianLine{margin-top:6px}
         .coachFact{position:relative}
-        .coachStatus{display:inline-flex!important;width:max-content;margin-top:5px!important;padding:3px 6px;border-radius:999px;font-size:8px!important;font-weight:900!important;letter-spacing:.02em!important;text-transform:none!important}
+        .coachStatus{display:inline-flex!important;width:max-content;margin-top:4px!important;padding:3px 7px;border-radius:999px;font-size:8px!important;font-weight:900!important;letter-spacing:.02em!important;text-transform:none!important;align-items:center;gap:4px}
         .coachStatus.assigned{background:#ecfdf3;color:#15803d}
         .coachStatus.pending{background:#f8fafc;color:#64748b;border:1px solid #e2e8f0}
-        .quickAssignment{margin-top:9px;padding:9px;border:1px solid #e1e9f3;border-radius:12px;background:#fbfdff}
+        .coachStatus::before{content:"";width:5px;height:5px;border-radius:999px;background:currentColor;opacity:.7}
+        .quickAssignment{margin-top:8px;padding:8px;border:1px solid #e1e9f3;border-radius:12px;background:#fbfdff}
         .quickAssignmentHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
         .quickAssignmentHead span{font-size:9px;font-weight:900;letter-spacing:.08em;color:#475569}
         .quickAssignmentHead small{font-size:9px;color:#8a99ad;text-align:right;line-height:1.3}
         .inlineAssignments{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:0}
-        .rosterActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}
-        .rosterActions a{display:flex;align-items:center;justify-content:center;min-height:40px;border:1px solid #cfe0f4;border-radius:10px;text-decoration:none;color:#1769e8;font-size:11px;font-weight:850;background:#fff;box-shadow:0 2px 6px rgba(20,89,166,.04)}
-        .rosterActions a:last-child{background:#1769e8;color:#fff;border-color:#1769e8;box-shadow:0 4px 10px rgba(23,105,232,.16)}
+        .rosterActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+        .rosterActions a{display:flex;align-items:center;justify-content:center;min-height:40px;border:1px solid #cfe0f4;border-radius:10px;text-decoration:none!important;color:#1769e8!important;font-size:11px;font-weight:850;background:#fff;box-shadow:0 2px 6px rgba(20,89,166,.04);line-height:1}
+        .rosterActions a:visited{color:#1769e8!important}
+        .rosterActions a:last-child{background:#1769e8!important;color:#fff!important;border-color:#1769e8;box-shadow:0 4px 10px rgba(23,105,232,.16)}
+        .rosterActions a:last-child:visited{color:#fff!important}
         .rosterEmpty{padding:28px;text-align:center;color:#7b8ca2}
         @media(max-width:900px){.rosterGrid{grid-template-columns:1fr}.bulkBar{grid-template-columns:1fr}.rosterFilters{grid-template-columns:1fr}.bulkAssignmentStack{width:100%}.bulkIntro{display:block}.bulkIntro p{text-align:left;margin-top:3px}}
-        @media(max-width:560px){.operationRoster{padding:11px;border-radius:16px}.operationRosterHeader{align-items:stretch}.rosterHeaderStats{min-width:76px}.operationRosterHeader h2{font-size:17px}.rosterFacts{grid-template-columns:1fr 1fr}.inlineAssignments,.rosterActions{grid-template-columns:1fr 1fr}.bulkControl{grid-template-columns:1fr auto}.bulkControl button{padding:0 9px}.levelPill{max-width:145px;overflow:hidden;text-overflow:ellipsis}.rosterCard{padding:11px}.quickAssignmentHead{display:block}.quickAssignmentHead small{display:block;text-align:left;margin-top:2px}.guardianLine{padding:7px 8px}.rosterFacts>div{padding:7px 8px}}
+        @media(max-width:560px){.operationRoster{padding:11px;border-radius:16px}.operationRosterHeader{align-items:stretch}.rosterHeaderStats{min-width:76px}.operationRosterHeader h2{font-size:17px}.rosterFacts{grid-template-columns:1fr 1fr}.inlineAssignments,.rosterActions{grid-template-columns:1fr 1fr}.bulkControl{grid-template-columns:1fr auto}.bulkControl button{padding:0 9px}.levelPill{max-width:145px;overflow:hidden;text-overflow:ellipsis}.rosterCard{padding:10px}.quickAssignmentHead{display:block}.quickAssignmentHead small{display:block;text-align:left;margin-top:2px}.guardianLine{padding:6px 8px}.rosterFacts>div{padding:7px 8px}.quickAssignment{padding:7px}.rosterActions a{min-height:38px}}
       `}</style>
     </section>
   );
