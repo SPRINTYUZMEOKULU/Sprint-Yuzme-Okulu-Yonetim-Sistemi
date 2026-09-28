@@ -104,7 +104,6 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
 
   const branchMap = new Map((branches || []).map((b) => [String(b.id), b]));
   const groupMap = new Map((groups || []).map((g) => [String(g.id), g]));
-  const staffMap = new Map((staffRows || []).map((s) => [String(s.id), s]));
   // Operasyon Planı geçmişte profile.id, puantaj ise staff.id kullanabildi.
   // Aynı eğitmeni her iki kimlikle de çözerek tek personel kaydına bağlıyoruz.
   const staffIdentityMap = new Map<string, any>();
