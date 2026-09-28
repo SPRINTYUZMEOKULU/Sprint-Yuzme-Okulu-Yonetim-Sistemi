@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { UserRole } from "@/lib/auth/profile";
 
@@ -18,6 +19,7 @@ type TodayRow = {
   staffId: string;
   staffName: string;
   title: string;
+  assignmentRole: "coach" | "backup";
   branchId: string;
   branchName: string;
   branchLocationConfigured: boolean;
@@ -319,14 +321,14 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
       ) : null}
 
       <section className="ppStats">
-        <article><span>Bugünkü Plan</span><strong>{data.summary.planned}</strong><small>personel / ders ataması</small></article>
-        <article><span>Giriş Yapan</span><strong>{data.summary.checkedIn}</strong><small>bugün kaydedilen</small></article>
-        <article><span>Onay Bekleyen</span><strong>{data.summary.pending}</strong><small>konum / yönetici kontrolü</small></article>
-        <article className={managerMissing.length ? "alert" : ""}><span>Giriş Yapılmayan</span><strong>{managerMissing.length || data.summary.missing}</strong><small>başlayan seans / giriş yok</small></article>
+        <article><span>Bugünkü Antrenör Planı</span><strong>{data.summary.planned}</strong><small>atanmış antrenör / seans</small></article>
+        <article><span>Derse Gelen Antrenör</span><strong>{data.summary.checkedIn}</strong><small>bugün giriş yapan</small></article>
+        <article><span>Konum Onayı Bekleyen</span><strong>{data.summary.pending}</strong><small>yönetici kontrolü</small></article>
+        <article className={managerMissing.length ? "alert" : ""}><span>Giriş Yapmayan Antrenör</span><strong>{managerMissing.length || data.summary.missing}</strong><small>başlayan seans / giriş yok</small></article>
       </section>
 
       <div className="ppTabs" role="tablist" aria-label="Personel puantaj bölümleri">
-        <button className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>Bugünkü Girişler</button>
+        <button className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>Bugünkü Antrenör & Ders Planı</button>
         <button className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>Aylık Puantaj & Hakediş</button>
         <button className="ppRefresh" onClick={() => void load()} disabled={loading}>{loading ? "Yenileniyor…" : "Yenile"}</button>
       </div>
@@ -334,7 +336,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
       {activeTab === "today" ? (
         <section className="ppPanel">
           <div className="ppPanelHead">
-            <div><p>BUGÜN</p><h2>Ders ve personel girişleri</h2></div>
+            <div><p>BUGÜN</p><h2>Antrenör, havuz ve ders planı</h2></div>
             <span>{data.date}</span>
           </div>
 
@@ -355,7 +357,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                         <span className={`ppStatus ${isMissingStarted ? "danger" : meta.tone}`}>{isMissingStarted ? "Giriş yapılmadı" : meta.label}</span>
                       </div>
                       <p>{row.branchName} · {row.groupName}</p>
-                      <small>{row.title || "Eğitmen"}</small>
+                      <small>{row.assignmentRole === "backup" ? "Yedek Eğitmen" : "Ana Eğitmen"} · {row.title || "Eğitmen"}</small>
                       {row.checkin ? (
                         <div className="ppCheckMeta">
                           <span>Giriş: {timeOf(row.checkin.checked_in_at)}</span>
@@ -380,13 +382,30 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                         </button>
                       ) : null}
                       {!canCheckin && !canApprove ? <span className="ppDone">{row.checkin ? "Kayıt tamamlandı" : isMissingStarted ? "Yönetici takibinde" : "Planlandı"}</span> : null}
+                      {data.isManager ? (
+                        <Link
+                          className="ppApprove"
+                          href={`/operasyon-plani?tarih=${encodeURIComponent(data.date)}&sube=${encodeURIComponent(row.branchId)}&saat=${encodeURIComponent(row.startTime)}`}
+                        >
+                          Atamayı Düzenle
+                        </Link>
+                      ) : null}
                     </div>
                   </article>
                 );
               })}
             </div>
           ) : (
-            <div className="ppEmpty">Bugün için atanmış aktif ders bulunmuyor.</div>
+            <div className="ppEmpty">
+              <strong>Bugün için atanmış aktif antrenör/seans bulunmuyor.</strong>
+              {data.isManager ? (
+                <div style={{ marginTop: 12 }}>
+                  <Link className="ppApprove" href={`/operasyon-plani?tarih=${encodeURIComponent(data.date)}`}>
+                    Operasyon Planında Atama Yap / Düzelt
+                  </Link>
+                </div>
+              ) : null}
+            </div>
           )}
         </section>
       ) : (
