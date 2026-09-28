@@ -1018,95 +1018,12 @@ export default async function OperasyonPlaniPage({
   // Tüm kursiyer yönetimi kendi ayrı kapsamını kullanmaya devam eder.
   const currentView = params.kapsam === "tumu" ? "ogrenci" : "seans";
 
-  // Görünüm düğmeleri yalnızca aktif renk değiştirmesin; seçilen görünüme
-  // göre seansları gerçekten yeniden sırala. Bu sayede mobilde de tıklama
-  // sonucunun ekranda net bir karşılığı olur.
-  const scheduleCoachName = (schedule: any) => {
-    const explicit = staffAssignments.find(
-      (assignment: any) =>
-        assignment.schedule_id === schedule.id &&
-        assignment.coach_id
-    );
-    const group = groupMap.get(schedule.group_id);
-    const coachId =
-      explicit?.coach_id ||
-      schedule.coach_id ||
-      group?.primary_coach_id ||
-      "";
-    const coach = coachId ? coachMap.get(coachId) : null;
-    return String(coach?.full_name || coach?.email || "ZZZ");
-  };
-
-  const scheduleFirstLevel = (schedule: any) => {
-    const level = memberships
-      .filter((item: any) => item.group_id === schedule.group_id)
-      .map((item: any) => studentMap.get(item.student_id)?.swimming_level)
-      .find(Boolean);
-    return String(level || "ZZZ");
-  };
-
+  // Tek ana plan görünümünde seanslar yalnızca gün ve saate göre sıralanır.
+  // Eski görünüm sekmelerine ait özel sıralamalar kaldırıldı; filtreler veri kümesini daraltır.
   filteredSchedules = [...filteredSchedules].sort((a: any, b: any) => {
-    const byDayTime = () => {
-      const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
-      if (dayDiff !== 0) return dayDiff;
-      return String(a.start_time || "").localeCompare(String(b.start_time || ""));
-    };
-
-    if (currentView === "egitmen") {
-      return (
-        scheduleCoachName(a).localeCompare(scheduleCoachName(b), "tr") ||
-        byDayTime()
-      );
-    }
-
-    if (currentView === "grup") {
-      return (
-        String(groupMap.get(a.group_id)?.name || "").localeCompare(
-          String(groupMap.get(b.group_id)?.name || ""),
-          "tr"
-        ) || byDayTime()
-      );
-    }
-
-    if (currentView === "seviye") {
-      return (
-        scheduleFirstLevel(a).localeCompare(scheduleFirstLevel(b), "tr") ||
-        byDayTime()
-      );
-    }
-
-    if (currentView === "yas") {
-      const firstAge = (schedule: any) => {
-        const ages = memberships
-          .filter((item: any) => item.group_id === schedule.group_id)
-          .map((item: any) =>
-            ageOnDate(studentMap.get(item.student_id)?.birth_date, selectedDate)
-          )
-          .filter((value: any) => value !== null) as number[];
-
-        return ages.length ? Math.min(...ages) : 999;
-      };
-
-      return firstAge(a) - firstAge(b) || byDayTime();
-    }
-
-    if (currentView === "havuz") {
-      return (
-        String(branchMap.get(a.branch_id || groupMap.get(a.group_id)?.branch_id)?.name || "").localeCompare(
-          String(branchMap.get(b.branch_id || groupMap.get(b.group_id)?.branch_id)?.name || ""),
-          "tr"
-        ) || byDayTime()
-      );
-    }
-
-    if (currentView === "saat") {
-      return (
-        String(a.start_time || "").localeCompare(String(b.start_time || "")) ||
-        Number(a.weekday || 0) - Number(b.weekday || 0)
-      );
-    }
-
-    return byDayTime();
+    const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
+    if (dayDiff !== 0) return dayDiff;
+    return String(a.start_time || "").localeCompare(String(b.start_time || ""));
   });
 
   /* =======================================================
