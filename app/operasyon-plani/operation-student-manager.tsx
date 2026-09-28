@@ -157,22 +157,28 @@ export default function OperationStudentManager({
           <span>{selected.length ? `${selected.length} seçili` : "Görünenlerin tümünü seç"}</span>
         </label>
 
-        <div className="bulkControl">
-          <select value={coachId} onChange={(event) => setCoachId(event.target.value)}>
-            <option value="">Toplu eğitmen seç</option>
-            {coaches.map((coach) => (
-              <option key={coach.id} value={coach.id}>{coach.full_name || coach.email || "Eğitmen"}</option>
-            ))}
-          </select>
-          <button disabled={busy || !selected.length || !coachId} onClick={() => void apply("coach")}>Eğitmeni Ata</button>
-        </div>
+        <div className="bulkAssignmentStack">
+          <div className="bulkControl">
+            <select value={coachId} onChange={(event) => setCoachId(event.target.value)}>
+              <option value="">Toplu eğitmen seç</option>
+              {coaches.map((coach) => (
+                <option key={coach.id} value={coach.id}>{coach.full_name || coach.email || "Eğitmen"}</option>
+              ))}
+            </select>
+            <button disabled={busy || !selected.length || !coachId} onClick={() => void apply("coach")}>Eğitmeni Ata</button>
+          </div>
 
-        <div className="bulkControl">
-          <select value={level} onChange={(event) => setLevel(event.target.value)}>
-            <option value="">Toplu seviye seç</option>
-            {levels.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <button disabled={busy || !selected.length || !level} onClick={() => void apply("level")}>Seviyeyi Ata</button>
+          <div className="bulkControl">
+            <select value={level} onChange={(event) => setLevel(event.target.value)}>
+              <option value="">Toplu seviye seç</option>
+              {levels.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <button disabled={busy || !selected.length || !level} onClick={() => void apply("level")}>Seviyeyi Ata</button>
+          </div>
+
+          <small className="bulkSafetyNote">
+            Yalnızca seçili kursiyerlerin eğitmen veya yüzme seviyesi güncellenir; grup, şube, paket, ders hakkı ve geçmiş kayıtlar değişmez.
+          </small>
         </div>
       </div>
 
@@ -263,8 +269,10 @@ export default function OperationStudentManager({
         .rosterHeaderStats b{display:block;font-size:23px;color:#1769e8}.rosterHeaderStats small{color:#718096;font-weight:700}
         .rosterFilters{display:grid;grid-template-columns:minmax(240px,1.7fr) repeat(2,minmax(150px,.7fr));gap:8px;margin-bottom:10px}
         .rosterFilters input,.rosterFilters select,.bulkControl select,.inlineAssignments select{width:100%;min-height:42px;border:1px solid #d4e0ee;border-radius:11px;background:#fff;color:#17345c;padding:0 11px;font-size:12px;box-sizing:border-box}
-        .bulkBar{display:grid;grid-template-columns:minmax(180px,.8fr) repeat(2,minmax(250px,1fr));gap:8px;align-items:center;padding:10px;border:1px solid #dce8f6;border-radius:14px;background:#f7fbff;margin-bottom:12px}
-        .selectAll{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#29496e}
+        .bulkBar{display:grid;grid-template-columns:minmax(180px,.72fr) minmax(320px,1.6fr);gap:10px;align-items:start;padding:10px;border:1px solid #dce8f6;border-radius:14px;background:#f7fbff;margin-bottom:12px}
+        .bulkAssignmentStack{display:grid;gap:8px}
+        .bulkSafetyNote{display:block;color:#718096;font-size:10px;line-height:1.4;padding:0 2px}
+        .selectAll{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#29496e;min-height:42px}
         .selectAll input,.studentCheck input{width:18px;height:18px;accent-color:#1769e8}
         .bulkControl{display:grid;grid-template-columns:1fr auto;gap:7px}
         .bulkControl button{border:0;border-radius:10px;background:#1769e8;color:#fff;padding:0 12px;font-weight:850;font-size:11px;cursor:pointer}
@@ -286,7 +294,7 @@ export default function OperationStudentManager({
         .rosterActions a{display:flex;align-items:center;justify-content:center;min-height:38px;border:1px solid #cfe0f4;border-radius:10px;text-decoration:none;color:#1769e8;font-size:11px;font-weight:850}
         .rosterActions a:last-child{background:#1769e8;color:#fff;border-color:#1769e8}
         .rosterEmpty{padding:28px;text-align:center;color:#7b8ca2}
-        @media(max-width:900px){.rosterGrid{grid-template-columns:1fr}.bulkBar{grid-template-columns:1fr}.rosterFilters{grid-template-columns:1fr}}
+        @media(max-width:900px){.rosterGrid{grid-template-columns:1fr}.bulkBar{grid-template-columns:1fr}.rosterFilters{grid-template-columns:1fr}.bulkAssignmentStack{width:100%}}
         @media(max-width:560px){.operationRoster{padding:11px;border-radius:16px}.operationRosterHeader{align-items:stretch}.rosterHeaderStats{min-width:76px}.operationRosterHeader h2{font-size:17px}.rosterFacts{grid-template-columns:1fr 1fr}.inlineAssignments,.rosterActions{grid-template-columns:1fr 1fr}.bulkControl{grid-template-columns:1fr auto}.bulkControl button{padding:0 9px}.levelPill{max-width:120px;overflow:hidden;text-overflow:ellipsis}.rosterCard{padding:11px}}
       `}</style>
     </section>
