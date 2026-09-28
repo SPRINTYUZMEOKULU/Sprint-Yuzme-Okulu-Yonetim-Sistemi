@@ -1582,7 +1582,7 @@ export default async function OperasyonPlaniPage({
           </div>
           <div style={operationActionGridStyle}>
             <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
-              <span style={operationIconStyle}><Icons.branch /></span>
+              <span style={{ ...operationIconStyle, ...operationIconPrimaryStyle }}><Icons.branch /></span>
               <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
@@ -2503,18 +2503,22 @@ export default async function OperasyonPlaniPage({
 
                       <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <span style={sessionSummaryLabelStyle}>EĞİTMEN</span>
-                        <strong style={{ color: sessionCoaches.length ? "#13233f" : "#dc2626" }}>
+                        <strong
+                          style={{
+                            ...(sessionCoaches.length ? sessionCoachAssignedStyle : sessionCoachMissingStyle),
+                          }}
+                        >
                           {sessionCoaches.length
                             ? sessionCoaches
                                 .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
                                 .join(", ")
-                            : "Eğitmen atanmamış"}
+                            : "Atanmadı"}
                         </strong>
                       </div>
 
-                      <div className="opSessionMeta" style={sessionSummaryItemStyle}>
+                      <div className="opSessionMeta opSessionStudentMetric" style={sessionStudentMetricStyle}>
                         <span style={sessionSummaryLabelStyle}>ÖĞRENCİ</span>
-                        <strong>{groupStudents.length}{capacity ? ` / ${capacity}` : ""}</strong>
+                        <strong style={sessionStudentValueStyle}>{groupStudents.length}{capacity ? ` / ${capacity}` : ""}</strong>
                       </div>
 
                       <div className="opSessionLevels" style={sessionLevelWrapStyle}>
@@ -3755,8 +3759,8 @@ const sessionDangerButtonStyle = { ...sessionBaseButtonStyle, color:"#a43a22", b
 const sessionPurpleButtonStyle = { ...sessionBaseButtonStyle, color:"#6d36c9", background:"#f8f4ff", borderColor:"#e2d5ff" } as const;
 const sessionNeutralButtonStyle = { ...sessionBaseButtonStyle, color:"#174a87", background:"#fff", borderColor:"#cfe0f5" } as const;
 
-const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:8, marginBottom:12 } as const;
-const scopeButtonStyle = { display:"flex", alignItems:"center", gap:10, minHeight:68, padding:"11px 12px", border:"1px solid #dce7f5", borderRadius:13, background:"#f8fbff", color:"#38516f", textDecoration:"none", minWidth:0 } as const;
+const scopeSwitchStyle = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:10, marginBottom:14 } as const;
+const scopeButtonStyle = { display:"flex", alignItems:"center", gap:11, minHeight:72, padding:"12px 14px", border:"1px solid #dce7f5", borderRadius:14, background:"#fbfdff", color:"#38516f", textDecoration:"none", minWidth:0, boxShadow:"0 3px 10px rgba(15,23,42,.025)" } as const;
 const scopeTextStyle = { display:"flex", minWidth:0, flexDirection:"column", gap:3, lineHeight:1.25 } as const;
 const scopeButtonActiveStyle = { ...scopeButtonStyle, borderColor:"#1769e8", background:"#1769e8", color:"#fff", boxShadow:"0 8px 18px rgba(23,105,232,.18)" } as const;
 
@@ -3777,10 +3781,11 @@ const operationCenterEyebrowStyle = { fontSize: 10, fontWeight: 900, letterSpaci
 const operationCenterTitleStyle = { display: "block", fontSize: 18, color: "#13233f" } as const;
 const operationCenterTextStyle = { margin: "6px 0 0", color: "#65758d", fontSize: 12, lineHeight: 1.45, maxWidth: 720 } as const;
 const liveBadgeStyle = { flexShrink: 0, fontSize: 10, fontWeight: 900, color: "#16824b", background: "#eaf8f0", border: "1px solid #ccebd9", padding: "7px 9px", borderRadius: 999 } as const;
-const operationActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 } as const;
-const operationActionStyle = { minHeight: 72, display: "flex", alignItems: "center", gap: 11, textDecoration: "none", background: "#f8fbff", border: "1px solid #dce7f5", borderRadius: 15, padding: "12px 13px", color: "#13233f" } as const;
-const operationActionPrimaryStyle = { ...operationActionStyle, background: "#1769e8", borderColor: "#1769e8", color: "#fff" } as const;
-const operationIconStyle = { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.18)", flexShrink: 0 } as const;
+const operationActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 } as const;
+const operationActionStyle = { minHeight: 78, display: "flex", alignItems: "center", gap: 12, textDecoration: "none", background: "#fbfdff", border: "1px solid #dce7f5", borderRadius: 15, padding: "13px 14px", color: "#13233f", boxShadow:"0 4px 14px rgba(15,23,42,.035)" } as const;
+const operationActionPrimaryStyle = { ...operationActionStyle, background: "linear-gradient(135deg,#1769e8 0%,#0f5fd8 100%)", borderColor: "#1769e8", color: "#fff", boxShadow:"0 8px 20px rgba(23,105,232,.18)" } as const;
+const operationIconStyle = { width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", background: "#eaf3ff", color:"#1769e8", border:"1px solid #d8e8fb", flexShrink: 0 } as const;
+const operationIconPrimaryStyle = { background:"rgba(255,255,255,.16)", color:"#fff", border:"1px solid rgba(255,255,255,.22)" } as const;
 const operationActionTextStyle = { display:"flex", minWidth:0, flexDirection:"column", gap:3, lineHeight:1.25 } as const;
 const operationArrowStyle = { marginLeft: "auto", fontSize: 20, fontWeight: 800 } as const;
 
@@ -4016,10 +4021,10 @@ const dayBadgeStyle: React.CSSProperties = {
 
 const scheduleGridStyle: React.CSSProperties = {
   display: "grid",
-  // Tek/az seans olduğunda kartın masaüstünde gereksiz dar kalmasını önle.
-  // Mobilde min() sayesinde viewport taşması oluşmaz.
-  gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,680px),1fr))",
-  gap: 18,
+  // İki kolonlu masaüstü görünümünde kart içeriğinin taşmaması için
+  // minimum kart genişliği ve kolonlar birlikte dengelenir.
+  gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,620px),1fr))",
+  gap: 14,
 };
 
 const sessionCardStyle: React.CSSProperties = {
@@ -4033,12 +4038,13 @@ const sessionCardStyle: React.CSSProperties = {
 
 const sessionHeaderStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(120px,.8fr) minmax(170px,1.2fr) minmax(170px,1.2fr) minmax(180px,1.3fr) minmax(100px,.7fr) auto auto",
+  gridTemplateColumns: "90px minmax(0,.82fr) minmax(0,1.35fr) minmax(0,1fr) 62px minmax(52px,.58fr) 18px",
   alignItems: "center",
-  gap: 14,
-  padding: "14px 16px",
+  gap: 8,
+  padding: "14px 14px",
   borderBottom: "1px solid #edf1f6",
   background: "#fff",
+  minHeight: 86,
 };
 
 const sessionSummaryStyle: React.CSSProperties = {
@@ -4068,15 +4074,18 @@ const sessionDayTextStyle: React.CSSProperties = {
 const sessionSummaryItemStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 2,
+  gap: 3,
   minWidth: 0,
   fontSize: 12,
+  lineHeight: 1.28,
+  overflow: "hidden",
+  overflowWrap: "anywhere",
 };
 
 const sessionSummaryLabelStyle: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 8,
   fontWeight: 900,
-  letterSpacing: ".08em",
+  letterSpacing: ".07em",
   color: "#94a3b8",
 };
 
@@ -4087,15 +4096,56 @@ const sessionSummarySubStyle: React.CSSProperties = {
 
 const sessionLevelWrapStyle: React.CSSProperties = {
   display: "flex",
-  gap: 5,
+  gap: 4,
   flexWrap: "wrap",
   justifyContent: "flex-end",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const sessionChevronStyle: React.CSSProperties = {
-  fontSize: 20,
+  fontSize: 18,
   color: "#1769e8",
   fontWeight: 900,
+  lineHeight: 1,
+  textAlign: "center",
+};
+
+const sessionCoachAssignedStyle: React.CSSProperties = {
+  color: "#13233f",
+  fontSize: 11,
+  lineHeight: 1.25,
+  overflowWrap: "anywhere",
+};
+
+const sessionCoachMissingStyle: React.CSSProperties = {
+  display: "inline-flex",
+  width: "max-content",
+  maxWidth: "100%",
+  padding: "4px 7px",
+  borderRadius: 999,
+  background: "#fff1f2",
+  border: "1px solid #fecdd3",
+  color: "#be123c",
+  fontSize: 9,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const sessionStudentMetricStyle: React.CSSProperties = {
+  ...sessionSummaryItemStyle,
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "6px 5px",
+  borderRadius: 10,
+  background: "#f8fbff",
+  border: "1px solid #e3edf8",
+  textAlign: "center",
+};
+
+const sessionStudentValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "#13233f",
   lineHeight: 1,
 };
 
