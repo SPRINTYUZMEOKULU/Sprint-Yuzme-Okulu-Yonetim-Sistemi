@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export type OperationStudentRow = {
@@ -40,16 +40,39 @@ export default function OperationStudentManager({
   const [groupFilter, setGroupFilter] = useState("");
   const [coachFilter, setCoachFilter] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"coach" | "level" | null>(null);
   const [message, setMessage] = useState("");
+  const [messageError, setMessageError] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, { level?: string; coach_id?: string; coach_name?: string }>>({});
+
+  useEffect(() => {
+    setOverrides((current) => {
+      const remaining = { ...current };
+      for (const student of students) {
+        const override = remaining[student.id];
+        if (override &&
+          (override.level === undefined || override.level === student.level) &&
+          (override.coach_id === undefined || override.coach_id === student.coach_id)) {
+          delete remaining[student.id];
+        }
+      }
+      return Object.keys(remaining).length === Object.keys(current).length ? current : remaining;
+    });
+  }, [students]);
+
+  const displayedStudents = useMemo(
+    () => students.map((student) => ({ ...student, ...overrides[student.id] })),
+    [students, overrides],
+  );
 
   const groups = useMemo(
-    () => Array.from(new Set(students.map((student) => student.group_name).filter(Boolean) as string[])).sort(),
-    [students],
+    () => Array.from(new Set(displayedStudents.map((student) => student.group_name).filter(Boolean) as string[])).sort(),
+    [displayedStudents],
   );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
-    return students.filter((student) => {
+    return displayedStudents.filter((student) => {
       if (groupFilter && student.group_name !== groupFilter) return false;
       if (coachFilter && student.coach_id !== coachFilter) return false;
       if (!q) return true;
@@ -69,7 +92,7 @@ export default function OperationStudentManager({
         .toLocaleLowerCase("tr-TR")
         .includes(q);
     });
-  }, [students, search, groupFilter, coachFilter]);
+  }, [displayedStudents, search, groupFilter, coachFilter]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((student) => selected.includes(student.id));
 
@@ -95,7 +118,9 @@ export default function OperationStudentManager({
     }
 
     setBusy(true);
+    setBusyAction(action);
     setMessage("");
+    setMessageError(false);
     try {
       const response = await fetch("/api/operation-student-bulk", {
         method: "POST",
@@ -109,13 +134,38 @@ export default function OperationStudentManager({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "İşlem tamamlanamadı.");
-      setMessage(`${result.updated || ids.length} kursiyer güncellendi.`);
+      const appliedIds: string[] = Array.isArray(result.appliedIds) ? result.appliedIds : [];
+      if (appliedIds.length !== ids.length || ids.some((id) => !appliedIds.includes(id))) {
+        throw new Error("Seçilen kursiyerlerin tamamı için atama doğrulanamadı. Seçim korunuyor; lütfen tekrar kontrol edin.");
+      }
+      const selectedCoach = coaches.find((coach) => coach.id === chosenCoach);
+      setOverrides((current) => {
+        const next = { ...current };
+        for (const id of appliedIds) {
+          next[id] = {
+            ...next[id],
+            ...(action === "level" ? { level: result.level } : {
+              coach_id: chosenCoach,
+              coach_name: selectedCoach?.full_name || selectedCoach?.email || "Eğitmen",
+            }),
+          };
+        }
+        return next;
+      });
+      const count = Number(result.updated);
+      setMessage(action === "level"
+        ? count > 0
+          ? `${count} kursiyerin yüzme seviyesi ${result.level} olarak kaydedildi. Grup ve ders saati değişmedi.`
+          : `Seçili kursiyerlerin seviyesi zaten ${result.level}. Grup ve ders saati değişmedi.`
+        : `${count} kursiyerin eğitmen ataması ${selectedCoach?.full_name || selectedCoach?.email || "seçilen eğitmen"} olarak kaydedildi.`);
       setSelected([]);
       router.refresh();
     } catch (error) {
+      setMessageError(true);
       setMessage(error instanceof Error ? error.message : "İşlem tamamlanamadı.");
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -125,10 +175,10 @@ export default function OperationStudentManager({
         <div>
           <span>AKTİF KURSİYER YÖNETİMİ</span>
           <h2>Tüm Kursiyerler · Kalıcı Eğitim Planı</h2>
-          <p>Grup, seviye, sorumlu eğitmen ve haftalık ders programını tek ekranda yönetin. Günlük katılım için Yoklama kullanılır.</p>
+          <p>Bu ekranda eğitmen ve yüzme seviyesini atayın. Grup ve saat değişikliği için kursiyerin Dijital Dosya bölümündeki Grup / Şube Değiştir işlemini kullanın.</p>
         </div>
         <div className="rosterHeaderStats">
-          <b>{students.length}</b>
+          <b>{displayedStudents.length}</b>
           <small>aktif kursiyer</small>
         </div>
       </div>
@@ -158,7 +208,7 @@ export default function OperationStudentManager({
         </div>
         <label className="selectAll">
           <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} />
-          <span>{selected.length ? `${selected.length} seçili` : "Görünenlerin tümünü seç"}</span>
+          <span>{selected.length ? `${selected.length} seçili · ${filtered.filter((student) => selected.includes(student.id)).length} bu filtrede` : "Görünenlerin tümünü seç"}</span>
         </label>
 
         <div className="bulkAssignmentStack">
@@ -169,7 +219,7 @@ export default function OperationStudentManager({
                 <option key={coach.id} value={coach.id}>{coach.full_name || coach.email || "Eğitmen"}</option>
               ))}
             </select>
-            <button disabled={busy || !selected.length || !coachId} onClick={() => void apply("coach")}>Eğitmeni Ata</button>
+            <button type="button" disabled={busy || !selected.length || !coachId} onClick={() => void apply("coach")}>{busyAction === "coach" ? "Atama doğrulanıyor…" : "Eğitmeni Ata"}</button>
           </div>
 
           <div className="bulkControl">
@@ -177,7 +227,7 @@ export default function OperationStudentManager({
               <option value="">Toplu seviye seç</option>
               {levels.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <button disabled={busy || !selected.length || !level} onClick={() => void apply("level")}>Seviyeyi Ata</button>
+            <button type="button" disabled={busy || !selected.length || !level} onClick={() => void apply("level")}>{busyAction === "level" ? "Atama doğrulanıyor…" : "Seviyeyi Ata"}</button>
           </div>
 
           <small className="bulkSafetyNote">
@@ -186,7 +236,7 @@ export default function OperationStudentManager({
         </div>
       </div>
 
-      {message && <div className="rosterMessage">{message}</div>}
+      {message && <div className={`rosterMessage ${messageError ? "error" : ""}`} role="status" aria-live="polite">{message}</div>}
 
       <div className="rosterGrid">
         {filtered.map((student) => {
@@ -291,6 +341,7 @@ export default function OperationStudentManager({
         .bulkControl button{border:0;border-radius:10px;background:#1769e8;color:#fff;padding:0 12px;font-weight:850;font-size:11px;cursor:pointer}
         .bulkControl button:disabled{opacity:.45;cursor:not-allowed}
         .rosterMessage{padding:9px 11px;margin-bottom:10px;border-radius:10px;background:#eef6ff;color:#1459a6;font-size:12px;font-weight:800}
+        .rosterMessage.error{background:#fff0f0;color:#a52929}
         .rosterGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
         .rosterCard{border:1px solid #dce6f2;border-radius:16px;padding:13px;background:#fff;transition:.15s ease}
         .rosterCard.selected{border-color:#1769e8;box-shadow:0 0 0 2px rgba(23,105,232,.1)}

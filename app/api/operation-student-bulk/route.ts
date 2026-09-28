@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: validStudents, error: studentError } = await supabase
     .from("students")
-    .select("id,branch_id")
+    .select("id,branch_id,swimming_level")
     .eq("organization_id", organizationId)
     .eq("is_deleted", false)
     .in("id", studentIds);
@@ -106,31 +106,57 @@ export async function POST(request: NextRequest) {
       canonicalLevel = createdLevel;
     }
 
-    const { error } = await supabase
-      .from("students")
-      .update({ swimming_level: canonicalLevel.name })
-      .eq("organization_id", organizationId)
-      .in("id", validIds);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const { error: membershipLevelError } = await supabase
+    const { data: currentMemberships, error: membershipLookupError } = await supabase
       .from("student_group_memberships")
-      .update({
-        level_id: canonicalLevel.id,
-      })
+      .select("id,student_id,level_id")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .in("student_id", validIds);
 
-    if (membershipLevelError) {
-      return NextResponse.json({ error: membershipLevelError.message }, { status: 500 });
+    if (membershipLookupError) {
+      return NextResponse.json({ error: membershipLookupError.message }, { status: 500 });
     }
 
-    await supabase.from("student_timeline_events").insert(
-      validIds.map((studentId) => ({
+    const studentChanges = (validStudents || [])
+      .filter((student: any) => student.swimming_level !== canonicalLevel.name)
+      .map((student: any) => student.id);
+    const membershipChanges = (currentMemberships || [])
+      .filter((membership: any) => membership.level_id !== canonicalLevel.id)
+      .map((membership: any) => membership.id);
+
+    if (studentChanges.length) {
+      const { data, error } = await supabase
+        .from("students")
+        .update({ swimming_level: canonicalLevel.name })
+        .eq("organization_id", organizationId)
+        .in("id", studentChanges)
+        .select("id");
+      if (error || data?.length !== studentChanges.length) {
+        return NextResponse.json({ error: error?.message || "Seviye değişikliği doğrulanamadı." }, { status: 500 });
+      }
+    }
+
+    if (membershipChanges.length) {
+      const { data, error } = await supabase
+        .from("student_group_memberships")
+        .update({ level_id: canonicalLevel.id })
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .in("id", membershipChanges)
+        .select("id");
+      if (error || data?.length !== membershipChanges.length) {
+        return NextResponse.json({ error: error?.message || "Grup üyeliğindeki seviye doğrulanamadı." }, { status: 500 });
+      }
+    }
+
+    const changedIds = Array.from(new Set([
+      ...studentChanges,
+      ...(currentMemberships || [])
+        .filter((membership: any) => membershipChanges.includes(membership.id))
+        .map((membership: any) => membership.student_id),
+    ]));
+    if (changedIds.length) await supabase.from("student_timeline_events").insert(
+      changedIds.map((studentId) => ({
         organization_id: organizationId,
         student_id: studentId,
         event_type: "level_updated",
@@ -140,9 +166,21 @@ export async function POST(request: NextRequest) {
       })),
     );
 
+    const { data: verifiedStudents, error: verifyStudentError } = await supabase
+      .from("students")
+      .select("id,swimming_level")
+      .eq("organization_id", organizationId)
+      .in("id", validIds);
+    if (verifyStudentError || verifiedStudents?.length !== validIds.length ||
+      verifiedStudents.some((student: any) => student.swimming_level !== canonicalLevel.name)) {
+      return NextResponse.json({ error: verifyStudentError?.message || "Seviye ataması doğrulanamadı." }, { status: 500 });
+    }
+
     return NextResponse.json({
       ok: true,
-      updated: validIds.length,
+      updated: changedIds.length,
+      unchanged: validIds.length - changedIds.length,
+      appliedIds: validIds,
       action: "level",
       level_id: canonicalLevel.id,
       level: canonicalLevel.name,
@@ -224,17 +262,28 @@ export async function POST(request: NextRequest) {
     if (!rows.length) {
       return NextResponse.json({ error: "Atama yapılabilecek aktif seans bulunamadı." }, { status: 400 });
     }
-
-    const { error } = await supabase
-      .from("lesson_student_assignments")
-      .upsert(rows, { onConflict: "schedule_id,student_id" });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const scheduledStudentIds = new Set(rows.map((row) => row.student_id));
+    if (validIds.some((id) => !scheduledStudentIds.has(id))) {
+      return NextResponse.json({ error: "Seçili kursiyerlerden en az birinin aktif grup veya seansı yok. Hiçbir eğitmen ataması yapılmadı." }, { status: 400 });
     }
 
+    const { data: savedAssignments, error } = await supabase
+      .from("lesson_student_assignments")
+      .upsert(rows, { onConflict: "schedule_id,student_id" })
+      .select("student_id,schedule_id,coach_id,is_active");
+
+    const expectedAssignments = new Set(rows.map((row) => `${row.student_id}:${row.schedule_id}`));
+    const confirmedAssignments = (savedAssignments || []).filter((row: any) =>
+      row.coach_id === coachId && row.is_active &&
+      expectedAssignments.has(`${row.student_id}:${row.schedule_id}`),
+    );
+    if (error || confirmedAssignments.length !== rows.length) {
+      return NextResponse.json({ error: error?.message || "Toplu eğitmen ataması doğrulanamadı." }, { status: 500 });
+    }
+
+    const appliedIds = Array.from(new Set(rows.map((row) => row.student_id)));
     await supabase.from("student_timeline_events").insert(
-      validIds.map((studentId) => ({
+      appliedIds.map((studentId) => ({
         organization_id: organizationId,
         student_id: studentId,
         event_type: "coach_assignment_updated",
@@ -244,7 +293,7 @@ export async function POST(request: NextRequest) {
       })),
     );
 
-    return NextResponse.json({ ok: true, updated: validIds.length, assignments: rows.length, action: "coach" });
+    return NextResponse.json({ ok: true, updated: appliedIds.length, assignments: rows.length, appliedIds, coach_id: coachId, action: "coach" });
   }
 
   return NextResponse.json({ error: "Geçersiz işlem." }, { status: 400 });
