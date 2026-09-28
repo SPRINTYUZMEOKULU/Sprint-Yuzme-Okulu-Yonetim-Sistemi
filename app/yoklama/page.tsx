@@ -13,12 +13,16 @@ let coachVisibleSchedules=effectiveSchedules;
 let coachVisibleGroups=groups.data||[];
 if(profile.role==="coach"){
   const {data:coachStaff}=await supabase.from("staff").select("id").eq("organization_id",organizationId).eq("auth_user_id",profile.id).eq("is_active",true).maybeSingle();
-  if(coachStaff?.id){
-    const assignedRows=(staffAssignments.data||[]).filter((item:any)=>item.coach_id===coachStaff.id);
+  // Operasyon planındaki coach_id alanları profile.id kullanıyor. Personel/puantaj
+  // tarafındaki eski veya ek kayıtlar staff.id kullanabildiği için iki kimliği de
+  // kabul ediyoruz. Böylece yetkisi açık eğitmenin atanmış seansları boş görünmez.
+  const coachIds=new Set([profile.id,coachStaff?.id].filter(Boolean) as string[]);
+  if(coachIds.size){
+    const assignedRows=(staffAssignments.data||[]).filter((item:any)=>item.coach_id&&coachIds.has(item.coach_id));
     const assignedScheduleIds=new Set(assignedRows.map((item:any)=>item.schedule_id).filter(Boolean));
     const assignedGroupIds=new Set(assignedRows.map((item:any)=>item.group_id).filter(Boolean));
-    for(const group of groups.data||[]){if(group.primary_coach_id===coachStaff.id)assignedGroupIds.add(group.id)}
-    coachVisibleSchedules=effectiveSchedules.filter((schedule:any)=>schedule.coach_id===coachStaff.id||assignedScheduleIds.has(schedule.id)||assignedGroupIds.has(schedule.group_id));
+    for(const group of groups.data||[]){if(group.primary_coach_id&&coachIds.has(group.primary_coach_id))assignedGroupIds.add(group.id)}
+    coachVisibleSchedules=effectiveSchedules.filter((schedule:any)=>(schedule.coach_id&&coachIds.has(schedule.coach_id))||assignedScheduleIds.has(schedule.id)||assignedGroupIds.has(schedule.group_id));
     const visibleGroupIds=new Set(coachVisibleSchedules.map((schedule:any)=>schedule.group_id).filter(Boolean));
     coachVisibleGroups=(groups.data||[]).filter((group:any)=>visibleGroupIds.has(group.id));
   }else{
