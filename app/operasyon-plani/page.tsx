@@ -1990,23 +1990,7 @@ export default async function OperasyonPlaniPage({
               }}
             >
               {planScope === "hafta"
-                ? currentView === "seans"
-                  ? "Tüm aktif seans planı"
-                  : currentView === "egitmen"
-                  ? "Eğitmene göre aktif seans planı"
-                  : currentView === "grup"
-                  ? "Gruba göre aktif seans planı"
-                  : currentView === "seviye"
-                  ? "Seviyeye göre aktif seans planı"
-                  : currentView === "yas"
-                  ? "Yaş ve seviyeye göre aktif seans planı"
-                  : currentView === "ortak"
-                  ? "Ortak çalışan grup ve seanslar"
-                  : currentView === "havuz"
-                  ? "Havuza göre aktif seans planı"
-                  : currentView === "saat"
-                  ? "Saate göre aktif seans planı"
-                  : "Tüm aktif seans planı"
+                ? "Tüm aktif seans planı"
                 : new Intl.DateTimeFormat(
                     "tr-TR",
                     {
