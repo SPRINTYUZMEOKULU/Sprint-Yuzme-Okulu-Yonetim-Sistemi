@@ -3412,6 +3412,7 @@ export default async function OperasyonPlaniPage({
                                   </Link>
 
                                   {canEdit && (
+                                    <>
                                     <form
                                       action={
                                         ogrenciAta
@@ -3529,6 +3530,7 @@ export default async function OperasyonPlaniPage({
                                         Seviyeyi Ata
                                       </button>
                                     </form>
+                                    </>
                                   )}
                                 </div>
                               </div>
