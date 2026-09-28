@@ -450,6 +450,114 @@ async function ogrenciAta(formData: FormData) {
 }
 
 /* =========================================================
+   ÖĞRENCİ → SEVİYE ATAMA
+========================================================= */
+
+async function ogrenciSeviyeAta(formData: FormData) {
+  "use server";
+
+  const profile = await requireProfile([
+    "owner",
+    "admin",
+    "branch_manager",
+  ]);
+
+  const organizationId = profile.organization_id;
+  if (!organizationId) {
+    throw new Error("Organizasyon bilgisi bulunamadı.");
+  }
+
+  const studentId = String(formData.get("student_id") || "");
+  const levelName = String(formData.get("level") || "").trim().slice(0, 100);
+
+  if (!studentId || !levelName) {
+    throw new Error("Öğrenci ve seviye seçilmelidir.");
+  }
+
+  const supabase = await createClient();
+
+  const { data: existingLevel, error: lookupError } = await supabase
+    .from("swimming_levels")
+    .select("id,name,is_active")
+    .eq("organization_id", organizationId)
+    .ilike("name", levelName)
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw new Error(`Seviye doğrulanamadı: ${lookupError.message}`);
+  }
+
+  let levelRow = existingLevel;
+
+  if (levelRow && levelRow.is_active === false) {
+    const { data: reactivated, error: reactivateError } = await supabase
+      .from("swimming_levels")
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq("id", levelRow.id)
+      .eq("organization_id", organizationId)
+      .select("id,name,is_active")
+      .single();
+
+    if (reactivateError || !reactivated) {
+      throw new Error(`Seviye aktifleştirilemedi: ${reactivateError?.message || "Bilinmeyen hata"}`);
+    }
+    levelRow = reactivated;
+  }
+
+  if (!levelRow) {
+    const { data: created, error: createError } = await supabase
+      .from("swimming_levels")
+      .insert({
+        organization_id: organizationId,
+        name: levelName,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .select("id,name,is_active")
+      .single();
+
+    if (createError || !created) {
+      throw new Error(`Seviye oluşturulamadı: ${createError?.message || "Bilinmeyen hata"}`);
+    }
+    levelRow = created;
+  }
+
+  const { error: studentLevelError } = await supabase
+    .from("students")
+    .update({ swimming_level: levelRow.name })
+    .eq("organization_id", organizationId)
+    .eq("id", studentId);
+
+  if (studentLevelError) {
+    throw new Error(`Öğrenci seviyesi güncellenemedi: ${studentLevelError.message}`);
+  }
+
+  const { error: membershipLevelError } = await supabase
+    .from("student_group_memberships")
+    .update({ level_id: levelRow.id })
+    .eq("organization_id", organizationId)
+    .eq("student_id", studentId)
+    .eq("is_active", true);
+
+  if (membershipLevelError) {
+    throw new Error(`Grup üyeliği seviyesi güncellenemedi: ${membershipLevelError.message}`);
+  }
+
+  await supabase.from("student_timeline_events").insert({
+    organization_id: organizationId,
+    student_id: studentId,
+    event_type: "level_updated",
+    title: "Yüzme seviyesi güncellendi",
+    description: levelRow.name,
+    created_by: profile.id,
+  });
+
+  revalidatePath("/operasyon-plani");
+  revalidatePath(`/ogrenciler/${studentId}`);
+}
+
+/* =========================================================
    ORTAK SEANS / AYRI TUT TERCİHİ
 ========================================================= */
 
@@ -905,13 +1013,10 @@ export default async function OperasyonPlaniPage({
       return true;
     });
 
-  const currentView = params.gorunum || "seans";
-
-  if (currentView === "ortak") {
-    filteredSchedules = filteredSchedules.filter((schedule: any) =>
-      isSharedScheduleCandidate(schedule, filteredSchedules)
-    );
-  }
+  // Operasyon ekranında tek ana plan görünümü kullanılır.
+  // Eski görünüm URL'leri veri kaybına yol açmadan Seans Planı'na düşer.
+  // Tüm kursiyer yönetimi kendi ayrı kapsamını kullanmaya devam eder.
+  const currentView = params.kapsam === "tumu" ? "ogrenci" : "seans";
 
   // Görünüm düğmeleri yalnızca aktif renk değiştirmesin; seçilen görünüme
   // göre seansları gerçekten yeniden sırala. Bu sayede mobilde de tıklama
@@ -1651,190 +1756,27 @@ export default async function OperasyonPlaniPage({
                 <Icons.users />
               </span>
               <span style={scopeTextStyle}>
-                <b>Tüm Aktif Kursiyerler</b>
-                <small>Kalıcı grup · seviye · eğitmen planı</small>
+                <b>Kursiyer Yönetimi</b>
+                <small>Toplu eğitmen · seviye · öğrenci planı</small>
               </span>
             </Link>
           </div>
 
           <div className="opControlHeader" style={controlPanelHeaderStyle}>
             <div>
-              <strong style={controlPanelTitleStyle}>Planı görüntüle</strong>
-              <p style={controlPanelTextStyle}>Seansları ihtiyacınıza göre tek dokunuşla gruplayın ve filtreleyin.</p>
+              <strong style={controlPanelTitleStyle}>Plan özeti</strong>
+              <p style={controlPanelTextStyle}>
+                Haftalık veya günlük kapsamı seçin; yaş, seviye, havuz, saat, eğitmen ve grup ayrımlarını aşağıdaki filtrelerden yönetin.
+              </p>
             </div>
             <span style={controlDateBadgeStyle}>
               {planScope === "hafta"
                 ? "Haftalık aktif plan"
-                : `${GUNLER[selectedWeekday]} · ${selectedDate.split("-").reverse().join(".")}`}
+                : planScope === "tumu"
+                  ? "Tüm aktif kursiyerler"
+                  : `${GUNLER[selectedWeekday]} · ${selectedDate.split("-").reverse().join(".")}`}
             </span>
           </div>
-          <div className="opViewBar" style={viewBarStyle}>
-          {[
-            ["seans", "Seans Planı", "calendar"],
-            ["yas", "Yaş / Seviye", "cake"],
-            ["ortak", "Ortak Gruplar", "users"],
-          ].map(([key, label, iconName]) => {
-            const active = currentView === key;
-
-            const qp =
-              new URLSearchParams();
-
-            qp.set(
-              "tarih",
-              selectedDate
-            );
-
-            qp.set(
-              "gorunum",
-              key
-            );
-
-            if (params.sube)
-              qp.set(
-                "sube",
-                params.sube
-              );
-
-            if (params.saat)
-              qp.set(
-                "saat",
-                params.saat
-              );
-
-            if (params.egitmen)
-              qp.set(
-                "egitmen",
-                params.egitmen
-              );
-
-            if (params.grup)
-              qp.set(
-                "grup",
-                params.grup
-              );
-
-            if (params.seviye)
-              qp.set(
-                "seviye",
-                params.seviye
-              );
-
-            if (params.yas)
-              qp.set(
-                "yas",
-                params.yas
-              );
-
-            if (params.kapsam)
-              qp.set(
-                "kapsam",
-                params.kapsam
-              );
-
-            if (key === "ogrenci") {
-              qp.set("kapsam", "tumu");
-            } else if (qp.get("kapsam") === "tumu") {
-              qp.set("kapsam", planScope === "gun" ? "gun" : "hafta");
-            }
-
-            return (
-              <Link
-                key={key}
-                className={active ? "opViewButton isActive" : "opViewButton"}
-                href={`/operasyon-plani?${qp.toString()}`}
-                style={{
-                  ...viewButtonStyle,
-                  ...(active
-                    ? viewButtonActiveStyle
-                    : {}),
-                }}
-              >
-                <span style={viewButtonIconStyle}>
-                  {iconName === "calendar" ? <Icons.calendar /> : iconName === "cake" ? <Icons.cake /> : <Icons.users />}
-                </span>
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-          </div>
-
-          {(currentView === "yas" || currentView === "ortak") ? (
-            <details open style={quickViewDetailsStyle}>
-              <summary style={quickViewSummaryStyle}>
-                <span>
-                  <b>
-                    {currentView === "ortak"
-                      ? "Ortak grup seçimi"
-                      : "Yaş / seviye seçimi"}
-                  </b>
-                  <small style={filterSummaryTextStyle}>
-                    {currentView === "ortak"
-                      ? " Aynı havuz ve aynı saatte birlikte çalışan grupları açın."
-                      : " Yaş aralığı ve seviyeye göre planı daraltın."}
-                  </small>
-                </span>
-                <span style={filterSummaryBadgeStyle}>Seç / Filtrele</span>
-              </summary>
-
-              <form method="get" style={quickViewFormStyle}>
-                <input type="hidden" name="tarih" value={selectedDate} />
-                <input type="hidden" name="gorunum" value={currentView} />
-                {params.kapsam ? (
-                  <input type="hidden" name="kapsam" value={params.kapsam} />
-                ) : null}
-                {params.sube ? (
-                  <input type="hidden" name="sube" value={params.sube} />
-                ) : null}
-                {params.saat ? (
-                  <input type="hidden" name="saat" value={params.saat} />
-                ) : null}
-
-                {currentView === "yas" ? (
-                  <>
-                    <div style={filterFieldStyle}>
-                      <label style={labelStyle}>Yaş Aralığı</label>
-                      <select name="yas" defaultValue={params.yas || ""} style={inputStyle}>
-                        <option value="">Tüm Yaşlar</option>
-                        <option value="3-5">3–5 Yaş</option>
-                        <option value="6-8">6–8 Yaş</option>
-                        <option value="9-11">9–11 Yaş</option>
-                        <option value="12-14">12–14 Yaş</option>
-                        <option value="15+">15+ / Yetişkin</option>
-                      </select>
-                    </div>
-
-                    <div style={filterFieldStyle}>
-                      <label style={labelStyle}>Seviye</label>
-                      <select name="seviye" defaultValue={params.seviye || ""} style={inputStyle}>
-                        <option value="">Tüm Seviyeler</option>
-                        {levels.map((level: any) => (
-                          <option key={level} value={level}>{level}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                ) : (
-                  <div style={quickInfoStyle}>
-                    <strong>{selectedDaySharedSlots.length} ortak saat</strong>
-                    <span>
-                      Kartı açtığınızda grupları ve yalnız o güne seçili öğrencileri birlikte görebilirsiniz.
-                    </span>
-                  </div>
-                )}
-
-                <button type="submit" style={filterButtonStyle}>
-                  Uygula
-                </button>
-
-                <Link
-                  href={`/operasyon-plani?tarih=${selectedDate}&gorunum=${currentView}&kapsam=${planScope}`}
-                  style={clearButtonStyle}
-                >
-                  Temizle
-                </Link>
-              </form>
-            </details>
-          ) : null}
         </section>
 
         {/* =================================================
@@ -3555,6 +3497,38 @@ export default async function OperasyonPlaniPage({
                                         Kaydet
                                       </button>
                                     </form>
+
+                                    <form
+                                      action={ogrenciSeviyeAta}
+                                      style={studentAssignFormStyle}
+                                    >
+                                      <input
+                                        type="hidden"
+                                        name="student_id"
+                                        value={student.id}
+                                      />
+
+                                      <select
+                                        name="level"
+                                        defaultValue={student.swimming_level || ""}
+                                        style={studentCoachSelectStyle}
+                                        required
+                                      >
+                                        <option value="">Seviye seç</option>
+                                        {levels.map((level: any) => (
+                                          <option key={level} value={level}>
+                                            {level}
+                                          </option>
+                                        ))}
+                                      </select>
+
+                                      <button
+                                        type="submit"
+                                        style={saveSmallButtonStyle}
+                                      >
+                                        Seviyeyi Ata
+                                      </button>
+                                    </form>
                                   )}
                                 </div>
                               </div>
@@ -3863,45 +3837,6 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 const backButtonStyle = secondaryButtonStyle;
-
-const viewBarStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-  gap: 8,
-  background: "#f8fbff",
-  border: "1px solid #e1e8f2",
-  borderRadius: 15,
-  padding: 7,
-  marginBottom: 14,
-};
-
-const viewButtonStyle: React.CSSProperties = {
-  minHeight: 44,
-  padding: "9px 12px",
-  borderRadius: 10,
-  color: "#64748b",
-  textDecoration: "none",
-  fontSize: 12,
-  fontWeight: 850,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 7,
-};
-
-const viewButtonIconStyle: React.CSSProperties = {
-  width: 20,
-  height: 20,
-  display: "grid",
-  placeItems: "center",
-  flexShrink: 0,
-};
-
-const viewButtonActiveStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg,#1769e8 0%,#0f5fd8 100%)",
-  color: "#fff",
-  boxShadow: "0 5px 12px rgba(23,105,232,.16)",
-};
 
 const filterPanelStyle: React.CSSProperties = {
   display: "grid",
