@@ -259,8 +259,8 @@ export default function OperationStudentManager({
               </div>
 
               <div className="rosterActions">
-                <Link href={`/ogrenciler/${student.id}`}>Dijital Dosya</Link>
-                <Link href={`/yoklama?grup=${student.group_id || ""}`}>Yoklamaya Git</Link>
+                <Link className="rosterActionLink rosterActionSecondary" href={`/ogrenciler/${student.id}`}>Dijital Dosya</Link>
+                <Link className="rosterActionLink rosterActionPrimary" href={`/yoklama?grup=${student.group_id || ""}`}>Yoklamaya Git</Link>
               </div>
             </article>
           );
@@ -315,13 +315,14 @@ export default function OperationStudentManager({
         .quickAssignmentHead small{font-size:9px;color:#8a99ad;text-align:right;line-height:1.3}
         .inlineAssignments{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:0}
         .rosterActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
-        .rosterActions a{display:flex;align-items:center;justify-content:center;min-height:40px;border:1px solid #cfe0f4;border-radius:10px;text-decoration:none!important;color:#1769e8!important;font-size:11px;font-weight:850;background:#fff;box-shadow:0 2px 6px rgba(20,89,166,.04);line-height:1}
-        .rosterActions a:visited{color:#1769e8!important}
-        .rosterActions a:last-child{background:#1769e8!important;color:#fff!important;border-color:#1769e8;box-shadow:0 4px 10px rgba(23,105,232,.16)}
-        .rosterActions a:last-child:visited{color:#fff!important}
+        :global(.rosterActionLink){display:flex!important;align-items:center!important;justify-content:center!important;min-height:40px!important;border-radius:10px!important;text-decoration:none!important;font-size:11px!important;font-weight:850!important;line-height:1!important;box-sizing:border-box!important}
+        :global(.rosterActionSecondary){border:1px solid #cfe0f4!important;color:#1769e8!important;background:#fff!important;box-shadow:0 2px 6px rgba(20,89,166,.04)!important}
+        :global(.rosterActionSecondary:visited){color:#1769e8!important}
+        :global(.rosterActionPrimary){border:1px solid #1769e8!important;background:#1769e8!important;color:#fff!important;box-shadow:0 4px 10px rgba(23,105,232,.16)!important}
+        :global(.rosterActionPrimary:visited){color:#fff!important}
         .rosterEmpty{padding:28px;text-align:center;color:#7b8ca2}
         @media(max-width:900px){.rosterGrid{grid-template-columns:1fr}.bulkBar{grid-template-columns:1fr}.rosterFilters{grid-template-columns:1fr}.bulkAssignmentStack{width:100%}.bulkIntro{display:block}.bulkIntro p{text-align:left;margin-top:3px}}
-        @media(max-width:560px){.operationRoster{padding:11px;border-radius:16px}.operationRosterHeader{align-items:stretch}.rosterHeaderStats{min-width:76px}.operationRosterHeader h2{font-size:17px}.rosterFacts{grid-template-columns:1fr 1fr}.inlineAssignments,.rosterActions{grid-template-columns:1fr 1fr}.bulkControl{grid-template-columns:1fr auto}.bulkControl button{padding:0 9px}.levelPill{max-width:145px;overflow:hidden;text-overflow:ellipsis}.rosterCard{padding:10px}.quickAssignmentHead{display:block}.quickAssignmentHead small{display:block;text-align:left;margin-top:2px}.guardianLine{padding:6px 8px}.rosterFacts>div{padding:7px 8px}.quickAssignment{padding:7px}.rosterActions a{min-height:38px}}
+        @media(max-width:560px){.operationRoster{padding:11px;border-radius:16px}.operationRosterHeader{align-items:stretch}.rosterHeaderStats{min-width:76px}.operationRosterHeader h2{font-size:17px}.rosterFacts{grid-template-columns:1fr 1fr}.inlineAssignments,.rosterActions{grid-template-columns:1fr 1fr}.bulkControl{grid-template-columns:1fr auto}.bulkControl button{padding:0 9px}.levelPill{max-width:145px;overflow:hidden;text-overflow:ellipsis}.rosterCard{padding:10px}.quickAssignmentHead{display:block}.quickAssignmentHead small{display:block;text-align:left;margin-top:2px}.guardianLine{padding:6px 8px}.rosterFacts>div{padding:7px 8px}.quickAssignment{padding:7px}:global(.rosterActionLink){min-height:38px!important}}
       `}</style>
     </section>
   );
