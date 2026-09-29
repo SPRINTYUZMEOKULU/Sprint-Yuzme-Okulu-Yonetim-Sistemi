@@ -25,15 +25,25 @@ function hasDay(e:Enrollment|undefined,uiDay:number){const ds=Array.isArray(e?.l
 function remaining(e?:Enrollment){return Math.max(0,Number(e?.total_lessons||0)-Number(e?.used_lessons||0))}
 
 export default function QuickAttendanceClient(p:Props){
- const [date,setDate]=useState(today());
+ const [date,setDate]=useState(today);
  const day=weekday(date);
- const initialBranch=p.initialBranchId||p.schedules.find(s=>scheduleWeekday(s.weekday)===weekday(today()))?.branch_id||p.branches[0]?.id||"";
+ const initialBranch=(p.branches.some(b=>b.id===p.initialBranchId)?p.initialBranchId:"")||p.schedules.find(s=>scheduleWeekday(s.weekday)===weekday(today()))?.branch_id||p.branches[0]?.id||"";
  const [branchId,setBranchId]=useState(initialBranch);
  const [time,setTime]=useState("");
  const [statuses,setStatuses]=useState<Record<string,Status>>({});
  const [message,setMessage]=useState("");
  const [loaded,setLoaded]=useState(false);
  const [pending,startTransition]=useTransition();
+
+ function changeDate(nextDate:string){
+   if(!nextDate)return;
+   setDate(nextDate);
+   const nextDay=weekday(nextDate);
+   if(!p.schedules.some(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===nextDay&&s.branch_id===branchId)){
+     const nextBranch=p.schedules.find(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===nextDay)?.branch_id;
+     if(nextBranch)setBranchId(nextBranch);
+   }
+ }
 
  const schedulesForDay=useMemo(()=>p.schedules.filter(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===day&&(!branchId||s.branch_id===branchId)),[p.schedules,day,branchId]);
  const times=useMemo(()=>Array.from(new Set(schedulesForDay.map(s=>tm(s.start_time)))).sort(),[schedulesForDay]);
@@ -96,15 +106,16 @@ export default function QuickAttendanceClient(p:Props){
    <section className="qaTop">
      <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1></div>
      <div className="qaSelectors">
-       <input type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-       <select value={branchId} onChange={e=>setBranchId(e.target.value)}>{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
-       <select value={time} onChange={e=>setTime(e.target.value)} disabled={!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
+       <input type="date" value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
+       <select aria-label="Şube / Havuz" value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
+       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
      </div>
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işlendi</span></div>
    </section>
 
    <AttendanceReminderPanel key={draftKey} students={p.students} context={`${date} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
+   {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
    {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=><section className="qaGroup" key={g.group.id}>
      <header><div><b>{g.group.name||"Grup"}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span></div><button onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
      <div className="qaList">{g.students.map(s=>{const key=`${g.group.id}:${s.id}`;const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=rem<=0&&!comp;return <article key={s.id} className={expired?"expired":last?"last":""}>

@@ -241,7 +241,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
 
     // Eğitmen yalnızca kendisine atanmış grup/seanslarda yoklama alabilir.
     // owner/admin gibi yönetim rolleri kurum genelinde işlem yapmaya devam eder.
-    if (profile.role === "coach") {
+    if (profile.role === "coach" && !profile.is_super_user) {
       const { data: coachStaff, error: coachStaffError } = await supabase
         .from("staff")
         .select("id")
@@ -657,7 +657,7 @@ export async function clearAttendance(input: ClearAttendanceInput) {
       return { ok: false, message: "Seçilen grup veya ders seansı bulunamadı." };
     }
 
-    if (profile.role === "coach") {
+    if (profile.role === "coach" && !profile.is_super_user) {
       const { data: coachStaff } = await supabase
         .from("staff")
         .select("id")
