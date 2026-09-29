@@ -8,16 +8,17 @@ const roles = ["owner","admin","branch_manager","registration_staff","accounting
 
 type Priority = "low"|"normal"|"high"|"critical";
 
-export async function GET(){
+export async function GET(request:Request){
   const profile=await requireProfile([...roles]);
   const supabase=await createClient();
-  const {data,error}=await supabase.from("alerts")
+  let query=supabase.from("alerts")
     .select("id,title,description,priority,status,source_id,action_url,due_at,created_at,assigned_to")
     .eq("organization_id",profile.organization_id)
     .eq("alert_type","attendance_reminder")
-    .in("status",["open","in_progress"])
     .order("created_at",{ascending:false})
-    .limit(20);
+    .limit(100);
+  if(new URL(request.url).searchParams.get("includeCompleted")!=="1")query=query.in("status",["open","in_progress"]);
+  const {data,error}=await query;
   if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
   return NextResponse.json({ok:true,items:data||[]});
 }
@@ -31,6 +32,7 @@ export async function POST(request:Request){
   const requestedPriority=String(body.priority||"normal") as Priority;
   const priority:Priority=["low","normal","high","critical"].includes(requestedPriority)?requestedPriority:"normal";
   const dueDate=String(body.dueDate||"").trim();
+  if(note.length>4500)return NextResponse.json({ok:false,error:"Not çok uzun."},{status:400});
   if(note.length<3)return NextResponse.json({ok:false,error:"Hatırlatma notu en az 3 karakter olmalı."},{status:400});
 
   const supabase=await createClient();
