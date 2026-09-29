@@ -48,6 +48,7 @@ export async function POST(request:Request){
   }
 
   const title=studentName?`${studentName} · Yoklama hatırlatması`:"Yoklama notu / hatırlatma";
+  if(dueDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)||Number.isNaN(new Date(`${dueDate}T09:00:00+03:00`).getTime())))return NextResponse.json({ok:false,error:"Hatırlatma tarihi geçersiz."},{status:400});
   const dueAt=dueDate?new Date(`${dueDate}T09:00:00+03:00`).toISOString():null;
   const actionUrl=studentId?`/ogrenciler/${studentId}`:"/yoklama";
   const {data:alert,error}=await supabase.from("alerts").insert({
