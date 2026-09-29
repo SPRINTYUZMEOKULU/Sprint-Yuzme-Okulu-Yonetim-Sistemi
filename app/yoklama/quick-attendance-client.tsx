@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { getAttendanceForDate, saveAttendance } from "./actions";
 
 type Status="present"|"absent"|"excused"|"compensation";
@@ -111,6 +112,8 @@ export default function QuickAttendanceClient(p:Props){
      </div>
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işlendi</span></div>
    </section>
+
+   <AttendanceReminderPanel key={draftKey} students={p.students} context={`${date} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
    {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=><section className="qaGroup" key={g.group.id}>
