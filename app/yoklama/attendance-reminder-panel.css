@@ -1,0 +1,48 @@
+
+.attendanceReminderPanel{margin:12px 0;background:#fff;border:1px solid #dce5ef;border-radius:16px;box-shadow:0 4px 18px #10213a05;color:#153153;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.attendanceReminderPanel *{box-sizing:border-box}
+.attendanceReminderPanel .arpHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px}
+.attendanceReminderPanel .arpHeading{display:flex;align-items:center;gap:10px;min-width:0}
+.attendanceReminderPanel .arpIcon{width:38px;height:38px;display:grid;place-items:center;background:#eef5ff;color:#2168cd;border-radius:11px;flex-shrink:0}
+.attendanceReminderPanel .arpIcon svg{width:21px;height:21px}
+.attendanceReminderPanel h2{margin:0;font-size:16px;font-weight:750;letter-spacing:-.02em}
+.attendanceReminderPanel .arpHeading p{margin:3px 0 0;color:#78889c;font-size:12px;line-height:1.4}
+.attendanceReminderPanel button{font:inherit;cursor:pointer}
+.attendanceReminderPanel button:disabled{cursor:default;opacity:.5}
+.attendanceReminderPanel .arpAdd{border:1px solid #cfe0f6;color:#1663cb;background:#f4f8ff;padding:0 12px;min-height:40px;border-radius:10px;white-space:nowrap;font-size:13px;font-weight:700}
+.attendanceReminderPanel .arpForm{padding:0 16px 14px;display:grid;gap:9px}
+.attendanceReminderPanel .arpContext{font-size:11px;color:#647b98;background:#f5f8fc;padding:8px 10px;border-radius:8px;overflow-wrap:anywhere}
+.attendanceReminderPanel .arpNoteLabel{font-size:12px;font-weight:700;color:#415b79}
+.attendanceReminderPanel textarea,.attendanceReminderPanel select,.attendanceReminderPanel input{font:inherit;font-size:16px;width:100%;min-width:0;max-width:100%;border:1px solid #d6e1ee;border-radius:10px;background:#fff;color:#153153;outline:none}
+.attendanceReminderPanel textarea{padding:11px 12px;min-height:94px;resize:vertical;line-height:1.5}
+.attendanceReminderPanel textarea::placeholder{color:#8a9aae}
+.attendanceReminderPanel input,.attendanceReminderPanel select{height:44px;padding:0 10px}
+.attendanceReminderPanel :is(textarea,input,select):focus{border-color:#649ded;box-shadow:0 0 0 3px #eaf2ff}
+.attendanceReminderPanel button:focus-visible,.attendanceReminderPanel a:focus-visible,.attendanceReminderPanel summary:focus-visible{outline:3px solid #8db7f1;outline-offset:3px}
+.attendanceReminderPanel .arpOptions{border:1px solid #e7edf5;border-radius:10px;background:#fafcfe}
+.attendanceReminderPanel .arpOptions summary{padding:11px 12px;cursor:pointer;font-size:12px;font-weight:650;color:#47617e}
+.attendanceReminderPanel .arpOptions summary span{font-size:10px;font-weight:400;color:#8999ab;margin-left:4px}
+.attendanceReminderPanel .arpFields{padding:0 12px 12px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+.attendanceReminderPanel .arpFields label{display:grid;gap:6px;font-size:11px;color:#6a7e95;font-weight:650;min-width:0}
+.attendanceReminderPanel .arpFormFooter{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:3px}
+.attendanceReminderPanel .arpFormFooter small{color:#8392a5;font-size:11px}
+.attendanceReminderPanel .arpSave{min-height:44px;padding:0 20px;border:0;border-radius:10px;background:#1969da;color:#fff;font-size:13px;font-weight:750}
+.attendanceReminderPanel .arpMessage{margin:0 16px 12px;background:#eef7ff;border:1px solid #d7e9fc;border-radius:10px;padding:10px 12px;color:#285c91;font-size:12px;line-height:1.5;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.attendanceReminderPanel .arpMessage button{background:none;border:0;font-size:20px;color:#55789e;min-width:32px;min-height:32px}
+.attendanceReminderPanel .arpBottom{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid #edf2f7;gap:8px;background:#fcfdff}
+.attendanceReminderPanel .arpListToggle{display:flex;align-items:center;gap:7px;min-height:32px;border:0;background:none;color:#617792;padding:0;font-size:12px;font-weight:650}
+.attendanceReminderPanel .arpListToggle span{display:grid;place-items:center;min-width:22px;height:22px;background:#ecf3fd;color:#246dcb;border-radius:7px;font-size:11px}
+.attendanceReminderPanel .arpListToggle svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .15s}
+.attendanceReminderPanel .arpListToggle svg.isOpen{transform:rotate(180deg)}
+.attendanceReminderPanel a.arpAllNotes,.attendanceReminderPanel .arpActions a{color:#2467ba;text-decoration:none!important;font-size:12px;font-weight:650;display:inline-flex;align-items:center;gap:5px;min-height:32px}
+.attendanceReminderPanel .arpList{padding:12px 16px;display:grid;gap:9px;max-height:400px;overflow:auto}
+.attendanceReminderPanel .arpList article{border:1px solid #e2eaf3;border-left:3px solid #90b9ed;border-radius:10px;padding:12px;min-width:0;background:#fff}
+.attendanceReminderPanel .arpList article.priority-high{border-left-color:#eab04f}.attendanceReminderPanel .arpList article.priority-critical{border-left-color:#e87979}
+.attendanceReminderPanel .arpMeta{display:grid;gap:4px}.attendanceReminderPanel .arpMeta strong{font-size:12px}.attendanceReminderPanel .arpMeta small{font-size:10px;color:#8a9aae}
+.attendanceReminderPanel .arpList article p{margin:8px 0;color:#4d6683;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.attendanceReminderPanel .arpActions{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.attendanceReminderPanel .arpActions button{border:1px solid #cde7db;background:#f2faf6;color:#32805c;min-height:36px;padding:0 10px;border-radius:8px;font-size:11px;font-weight:650}
+.attendanceReminderPanel .arpDone{font-size:11px;color:#32805c}.attendanceReminderPanel .arpEmpty{margin:0;padding:10px;text-align:center;font-size:12px;color:#8294aa}
+@media(max-width:600px){.attendanceReminderPanel .arpHead{padding:12px}.attendanceReminderPanel .arpForm{padding:0 12px 12px}.attendanceReminderPanel .arpBottom{padding:7px 12px}.attendanceReminderPanel .arpFields{grid-template-columns:1fr 1fr}.attendanceReminderPanel .arpFields label:first-child{grid-column:1/-1}.attendanceReminderPanel .arpFields input{max-width:100%;width:100%;appearance:none}.attendanceReminderPanel .arpHeading p{font-size:11px}.attendanceReminderPanel .arpList{padding:10px 12px}.attendanceReminderPanel .arpMessage{margin:0 12px 10px}.attendanceReminderPanel .arpFormFooter small{max-width:145px}}
+
+.attendanceReminderPanel a.arpAllNotes{min-height:36px;padding:0 11px;border:1px solid #dae5f2;border-radius:9px;background:#fff;color:#3e638d;text-decoration:none!important}.attendanceReminderPanel a.arpAllNotes:hover{background:#f0f6fd;border-color:#bcd2ed}
