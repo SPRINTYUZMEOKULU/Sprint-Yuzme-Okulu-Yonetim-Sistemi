@@ -449,16 +449,22 @@ export async function POST(request: NextRequest) {
     }
     const newEnrollment = insertResult.data;
 
-    if (activeEnrollment?.id) {
-      const { error: closeError } = await supabase
-        .from("student_enrollments")
-        .update({ status: "completed", updated_at: now })
-        .eq("organization_id", organizationId)
-        .eq("id", activeEnrollment.id);
-      if (closeError) {
-        await supabase.from("student_enrollments").delete().eq("id", newEnrollment.id);
-        return fail("close-previous-enrollment", closeError);
-      }
+    /*
+     * Legacy/tekrar kayıt senaryolarında aynı öğrenciye ait birden fazla aktif
+     * enrollment kalmış olabilir. Sadece "en son" kaydı kapatmak yoklama ve
+     * kalan ders ekranlarında eski 0 bakiyeli paketin yeniden seçilmesine yol
+     * açıyordu. Yeni kaydı aktive etmeden önce öğrencinin tüm eski aktif
+     * kayıtlarını tek seferde kapatıyoruz.
+     */
+    const { error: closeError } = await supabase
+      .from("student_enrollments")
+      .update({ status: "completed", updated_at: now })
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .eq("status", "active");
+    if (closeError) {
+      await supabase.from("student_enrollments").delete().eq("id", newEnrollment.id);
+      return fail("close-previous-enrollments", closeError);
     }
 
     const { error: activateError } = await supabase
