@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 function getActionMessage(target: Element) {
   const text = (target.textContent || "").replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
@@ -28,8 +29,17 @@ function getActionMessage(target: Element) {
 }
 
 export default function StudentActionFeedback() {
+  const pathname = usePathname();
   const [message, setMessage] = useState("");
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setMessage("");
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const show = (target: Element) => {
@@ -46,17 +56,21 @@ export default function StudentActionFeedback() {
       );
     };
 
-    const onPointerDown = (event: PointerEvent) => {
+    const onClick = (event: MouseEvent) => {
       const action = findAction(event.target);
       if (!action) return;
+
+      // Geri/ileri navigasyonunda iOS'un eski pointer durumunu yeni sayfaya
+      // taşıması yanlış işlem mesajı gösterebiliyor. Yalnız tamamlanmış gerçek
+      // click aksiyonlarında geri bildirim üret.
       show(action);
     };
 
-    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("click", onClick, true);
 
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
-      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("click", onClick, true);
     };
   }, []);
 
