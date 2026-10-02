@@ -44,6 +44,53 @@ type Props = {
   notifications: NotificationItem[];
 };
 
+function UiIcon({
+  name,
+  size = 18,
+}: {
+  name: string;
+  size?: number;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "grid":
+      return <svg {...common}><rect x="4" y="4" width="6" height="6" rx="1.2"/><rect x="14" y="4" width="6" height="6" rx="1.2"/><rect x="4" y="14" width="6" height="6" rx="1.2"/><rect x="14" y="14" width="6" height="6" rx="1.2"/></svg>;
+    case "dot":
+      return <svg {...common}><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>;
+    case "plus":
+      return <svg {...common}><path d="M12 5v14M5 12h14"/></svg>;
+    case "check":
+      return <svg {...common}><path d="m5 12 4 4L19 6"/></svg>;
+    case "wallet":
+      return <svg {...common}><path d="M4 7.5h15a1 1 0 0 1 1 1v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11A1.5 1.5 0 0 1 5.5 5H17"/><path d="M15 12h5"/><circle cx="15.5" cy="12" r=".6" fill="currentColor" stroke="none"/></svg>;
+    case "approve":
+      return <svg {...common}><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.3 2.3 4.8-5"/></svg>;
+    case "settings":
+      return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>;
+    case "bell":
+      return <svg {...common}><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 20h4"/></svg>;
+    case "folderOpen":
+      return <svg {...common}><path d="M3.5 7.5h6l1.8 2H20a1.5 1.5 0 0 1 1.4 2l-2 6a2 2 0 0 1-1.9 1.4H5.2a2 2 0 0 1-1.9-2.6l1.5-4.5A2 2 0 0 1 6.7 10H20"/><path d="M3.5 7.5V6A1.5 1.5 0 0 1 5 4.5h4.3l1.7 2h5"/></svg>;
+    case "arrowRight":
+      return <svg {...common}><path d="M5 12h14"/><path d="m14 7 5 5-5 5"/></svg>;
+    case "undo":
+      return <svg {...common}><path d="M9 7 4 12l5 5"/><path d="M5 12h9a5 5 0 0 1 5 5v1"/></svg>;
+    default:
+      return <svg {...common}><circle cx="12" cy="12" r="8"/></svg>;
+  }
+}
+
 const FILTERS: Array<{
   key: FilterKey;
   label: string;
@@ -52,37 +99,37 @@ const FILTERS: Array<{
   {
     key: "all",
     label: "Tümü",
-    icon: "▦",
+    icon: "grid",
   },
   {
     key: "unread",
     label: "Okunmamış",
-    icon: "●",
+    icon: "dot",
   },
   {
     key: "preregistration",
     label: "Ön Kayıt",
-    icon: "＋",
+    icon: "plus",
   },
   {
     key: "attendance",
     label: "Yoklama",
-    icon: "✓",
+    icon: "check",
   },
   {
     key: "finance",
     label: "Finans",
-    icon: "₺",
+    icon: "wallet",
   },
   {
     key: "approvals",
     label: "Onaylar",
-    icon: "◎",
+    icon: "approve",
   },
   {
     key: "system",
     label: "Sistem",
-    icon: "⚙",
+    icon: "settings",
   },
 ];
 
@@ -477,7 +524,7 @@ export default function BildirimMerkeziClient({
                   aria-pressed={isActive}
                 >
                   <span className="filter-icon">
-                    {filter.icon}
+                    <UiIcon name={filter.icon} size={15} />
                   </span>
 
                   <span>
@@ -590,9 +637,10 @@ export default function BildirimMerkeziClient({
                           : "unread"
                       }`}
                     >
-                      {notification.is_read
-                        ? "✓"
-                        : "🔔"}
+                      <UiIcon
+                        name={notification.is_read ? "check" : "bell"}
+                        size={18}
+                      />
                     </div>
 
                     <div className="notification-content">
@@ -653,12 +701,10 @@ export default function BildirimMerkeziClient({
     }
   }}
 >
-  <span>
-    İlgili Kaydı Aç
-  </span>
-
-  <span aria-hidden="true">
-    →
+  <UiIcon name="folderOpen" size={16} />
+  <span>Kaydı Görüntüle</span>
+  <span className="open-record-arrow" aria-hidden="true">
+    <UiIcon name="arrowRight" size={15} />
   </span>
 </Link>
                         ) : null}
@@ -677,9 +723,7 @@ export default function BildirimMerkeziClient({
                               )
                             }
                           >
-                            <span>
-                              ✓
-                            </span>
+                            <span className="action-icon"><UiIcon name="check" size={15} /></span>
 
                             <span>
                               {currentlyWorking
@@ -701,9 +745,7 @@ export default function BildirimMerkeziClient({
                               )
                             }
                           >
-                            <span>
-                              ↶
-                            </span>
+                            <span className="action-icon"><UiIcon name="undo" size={15} /></span>
 
                             <span>
                               {currentlyWorking
@@ -988,8 +1030,20 @@ export default function BildirimMerkeziClient({
         }
 
         .filter-icon {
-          font-size: 12px;
-          font-weight: 950;
+          width: 22px;
+          height: 22px;
+          border-radius: 7px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: currentColor;
+          background: #f4f7fb;
+          border: 1px solid #e8edf4;
+        }
+
+        .filter-button.active .filter-icon {
+          background: rgba(255,255,255,.15);
+          border-color: rgba(255,255,255,.14);
         }
 
         .filter-count {
@@ -1261,29 +1315,64 @@ export default function BildirimMerkeziClient({
             border-color 0.13s ease;
         }
 
-        .open-record-button {
-          background: #1264e8;
-          color: white;
-          border: 1px solid #1264e8;
+        :global(a.open-record-button) {
+          min-height: 40px;
+          padding: 0 12px 0 13px;
+          border-radius: 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: linear-gradient(135deg, #176de9, #0753c8);
+          color: #ffffff !important;
+          border: 1px solid #0753c8;
+          text-decoration: none !important;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .05px;
           box-shadow:
-            0 6px 14px
-              rgba(18, 100, 232, 0.16);
+            0 7px 16px rgba(18, 100, 232, 0.18),
+            inset 0 1px 0 rgba(255,255,255,.2);
+          cursor: pointer;
+          transition:
+            transform 0.13s ease,
+            box-shadow 0.13s ease,
+            background 0.13s ease;
         }
 
-        .open-record-button:hover {
-          background: #0758d1;
+        :global(a.open-record-button:visited) {
+          color: #ffffff !important;
+        }
+
+        :global(a.open-record-button:hover) {
+          color: #ffffff !important;
+          background: linear-gradient(135deg, #1064dd, #0648b7);
+          text-decoration: none !important;
           box-shadow:
-            0 9px 18px
-              rgba(18, 100, 232, 0.2);
+            0 10px 20px rgba(18, 100, 232, 0.23);
           transform: translateY(-1px);
         }
 
-        .open-record-button:active {
-          transform: translateY(1px)
-            scale(0.97);
+        :global(a.open-record-button:active) {
+          transform: translateY(1px) scale(0.98);
           box-shadow:
-            inset 0 3px 8px
-              rgba(0, 0, 0, 0.12);
+            inset 0 3px 8px rgba(0, 0, 0, 0.12);
+        }
+
+        :global(.open-record-arrow) {
+          width: 23px;
+          height: 23px;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,.14);
+        }
+
+        .action-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .state-button {
