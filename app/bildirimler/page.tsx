@@ -46,6 +46,65 @@ function formatDate(value: string) {
   }
 }
 
+function UiIcon({
+  name,
+  size = 20,
+}: {
+  name: string;
+  size?: number;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "home":
+      return <svg {...common}><path d="m3 11 9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>;
+    case "warning":
+      return <svg {...common}><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4"/><path d="M12 16.5h.01"/></svg>;
+    case "check":
+      return <svg {...common}><path d="m5 12 4 4L19 6"/></svg>;
+    case "bell":
+      return <svg {...common}><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 20h4"/></svg>;
+    case "inbox":
+      return <svg {...common}><path d="M4 5h16l2 9v5H2v-5l2-9Z"/><path d="M2.5 14h5l2 3h5l2-3h5"/></svg>;
+    case "phone":
+      return <svg {...common}><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10 5h4"/><circle cx="12" cy="18.5" r=".8" fill="currentColor" stroke="none"/></svg>;
+    case "send":
+      return <svg {...common}><path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4 18-7Z"/></svg>;
+    case "plus":
+      return <svg {...common}><path d="M12 5v14M5 12h14"/></svg>;
+    case "user":
+      return <svg {...common}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>;
+    case "wallet":
+      return <svg {...common}><path d="M4 7.5h15a1 1 0 0 1 1 1v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11A1.5 1.5 0 0 1 5.5 5H17"/><path d="M15 12h5"/></svg>;
+    case "cash":
+      return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M7 9H5v2M17 15h2v-2"/></svg>;
+    case "approve":
+      return <svg {...common}><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.3 2.3 4.8-5"/></svg>;
+    case "shield":
+      return <svg {...common}><path d="M12 3 5 6v5c0 4.5 2.7 8 7 10 4.3-2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>;
+    case "calendar":
+      return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>;
+    case "operations":
+      return <svg {...common}><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></svg>;
+    case "settings":
+      return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6.2L14.7 3h-4L10.4 6.2A8 8 0 0 0 8.9 7L6.5 6l-2 3.4L6.5 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1A8 8 0 0 0 10.4 18l.3 3h4l.3-3a8 8 0 0 0 1.5-.9l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>;
+    case "info":
+      return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg>;
+    default:
+      return <svg {...common}><circle cx="12" cy="12" r="8"/></svg>;
+  }
+}
+
 export default async function BildirimlerPage() {
   const supabase = await createClient();
 
@@ -250,7 +309,7 @@ export default async function BildirimlerPage() {
               href="/"
               className="header-button secondary"
             >
-              <span>←</span>
+              <span className="header-button-icon"><UiIcon name="home" size={16} /></span>
               <span>Ana Sayfa</span>
             </Link>
 
@@ -258,7 +317,7 @@ export default async function BildirimlerPage() {
               href="/uyarilar"
               className="header-button warning"
             >
-              <span>⚠</span>
+              <span className="header-button-icon"><UiIcon name="warning" size={16} /></span>
               <span>Uyarılar</span>
             </Link>
 
@@ -266,7 +325,7 @@ export default async function BildirimlerPage() {
               href="/onay-merkezi"
               className="header-button primary"
             >
-              <span>✓</span>
+              <span className="header-button-icon"><UiIcon name="check" size={16} /></span>
               <span>Onay Merkezi</span>
             </Link>
           </div>
@@ -284,7 +343,7 @@ export default async function BildirimlerPage() {
 
         <section className="stats-grid">
           <article className="stat-card unread-stat">
-            <div className="stat-icon">🔔</div>
+            <div className="stat-icon"><UiIcon name="bell" size={22} /></div>
 
             <div>
               <div className="stat-label">
@@ -302,7 +361,7 @@ export default async function BildirimlerPage() {
           </article>
 
           <article className="stat-card today-stat">
-            <div className="stat-icon">📥</div>
+            <div className="stat-icon"><UiIcon name="inbox" size={22} /></div>
 
             <div>
               <div className="stat-label">
@@ -320,7 +379,7 @@ export default async function BildirimlerPage() {
           </article>
 
           <article className="stat-card device-stat">
-            <div className="stat-icon">📱</div>
+            <div className="stat-icon"><UiIcon name="phone" size={22} /></div>
 
             <div>
               <div className="stat-label">
@@ -338,7 +397,7 @@ export default async function BildirimlerPage() {
           </article>
 
           <article className="stat-card push-stat">
-            <div className="stat-icon">✓</div>
+            <div className="stat-icon"><UiIcon name="send" size={22} /></div>
 
             <div>
               <div className="stat-label">
@@ -366,9 +425,7 @@ export default async function BildirimlerPage() {
           <aside className="side-column">
             <section className="side-panel">
               <div className="side-panel-heading">
-                <div className="side-icon">
-                  📱
-                </div>
+                <div className="side-icon"><UiIcon name="phone" size={20} /></div>
 
                 <div>
                   <h2>Push Cihazları</h2>
@@ -434,47 +491,16 @@ export default async function BildirimlerPage() {
 
               <div className="source-list">
                 {[
-                  {
-                    label: "Ön Kayıtlar",
-                    icon: "＋",
-                  },
-                  {
-                    label: "Öğrenciler",
-                    icon: "◉",
-                  },
-                  {
-                    label: "Yoklama",
-                    icon: "✓",
-                  },
-                  {
-                    label: "Ödemeler",
-                    icon: "₺",
-                  },
-                  {
-                    label: "Günlük Kasa",
-                    icon: "▣",
-                  },
-                  {
-                    label: "Onay Merkezi",
-                    icon: "◎",
-                  },
-                  {
-                    label:
-                      "Kullanıcı ve Yetkiler",
-                    icon: "♙",
-                  },
-                  {
-                    label: "Ders Programı",
-                    icon: "▦",
-                  },
-                  {
-                    label: "Operasyon Planı",
-                    icon: "⌘",
-                  },
-                  {
-                    label: "Sistem",
-                    icon: "⚙",
-                  },
+                  { label: "Ön Kayıtlar", icon: "plus" },
+                  { label: "Öğrenciler", icon: "user" },
+                  { label: "Yoklama", icon: "check" },
+                  { label: "Ödemeler", icon: "wallet" },
+                  { label: "Günlük Kasa", icon: "cash" },
+                  { label: "Onay Merkezi", icon: "approve" },
+                  { label: "Kullanıcı ve Yetkiler", icon: "shield" },
+                  { label: "Ders Programı", icon: "calendar" },
+                  { label: "Operasyon Planı", icon: "operations" },
+                  { label: "Sistem", icon: "settings" },
                 ].map((source) => (
                   <div
                     key={source.label}
@@ -482,7 +508,7 @@ export default async function BildirimlerPage() {
                   >
                     <div className="source-name">
                       <span className="source-icon">
-                        {source.icon}
+                        <UiIcon name={source.icon} size={14} />
                       </span>
 
                       <span>
@@ -499,9 +525,7 @@ export default async function BildirimlerPage() {
             </section>
 
             <section className="info-panel">
-              <div className="info-icon">
-                ℹ
-              </div>
+              <div className="info-icon"><UiIcon name="info" size={17} /></div>
 
               <div>
                 <strong>
@@ -610,6 +634,20 @@ export default async function BildirimlerPage() {
             background 0.14s ease,
             border-color 0.14s ease;
           -webkit-tap-highlight-color: transparent;
+        }
+
+        .header-button-icon {
+          width: 24px;
+          height: 24px;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,.55);
+        }
+
+        .header-button.primary .header-button-icon {
+          background: rgba(255,255,255,.14);
         }
 
         .header-button.secondary {
@@ -746,10 +784,16 @@ export default async function BildirimlerPage() {
           align-items: center;
           justify-content: center;
           border-radius: 15px;
-          background: #edf4ff;
-          font-size: 20px;
-          border: 1px solid #deebfc;
+          background: linear-gradient(145deg, #f4f8ff, #e9f2ff);
+          color: #1768d8;
+          border: 1px solid #d9e7fb;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
         }
+
+        .unread-stat .stat-icon { color: #c78316; background: #fff8e9; border-color: #f6e4b9; }
+        .today-stat .stat-icon { color: #1768d8; }
+        .device-stat .stat-icon { color: #16845a; background: #eefaf4; border-color: #d7f0e3; }
+        .push-stat .stat-icon { color: #5d56c8; background: #f4f1ff; border-color: #e6e0ff; }
 
         .stat-label {
           color: #728098;
