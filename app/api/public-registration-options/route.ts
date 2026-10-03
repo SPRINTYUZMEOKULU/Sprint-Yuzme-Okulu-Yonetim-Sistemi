@@ -110,9 +110,11 @@ export async function GET() {
           `
           id,
           group_id,
+          branch_id,
           weekday,
           start_time,
-          end_time
+          end_time,
+          is_active
           `
         )
         .eq("organization_id", organization.id)
