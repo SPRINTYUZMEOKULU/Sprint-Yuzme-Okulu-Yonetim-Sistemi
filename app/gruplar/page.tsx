@@ -309,6 +309,11 @@ export default async function GroupsPage({
   const coaches = coachesResult.data || [];
   const memberships = (membershipsResult.data || []) as MembershipItem[];
   const students = (studentsResult.data || []) as StudentItem[];
+  const visibleStudents = students.filter(
+    (student) =>
+      String(student.status || "active").toLocaleLowerCase("tr-TR") !==
+      "passive"
+  );
   const staffAssignments =
     (staffAssignmentsResult.data || []) as StaffAssignmentItem[];
   const studentAssignments =
@@ -330,7 +335,7 @@ export default async function GroupsPage({
   );
 
   const studentMap = new Map(
-    students.map((student) => [student.id, student])
+    visibleStudents.map((student) => [student.id, student])
   );
 
   const scheduleById = new Map(
@@ -348,6 +353,13 @@ export default async function GroupsPage({
   const membershipsMap = new Map<string, MembershipItem[]>();
 
   for (const membership of memberships) {
+    // Pasife alınan kursiyerin geçmiş grup üyeliği korunabilir; ancak
+    // aktif seans/grup ekranındaki öğrenci sayısı ve eğitmen dağılımına
+    // dahil edilmemelidir.
+    if (!studentMap.has(membership.student_id)) {
+      continue;
+    }
+
     const current = membershipsMap.get(membership.group_id) || [];
     current.push(membership);
     membershipsMap.set(membership.group_id, current);
