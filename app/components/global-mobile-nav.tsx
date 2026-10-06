@@ -44,6 +44,7 @@ const groups: NavGroup[] = [
         children: [
           { label: "Veli Merkezi", href: "/veliler" },
           { label: "Veli Talepleri", href: "/veli-talepleri" },
+          { label: "Portal İçerikleri", href: "/veliler/icerik" },
         ],
       },
     ],
