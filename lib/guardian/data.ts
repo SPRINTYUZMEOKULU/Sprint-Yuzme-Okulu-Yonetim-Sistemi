@@ -96,9 +96,11 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
 
   const { data: students } = await admin
     .from("students")
-    .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id")
+    .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id,is_deleted")
     .eq("organization_id", profile.organization_id)
     .in("id", ids)
+    .eq("status", "active")
+    .eq("is_deleted", false)
     .order("first_name");
 
   const studentList = (students || []) as GuardianStudent[];
@@ -156,6 +158,12 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     schedules = data || [];
   }
 
+  const visibleAnnouncements = (announcementRes.data || []).filter((a: any) => {
+    if (a.group_id) return Boolean(group?.id) && a.group_id === group.id;
+    if (a.branch_id) return Boolean(branchId) && a.branch_id === branchId;
+    return true;
+  });
+
   const progress = (progressRes.data || []).map((item: any) => ({
     ...item,
     note: item.body,
@@ -174,7 +182,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     schedules,
     attendance: attendanceRes.data || [],
     progress,
-    announcements: announcementRes.data || [],
+    announcements: visibleAnnouncements,
     payments: paymentsRes.data || [],
     messages: messagesRes.data || [],
     documents: documentsRes.data || [],
