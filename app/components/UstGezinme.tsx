@@ -19,6 +19,7 @@ const menuItems: MenuItem[] = [
   { label: "Öğrenciler", href: "/ogrenciler", moduleKey: "students" },
   { label: "Veliler", href: "/veliler", moduleKey: "students" },
   { label: "Veli Talepleri", href: "/veli-talepleri", moduleKey: "students" },
+  { label: "Portal İçerikleri", href: "/veliler/icerik", moduleKey: "students" },
   { label: "Şubeler", href: "/subeler", moduleKey: "branches" },
   { label: "Gruplar", href: "/gruplar", moduleKey: "groups" },
   { label: "Ders Programı", href: "/ders-programi", moduleKey: "schedule" },
