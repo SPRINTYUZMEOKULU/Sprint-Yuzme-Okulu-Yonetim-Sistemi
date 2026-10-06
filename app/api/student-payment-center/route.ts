@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // yanlış ₺0 / Ödendi durumuna dönüşmez.
     const supabase = adminClient();
 
-    const [studentResult, enrollmentResult, paymentsResult, checklistResult, obligationsResult] = await Promise.all([
+    const [studentResult, enrollmentResult, paymentsResult, checklistResult] = await Promise.all([
       supabase
         .from("students")
         .select("id,first_name,last_name,phone,guardian_name,guardian_phone,preferred_package_id")
@@ -75,19 +75,12 @@ export async function GET(request: NextRequest) {
         .eq("organization_id", organizationId)
         .eq("student_id", studentId)
         .maybeSingle(),
-      supabase
-        .from("student_financial_obligations")
-        .select("id,enrollment_id,amount,paid_amount,due_date,status,created_at")
-        .eq("organization_id", organizationId)
-        .eq("student_id", studentId)
-        .order("created_at", { ascending: false }),
     ]);
 
     if (studentResult.error) throw studentResult.error;
     if (enrollmentResult.error) throw enrollmentResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
     if (checklistResult.error) throw checklistResult.error;
-    if (obligationsResult.error) throw obligationsResult.error;
 
     if (!studentResult.data) {
       return NextResponse.json(
@@ -175,45 +168,13 @@ export async function GET(request: NextRequest) {
       ? allPayments.filter((row: any) => row.enrollment_id === enrollment.id)
       : [];
 
-    const packageTotalReceived = activePayments.reduce(
+    const totalReceived = activePayments.reduce(
       (sum: number, row: any) => sum + amount(row.amount),
       0,
     );
 
-    const packageTotalAmount = amount(packageInfo?.price);
-    const packageRemaining = Math.max(0, packageTotalAmount - packageTotalReceived);
-
-    // Açık finansal yükümlülükler (örn. kayıt yenileme sonrası yeni dönem borcu)
-    // eski tahsilattan bağımsızdır. Yönetici düzeltmesiyle aynı enrollment kaydı
-    // yeni döneme taşınmış olsa bile eski ödeme yeni borcu kapatmış sayılmamalıdır.
-    const openObligations = (obligationsResult.data || []).filter((row: any) =>
-      !["paid", "cancelled"].includes(String(row.status || "").toLowerCase()),
-    );
-
-    const obligationTotalAmount = openObligations.reduce(
-      (sum: number, row: any) => sum + amount(row.amount),
-      0,
-    );
-    const obligationPaidAmount = openObligations.reduce(
-      (sum: number, row: any) => sum + amount(row.paid_amount),
-      0,
-    );
-    const obligationRemaining = openObligations.reduce(
-      (sum: number, row: any) =>
-        sum + Math.max(0, amount(row.amount) - amount(row.paid_amount)),
-      0,
-    );
-
-    const hasOpenObligation = obligationRemaining > 0.01;
-    const totalAmount = hasOpenObligation
-      ? Math.max(packageTotalAmount, obligationTotalAmount)
-      : packageTotalAmount;
-    const totalReceived = hasOpenObligation
-      ? obligationPaidAmount
-      : packageTotalReceived;
-    const remainingPayment = hasOpenObligation
-      ? obligationRemaining
-      : packageRemaining;
+    const totalAmount = amount(packageInfo?.price);
+    const remainingPayment = Math.max(0, totalAmount - totalReceived);
 
     const draftStartDate = String(draftData.start_date || "") || null;
     const draftPlannedEndDate = String(draftData.planned_end_date || "") || null;
@@ -230,10 +191,6 @@ export async function GET(request: NextRequest) {
             startDate: enrollment?.start_date || draftStartDate,
             plannedEndDate: enrollment?.planned_end_date || draftPlannedEndDate,
             paymentDueDate:
-              openObligations
-                .map((row: any) => row.due_date)
-                .filter(Boolean)
-                .sort()[0] ||
               enrollment?.payment_due_date ||
               checklistResult.data?.payment_due_date ||
               draftStartDate ||
@@ -245,8 +202,6 @@ export async function GET(request: NextRequest) {
             totalAmount,
             totalReceived,
             remainingPayment,
-            openObligationCount: openObligations.length,
-            obligationRemaining,
           }
         : null,
       payments: allPayments.map((row: any) => {
