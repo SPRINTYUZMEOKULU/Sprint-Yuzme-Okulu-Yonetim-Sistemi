@@ -508,6 +508,44 @@ export async function POST(request: NextRequest) {
       `Yeni döneminizin sağlıklı ve başarılı geçmesini dileriz.\n` +
       `*Sprint Yüzme Okulu*`;
 
+    const packageFee = Number(selectedPackage.price || 0);
+    if (Number.isFinite(packageFee) && packageFee > 0) {
+      const { data: existingPackageDebt, error: packageDebtLookupError } = await supabase
+        .from("student_financial_obligations")
+        .select("id,status")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("enrollment_id", newEnrollment.id)
+        .eq("obligation_type", "installment")
+        .ilike("title", "Paket ücreti%")
+        .neq("status", "cancelled")
+        .limit(1)
+        .maybeSingle();
+
+      if (packageDebtLookupError) return fail("package-debt-lookup", packageDebtLookupError);
+
+      if (!existingPackageDebt) {
+        const { error: packageDebtError } = await supabase
+          .from("student_financial_obligations")
+          .insert({
+            organization_id: organizationId,
+            student_id: studentId,
+            enrollment_id: newEnrollment.id,
+            obligation_type: "installment",
+            title: `Paket ücreti · ${selectedPackage.name}`,
+            description: "Kayıt yenileme sırasında otomatik oluşturulan yeni dönem paket borcu.",
+            amount: packageFee,
+            paid_amount: 0,
+            due_date: paymentDueDate || startDate,
+            status: "open",
+            reminder_days: 3,
+            created_by: profile.id,
+          });
+
+        if (packageDebtError) return fail("package-debt-create", packageDebtError);
+      }
+    }
+
     const optionalWrites = await Promise.all([
       supabase.from("student_renewal_events").insert({
         organization_id: organizationId,
