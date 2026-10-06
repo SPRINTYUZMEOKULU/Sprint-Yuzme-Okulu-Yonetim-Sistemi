@@ -20,3 +20,18 @@
   .portalManageButton{flex:0 0 auto;max-width:145px;white-space:normal;text-align:center;line-height:1.25}
   .portalAudienceGrid{grid-template-columns:1fr}
 }
+
+.guardianChildActions{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0}
+.guardianUnlinkButton{color:#b4232d!important;background:#fff1f2!important;border:1px solid #fecaca!important;min-height:44px}
+@media(max-width:600px){.guardianChild{flex-wrap:wrap}.guardianChildActions{width:100%;align-items:stretch}.guardianChildActions>a{text-align:center}.guardianChildActions button{width:100%}}
+
+
+.guardianChild>span:first-child{min-width:0;flex:1;overflow-wrap:anywhere}
+.guardianChild .guardianChildActions{display:flex;gap:8px}
+.guardianStudentFileButton{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid #cfe0f4;border-radius:12px;background:#edf5ff;color:#1769e8!important;text-decoration:none!important;font:800 12px system-ui}
+.guardianStudentFileButton svg{width:18px;height:18px;flex-shrink:0}
+.guardianStudentFileButton:hover{background:#e0edff;border-color:#9ac1f5}
+.guardianChildActions a:focus-visible,.guardianChildActions button:focus-visible,.guardianCardActions a:focus-visible{outline:3px solid #78aefa;outline-offset:3px}
+.guardianChildActions small{font-size:11px;line-height:1.5}
+.guardianUnlinkButton:hover{background:#ffe4e8!important}
+@media(min-width:601px){.guardianChildActions{max-width:190px}}

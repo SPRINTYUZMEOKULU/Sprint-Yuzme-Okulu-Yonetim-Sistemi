@@ -10,8 +10,8 @@ import {
   linkGuardianStudentCanonical,
   sendGuardianPortalMessage,
   toggleGuardianProgressVisibility,
-  unlinkGuardianStudentCanonical,
 } from "./actions";
+import UnlinkStudentButton from "../unlink-student-button";
 import StudentSearchSelect from "./student-search-select";
 import "../guardian-management.css";
 
@@ -135,13 +135,9 @@ export default async function GuardianFile({ params, searchParams }: { params: P
                     <b>{s ? `${s.first_name} ${s.last_name}` : "Öğrenci"}</b>
                     <small>{s?.student_number || "Numara yok"} · {l.relationship || "Veli"} · {l.portal_access ? "Portal açık" : "Portal kapalı"}</small>
                   </span>
-                  <span>
-                    <Link href={`/ogrenciler/${l.student_id}`}>Dosyayı Aç</Link>
-                    {["owner", "admin"].includes(profile.role) ? <form action={unlinkGuardianStudentCanonical}>
-                      <input type="hidden" name="guardian_profile_id" value={id} />
-                      <input type="hidden" name="student_id" value={l.student_id} />
-                      <button className="deleteNoteButton">Bağı Kaldır</button>
-                    </form> : null}
+                  <span className="guardianChildActions">
+                    <Link className="guardianStudentFileButton" href={`/ogrenciler/${l.student_id}`}>Öğrenci Dosyası</Link>
+                    {["owner", "admin"].includes(profile.role) ? <UnlinkStudentButton profileId={id} studentId={l.student_id} name={s ? `${s.first_name} ${s.last_name}` : "Öğrenci"} /> : null}
                   </span>
                 </div>;
               })}
