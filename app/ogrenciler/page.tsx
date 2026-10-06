@@ -37,6 +37,7 @@ type PackageRow = {
   id: string;
   name: string;
   lesson_count: number | null;
+  price: number | null;
 };
 
 export type ScheduleRow = {
@@ -156,7 +157,7 @@ export default async function StudentsPage() {
 
     supabase
       .from("course_packages")
-      .select("id,name,lesson_count")
+      .select("id,name,lesson_count,price")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("lesson_count"),
@@ -197,6 +198,7 @@ export default async function StudentsPage() {
     attendancePlansResult,
     lessonBalancesResult,
     paymentSummariesResult,
+    studentPaymentsResult,
     compensationPlansResult,
     lastAttendanceResult,
     notesResult,
@@ -234,6 +236,14 @@ export default async function StudentsPage() {
           .select("*")
           .eq("organization_id", organizationId)
           .in("student_id", studentIds),
+
+        financeSupabase
+          .from("student_payments")
+          .select("student_id,enrollment_id,amount,payment_status,cancelled_at,received_at,created_at")
+          .eq("organization_id", organizationId)
+          .in("student_id", studentIds)
+          .order("received_at", { ascending: false })
+          .limit(10000),
 
         supabase
           .from("student_compensation_lessons")
@@ -281,6 +291,7 @@ export default async function StudentsPage() {
         { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
+        { data: [], error: null },
       ];
 
   const secondaryErrors = [
@@ -289,6 +300,7 @@ export default async function StudentsPage() {
     attendancePlansResult.error,
     lessonBalancesResult.error,
     paymentSummariesResult.error,
+    studentPaymentsResult.error,
     compensationPlansResult.error,
     lastAttendanceResult.error,
     notesResult.error,
@@ -355,6 +367,28 @@ export default async function StudentsPage() {
   const paymentSummaryMap = latestByStudent(
     (paymentSummariesResult.data || []) as any[]
   );
+
+  // Öğrenci Merkezi ile Dijital Kursiyer Dosyası aynı finans kaynağını kullanmalı.
+  // Aktif paket tahsilatını doğrudan student_payments üzerinden enrollment bazında
+  // topluyoruz; böylece ödenmiş aktif paket, eski/özet view verisi nedeniyle
+  // "Ödeme Bekleniyor" görünmez.
+  const receivedByEnrollment = new Map<string, number>();
+
+  for (const row of (studentPaymentsResult.data || []) as any[]) {
+    if (
+      !row?.enrollment_id ||
+      row?.cancelled_at ||
+      row?.payment_status === "cancelled"
+    ) {
+      continue;
+    }
+
+    const enrollmentId = String(row.enrollment_id);
+    receivedByEnrollment.set(
+      enrollmentId,
+      (receivedByEnrollment.get(enrollmentId) || 0) + toNumber(row.amount)
+    );
+  }
 
   const plannedCompensationCount = new Map<string, number>();
   const nextCompensationMap = new Map<string, any>();
@@ -542,17 +576,38 @@ export default async function StudentsPage() {
         attendancePlan?.compensation_planned_end_date ??
         normalEndDate;
 
-      const paymentStatus =
-        paymentSummary?.payment_status ??
-        paymentSummary?.status ??
-        null;
+      const activeEnrollmentId = enrollment?.id
+        ? String(enrollment.id)
+        : "";
 
-      const outstandingBalance = toNumber(
-        paymentSummary?.outstanding_balance ??
-          paymentSummary?.remaining_amount ??
-          paymentSummary?.balance_due ??
+      const activePackagePrice = toNumber(
+        selectedPackage?.price ??
+          paymentSummary?.package_total ??
+          paymentSummary?.package_amount ??
           0
       );
+
+      const activeTotalReceived = activeEnrollmentId
+        ? toNumber(receivedByEnrollment.get(activeEnrollmentId))
+        : toNumber(paymentSummary?.total_received ?? 0);
+
+      const hasActivePackagePrice = activePackagePrice > 0;
+      const outstandingBalance = hasActivePackagePrice
+        ? Math.max(activePackagePrice - activeTotalReceived, 0)
+        : toNumber(
+            paymentSummary?.outstanding_balance ??
+              paymentSummary?.remaining_amount ??
+              paymentSummary?.balance_due ??
+              0
+          );
+
+      const paymentStatus = hasActivePackagePrice
+        ? outstandingBalance <= 0.01
+          ? "paid"
+          : "waiting_payment"
+        : paymentSummary?.payment_status ??
+          paymentSummary?.status ??
+          null;
 
       return {
         id: student.id,
@@ -609,12 +664,8 @@ export default async function StudentsPage() {
         guardian_email: student.guardian_email || null,
 
         payment_status: paymentStatus,
-        payment_total_received: toNumber(
-          paymentSummary?.total_received ?? 0
-        ),
-        payment_package_outstanding: toNumber(
-          paymentSummary?.package_outstanding ?? 0
-        ),
+        payment_total_received: activeTotalReceived,
+        payment_package_outstanding: outstandingBalance,
         payment_extra_outstanding: toNumber(
           paymentSummary?.extra_outstanding ?? 0
         ),
