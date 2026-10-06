@@ -10,7 +10,7 @@ type Group={id:string;branch_id?:string|null;name?:string|null;course_type?:stri
 type Schedule={id:string;branch_id?:string|null;group_id?:string|null;coach_id?:string|null;weekday?:number|null;start_time?:string|null;end_time?:string|null;is_active?:boolean|null};
 type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolean|null};
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
-type Enrollment={id:string;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
+type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
 type Props={branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string};
 
@@ -64,7 +64,7 @@ export default function QuickAttendanceClient(p:Props){
    const memberIds=new Set(p.memberships.filter(m=>m.is_active!==false&&m.group_id===group.id&&m.student_id&&hasDay(enrollmentByStudent.get(m.student_id),day)).map(m=>m.student_id as string));
    const compensationIds=new Set(p.compensationLessons.filter(c=>c.status==="planned"&&c.target_group_id===group.id&&c.lesson_date===date&&(!c.target_schedule_id||c.target_schedule_id===schedule.id)).map(c=>c.student_id));
    const ids=new Set([...memberIds,...compensationIds]);
-   const students=p.students.filter(s=>ids.has(s.id)&&String(s.status||"active").toLocaleLowerCase("tr-TR")!=="passive").sort((a,b)=>fullName(a).localeCompare(fullName(b),"tr"));
+   const students=p.students.filter(s=>{const e=enrollmentByStudent.get(s.id);return !e?.start_confirmation_required||Boolean(e.actual_started_at)}).filter(s=>ids.has(s.id)&&String(s.status||"active").toLocaleLowerCase("tr-TR")!=="passive").sort((a,b)=>fullName(a).localeCompare(fullName(b),"tr"));
    return {group,schedule,students,enrollmentByStudent,compensationIds};
  }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,date,day]);
 

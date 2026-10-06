@@ -23,8 +23,8 @@ export async function GET(){
     const supabase=await createClient();
 
     const [studentsResult,enrollmentsResult,attendanceResult,transferStartedResult,groupsResult,branchesResult,schedulesResult]=await Promise.all([
-      supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status,registration_source").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false).eq("registration_source","web_form"),
-      supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
+      supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status,registration_source").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false),
+      supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
       supabase.from("attendance_records").select("student_id").eq("organization_id",organizationId),
       supabase.from("student_activity_logs").select("student_id").eq("organization_id",organizationId).eq("activity_type","legacy_transfer_manager_confirmed"),
       supabase.from("training_groups").select("id,name,branch_id").eq("organization_id",organizationId).eq("is_active",true),
@@ -49,9 +49,10 @@ export async function GET(){
 
     const students=(studentsResult.data||[]).flatMap((student:any)=>{
       const studentId=String(student.id);
-      if(attended.has(studentId)||transferStarted.has(studentId))return [];
       const enrollment=enrollmentMap.get(student.id);
       if(!enrollment)return [];
+      const pendingStart=enrollment.start_confirmation_required&&!enrollment.actual_started_at;
+      if(!pendingStart&&(student.registration_source!=="web_form"||attended.has(studentId)||transferStarted.has(studentId)))return [];
       const group=groupMap.get(String(enrollment.group_id||""));
       const branchId=String(group?.branch_id||enrollment.branch_id||"");
       const startDate=enrollment.start_date||null;

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import EnrollmentStartControl from "./enrollment-start-control";
 import * as XLSX from "xlsx";
 
 import {
@@ -17,6 +18,10 @@ export type StudentListItem = {
   last_name: string;
 
   status?: string | null;
+  enrollment_id?: string | null;
+  enrollment_start_date?: string | null;
+  start_confirmation_required?: boolean;
+  actual_started_at?: string | null;
   swimming_level?: string | null;
 
   branch_id?: string | null;
@@ -117,6 +122,7 @@ type StudentNoteItem = {
 
 type Props = {
   students: StudentListItem[];
+  canManageStart?: boolean;
   branches?: BranchOption[];
   groups?: GroupOption[];
   schedules?: ScheduleOption[];
@@ -191,7 +197,9 @@ function istanbulToday() {
 }
 
 function startsAfterToday(student: StudentListItem, today: string) {
-  if (student.status !== "active" || !student.start_date) return false;
+  if (student.status !== "active") return false;
+  if (student.start_confirmation_required && !student.actual_started_at) return true;
+  if (!student.start_date) return false;
   const start = student.start_date.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
   if (Number.isNaN(Date.parse(start + "T12:00:00Z"))) return false;
@@ -919,6 +927,7 @@ export default function StudentsClient({
   branches: branchOptions = [],
   groups: groupOptions = [],
   schedules: scheduleOptions = [],
+  canManageStart = false,
 }: Props) {
   const router = useRouter();
   const [referenceDate, setReferenceDate] = useState(istanbulToday);
@@ -2717,7 +2726,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
         >
           <span>Başlayacak Kursiyerler</span>
           <strong>{counts.starting}</strong>
-          <small>Başlangıç tarihi henüz gelmemiş kursiyerler</small>
+          <small>Tarihi gelmeyen veya Başlat onayı bekleyen kursiyerler</small>
         </button>
 
         <button
@@ -3089,6 +3098,15 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     "Durum Yok")}
                 </span>
               </header>
+
+              {isStartingStudent(student) && <EnrollmentStartControl
+                key={student.enrollment_id || student.id}
+                studentId={student.id}
+                enrollmentId={student.enrollment_id || ""}
+                startDate={student.enrollment_start_date || student.start_date || ""}
+                referenceDate={referenceDate}
+                canManage={canManageStart}
+              />}
 
               <div className="studentProgramLine">
                 <span>📍 {student.branch_name || "Şube yok"}</span>

@@ -618,6 +618,10 @@ export default async function StudentsPage() {
         last_name: student.last_name || "",
 
         status: student.status || null,
+        enrollment_id: enrollment?.id || null,
+        enrollment_start_date: enrollment?.start_date || null,
+        start_confirmation_required: Boolean(enrollment?.start_confirmation_required),
+        actual_started_at: enrollment?.actual_started_at || null,
         swimming_level: student.swimming_level || null,
 
         branch_id: branchId,
@@ -727,6 +731,7 @@ export default async function StudentsPage() {
       ) : (
         <StudentsClient
           students={preparedStudents}
+          canManageStart={["owner","admin","branch_manager","registration_staff","accounting"].includes(profile.role)}
           branches={branches}
           groups={groups}
           schedules={schedules}
