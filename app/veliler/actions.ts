@@ -1,5 +1,6 @@
 "use server";
 
+import { linkGuardianStudentCanonical, unlinkGuardianStudentCanonical } from "./[id]/actions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -157,7 +158,9 @@ export async function prepareGuardianPortalAccess(guardianProfileId: string) {
     if (guardianUpdateError) return { ok: false as const, message: guardianUpdateError.message };
   }
 
-  await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId);
+  const { error: profileActivationError } = await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId).eq("organization_id", organizationId).eq("role", "guardian");
+  if (profileActivationError) return { ok: false as const, message: "Şifre hazırlandı ancak portal hesabı etkinleştirilemedi. Lütfen tekrar deneyin." };
+  revalidatePath("/veli-paneli");
 
   revalidatePath("/veliler");
   revalidatePath(`/veliler/${guardianProfileId}`);
@@ -194,53 +197,13 @@ export async function updateGuardian(formData: FormData) {
 }
 
 export async function linkGuardianStudent(formData: FormData) {
-  const profile = await requireProfile([...managementRoles]);
-  const guardianId = text(formData, "guardian_id", 100);
-  const studentId = text(formData, "student_id", 100);
-  const path = `/veliler/${guardianId}`;
-  if (!profile.organization_id || !guardianId || !studentId) back(path, "error", "Veli veya öğrenci seçilmedi.");
-
-  const admin = adminClient();
-  const guardianState = await ensureGuardianProfile(admin, guardianId, profile.organization_id);
-  if (!guardianState.ok) back(path, "error", guardianState.message);
-
-  const { data: student, error: studentError } = await admin
-    .from("students")
-    .select("id")
-    .eq("id", studentId)
-    .eq("organization_id", profile.organization_id)
-    .maybeSingle();
-  if (studentError || !student) back(path, "error", studentError?.message || "Öğrenci bu organizasyonda bulunamadı.");
-
-  const { error } = await admin.from("guardian_students").upsert({
-    guardian_id: guardianId,
-    student_id: studentId,
-    relationship: text(formData, "relationship", 50) || "Veli",
-    is_primary: formData.get("is_primary") === "on",
-    is_payment_contact: formData.get("is_payment_contact") === "on",
-    receives_messages: formData.get("receives_messages") === "on",
-    portal_access: formData.get("portal_access") === "on",
-    is_emergency_contact: formData.get("is_emergency_contact") === "on",
-  }, { onConflict: "guardian_id,student_id" });
-
-  if (error) back(path, "error", `Öğrenci bağlanamadı: ${error.message}`);
-  revalidatePath("/veliler");
-  revalidatePath(path);
-  back(path, "saved", "Öğrenci bağlantısı kaydedildi.");
+  formData.set("guardian_profile_id", text(formData, "guardian_id", 100));
+  return linkGuardianStudentCanonical(formData);
 }
 
 export async function unlinkGuardianStudent(formData: FormData) {
-  const profile = await requireProfile(["owner", "admin"]);
-  const guardianId = text(formData, "guardian_id", 100);
-  const studentId = text(formData, "student_id", 100);
-  const path = `/veliler/${guardianId}`;
-  const admin = adminClient();
-  const { error } = await admin.from("guardian_students").delete()
-    .eq("guardian_id", guardianId).eq("student_id", studentId);
-  if (error) back(path, "error", error.message);
-  revalidatePath("/veliler");
-  revalidatePath(path);
-  back(path, "saved", "Öğrenci bağlantısı kaldırıldı.");
+  formData.set("guardian_profile_id", text(formData, "guardian_id", 100));
+  return unlinkGuardianStudentCanonical(formData);
 }
 
 export async function createGuardianRequest(formData: FormData) {

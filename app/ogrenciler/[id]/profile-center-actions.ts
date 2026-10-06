@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -74,10 +75,17 @@ async function guardianPortalState(studentId: string, organizationId: string) {
 
   if (!link?.guardian_id) return null;
 
+  const { data: record } = await admin.from("guardians")
+    .select("id,auth_user_id")
+    .eq("organization_id", organizationId)
+    .eq("id", link.guardian_id)
+    .maybeSingle();
+  if (!record?.auth_user_id) return null;
+
   const { data: guardian } = await admin
     .from("profiles")
     .select("id,full_name,email,phone,role,is_active,organization_id")
-    .eq("id", link.guardian_id)
+    .eq("id", record.auth_user_id)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -85,6 +93,7 @@ async function guardianPortalState(studentId: string, organizationId: string) {
 
   return {
     guardianId: guardian.id,
+    guardianRecordId: record.id,
     fullName: guardian.full_name || "",
     email: guardian.email || "",
     phone: guardian.phone || "",
@@ -257,11 +266,26 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     }
   }
 
+  const { data: existingRecord, error: recordLookupError } = await admin.from("guardians")
+    .select("id").eq("organization_id", organizationId).eq("auth_user_id", guardianId).maybeSingle();
+  if (recordLookupError) return { ok: false as const, message: recordLookupError.message };
+  let recordId = existingRecord?.id;
+  if (!recordId) {
+    const { data: createdRecord, error: recordError } = await admin.from("guardians").insert({
+      organization_id: organizationId, auth_user_id: guardianId,
+      full_name: fullName, phone: phone || null, email: email || null,
+      relationship, login_enabled: true, is_active: true,
+    }).select("id").single();
+    if (recordError || !createdRecord) return { ok: false as const, message: recordError?.message || "Ana veli kaydı oluşturulamadı." };
+    recordId = createdRecord.id;
+  }
+
   const { error: linkError } = await admin.from("guardian_students").upsert({
-    guardian_id: guardianId,
+    guardian_id: recordId,
     student_id: studentId,
     relationship,
     is_primary: true,
+    portal_access: true,
   }, { onConflict: "guardian_id,student_id" });
 
   if (linkError) {
@@ -280,7 +304,7 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     performed_at: new Date().toISOString(),
   });
 
-  revalidatePath(`/ogrenciler/${studentId}`);
+  revalidateGuardianConnection(guardianId, studentId);
   return {
     ok: true as const,
     message: createdAuthUser ? "Veli portal hesabı oluşturuldu ve öğrenciye bağlandı." : "Mevcut veli hesabı öğrenciye bağlandı.",
@@ -366,13 +390,15 @@ export async function unlinkGuardianPortal(studentIdValue: string) {
   if (!state?.guardianId) return { ok: false as const, message: "Bağlı veli hesabı bulunamadı." };
 
   const admin = adminClient();
-  const { error } = await admin
+  const { data: removed, error } = await admin
     .from("guardian_students")
     .delete()
     .eq("student_id", studentId)
-    .eq("guardian_id", state.guardianId);
+    .eq("guardian_id", state.guardianRecordId)
+    .select("student_id");
 
   if (error) return { ok: false as const, message: error.message };
-  revalidatePath(`/ogrenciler/${studentId}`);
+  if (!removed?.length) return { ok: false as const, message: "Bağlantı bulunamadı; ekranı yenileyin." };
+  revalidateGuardianConnection(state.guardianId, studentId);
   return { ok: true as const, message: "Veli portal hesabının öğrenci bağlantısı kaldırıldı." };
 }

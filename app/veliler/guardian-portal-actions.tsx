@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import GuardianIcon from "./guardian-icon";
 import { prepareGuardianPortalAccess } from "./actions";
 
 function whatsappPhone(value: string) {
@@ -41,11 +43,14 @@ export default function GuardianPortalActions({
   hasGuardianRow: boolean;
   linkedCount: number;
 }) {
+  const router = useRouter();
+  const [whatsappUrl, setWhatsappUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
   async function prepareAndSend() {
     if (busy) return;
+    setWhatsappUrl("");
     setBusy(true);
     setStatus("Portal erişimi hazırlanıyor…");
     try {
@@ -54,12 +59,9 @@ export default function GuardianPortalActions({
         setStatus(result.message);
         return;
       }
-      setStatus("✓ Şifre hazırlandı · WhatsApp açılıyor");
-      window.open(
-        `https://wa.me/${whatsappPhone(result.phone)}?text=${encodeURIComponent(portalMessage(result))}`,
-        "_blank",
-        "noopener,noreferrer"
-      );
+      setStatus("Geçici şifre hazır. Aşağıdaki butondan WhatsApp mesajını açın.");
+      setWhatsappUrl(`https://wa.me/${whatsappPhone(result.phone)}?text=${encodeURIComponent(portalMessage(result))}`);
+      router.refresh();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "İşlem tamamlanamadı.");
     } finally {
@@ -69,11 +71,12 @@ export default function GuardianPortalActions({
 
   return <div className="guardianQuickActions">
     <button type="button" className="guardianActivationButton" onClick={prepareAndSend} disabled={busy || !phone}>
-      {busy ? "Hazırlanıyor…" : "Şifre Oluştur / Yenile + WhatsApp"}
+      <GuardianIcon name="key"/>{busy ? "Hazırlanıyor…" : "Geçici Şifre Hazırla"}
     </button>
+    {whatsappUrl ? <button type="button" className="guardianActivationButton" onClick={() => window.open(whatsappUrl, "_blank", "noopener,noreferrer")}><GuardianIcon name="message"/>WhatsApp Mesajını Aç</button> : null}
     {!hasGuardianRow ? <span className="guardianHealth warning">Ana portal kaydı eksik · işlem sırasında otomatik onarılır</span> : null}
     {hasGuardianRow && linkedCount === 0 ? <span className="guardianHealth danger">Öğrenci bağlantısı eksik</span> : null}
     {!phone ? <span className="guardianHealth danger">Telefon eksik veya geçersiz</span> : null}
-    {status ? <small className="guardianActionStatus">{status}</small> : null}
+    {status ? <small role="status" aria-live="polite" className="guardianActionStatus">{status}</small> : null}
   </div>;
 }

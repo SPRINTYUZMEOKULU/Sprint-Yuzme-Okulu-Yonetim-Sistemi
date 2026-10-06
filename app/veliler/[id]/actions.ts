@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
 import { redirect } from "next/navigation";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
@@ -90,8 +91,7 @@ export async function linkGuardianStudentCanonical(formData: FormData) {
   }, { onConflict: "guardian_id,student_id" });
 
   if (error) back(authProfileId, "error", `Öğrenci bağlanamadı: ${error.message}`);
-  revalidatePath("/veliler");
-  revalidatePath(`/veliler/${authProfileId}`);
+  revalidateGuardianConnection(authProfileId, studentId);
   back(authProfileId, "saved", "Öğrenci bağlantısı kaydedildi.");
 }
 
@@ -105,13 +105,16 @@ export async function unlinkGuardianStudentCanonical(formData: FormData) {
   const resolved = await resolveCanonicalGuardianId(authProfileId, profile.organization_id);
   if (!resolved.ok) back(authProfileId, "error", resolved.message);
 
-  const { error } = await admin.from("guardian_students").delete()
-    .eq("guardian_id", resolved.guardianId)
-    .eq("student_id", studentId);
-  if (error) back(authProfileId, "error", error.message);
+  const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
+  if (!verified.ok) back(authProfileId, "error", verified.message);
 
-  revalidatePath("/veliler");
-  revalidatePath(`/veliler/${authProfileId}`);
+  const { data: removed, error } = await admin.from("guardian_students").delete()
+    .eq("guardian_id", resolved.guardianId)
+    .eq("student_id", studentId).select("student_id");
+  if (error) back(authProfileId, "error", error.message);
+  if (!removed?.length) back(authProfileId, "error", "Bağlantı kaldırılmadı; ekranı yenileyip tekrar deneyin.");
+
+  revalidateGuardianConnection(authProfileId, studentId);
   back(authProfileId, "saved", "Öğrenci bağlantısı kaldırıldı.");
 }
 
