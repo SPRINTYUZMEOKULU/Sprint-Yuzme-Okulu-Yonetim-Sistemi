@@ -1017,6 +1017,7 @@ const [noteBody, setNoteBody] = useState("");
 const [noteType, setNoteType] = useState("general");
 const [noteReminderAt, setNoteReminderAt] = useState("");
 const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+const noteReturnScrollYRef = useRef(0);
 
 async function loadStudentNotes(studentId: string) {
   setNoteLoading(true);
@@ -1036,6 +1037,7 @@ async function loadStudentNotes(studentId: string) {
 }
 
 function openStudentNotes(student: StudentListItem) {
+  noteReturnScrollYRef.current = window.scrollY;
   setNoteStudent(student);
   setEditingNoteId(null);
   setNoteBody("");
@@ -1089,9 +1091,20 @@ async function saveStudentNote() {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Not kaydedilemedi.");
-    await loadStudentNotes(noteStudent.id);
-    resetStudentNoteForm();
+
+    const returnScrollY = noteReturnScrollYRef.current;
+    closeStudentNotes();
     router.refresh();
+
+    // Not kaydı sonrası kullanıcıyı öğrenci listesindeki aynı çalışma noktasına döndür.
+    // Filtreler / arama / sıralama client state olarak korunur; scroll konumu da
+    // özellikle mobil Safari'de refresh sonrası ikinci kez sabitlenir.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: returnScrollY, left: 0, behavior: "auto" });
+      window.setTimeout(() => {
+        window.scrollTo({ top: returnScrollY, left: 0, behavior: "auto" });
+      }, 80);
+    });
   } catch (error) {
     setNoteError(error instanceof Error ? error.message : "Not kaydedilemedi.");
   } finally {
