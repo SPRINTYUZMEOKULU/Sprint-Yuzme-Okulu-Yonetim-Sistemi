@@ -109,10 +109,10 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("attendance_records").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("lesson_date", { ascending: false }).limit(40),
     admin.from("student_notes").select("id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("note_type", "coach").eq("is_guardian_visible", true).order("created_at", { ascending: false }).limit(30),
-    supabase.from("announcements").select("*").eq("is_published", true).order("published_at", { ascending: false }).limit(20),
+    admin.from("announcements").select("*").eq("organization_id", profile.organization_id).eq("is_published", true).order("published_at", { ascending: false }).limit(20),
     admin.from("payments").select("*").eq("student_id", selected.id).order("received_at", { ascending: false }).limit(30),
     admin.from("guardian_messages").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
-    supabase.from("guardian_documents").select("*").eq("is_active", true).order("sort_order").order("created_at", { ascending: false }),
+    admin.from("guardian_documents").select("*").eq("organization_id", profile.organization_id).eq("is_active", true).order("sort_order").order("created_at", { ascending: false }),
     admin.from("guardian_consents").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("accepted_at", { ascending: false })
   ]);
 
