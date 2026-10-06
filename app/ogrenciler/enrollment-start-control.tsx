@@ -32,7 +32,7 @@ export default function EnrollmentStartControl({studentId,enrollmentId,startDate
       }
     });
   }
-  return <section className="startPanel" onClick={event=>event.stopPropagation()}>
+  return <section className="startPanel" onClick={event=>event.stopPropagation()} onKeyDown={event=>event.stopPropagation()}>
     <div className="startHead"><span className="startIcon" aria-hidden="true">▶</span><div>
       <strong>{dateArrived?"Başlangıç Onayı Bekliyor":"Başlangıç Günü Bekleniyor"}</strong>
       <p>{dateArrived?"Başlat onayı verilene kadar Başlayacak listesinde kalır.":"Planlanan tarih geldiğinde Başlat butonu açılacak."}</p>
