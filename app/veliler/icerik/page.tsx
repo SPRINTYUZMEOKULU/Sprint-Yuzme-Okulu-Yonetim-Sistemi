@@ -27,16 +27,22 @@ export default async function GuardianContentManagement({ searchParams }: { sear
   const org = profile.organization_id!;
   const admin = adminClient();
 
-  const [announcementsRes, documentsRes, guardiansRes, messagesRes] = await Promise.all([
-    admin.from("announcements").select("id,title,body,is_published,published_at,created_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(50),
+  const [announcementsRes, documentsRes, guardiansRes, messagesRes, branchesRes, groupsRes] = await Promise.all([
+    admin.from("announcements").select("id,title,body,audience,branch_id,group_id,is_published,published_at,created_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(50),
     admin.from("guardian_documents").select("id,title,summary,document_type,requires_consent,is_active,version,created_at").eq("organization_id", org).order("sort_order").order("created_at", { ascending: false }).limit(50),
     admin.from("profiles").select("id").eq("organization_id", org).eq("role", "guardian").eq("is_active", true),
     admin.from("guardian_messages").select("id,read_at").eq("organization_id", org).limit(5000),
+    admin.from("branches").select("id,name,is_active").eq("organization_id", org).eq("is_active", true).order("name"),
+    admin.from("training_groups").select("id,name,branch_id,is_active").eq("organization_id", org).eq("is_active", true).order("name"),
   ]);
 
   const announcements = announcementsRes.data || [];
   const documents = documentsRes.data || [];
   const messages = messagesRes.data || [];
+  const branches = branchesRes.data || [];
+  const groups = groupsRes.data || [];
+  const branchMap = new Map(branches.map((b: any) => [b.id, b.name]));
+  const groupMap = new Map(groups.map((g: any) => [g.id, g.name]));
   const canPublishAnnouncements = ["owner", "admin", "branch_manager"].includes(profile.role);
   const canManageDocuments = ["owner", "admin"].includes(profile.role);
 
@@ -72,10 +78,10 @@ export default async function GuardianContentManagement({ searchParams }: { sear
           <div className="guardianEyebrow">PORTAL SENKRONİZASYONU</div>
           <h2>Hangi alan nereden yönetiliyor?</h2>
           <div className="guardianDetailGrid">
-            <div className="guardianChild"><span><b>Duyurular</b><small>Bu ekrandan oluşturulur ve yayınlanır.</small></span><span className="guardianPill">Manuel</span></div>
-            <div className="guardianChild"><span><b>Mesajlar & Gelişim</b><small>Veli dosyasından kişiye/öğrenciye özel gönderilir.</small></span><Link href="/veliler">Veliyi Aç</Link></div>
-            <div className="guardianChild"><span><b>Kurallar & Belgeler</b><small>Bu ekrandan yayınlanır; onay gerektiren belge işaretlenebilir.</small></span><span className="guardianPill">Manuel</span></div>
-            <div className="guardianChild"><span><b>Program · Yoklama · Ödeme</b><small>Mevcut SprintOS kayıtlarından otomatik gelir; burada tekrar girilmez.</small></span><span className="guardianPill">Otomatik</span></div>
+            <div className="guardianChild portalSyncRow"><span><b>Duyurular</b><small>Genel, şube veya grup bazında yayınlanabilir.</small></span><span className="guardianPill compact">Manuel</span></div>
+            <div className="guardianChild portalSyncRow"><span><b>Mesajlar & Gelişim</b><small>Veli dosyasından kişiye/öğrenciye özel gönderilir.</small></span><Link className="portalManageButton" href="/veliler"><span>Veli Dosyalarını Yönet</span><b>→</b></Link></div>
+            <div className="guardianChild portalSyncRow"><span><b>Kurallar & Belgeler</b><small>Bu ekrandan yayınlanır; onay gerektiren belge işaretlenebilir.</small></span><span className="guardianPill compact">Manuel</span></div>
+            <div className="guardianChild portalSyncRow"><span><b>Program · Yoklama · Ödeme</b><small>Mevcut SprintOS kayıtlarından otomatik gelir; burada tekrar girilmez.</small></span><span className="guardianPill compact">Otomatik</span></div>
           </div>
         </section>
 
@@ -84,6 +90,7 @@ export default async function GuardianContentManagement({ searchParams }: { sear
             <div className="guardianEyebrow">DUYURU YAYINLA</div>
             <h2>Veli portalı duyurusu</h2>
             {canPublishAnnouncements ? <form action={createAnnouncement} className="guardianForm">
+              <div className="portalAudienceBox"><div><strong>Kimler görecek?</strong><small>Boş bırakırsanız tüm aktif velilere yayınlanır.</small></div><div className="portalAudienceGrid"><label>Şube<select name="branch_id" defaultValue=""><option value="">Tüm şubeler</option>{branches.map((b:any)=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Grup<select name="group_id" defaultValue=""><option value="">Tüm gruplar</option>{groups.map((g:any)=><option key={g.id} value={g.id}>{branchMap.get(g.branch_id)||"Şube"} · {g.name}</option>)}</select></label></div></div>
               <label>Başlık<input name="title" placeholder="Örn. Havuz bakım duyurusu" required /></label>
               <label>Duyuru Metni<textarea name="body" rows={7} placeholder="Velilerin portalda göreceği bilgilendirmeyi yazın..." required /></label>
               <div className="guardianChecks"><label><input type="checkbox" name="is_published" defaultChecked /> Hemen yayınla</label></div>
@@ -113,7 +120,7 @@ export default async function GuardianContentManagement({ searchParams }: { sear
             <div className="guardianCardHead"><div><div className="guardianEyebrow">DUYURU GEÇMİŞİ</div><h2>Yayınlar</h2></div></div>
             <div className="guardianRequestList">
               {announcements.map((a: any) => <article className="guardianRequest" key={a.id}>
-                <div className="guardianRequestHead"><div><small>{date(a.published_at || a.created_at)}</small><h3>{a.title}</h3></div><span className={"guardianPill " + (a.is_published ? "" : "off")}>{a.is_published ? "Yayında" : "Taslak / Pasif"}</span></div>
+                <div className="guardianRequestHead"><div><small>{date(a.published_at || a.created_at)}</small><h3>{a.title}</h3><div className="guardianRequestMeta"><span>{a.group_id ? `Grup: ${groupMap.get(a.group_id)||"Seçili grup"}` : a.branch_id ? `Şube: ${branchMap.get(a.branch_id)||"Seçili şube"}` : "Tüm aktif veliler"}</span></div></div><span className={"guardianPill " + (a.is_published ? "" : "off")}>{a.is_published ? "Yayında" : "Taslak / Pasif"}</span></div>
                 <p style={{whiteSpace:"pre-wrap"}}>{a.body}</p>
                 {canPublishAnnouncements ? <form action={toggleAnnouncement}><input type="hidden" name="id" value={a.id}/><button className="guardianButton">{a.is_published ? "Portaldan Kaldır" : "Şimdi Yayınla"}</button></form> : null}
               </article>)}
