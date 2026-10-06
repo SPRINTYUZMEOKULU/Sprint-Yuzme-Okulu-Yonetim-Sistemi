@@ -426,6 +426,52 @@ export async function createStudentPayment(
       };
     }
 
+    /*
+     * YENİ DÖNEM PAKET BORCU SENKRONU
+     *
+     * Kayıt yenilemede otomatik açılan paket borcu aynı enrollment'a bağlıdır.
+     * Bu ekranda ödeme alındığında borç da aynı anda kapanır/kısmi kalır.
+     * Eski dönem borçları veya manuel "Ek borç" kayıtları etkilenmez.
+     */
+    const { data: packageObligation, error: packageObligationError } = await supabase
+      .from("student_financial_obligations")
+      .select("id,amount,paid_amount,status,title")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .eq("enrollment_id", enrollmentId)
+      .eq("obligation_type", "installment")
+      .ilike("title", "Paket ücreti%")
+      .in("status", ["open", "partially_paid"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (packageObligationError) {
+      console.error("package obligation sync lookup error:", packageObligationError);
+    } else if (packageObligation) {
+      const currentPaid = Number(packageObligation.paid_amount || 0);
+      const obligationAmount = Number(packageObligation.amount || 0);
+      const nextPaid = Math.min(obligationAmount, currentPaid + amount);
+      const nextStatus =
+        nextPaid >= obligationAmount ? "paid" : "partially_paid";
+
+      const { error: obligationSyncError } = await supabase
+        .from("student_financial_obligations")
+        .update({
+          paid_amount: nextPaid,
+          status: nextStatus,
+          paid_by: profile.id,
+          paid_at: nextStatus === "paid" ? now : null,
+          updated_at: now,
+        })
+        .eq("organization_id", organizationId)
+        .eq("id", packageObligation.id);
+
+      if (obligationSyncError) {
+        console.error("package obligation sync update error:", obligationSyncError);
+      }
+    }
+
     if (input.installmentId) {
       const { data: installment } = await supabase
         .from("student_payment_installments")
