@@ -1,3 +1,4 @@
+import { getGuardianContext } from "@/lib/guardian/data";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
@@ -21,7 +22,7 @@ export default async function GuardianRequestsPage({searchParams}:{searchParams:
  if(guardian)requestQuery.eq("guardian_id",profile.id);else if(query.guardian)requestQuery.eq("guardian_id",query.guardian);
  const [requestsRes,linksRes,studentsRes,guardiansRes,staffRes]=await Promise.all([
   requestQuery,
-  guardian?db.from("guardian_students").select("student_id").eq("guardian_id",profile.id):Promise.resolve({data:[]}),
+  guardian?getGuardianContext(profile.id).then(context=>({data:context.students.map(student=>({student_id:student.id}))})):Promise.resolve({data:[]}),
   db.from("students").select("id,first_name,last_name,student_number,branch_id").eq("organization_id",org).limit(5000),
   guardian?Promise.resolve({data:[]}):db.from("profiles").select("id,full_name,phone").eq("organization_id",org).eq("role","guardian"),
   guardian?Promise.resolve({data:[]}):db.from("profiles").select("id,full_name,role").eq("organization_id",org).eq("is_active",true).in("role",["owner","admin","branch_manager","registration_staff","accounting","coach"]),

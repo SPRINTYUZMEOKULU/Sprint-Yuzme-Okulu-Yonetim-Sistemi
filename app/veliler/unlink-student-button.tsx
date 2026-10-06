@@ -1,5 +1,6 @@
 "use client";
 import { unlinkGuardianStudentCanonical } from "./[id]/actions";
+import GuardianIcon from "./guardian-icon";
 import PendingSubmitButton from "@/app/ogrenciler/[id]/pending-submit-button";
 
 export default function UnlinkStudentButton({ profileId, studentId, name }: {
@@ -10,6 +11,6 @@ export default function UnlinkStudentButton({ profileId, studentId, name }: {
   }}>
     <input type="hidden" name="guardian_profile_id" value={profileId} />
     <input type="hidden" name="student_id" value={studentId} />
-    <PendingSubmitButton className="guardianButton guardianUnlinkButton" pendingText="Kaldırılıyor…">Bağlantıyı Kaldır</PendingSubmitButton>
+    <PendingSubmitButton className="guardianButton guardianUnlinkButton" pendingText="Kaldırılıyor…"><GuardianIcon name="unlink"/>Bağlantıyı Kaldır</PendingSubmitButton>
   </form>;
 }

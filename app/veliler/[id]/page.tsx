@@ -11,6 +11,8 @@ import {
   sendGuardianPortalMessage,
   toggleGuardianProgressVisibility,
 } from "./actions";
+import GuardianIcon from "../guardian-icon";
+import GuardianPortalActions from "../guardian-portal-actions";
 import UnlinkStudentButton from "../unlink-student-button";
 import StudentSearchSelect from "./student-search-select";
 import "../guardian-management.css";
@@ -62,6 +64,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const links = linksRes.data || [];
   const students = studentsRes.data || [];
   const studentMap = new Map(students.map((s: any) => [s.id, s]));
+  const activeLinks = links.filter((l: any) => studentMap.get(l.student_id)?.status === "active");
   const linkedIds = links.map((l: any) => l.student_id).filter(Boolean);
   const linkedIdSet = new Set(linkedIds);
   const visibleError = friendlyError(query.error);
@@ -71,13 +74,14 @@ export default async function GuardianFile({ params, searchParams }: { params: P
       ? admin.from("student_notes").select("id,student_id,body,target,is_guardian_visible,created_at,author_id,note_type").eq("organization_id", org).eq("note_type", "coach").in("student_id", linkedIds).order("created_at", { ascending: false }).limit(60)
       : Promise.resolve({ data: [] as any[], error: null }),
     admin.from("guardian_messages").select("id,student_id,title,body,message_type,channel,sent_at,read_at,created_at").eq("organization_id", org).eq("guardian_id", id).order("created_at", { ascending: false }).limit(60),
-    admin.from("announcements").select("id,title,body,audience,is_published,published_at,created_at").eq("is_published", true).order("published_at", { ascending: false }).limit(10),
+    admin.from("announcements").select("id,title,body,audience,is_published,published_at,created_at").eq("organization_id", org).eq("is_published", true).order("published_at", { ascending: false }).limit(10),
   ]);
 
   const progress = progressRes.data || [];
   const messages = messagesRes.data || [];
   const announcements = announcementRes.data || [];
-  const visibleProgressCount = progress.filter((p: any) => p.is_guardian_visible).length;
+  const portalStudentIds = new Set(activeLinks.filter((l: any) => l.portal_access).map((l: any) => l.student_id));
+  const visibleProgressCount = progress.filter((p: any) => p.is_guardian_visible && portalStudentIds.has(p.student_id)).length;
   const unreadMessageCount = messages.filter((m: any) => !m.read_at).length;
   const portalEnabled = guardian.is_active !== false && guardianRecordRes.data?.is_active !== false && guardianRecordRes.data?.login_enabled !== false;
 
@@ -98,8 +102,8 @@ export default async function GuardianFile({ params, searchParams }: { params: P
             <p>{guardian.phone || "Telefon yok"} · Son giriş: {date(guardian.last_sign_in_at)}</p>
           </div>
           <div className="guardianHeroActions">
-            <Link href="/veliler">Velilere Dön</Link>
-            <Link className="primary" href={`/veli-talepleri?guardian=${id}`}>Talepleri Aç</Link>
+            <Link href="/veliler"><GuardianIcon name="users"/>Velilere Dön</Link>
+            <Link className="primary" href={`/veli-talepleri?guardian=${id}`}><GuardianIcon name="message"/>Talepleri Aç</Link>
           </div>
         </header>
 
@@ -118,13 +122,14 @@ export default async function GuardianFile({ params, searchParams }: { params: P
               <div className="guardianChecks"><label><input type="checkbox" name="is_active" defaultChecked={guardian.is_active} /> Portal hesabı aktif</label></div>
               <PendingSubmitButton className="guardianButton primary" pendingText="Bilgiler kaydediliyor…">Bilgileri Kaydet</PendingSubmitButton>
             </form>
+            <GuardianPortalActions guardianProfileId={id} phone={guardian.phone || ""} hasGuardianRow={Boolean(canonicalGuardianId)} linkedCount={activeLinks.length}/>
             <div className="guardianChild" style={{ marginTop: 14 }}>
               <span><b>Oluşturulma</b><small>{date(guardian.created_at)}</small></span>
               <span><b>Son giriş</b><small>{date(guardian.last_sign_in_at)}</small></span>
             </div>
           </section>
 
-          <section className="guardianPanel">
+          <section className="guardianPanel" id="ogrenci-baglantilari">
             <div className="guardianEyebrow">ÖĞRENCİ BAĞLANTILARI</div>
             <h2>Bağlı öğrenciler</h2>
             <div className="guardianChildren">
@@ -133,19 +138,35 @@ export default async function GuardianFile({ params, searchParams }: { params: P
                 return <div className="guardianChild" key={l.student_id}>
                   <span>
                     <b>{s ? `${s.first_name} ${s.last_name}` : "Öğrenci"}</b>
-                    <small>{s?.student_number || "Numara yok"} · {l.relationship || "Veli"} · {l.portal_access ? "Portal açık" : "Portal kapalı"}</small>
+                    <small>{s?.student_number || "Numara yok"} · {l.relationship || "Veli"} · {s?.status === "active" && l.portal_access ? "Portala açık" : s?.status !== "active" ? "Pasif öğrenci · portalda gizli" : "Portal erişimi kapalı"}</small>
                   </span>
                   <span className="guardianChildActions">
-                    <Link className="guardianStudentFileButton" href={`/ogrenciler/${l.student_id}`}>Öğrenci Dosyası</Link>
+                    <Link className="guardianStudentFileButton" href={`/ogrenciler/${l.student_id}`}><GuardianIcon name="file"/>Öğrenci Dosyası</Link>
                     {["owner", "admin"].includes(profile.role) ? <UnlinkStudentButton profileId={id} studentId={l.student_id} name={s ? `${s.first_name} ${s.last_name}` : "Öğrenci"} /> : null}
                   </span>
+                  {s ? <details className="guardianLinkSettings">
+                    <summary><GuardianIcon name="shield"/>Bağlantı ve erişim ayarları</summary>
+                    <form action={linkGuardianStudentCanonical} className="guardianForm">
+                      <input type="hidden" name="guardian_profile_id" value={id}/>
+                      <input type="hidden" name="student_id" value={l.student_id}/>
+                      <label>Yakınlık<select name="relationship" defaultValue={l.relationship || "Veli"}>{Array.from(new Set([l.relationship || "Veli", "Anne", "Baba", "Yasal Vasi", "Kendisi", "Acil Durum Kişisi", "Diğer"])).map(value=><option key={value}>{value}</option>)}</select></label>
+                      <div className="guardianChecks">
+                        <label><input type="checkbox" name="is_primary" defaultChecked={l.is_primary}/>Birincil veli</label>
+                        <label><input type="checkbox" name="is_payment_contact" defaultChecked={l.is_payment_contact}/>Ödeme sorumlusu</label>
+                        <label><input type="checkbox" name="receives_messages" defaultChecked={l.receives_messages}/>Mesajları alsın</label>
+                        <label><input type="checkbox" name="portal_access" defaultChecked={l.portal_access}/>Portal erişimi</label>
+                        <label><input type="checkbox" name="is_emergency_contact" defaultChecked={l.is_emergency_contact}/>Acil durumda ara</label>
+                      </div>
+                      <PendingSubmitButton className="guardianButton primary" pendingText="Ayarlar kaydediliyor…">Bağlantı Ayarlarını Kaydet</PendingSubmitButton>
+                    </form>
+                  </details> : null}
                 </div>;
               })}
               {!links.length ? <div className="guardianChild"><small>Henüz öğrenci bağlantısı yok.</small></div> : null}
             </div>
             <form action={linkGuardianStudentCanonical} className="guardianForm" style={{ marginTop: 18 }}>
               <input type="hidden" name="guardian_profile_id" value={id} />
-              <StudentSearchSelect students={students.filter((s: any) => !linkedIdSet.has(s.id)).map((s: any) => ({ id: s.id, name: `${s.first_name || ""} ${s.last_name || ""}`.trim(), number: s.student_number || "" }))} />
+              <StudentSearchSelect students={students.filter((s: any) => s.status === "active" && !linkedIdSet.has(s.id)).map((s: any) => ({ id: s.id, name: `${s.first_name || ""} ${s.last_name || ""}`.trim(), number: s.student_number || "" }))} />
               <label>Yakınlık<select name="relationship"><option>Anne</option><option>Baba</option><option>Yasal Vasi</option><option>Kendisi</option><option>Acil Durum Kişisi</option><option>Diğer</option></select></label>
               <div className="guardianChecks">
                 <label><input type="checkbox" name="is_primary" /> Birincil veli</label>
@@ -161,17 +182,17 @@ export default async function GuardianFile({ params, searchParams }: { params: P
 
         <section className="guardianPanel" style={{ marginTop: 16 }}>
           <div className="guardianCardHead">
-            <div><div className="guardianEyebrow">VELİ PORTAL YÖNETİMİ</div><h2>Veli ne görüyor?</h2></div>
+            <div><div className="guardianEyebrow">VELİ PORTAL YÖNETİMİ</div><h2>Portal içerik özeti</h2></div>
             <span className="guardianPill">{portalEnabled ? "Portal Aktif" : "Portal Pasif"}</span>
           </div>
           <div className="guardianDetailGrid">
-            <div className="guardianChild"><span><b>{links.filter((l: any) => l.portal_access).length}</b><small>Portala açık öğrenci</small></span></div>
+            <div className="guardianChild"><span><b>{activeLinks.filter((l: any) => l.portal_access).length}</b><small>Portala açık öğrenci</small></span></div>
             <div className="guardianChild"><span><b>{visibleProgressCount}</b><small>Veliye açık gelişim notu</small></span></div>
             <div className="guardianChild"><span><b>{messages.length}</b><small>Portal mesajı · {unreadMessageCount} okunmamış</small></span></div>
-            <div className="guardianChild"><span><b>{announcements.length}</b><small>Yayındaki genel duyuru</small></span></div>
+            <div className="guardianChild"><span><b>{announcements.length}</b><small>Son yayınlanan duyurular · okul geneli</small></span></div>
           </div>
           <div className="guardianNotice" style={{ marginTop: 14 }}>
-            Veli portalında yalnızca portal erişimi açık öğrenciler, veliyle paylaşılmış gelişim notları, bu veliye gönderilen mesajlar ve yayınlanmış duyurular görünür.
+            Veli portalında yalnızca aktif ve portal erişimi açık öğrenciler, veliyle paylaşılmış gelişim notları, bu veliye gönderilen mesajlar ve yayınlanmış duyurular görünür.
           </div>
         </section>
 

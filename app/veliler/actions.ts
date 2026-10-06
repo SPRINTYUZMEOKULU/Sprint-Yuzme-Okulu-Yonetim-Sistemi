@@ -158,7 +158,9 @@ export async function prepareGuardianPortalAccess(guardianProfileId: string) {
     if (guardianUpdateError) return { ok: false as const, message: guardianUpdateError.message };
   }
 
-  await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId);
+  const { error: profileActivationError } = await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId).eq("organization_id", organizationId).eq("role", "guardian");
+  if (profileActivationError) return { ok: false as const, message: "Şifre hazırlandı ancak portal hesabı etkinleştirilemedi. Lütfen tekrar deneyin." };
+  revalidatePath("/veli-paneli");
 
   revalidatePath("/veliler");
   revalidatePath(`/veliler/${guardianProfileId}`);
