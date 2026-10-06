@@ -12,7 +12,7 @@ type Group = { id: string; branch_id: string | null; name: string; primary_coach
 type Student = { id: string; first_name: string | null; last_name: string | null; status: string | null; branch_id: string | null };
 type Enrollment = { id: string; student_id: string; branch_id: string | null; group_id: string | null; start_date: string | null; planned_end_date: string | null; total_lessons: number | null; used_lessons: number | null; status: string | null };
 type Attendance = { id: string; student_id: string; group_id: string | null; schedule_id: string | null; coach_id: string | null; lesson_date: string; status: string | null };
-type Payment = { id: string; student_id: string | null; amount: number | string | null; payment_status: string | null; payment_method: string | null; received_at: string | null; cancelled_at: string | null };
+type Payment = { id: string; student_id: string | null; enrollment_id: string | null; amount: number | string | null; payment_status: string | null; payment_method: string | null; received_at: string | null; cancelled_at: string | null };
 type Profile = { id: string; full_name: string | null; role: string | null };
 type Schedule = { id: string; branch_id: string | null; group_id: string | null; coach_id: string | null };
 
@@ -72,7 +72,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     supabase.from("students").select("id,first_name,last_name,status,branch_id").eq("organization_id", organizationId).eq("is_deleted", false),
     supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status").eq("organization_id", organizationId),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,coach_id,lesson_date,status").eq("organization_id", organizationId).gte("lesson_date", from).lte("lesson_date", to),
-    supabase.from("student_payments").select("id,student_id,amount,payment_status,payment_method,received_at,cancelled_at").eq("organization_id", organizationId).gte("received_at", `${from}T00:00:00`).lte("received_at", `${to}T23:59:59`),
+    supabase.from("student_payments").select("id,student_id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at").eq("organization_id", organizationId).gte("received_at", `${from}T00:00:00`).lte("received_at", `${to}T23:59:59`),
     supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId).eq("role", "coach"),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id").eq("organization_id", organizationId).eq("is_active", true),
   ]);
@@ -95,6 +95,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
   const groupMap = new Map(groups.map((g) => [g.id, g]));
   const studentMap = new Map(students.map((s) => [s.id, s]));
+  const enrollmentMap = new Map(enrollments.map((e) => [e.id, e]));
   const coachMap = new Map(coaches.map((c) => [c.id, c.full_name || "İsimsiz antrenör"]));
   const scheduleMap = new Map(schedules.map((s) => [s.id, s]));
 
@@ -106,9 +107,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const group = a.group_id ? groupMap.get(a.group_id) : null;
     return schedule?.branch_id === branchId || group?.branch_id === branchId || relevantStudentIds.has(a.student_id);
   });
-  const filteredPayments = payments.filter((p) => branchId === "all" || (p.student_id ? relevantStudentIds.has(p.student_id) : false));
+  const filteredPayments = payments.filter((p) => {
+    if (branchId === "all") return true;
+    const paymentEnrollment = p.enrollment_id ? enrollmentMap.get(p.enrollment_id) : null;
+    const paymentStudent = p.student_id ? studentMap.get(p.student_id) : null;
+    return paymentEnrollment?.branch_id === branchId || paymentStudent?.branch_id === branchId || (p.student_id ? relevantStudentIds.has(p.student_id) : false);
+  });
 
-  const activeEnrollments = filteredEnrollments.filter((e) => e.status === "active");
+  // "Aktif öğrenci" raporu, yalnızca öğrenci kartı ve kayıt dönemi birlikte aktifse sayılır.
+  // Böylece pasife alınmış kursiyerin eski aktif enrollment kaydı raporu şişirmez.
+  const activeEnrollments = filteredEnrollments.filter((e) => e.status === "active" && studentMap.get(e.student_id)?.status === "active");
+  const inconsistentActiveEnrollmentCount = filteredEnrollments.filter((e) => e.status === "active" && studentMap.get(e.student_id)?.status !== "active").length;
   const activeStudentIds = new Set(activeEnrollments.map((e) => e.student_id));
   const activeStudents = students.filter((s) => activeStudentIds.has(s.id));
   const presentCount = filteredAttendance.filter((a) => statusIsPresent(a.status)).length;
@@ -122,7 +131,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const branchRows = branches
     .filter((b) => branchId === "all" || b.id === branchId)
     .map((branch) => {
-      const branchEnrollments = enrollments.filter((e) => e.branch_id === branch.id && e.status === "active");
+      const branchEnrollments = enrollments.filter((e) => e.branch_id === branch.id && e.status === "active" && studentMap.get(e.student_id)?.status === "active");
       const studentIds = new Set(branchEnrollments.map((e) => e.student_id));
       const branchAttendance = attendance.filter((a) => {
         const schedule = a.schedule_id ? scheduleMap.get(a.schedule_id) : null;
@@ -131,7 +140,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       });
       const p = branchAttendance.filter((a) => statusIsPresent(a.status)).length;
       const a = branchAttendance.filter((row) => statusIsAbsent(row.status)).length;
-      const branchPayments = payments.filter((payment) => payment.student_id && studentIds.has(payment.student_id) && !payment.cancelled_at && !["cancelled", "canceled", "void"].includes(String(payment.payment_status || "").toLowerCase()));
+      const branchPayments = payments.filter((payment) => {
+        const paymentEnrollment = payment.enrollment_id ? enrollmentMap.get(payment.enrollment_id) : null;
+        const paymentStudent = payment.student_id ? studentMap.get(payment.student_id) : null;
+        const belongsToBranch = paymentEnrollment?.branch_id === branch.id || paymentStudent?.branch_id === branch.id;
+        return belongsToBranch && !payment.cancelled_at && !["cancelled", "canceled", "void"].includes(String(payment.payment_status || "").toLowerCase());
+      });
       return {
         id: branch.id,
         name: branch.name,
@@ -178,7 +192,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <main className="reportsShell">
       <div className="reportsWrap">
         <header className="reportsHeader">
-          <div><p className="reportsEyebrow">SPRİNT YÜZME OKULU · CANLI RAPORLAR</p><h1>Raporlar</h1><p>Öğrenci, şube, yoklama, tahsilat ve antrenör verileri tek merkezde.</p></div>
+          <div className="reportsHeaderCopy">
+            <div className="reportsTitleLine"><p className="reportsEyebrow">SPRİNT YÜZME OKULU · YÖNETİM RAPORLARI</p><span className="liveBadge"><i /> Canlı veri</span></div>
+            <h1>Rapor Merkezi</h1>
+            <p>Öğrenci, şube, yoklama, tahsilat ve antrenör performansını tek ekrandan izleyin.</p>
+          </div>
           <div className="reportsHeaderActions"><Link href="/" className="reportSecondary">← Yönetim paneli</Link><Link href="/odemeler" className="reportPrimary">Ödeme merkezini aç</Link></div>
         </header>
 
@@ -189,11 +207,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <button type="submit">Raporu getir</button>
         </form>
 
+        {inconsistentActiveEnrollmentCount > 0 ? (
+          <div className="dataNotice">
+            <div><strong>Veri tutarlılığı kontrolü</strong><span>{inconsistentActiveEnrollmentCount} pasif kursiyerde eski “aktif kayıt dönemi” bulundu. Aktif öğrenci ve kalan ders hesaplarına dahil edilmedi.</span></div>
+            <Link href="/ogrenciler?status=passive">Pasif kursiyerleri kontrol et →</Link>
+          </div>
+        ) : null}
+
         <section className="kpiGrid">
-          <article className="kpiCard"><span>Aktif öğrenci</span><strong>{activeStudentIds.size}</strong><small>{activeEnrollments.length} aktif kayıt</small></article>
-          <article className="kpiCard"><span>Dönem tahsilatı</span><strong>{money(collectionTotal)}</strong><small>{validPayments.length} ödeme kaydı</small></article>
-          <article className="kpiCard"><span>Katılım oranı</span><strong>{pct(attendanceRate)}</strong><small>{presentCount} katıldı · {absentCount} gelmedi</small></article>
-          <article className="kpiCard"><span>Kalan ders</span><strong>{remainingLessons}</strong><small>Aktif paketlerin toplamı</small></article>
+          <article className="kpiCard kpiBlue"><div className="kpiTop"><span>Aktif öğrenci</span><b>01</b></div><strong>{activeStudentIds.size}</strong><small>{activeEnrollments.length} aktif kayıt dönemi</small></article>
+          <article className="kpiCard kpiGreen"><div className="kpiTop"><span>Dönem tahsilatı</span><b>₺</b></div><strong>{money(collectionTotal)}</strong><small>{validPayments.length} geçerli ödeme kaydı</small></article>
+          <article className="kpiCard kpiAmber"><div className="kpiTop"><span>Katılım oranı</span><b>%</b></div><strong>{pct(attendanceRate)}</strong><small>{presentCount} katıldı · {absentCount} gelmedi</small></article>
+          <article className="kpiCard kpiViolet"><div className="kpiTop"><span>Kalan ders</span><b>∑</b></div><strong>{remainingLessons}</strong><small>Aktif kursiyer paketlerinin toplamı</small></article>
         </section>
 
         <section className="reportsGrid">
