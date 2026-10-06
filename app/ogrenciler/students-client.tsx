@@ -184,6 +184,20 @@ const DAY_NAMES: Record<number, string> = {
   7: "Pazar",
 };
 
+function istanbulToday() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+function startsAfterToday(student: StudentListItem, today: string) {
+  if (student.status !== "active" || !student.start_date) return false;
+  const start = student.start_date.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
+  if (Number.isNaN(Date.parse(start + "T12:00:00Z"))) return false;
+  return start > today;
+}
+
 function shortTime(value?: string | null) {
   return value ? value.slice(0, 5) : "";
 }
@@ -907,6 +921,17 @@ export default function StudentsClient({
   schedules: scheduleOptions = [],
 }: Props) {
   const router = useRouter();
+  const [referenceDate, setReferenceDate] = useState(istanbulToday);
+
+  useEffect(() => {
+    const updateDate = () => setReferenceDate(istanbulToday());
+    const timer = window.setInterval(updateDate, 60_000);
+    window.addEventListener("focus", updateDate);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateDate);
+    };
+  }, []);
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("active");
@@ -1574,20 +1599,16 @@ function closeLessonAction() {
   );
 
   // Başlangıç tarihi gelmemiş aktif kayıtlar Başlayacak listesinde tutulur.
-  const isStartingStudent = (student: StudentListItem) => {
-    if (student.status !== "active" || !student.start_date) return false;
-    const start = new Date(student.start_date);
-    if (Number.isNaN(start.getTime())) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    start.setHours(0, 0, 0, 0);
-    return start.getTime() > today.getTime();
-  };
+  const isStartingStudent = (student: StudentListItem) =>
+    startsAfterToday(student, referenceDate);
+
+  const isActiveStudent = (student: StudentListItem) =>
+    student.status === "active" && !isStartingStudent(student);
 
   const counts = useMemo(() => {
     return {
       total: students.length,
-      active: students.filter((student) => student.status === "active").length,
+      active: students.filter(isActiveStudent).length,
       starting: students.filter(isStartingStudent).length,
       passive: students.filter((student) => student.status === "passive").length,
       preRegistration: students.filter(
@@ -1624,7 +1645,7 @@ function closeLessonAction() {
         (student) => Boolean(informationNeed(student))
       ).length,
     };
-  }, [students]);
+  }, [students, referenceDate]);
 
   const filteredStudents = useMemo(() => {
     const query = normalizeText(search);
@@ -1673,10 +1694,7 @@ function closeLessonAction() {
       let statusMatch = true;
 
       if (status === "active") {
-        // Aktif statüdeki tüm kesin kayıtlar Aktif listede görünür.
-        // Başlangıç tarihi ileri bir tarih olsa bile kayıt aktifse gizlenmez;
-        // "Başlayacak" sekmesi aynı öğrenciyi operasyonel takip için ayrıca gösterebilir.
-        statusMatch = student.status === "active";
+        statusMatch = isActiveStudent(student);
       }
 
       if (status === "starting") {
@@ -1795,6 +1813,7 @@ function closeLessonAction() {
     dayFilter,
     timeFilter,
     sort,
+    referenceDate,
   ]);
 
 
@@ -2698,7 +2717,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
         >
           <span>Başlayacak Kursiyerler</span>
           <strong>{counts.starting}</strong>
-          <small>Başlangıç tarihi yaklaşan aktif kayıtlar</small>
+          <small>Başlangıç tarihi henüz gelmemiş kursiyerler</small>
         </button>
 
         <button
@@ -3058,16 +3077,16 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
                 <span
                   className={`statusBadge ${
-                    student.status === "active"
+                    isActiveStudent(student)
                       ? "green"
                       : student.status === "passive"
                       ? "red"
                       : "orange"
                   }`}
                 >
-                  {statusLabels[student.status || ""] ||
+                  {isStartingStudent(student) ? "Başlayacak" : (statusLabels[student.status || ""] ||
                     student.status ||
-                    "Durum Yok"}
+                    "Durum Yok")}
                 </span>
               </header>
 
