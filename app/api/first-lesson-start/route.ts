@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         .maybeSingle(),
       supabase
         .from("student_enrollments")
-        .select("id,student_id,group_id,branch_id,start_date,status,created_at")
+        .select("id,student_id,group_id,branch_id,start_date,status,created_at,start_confirmation_required,actual_started_at")
         .eq("organization_id", organizationId)
         .eq("student_id", studentId)
         .eq("status", "active")
@@ -69,6 +69,18 @@ export async function POST(request: Request) {
 
     if (!student || student.status !== "active") {
       return NextResponse.json({ ok: false, error: "Aktif öğrenci kaydı bulunamadı." }, { status: 404 });
+    }
+    if (enrollment?.start_confirmation_required && !enrollment.actual_started_at) {
+      const { data: startResult, error: startError } = await supabase.rpc("manage_enrollment_start", {
+        p_enrollment_id: enrollment.id,
+        p_expected_start_date: enrollment.start_date,
+        p_start_date: today,
+        p_confirm: true,
+      });
+      if (startError || !startResult?.ok) {
+        return NextResponse.json({ok:false,error:startError?.message || "Başlangıç onayı kaydedilemedi."},{status:400});
+      }
+      return NextResponse.json({ok:true,message:startResult.message});
     }
     if (existingAttendance?.length) {
       return NextResponse.json({ ok: true, alreadyStarted: true, message: "Öğrencinin yoklama kaydı zaten mevcut." });

@@ -50,7 +50,7 @@ export async function GET(){
     const students=(studentsResult.data||[]).flatMap((student:any)=>{
       const studentId=String(student.id);
       const enrollment=enrollmentMap.get(student.id);
-      if(!enrollment)return [];
+      if(!enrollment||enrollment.actual_started_at)return [];
       const pendingStart=enrollment.start_confirmation_required&&!enrollment.actual_started_at;
       if(!pendingStart&&(student.registration_source!=="web_form"||attended.has(studentId)||transferStarted.has(studentId)))return [];
       const group=groupMap.get(String(enrollment.group_id||""));
