@@ -199,7 +199,6 @@ export default async function StudentsPage() {
     lessonBalancesResult,
     paymentSummariesResult,
     studentPaymentsResult,
-    financialObligationsResult,
     compensationPlansResult,
     lastAttendanceResult,
     notesResult,
@@ -244,14 +243,6 @@ export default async function StudentsPage() {
           .eq("organization_id", organizationId)
           .in("student_id", studentIds)
           .order("received_at", { ascending: false })
-          .limit(10000),
-
-        financeSupabase
-          .from("student_financial_obligations")
-          .select("student_id,enrollment_id,amount,paid_amount,status,due_date,created_at")
-          .eq("organization_id", organizationId)
-          .in("student_id", studentIds)
-          .order("created_at", { ascending: false })
           .limit(10000),
 
         supabase
@@ -301,7 +292,6 @@ export default async function StudentsPage() {
         { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
-        { data: [], error: null },
       ];
 
   const secondaryErrors = [
@@ -311,7 +301,6 @@ export default async function StudentsPage() {
     lessonBalancesResult.error,
     paymentSummariesResult.error,
     studentPaymentsResult.error,
-    financialObligationsResult.error,
     compensationPlansResult.error,
     lastAttendanceResult.error,
     notesResult.error,
@@ -399,30 +388,6 @@ export default async function StudentsPage() {
       enrollmentId,
       (receivedByEnrollment.get(enrollmentId) || 0) + toNumber(row.amount)
     );
-  }
-
-  const openObligationByStudent = new Map<
-    string,
-    { total: number; paid: number; remaining: number }
-  >();
-
-  for (const row of (financialObligationsResult.data || []) as any[]) {
-    if (!row?.student_id) continue;
-
-    const status = String(row.status || "").toLowerCase();
-    if (status === "paid" || status === "cancelled") continue;
-
-    const current = openObligationByStudent.get(String(row.student_id)) || {
-      total: 0,
-      paid: 0,
-      remaining: 0,
-    };
-    const total = toNumber(row.amount);
-    const paid = Math.max(0, toNumber(row.paid_amount));
-    current.total += total;
-    current.paid += paid;
-    current.remaining += Math.max(0, total - paid);
-    openObligationByStudent.set(String(row.student_id), current);
   }
 
   const plannedCompensationCount = new Map<string, number>();
@@ -627,7 +592,7 @@ export default async function StudentsPage() {
         : toNumber(paymentSummary?.total_received ?? 0);
 
       const hasActivePackagePrice = activePackagePrice > 0;
-      const packageOutstanding = hasActivePackagePrice
+      const outstandingBalance = hasActivePackagePrice
         ? Math.max(activePackagePrice - activeTotalReceived, 0)
         : toNumber(
             paymentSummary?.outstanding_balance ??
@@ -636,19 +601,13 @@ export default async function StudentsPage() {
               0
           );
 
-      const obligation = openObligationByStudent.get(String(student.id));
-      const hasOpenObligation = toNumber(obligation?.remaining) > 0.01;
-      const outstandingBalance = hasOpenObligation
-        ? toNumber(obligation?.remaining)
-        : packageOutstanding;
-      const effectiveTotalReceived = hasOpenObligation
-        ? toNumber(obligation?.paid)
-        : activeTotalReceived;
-
-      const paymentStatus =
-        outstandingBalance <= 0.01
+      const paymentStatus = hasActivePackagePrice
+        ? outstandingBalance <= 0.01
           ? "paid"
-          : "waiting_payment";
+          : "waiting_payment"
+        : paymentSummary?.payment_status ??
+          paymentSummary?.status ??
+          null;
 
       return {
         id: student.id,
@@ -705,7 +664,7 @@ export default async function StudentsPage() {
         guardian_email: student.guardian_email || null,
 
         payment_status: paymentStatus,
-        payment_total_received: effectiveTotalReceived,
+        payment_total_received: activeTotalReceived,
         payment_package_outstanding: outstandingBalance,
         payment_extra_outstanding: toNumber(
           paymentSummary?.extra_outstanding ?? 0
