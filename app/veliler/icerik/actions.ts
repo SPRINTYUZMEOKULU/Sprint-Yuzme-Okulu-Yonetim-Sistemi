@@ -27,13 +27,28 @@ export async function createAnnouncement(formData: FormData) {
   const title = value(formData, "title", 180);
   const body = value(formData, "body", 5000);
   const publishNow = formData.get("is_published") === "on";
+  const branchId = value(formData, "branch_id", 100);
+  const groupId = value(formData, "group_id", 100);
   if (!title || !body) back("error", "Duyuru başlığı ve metni zorunludur.");
 
-  const { error } = await adminClient().from("announcements").insert({
+  const admin = adminClient();
+  let resolvedBranchId = branchId || null;
+  if (groupId) {
+    const { data: group } = await admin.from("training_groups").select("id,branch_id").eq("organization_id", profile.organization_id).eq("id", groupId).maybeSingle();
+    if (!group) back("error", "Seçilen grup bulunamadı.");
+    resolvedBranchId = group.branch_id || resolvedBranchId;
+  } else if (branchId) {
+    const { data: branch } = await admin.from("branches").select("id").eq("organization_id", profile.organization_id).eq("id", branchId).maybeSingle();
+    if (!branch) back("error", "Seçilen şube bulunamadı.");
+  }
+
+  const { error } = await admin.from("announcements").insert({
     organization_id: profile.organization_id,
     title,
     body,
-    audience: "all",
+    audience: groupId ? "group" : resolvedBranchId ? "branch" : "all",
+    branch_id: resolvedBranchId,
+    group_id: groupId || null,
     is_published: publishNow,
     published_at: publishNow ? new Date().toISOString() : null,
     created_by: profile.id,
