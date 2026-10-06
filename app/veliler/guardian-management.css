@@ -3,3 +3,20 @@
 /* Mobilde dekoratif hero katmanı geri dönüş bağlantısının dokunmasını engellemesin. */
 .guardianAdminPage .guardianHero:after{pointer-events:none}
 .guardianAdminPage .guardianHeroActions{position:relative;z-index:2}
+
+/* Veli portal içerik merkezi — mobil/profesyonel görünüm */
+.guardianChild.portalSyncRow{align-items:center;min-height:84px;padding:15px 16px;background:linear-gradient(180deg,#fbfdff,#f7faff)}
+.guardianChild.portalSyncRow>span:first-child{min-width:0}
+.guardianChild .guardianPill.compact{display:inline-flex!important;align-items:center;justify-content:center;justify-self:end;align-self:center;width:auto!important;min-width:72px;min-height:32px;padding:0 12px;border-radius:999px;background:#eaf8f0;color:#177343;font-size:10px;font-weight:900;white-space:nowrap}
+.portalManageButton{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 13px;border:1px solid #cfe0f4;border-radius:11px;background:#edf5ff;color:#1769e8!important;text-decoration:none!important;font:900 11px system-ui;white-space:nowrap}
+.portalManageButton:hover{background:#e3f0ff;border-color:#afd0f7}
+.portalManageButton span{display:inline!important}
+.portalAudienceBox{padding:14px;border:1px solid #d9e5f2;border-radius:15px;background:#f8fbff}
+.portalAudienceBox>div:first-child{display:grid;gap:3px;margin-bottom:11px}.portalAudienceBox strong{font-size:13px}.portalAudienceBox small{color:#7a899e;font-size:11px}
+.portalAudienceGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){
+  .guardianChild.portalSyncRow{min-height:0;align-items:flex-start;gap:12px}
+  .guardianChild .guardianPill.compact{min-width:66px;min-height:30px;padding:0 10px}
+  .portalManageButton{flex:0 0 auto;max-width:145px;white-space:normal;text-align:center;line-height:1.25}
+  .portalAudienceGrid{grid-template-columns:1fr}
+}
