@@ -1,0 +1,95 @@
+/* Home presentation only; no data or interaction changes. */
+.dashboardContent .smartCalendar,
+.dashboardContent .livePanel,
+.dashboardContent .dashCard {
+  border-color: #dce5f1;
+  border-radius: 22px;
+  box-shadow: 0 10px 30px rgba(23,48,83,.055);
+}
+.dashboardContent .smartCalendar { padding: 24px; background: linear-gradient(145deg,#fff,#f9fbff); }
+.dashboardContent .smartCalendarTop { gap: 20px; margin-bottom: 18px; }
+.dashboardContent .smartCalendarTop h3 { font-size: 27px; letter-spacing: -.5px; margin: 6px 0; }
+.dashboardContent .smartCalendarTop p { font-size: 12px; line-height: 1.5; }
+.dashboardContent .smartCalendarActions button,
+.dashboardContent .selectedCalendarHead button,
+.dashboardContent .calendarFormActions button { min-height: 42px; border-radius: 12px; padding: 0 14px; font-size: 12px; }
+.dashboardContent .smartCalendarActions button.add,
+.dashboardContent .calendarFormActions button.save { background: linear-gradient(135deg,#176de9,#0f5cca); box-shadow: 0 5px 12px rgba(23,109,233,.16); }
+.dashboardContent .upcomingLessonStrip { gap: 12px; margin: 18px 0; }
+.dashboardContent .upcomingLessonStrip button { min-height: 88px; padding: 14px; border-radius: 16px; background: linear-gradient(135deg,#fff,#edf4ff); }
+.dashboardContent .upcomingLessonStrip span { font-size: 10px; }
+.dashboardContent .upcomingLessonStrip strong { font-size: 19px; margin-top: 7px; }
+.dashboardContent .upcomingLessonStrip small { font-size: 10px; margin-top: 5px; }
+.dashboardContent .calendarWeekHead { margin: 18px 0 9px; }
+.dashboardContent .calendarWeekHead span { font-size: 11px; color: #607591; }
+.dashboardContent .calendarGrid { gap: 7px; }
+.dashboardContent .calendarDay { min-height: 58px; background: #fff; border-color: #e2e9f3; border-radius: 13px; transition: border-color .15s, background .15s; }
+.dashboardContent .calendarDay b { font-size: 14px; }
+.dashboardContent .calendarDay:hover { border-color: #8bb8f3; background: #f4f8ff; }
+.dashboardContent .calendarDay.today { border-color: #9ac0f5; background: #edf4ff; }
+.dashboardContent .calendarDay.active { background: #176de9; color: #fff; box-shadow: 0 5px 12px rgba(23,109,233,.18); border-color: #176de9; }
+.dashboardContent .calendarDay.active .calendarDots em { outline: 1px solid #fff; }
+.dashboardContent .calendarLegend { gap: 9px; margin-top: 16px; font-size: 10px; }
+.dashboardContent .calendarLegend span { background: #fff; border: 1px solid #e2e9f3; border-radius: 20px; padding: 6px 9px; gap: 6px; }
+.dashboardContent .selectedCalendarDay { margin-top: 18px; padding-top: 18px; }
+.dashboardContent .selectedCalendarHead strong { font-size: 14px; }
+.dashboardContent .calendarItemList { gap: 10px; margin-top: 13px; }
+.dashboardContent .calendarItem { padding: 14px; gap: 10px; border-radius: 14px; background: #fff; }
+.dashboardContent .calendarItem b { font-size: 12px; line-height: 1.4; }
+.dashboardContent .calendarItem span { font-size: 11px; line-height: 1.5; color: #647894; }
+.dashboardContent .calendarEmpty { padding: 22px 14px; margin-top: 12px; border: 1px dashed #d7e2ef; border-radius: 14px; background: #f8fbff; font-size: 12px; text-align: center; color: #647894; }
+.dashboardContent .calendarNoteForm { padding: 18px; border-radius: 17px; }
+.dashboardContent .calendarNoteGrid label { font-size: 11px; gap: 7px; }
+.dashboardContent .calendarNoteGrid input,
+.dashboardContent .calendarNoteGrid select,
+.dashboardContent .calendarNoteGrid textarea { min-height: 42px; font-size: 13px; padding: 10px; }
+.dashboardContent .calendarNoteGrid input[type="checkbox"] { min-height: auto; }
+.dashboardContent .liveOpsHeadline { padding: 22px !important; border-radius: 22px; }
+.dashboardContent .liveOpsHeadline h2 { font-size: 27px; line-height: 1.2; }
+.dashboardContent .liveOpsHeadline p { font-size: 12px; line-height: 1.5; }
+.dashboardContent .livePanelHead { padding: 21px; background: linear-gradient(135deg,#f9fbff,#fff); }
+.dashboardContent .livePanelHead h3 { font-size: 20px; }
+.dashboardContent .livePanelHead > a { padding: 8px 10px; border: 1px solid #dce7f6; border-radius: 10px; background: #fff; font-size: 11px; flex-shrink: 0; }
+.dashboardContent .lessonRow { padding: 17px 20px; gap: 12px; }
+.dashboardContent .lessonTime { padding: 10px 6px; border-radius: 12px; background: #edf4ff; text-align: center; }
+.dashboardContent .lessonInfo strong { font-size: 13px; line-height: 1.4; }
+.dashboardContent .lessonInfo span { font-size: 11px; line-height: 1.5; }
+.dashboardContent .liveEmpty { background: linear-gradient(135deg,#fff,#f9fbff); }
+.dashboardContent .liveEmpty strong { font-size: 14px; }
+.dashboardContent .liveEmpty span { font-size: 12px; }
+.dashboardContent .birthdayRow { padding: 17px 20px; }
+.dashboardContent .birthdayRow strong { font-size: 13px; }
+.dashboardContent .birthdayRow span { font-size: 11px; }
+.dashboardContent .birthdayWhatsapp { min-height: 42px; border-radius: 12px; padding: 0 14px; font-size: 11px; }
+.dashboardContent .smartCalendar button:focus-visible,
+.dashboardContent .livePanel a:focus-visible,
+.dashboardContent .livePanel button:focus-visible { outline: 3px solid #176de9; outline-offset: 3px; }
+@media(max-width:640px) {
+  .dashboardContent .smartCalendar { padding: 16px; border-radius: 20px; }
+  .dashboardContent .smartCalendarTop h3 { font-size: 24px; }
+  .dashboardContent .smartCalendarActions { gap: 7px; }
+  .dashboardContent .smartCalendarActions button { padding: 0 8px; }
+  .dashboardContent .calendarDay { min-height: 46px; border-radius: 10px; }
+  .dashboardContent .calendarDay b { font-size: 12px; }
+  .dashboardContent .calendarGrid { gap: 4px; }
+  .dashboardContent .calendarWeekHead span { font-size: 9px; }
+  .dashboardContent .calendarLegend { gap: 6px; }
+  .dashboardContent .calendarLegend span { padding: 5px 7px; font-size: 9px; }
+  .dashboardContent .liveOpsHeadline { padding: 17px !important; }
+  .dashboardContent .liveOpsHeadline h2 { font-size: 23px !important; }
+  .dashboardContent .liveOpsHeadline p { font-size: 12px !important; }
+  .dashboardContent .liveOpsSignal { flex-shrink: 0; }
+  .dashboardContent .livePanelHead { padding: 16px !important; gap: 10px; }
+  .dashboardContent .livePanelHead h3 { font-size: 17px !important; }
+  .dashboardContent .livePanelHead > a { font-size: 10px; padding: 7px 8px; }
+  .dashboardContent .lessonRow { padding: 15px; }
+  .dashboardContent .birthdayRow { padding: 15px; }
+}
+@media(prefers-reduced-motion:reduce) { .dashboardContent .calendarDay { transition: none; } }
+.dashboardContent .dashCardHeader { gap: 14px; padding-bottom: 16px; border-bottom: 1px solid #edf1f6; }
+.dashboardContent .dashCardHeader h2 { font-size: 20px; line-height: 1.3; }
+.dashboardContent .branchList > div { padding: 14px 4px; }
+.dashboardContent .branchList strong { font-size: 12px; }
+.dashboardContent .branchList small { font-size: 10px; padding: 6px 9px; }
+.dashboardContent .branchDot { width: 10px; height: 10px; box-shadow: 0 0 0 4px #f1f5fb; }
+@media(max-width:640px) { .dashboardContent .dashCardHeader h2 { font-size: 18px; } }
