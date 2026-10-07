@@ -48,7 +48,7 @@ export async function GET() {
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
-    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,status").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
+    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
     supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
     supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
@@ -144,9 +144,8 @@ export async function GET() {
 
   const pendingAttendance = sessions.filter((session) => !session.attendanceComplete).length;
 
-  // Başlayacak Kursiyerler merkeziyle aynı mantık: aktif kaydı olan, daha önce
-  // yoklaması bulunmayan ve eski aktarım başlangıcıyla işaretlenmemiş öğrencinin
-  // ilk aktif seansı bugünse ana sayfadaki Yapılacak İşlemler alanına eklenir.
+  // Başlangıç onayı bekleyen güncel dönem, eski yoklama ve aktarım geçmişinden
+  // bağımsızdır. Başlatılmış dönemler bu sayaçtan çıkarılır.
   const scheduleByGroup = new Map<string, any[]>();
   for (const schedule of schedules) {
     const groupId = String(schedule.group_id || "");
@@ -158,10 +157,9 @@ export async function GET() {
 
   const todayStartingStudents = students.filter((student) => {
     const studentId = String(student.id);
-    if (attendedEver.has(studentId) || transferStarted.has(studentId)) return false;
-
     const enrollment = latestEnrollmentByStudent.get(studentId);
-    if (!enrollment?.group_id) return false;
+    if (!enrollment?.group_id || enrollment.actual_started_at) return false;
+    if (!enrollment.start_confirmation_required && (attendedEver.has(studentId) || transferStarted.has(studentId))) return false;
     if (enrollment.start_date && String(enrollment.start_date) > today.iso) return false;
 
     return (scheduleByGroup.get(String(enrollment.group_id)) || []).some(

@@ -6,7 +6,7 @@ import "../dashboard.css";
 export const dynamic = "force-dynamic";
 
 type StudentRow={id:string;student_number:string|null;first_name:string|null;last_name:string|null;phone:string|null;guardian_name:string|null;guardian_phone:string|null};
-type EnrollmentRow={student_id:string;group_id:string|null;branch_id:string|null;start_date:string|null;created_at:string|null};
+type EnrollmentRow={student_id:string;group_id:string|null;branch_id:string|null;start_date:string|null;created_at:string|null;start_confirmation_required:boolean|null;actual_started_at:string|null};
 type BranchRow={id:string;name:string|null};
 type GroupRow={id:string;name:string|null;branch_id:string|null};
 type ScheduleRow={id:string;group_id:string|null;weekday:number|null;start_time:string|null;end_time:string|null};
@@ -33,13 +33,16 @@ export default async function StartingStudentsPage({searchParams}:{searchParams?
 
   const [studentsResult,enrollmentsResult,attendanceResult,transferStartedResult,branchesResult,groupsResult,schedulesResult]=await Promise.all([
     supabase.from("students").select("id,student_number,first_name,last_name,phone,guardian_name,guardian_phone").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false),
-    supabase.from("student_enrollments").select("student_id,group_id,branch_id,start_date,created_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
+    supabase.from("student_enrollments").select("student_id,group_id,branch_id,start_date,created_at,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
     supabase.from("attendance_records").select("student_id").eq("organization_id",organizationId),
     supabase.from("student_activity_logs").select("student_id").eq("organization_id",organizationId).eq("activity_type","legacy_transfer_manager_confirmed"),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name,branch_id").eq("organization_id",organizationId),
     supabase.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",organizationId).eq("is_active",true),
   ]);
+
+  const queryError=studentsResult.error||enrollmentsResult.error||attendanceResult.error||transferStartedResult.error||branchesResult.error||groupsResult.error||schedulesResult.error;
+  if(queryError)throw new Error(`Başlayacak kursiyerler yüklenemedi: ${queryError.message}`);
 
   const attended=new Set((attendanceResult.data||[]).map((r:any)=>String(r.student_id)));
   const transferStarted=new Set((transferStartedResult.data||[]).map((r:any)=>String(r.student_id)).filter(Boolean));
@@ -52,7 +55,7 @@ export default async function StartingStudentsPage({searchParams}:{searchParams?
 
   function nextLesson(groupId:string,startDate:string|null){const schedules=schedulesByGroup.get(groupId)||[];if(!schedules.length)return null;const base=startDate&&startDate>today?startDate:today;for(let offset=0;offset<60;offset++){const date=addDays(base,offset);const weekday=isoWeekday(date);const matches=schedules.filter(s=>Number(s.weekday)===weekday).sort((a,b)=>String(a.start_time||"").localeCompare(String(b.start_time||"")));if(matches.length){const s=matches[0];return{date,startTime:String(s.start_time||"").slice(0,5),endTime:String(s.end_time||"").slice(0,5),scheduleId:s.id};}}return null;}
 
-  const starting:StartingStudent[]=((studentsResult.data||[]) as StudentRow[]).flatMap(student=>{const id=String(student.id);if(attended.has(id)||transferStarted.has(id))return[];const enrollment=enrollmentMap.get(id);if(!enrollment)return[];const group=groupMap.get(String(enrollment.group_id||""))||null;const branchName=branchMap.get(String(group?.branch_id||enrollment.branch_id||""))||"Şube belirtilmemiş";return[{student,enrollment,group,branchName,nextLesson:nextLesson(String(enrollment.group_id||""),enrollment.start_date)}];}).sort((a,b)=>{const ad=a.nextLesson?.date||"9999-12-31";const bd=b.nextLesson?.date||"9999-12-31";if(ad!==bd)return ad.localeCompare(bd);return String(a.nextLesson?.startTime||"").localeCompare(String(b.nextLesson?.startTime||""));});
+  const starting:StartingStudent[]=((studentsResult.data||[]) as StudentRow[]).flatMap(student=>{const id=String(student.id);const enrollment=enrollmentMap.get(id);if(!enrollment||enrollment.actual_started_at)return[];const pendingStart=Boolean(enrollment.start_confirmation_required);const futureStart=Boolean(enrollment.start_date&&enrollment.start_date>today);if(!pendingStart&&!futureStart&&(attended.has(id)||transferStarted.has(id)))return[];const group=groupMap.get(String(enrollment.group_id||""))||null;const branchName=branchMap.get(String(group?.branch_id||enrollment.branch_id||""))||"Şube belirtilmemiş";return[{student,enrollment,group,branchName,nextLesson:nextLesson(String(enrollment.group_id||""),enrollment.start_date)}];}).sort((a,b)=>{const ad=a.nextLesson?.date||"9999-12-31";const bd=b.nextLesson?.date||"9999-12-31";if(ad!==bd)return ad.localeCompare(bd);return String(a.nextLesson?.startTime||"").localeCompare(String(b.nextLesson?.startTime||""));});
 
   const todayStudents=starting.filter(x=>x.nextLesson?.date===today);
   const tomorrowStudents=starting.filter(x=>x.nextLesson?.date===tomorrow);
