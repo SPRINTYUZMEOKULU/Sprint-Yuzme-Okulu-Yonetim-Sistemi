@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { attendanceRoster } from "@/lib/attendance/roster";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { getAttendanceForDate, saveAttendance } from "./actions";
 
@@ -21,10 +22,7 @@ function scheduleWeekday(v?:number|null){const d=Number(v);return d===0?7:d}
 function tm(v?:string|null){return v?.slice(0,5)||"—"}
 function fullName(s:Student){return `${s.first_name||""} ${s.last_name||""}`.trim()||"Kursiyer"}
 function age(b?:string|null,ref?:string){if(!b)return null;const x=new Date(`${b}T12:00:00`),r=new Date(`${ref||today()}T12:00:00`);let a=r.getFullYear()-x.getFullYear();if(r.getMonth()<x.getMonth()||(r.getMonth()===x.getMonth()&&r.getDate()<x.getDate()))a--;return a>=0&&a<120?a:null}
-function hasDay(e:Enrollment|undefined,uiDay:number){const ds=Array.isArray(e?.lesson_weekdays)?e!.lesson_weekdays!.map(Number):[];if(!ds.length)return true;return ds.includes(uiDay===7?0:uiDay)}
 function remaining(e?:Enrollment){return Math.max(0,Number(e?.total_lessons||0)-Number(e?.used_lessons||0))}
-function enrollmentStamp(e:Enrollment){return Date.parse(e.created_at||e.updated_at||`${e.start_date||"1970-01-01"}T00:00:00Z`)||0}
-function newestEnrollment(rows:Enrollment[]){return [...rows].sort((a,b)=>enrollmentStamp(b)-enrollmentStamp(a)||String(b.start_date||"").localeCompare(String(a.start_date||""))||String(b.id).localeCompare(String(a.id)))[0]}
 function attendanceKey(scheduleId:string,studentId:string){return `${scheduleId}:${studentId}`}
 function groupSaveKey(groupId:string,scheduleId:string){return `${groupId}:${scheduleId}`}
 
@@ -57,14 +55,7 @@ export default function QuickAttendanceClient(p:Props){
 
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
    const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)return null;
-   const enrollmentRows=p.enrollments.filter(e=>e.group_id===group.id&&e.status==="active");
-   const enrollmentByStudent=new Map<string,Enrollment>();
-   for(const enrollment of enrollmentRows){const studentId=enrollment.student_id||"";if(!studentId)continue;const current=enrollmentByStudent.get(studentId);enrollmentByStudent.set(studentId,current?newestEnrollment([current,enrollment]):enrollment)}
-
-   const memberIds=new Set(p.memberships.filter(m=>m.is_active!==false&&m.group_id===group.id&&m.student_id&&hasDay(enrollmentByStudent.get(m.student_id),day)).map(m=>m.student_id as string));
-   const compensationIds=new Set(p.compensationLessons.filter(c=>c.status==="planned"&&c.target_group_id===group.id&&c.lesson_date===date&&(!c.target_schedule_id||c.target_schedule_id===schedule.id)).map(c=>c.student_id));
-   const ids=new Set([...memberIds,...compensationIds]);
-   const students=p.students.filter(s=>{const e=enrollmentByStudent.get(s.id);return !e?.start_confirmation_required||Boolean(e.actual_started_at)}).filter(s=>ids.has(s.id)&&String(s.status||"active").toLocaleLowerCase("tr-TR")!=="passive").sort((a,b)=>fullName(a).localeCompare(fullName(b),"tr"));
+   const {students,enrollmentByStudent,compensationIds}=attendanceRoster(p,group.id,schedule.id,date,day);
    return {group,schedule,students,enrollmentByStudent,compensationIds};
  }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,date,day]);
 
