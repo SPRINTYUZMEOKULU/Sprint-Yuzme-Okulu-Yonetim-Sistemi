@@ -34,7 +34,7 @@ export default function PreRegEnhancements() {
         el.textContent?.trim().startsWith("SPRINT") && el.textContent?.includes("YÜZME OKULU") && el.children.length <= 2
       );
       if (logoBox) {
-        logoBox.innerHTML = `<img src="/sprint-logo.png" alt="Sprint Yüzme Okulu" class="successBrandLogo" />`;
+        logoBox.innerHTML = `<img src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" class="successBrandLogo" />`;
         logoBox.classList.add("successLogoBox");
       }
 

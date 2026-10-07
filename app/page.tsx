@@ -753,7 +753,7 @@ export default async function HomePage() {
         >
           <div className="proLogo">
             <img
-              src="/sprint-logo.png"
+              src="/sprint-logo.png?v=6"
               alt="Sprint Yüzme Okulu"
               style={{
                 width: "100%",

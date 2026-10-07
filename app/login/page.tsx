@@ -25,7 +25,7 @@ export default function LoginPage() {
         <div className="v2BrandContent">
           <div className="v2LogoFrame compactLogoFrame">
             <span className="v2LogoHalo" aria-hidden="true" />
-            <Image src="/sprint-logo.png" alt="Sprint Yüzme Okulu" width={520} height={520} priority className="v2BrandLogo" />
+            <Image src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" width={520} height={520} priority className="v2BrandLogo" />
           </div>
           <p className="cloudLabel">SPRİNT YÜZME OKULU</p>
           <div className="v2Slogan compactSlogan">

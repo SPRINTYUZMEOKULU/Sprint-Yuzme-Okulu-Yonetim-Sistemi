@@ -14,7 +14,7 @@ export default function PreRegistrationPage() {
           <div className="preRegBrandTop">
             <Image
               className="preRegLogo"
-              src="/sprint-logo.png"
+              src="/sprint-logo.png?v=6"
               alt="Sprint Yüzme Okulu"
               width={116}
               height={116}
