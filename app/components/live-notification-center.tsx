@@ -68,7 +68,7 @@ export default function LiveNotificationCenter() {
   }, []);
 
   const check = useCallback(async () => {
-    if (checkingRef.current || currentRef.current || document.visibilityState !== "visible") return;
+    if (window.location.pathname.startsWith("/odeme-belge/") || checkingRef.current || currentRef.current || document.visibilityState !== "visible") return;
 
     checkingRef.current = true;
     try {

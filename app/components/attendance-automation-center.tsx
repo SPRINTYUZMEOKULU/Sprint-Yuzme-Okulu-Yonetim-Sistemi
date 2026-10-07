@@ -19,6 +19,7 @@ export default function AttendanceAutomationCenter(){
   const autoApplied=useRef(false);
 
   useEffect(()=>{
+    if(window.location.pathname.startsWith("/odeme-belge/"))return;
     let active=true;
     const sync=async()=>{try{await fetch("/api/attendance-alerts",{cache:"no-store",credentials:"same-origin"});}catch{}};
     void sync();
