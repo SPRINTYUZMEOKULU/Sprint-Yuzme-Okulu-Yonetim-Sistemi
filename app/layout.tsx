@@ -34,10 +34,10 @@ export const metadata: Metadata = {
   title: { default: "SPRİNT YÜZME OKULU", template: "%s | SPRİNT YÜZME OKULU" },
   description: "Sprint Yüzme Okulu Yönetim Sistemi",
   applicationName: "SPRİNT YÜZME OKULU",
-  manifest: "/manifest.webmanifest?v=5",
+  manifest: "/manifest.webmanifest?v=6",
   icons: {
-    icon: [{ url: "/icons/icon-512.png?v=5", sizes: "512x512", type: "image/png" }],
-    apple: [{ url: "/icons/apple-touch-icon.png?v=5", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/icons/icon-512.png?v=6", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png?v=6", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: { capable: true, title: "SPRİNT YÜZME OKULU", statusBarStyle: "default" },
   formatDetection: { telephone: false },
