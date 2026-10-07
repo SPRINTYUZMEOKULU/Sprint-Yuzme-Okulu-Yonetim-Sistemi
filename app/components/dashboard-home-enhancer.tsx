@@ -19,7 +19,7 @@ const favorites: FavoriteItem[] = [
   { label: "Ön Kayıtlar", href: "/on-kayitlar", icon: "note", tone: "orange" },
   { label: "Ödemeler", href: "/odemeler", icon: "wallet", tone: "green" },
   { label: "Yoklama", href: "/yoklama", icon: "check", tone: "purple" },
-  { label: "Gruplar", href: "/gruplar", icon: "branch", tone: "navy" },
+  { label: "Gruplar", href: "/gruplar", icon: "group", tone: "navy" },
   { label: "Hazır Mesajlar", href: "/hazir-mesajlar", icon: "message", tone: "cyan" },
 ];
 

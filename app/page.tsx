@@ -14,6 +14,7 @@ import GlobalSearch from "@/app/components/global-search";
 import SidebarToggle from "@/app/components/sidebar-toggle";
 
 import "./dashboard.css";
+import "./dashboard-polish.css";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,7 @@ const menu: MenuItem[] = [
     label: "Gruplar",
     href: "/gruplar",
     roles: staff,
-    icon: "branch",
+    icon: "group",
     group: "EĞİTİM",
     moduleKey: "groups",
   },
@@ -595,7 +596,7 @@ export default async function HomePage() {
     {
       label: "Gruplar",
       href: "/gruplar",
-      icon: "branch",
+      icon: "group",
       roles: staff,
       moduleKey: "groups",
     },

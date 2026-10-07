@@ -43,6 +43,13 @@ export const Icons = {
       <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </IconBase>
   ),
+  group: (props: IconProps) => (
+    <IconBase {...props}>
+      <circle cx="12" cy="7" r="3" />
+      <path d="M6 21v-2a6 6 0 0 1 12 0v2" />
+      <path d="M5 5a3 3 0 0 0 0 6M19 5a3 3 0 0 1 0 6M2 19v-2a4 4 0 0 1 3-3.87M22 19v-2a4 4 0 0 0-3-3.87" />
+    </IconBase>
+  ),
   branch: (props: IconProps) => (
     <IconBase {...props}>
       <circle cx="6" cy="5" r="2" />
