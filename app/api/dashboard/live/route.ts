@@ -49,7 +49,7 @@ export async function GET() {
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
-    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,updated_at,lesson_weekdays,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
+    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,updated_at,lesson_weekdays,total_lessons,used_lessons,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
     supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
     supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
@@ -63,7 +63,7 @@ export async function GET() {
     supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", profile.organization_id).eq("status", "planned").eq("lesson_date", today.iso),
   ]);
 
-  const rosterError = membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
+  const rosterError = branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
   if (rosterError) return NextResponse.json({ ok: false, error: "Yoklama özeti yüklenemedi." }, { status: 500 });
 
   const branches = branchesResult.data || [];
@@ -100,7 +100,22 @@ export async function GET() {
     );
     const studentCount = enrolled.size;
     const attendanceCount = recorded.size;
-    const attendanceComplete = studentCount > 0 && attendanceCount >= studentCount;
+    const blockedCount = roster.students.filter((student) => {
+      const enrollment = roster.enrollmentByStudent.get(student.id);
+      return !recorded.has(student.id) && !roster.compensationIds.has(student.id)
+        && Math.max(0, Number(enrollment?.total_lessons || 0) - Number(enrollment?.used_lessons || 0)) <= 0;
+    }).length;
+    const missingCount = Math.max(0, studentCount - attendanceCount - blockedCount);
+    const attendanceComplete = attendanceCount > 0 && missingCount === 0;
+    const records = attendance.filter((row) => recorded.has(row.student_id)
+      && (row.schedule_id === schedule.id || (!row.schedule_id && row.group_id === schedule.group_id)));
+    const statusByStudent = new Map(records.map((row) => [row.student_id, row.status]));
+    const statusCounts = { present: 0, absent: 0, excused: 0 };
+    for (const status of statusByStudent.values()) {
+      if (status === "present" || status === "compensation") statusCounts.present++;
+      else if (status === "absent") statusCounts.absent++;
+      else if (status === "excused") statusCounts.excused++;
+    }
 
     return {
       id: schedule.id,
@@ -113,6 +128,9 @@ export async function GET() {
       studentCount,
       attendanceCount,
       attendanceComplete,
+      missingCount,
+      blockedCount,
+      statusCounts,
     };
   });
 
@@ -144,7 +162,7 @@ export async function GET() {
     })
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
 
-  const pendingAttendance = sessions.filter((session) => !session.attendanceComplete).length;
+  const pendingAttendance = sessions.filter((session) => session.missingCount > 0).length;
 
   // Başlangıç onayı bekleyen güncel dönem, eski yoklama ve aktarım geçmişinden
   // bağımsızdır. Başlatılmış dönemler bu sayaçtan çıkarılır.
