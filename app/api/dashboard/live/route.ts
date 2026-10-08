@@ -45,12 +45,12 @@ export async function GET() {
   const supabase = await createClient();
   const today = turkeyDateParts();
 
-  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult, membershipsResult, compensationResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult, membershipsResult, compensationResult, reminderNotesResult] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
     supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,updated_at,lesson_weekdays,total_lessons,used_lessons,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
-    supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
+    supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date,coach_note").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
     supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
     supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
     supabase.from("students").select("id,first_name,last_name,birth_date,phone,guardian_phone,guardian_name,branch_id,status").eq("organization_id", profile.organization_id).eq("is_deleted", false),
@@ -61,6 +61,9 @@ export async function GET() {
     supabase.from("birthday_celebrations").select("id,student_id,celebration_year,status,sent_at,sent_by").eq("organization_id", profile.organization_id).eq("celebration_year", Number(today.iso.slice(0, 4))).eq("status", "sent"),
     supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", profile.organization_id).eq("status", "planned").eq("lesson_date", today.iso),
+    supabase.from("alerts").select("id,title,description,status,created_at")
+      .eq("organization_id", profile.organization_id).eq("alert_type", "attendance_reminder")
+      .like("description", `${today.iso} · %`).order("created_at", { ascending: false }),
   ]);
 
   const rosterError = branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
@@ -117,6 +120,18 @@ export async function GET() {
       else if (status === "excused") statusCounts.excused++;
     }
 
+    const branchName = branchMap.get(schedule.branch_id || "") || "Şube";
+    const startTime = String(schedule.start_time || "").slice(0, 5);
+    const context = `${today.iso} · ${branchName} · ${startTime}`;
+    const notes = (reminderNotesResult.data || [])
+      .filter((note) => String(note.description || "").split("\n")[0].trim() === context)
+      .map((note) => ({ id: note.id, title: note.title, text: String(note.description || "").split("\n").slice(1).join("\n").trim(), status: note.status }));
+    for (const row of records) {
+      if (!row.coach_note?.trim()) continue;
+      const student = rosterStudents.find((student) => student.id === row.student_id);
+      notes.push({ id: `attendance-${row.id}`, title: student ? `${student.first_name || ""} ${student.last_name || ""}`.trim() : "Öğrenci yoklama notu", text: row.coach_note.trim(), status: "saved" });
+    }
+
     return {
       id: schedule.id,
       branchId: schedule.branch_id,
@@ -131,6 +146,8 @@ export async function GET() {
       missingCount,
       blockedCount,
       statusCounts,
+      notes,
+      notesAvailable: !reminderNotesResult.error,
     };
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Icons } from "@/app/components/dashboard-icons";
@@ -23,6 +24,8 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
     missingCount: number;
     blockedCount: number;
     statusCounts: { present: number; absent: number; excused: number };
+    notes: Array<{ id: string; title: string; text: string; status: string }>;
+    notesAvailable: boolean;
   }>;
   birthdays: Array<{
     id: string;
@@ -48,6 +51,8 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
 function OperationPanel() {
   const [data, setData] = useState<LiveData | null>(null);
+  const [openedSession, setOpenedSession] = useState<string | null>(null);
+  const [openingSession, setOpeningSession] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [celebrationBusy, setCelebrationBusy] = useState<string | null>(null);
 
@@ -78,6 +83,11 @@ function OperationPanel() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    if (!data?.date) return;
+    try { setOpenedSession(sessionStorage.getItem(`sprintos:opened-attendance:${data.date}`)); } catch {}
+  }, [data?.date]);
 
   const actionCount = useMemo(() => {
     if (!data) return 0;
@@ -183,7 +193,14 @@ function OperationPanel() {
                   : "Kayıt yenileme gerekiyor";
                 const tone = session.attendanceComplete ? "done" : session.missingCount > 0 ? "pending" : "neutral";
                 return (
-                  <a className="lessonRow" href={`/yoklama?${params.toString()}#seans-${session.id}`} key={session.id}>
+                  <Link className={`lessonRow${openedSession === session.id ? " isOpened" : ""}${openingSession === session.id ? " isOpening" : ""}`} href={`/yoklama?${params.toString()}#seans-${session.id}`} key={session.id}
+                    onClick={(event) => {
+                      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                      setOpenedSession(session.id);
+                      setOpeningSession(session.id);
+                      try { sessionStorage.setItem(`sprintos:opened-attendance:${data.date}`, session.id); } catch {}
+                    }}>
+
                     <div className="lessonTime"><Icons.clock /><strong>{session.startTime || "—"}</strong><small>{session.endTime || "Bitiş yok"}</small></div>
                     <div className="lessonInfo">
                       <strong>{session.groupName}</strong>
@@ -196,8 +213,16 @@ function OperationPanel() {
                       {session.blockedCount > 0 && <small className="lessonBlocked">{session.blockedCount} öğrencinin ders hakkı bitmiş</small>}
                     </div>
                     <div className={`lessonStatus ${tone}`}><span className="lessonStatusIcon">{session.attendanceComplete ? <Icons.check /> : session.missingCount > 0 ? <Icons.clock /> : <Icons.users />}</span>{status}</div>
-                    <span className="lessonAction">{session.attendanceCount > 0 ? "Yoklamayı Aç" : "Yoklama Al"}<Icons.arrow /></span>
-                  </a>
+                    {(session.notes.length > 0 || !session.notesAvailable) && <div className="lessonNotes">
+                      <strong><Icons.note />Yoklama Notları · {session.notes.length}</strong>
+                      {session.notes.map((note) => <div className="lessonNote" key={note.id}>
+                        <span>{note.title}{note.status === "completed" ? " · Tamamlandı" : ""}</span>
+                        <p>{note.text}</p>
+                      </div>)}
+                      {!session.notesAvailable && <small>Seans notları yüklenemedi.</small>}
+                    </div>}
+                    <span className="lessonAction" aria-live="polite">{openingSession === session.id ? "Açılıyor…" : openedSession === session.id ? "Son Açılan Seans" : "Kartı Aç"}<Icons.arrow /></span>
+                  </Link>
                 );
               })}
             </div>
@@ -271,6 +296,16 @@ function OperationPanel() {
         .lessonTime>svg{width:17px;height:17px;margin:0 auto;color:#4c85d6}.lessonStatusIcon{display:flex}.lessonStatusIcon svg{width:14px;height:14px;flex-shrink:0}.lessonAction>svg{width:17px;height:17px;flex-shrink:0}
         .priorityRow>i:before,.priorityRow>i:after{content:none;animation:none}.priorityRow>i{border-radius:12px;box-shadow:none}.priorityRow>i svg{width:21px;height:21px;color:#fff}
         .birthdayPanel h3{display:flex;align-items:center;gap:8px}.birthdayPanel h3 svg{width:21px;height:21px;color:#bf7b20}.birthdayAvatar svg{width:24px;height:24px;color:#bf7b20}.birthdayWhatsapp svg{width:16px;height:16px}
+
+        .lessonRow{cursor:pointer;transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+        .lessonRow:hover,.lessonRow:focus-visible,.lessonRow.isOpened{background:#f0f7ff;border-color:#75aff5;box-shadow:0 0 0 2px rgba(23,109,233,.10),0 9px 24px rgba(23,109,233,.12)}
+        .lessonRow:active{background:#e1efff;transform:scale(.99)}.lessonRow.isOpening{animation:lessonOpenGlow .75s ease-in-out infinite}
+        @keyframes lessonOpenGlow{50%{box-shadow:0 0 0 4px rgba(23,109,233,.16),0 9px 28px rgba(23,109,233,.2)}}
+        .lessonRow.isOpened .lessonAction{background:#176de9;border-color:#176de9;color:#fff}
+        .lessonNotes{grid-column:2;min-width:0;padding:11px 12px;border:1px solid #d8e5f6;border-radius:12px;background:#f7faff}
+        .lessonNotes>strong{display:flex;align-items:center;gap:6px;font-size:11px;color:#325982}.lessonNotes>strong svg{width:15px;height:15px;flex-shrink:0}
+        .lessonNote{margin-top:9px}.lessonNote>span{font-size:10px;font-weight:800;color:#6a7f99}.lessonNote p{margin:4px 0 0;color:#243d5c;font-size:11px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}.lessonNotes>small{display:block;margin-top:7px;color:#8b650c}
+        @media(prefers-reduced-motion:reduce){.lessonRow,.lessonRow.isOpening{animation:none;transition:none}.lessonRow:active{transform:none}}
       `}</style>
     </section>
   );
