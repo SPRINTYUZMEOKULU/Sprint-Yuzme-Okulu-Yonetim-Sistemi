@@ -2361,7 +2361,7 @@ export default async function OperasyonPlaniPage({
                           {saatGoster(schedule.start_time)} – {saatGoster(schedule.end_time)}
                         </strong>
                         <span style={sessionDayTextStyle}>
-                          {GUNLER[Number(schedule.weekday)] || "Ders"}
+                          {GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"}
                         </span>
                       </div>
 
@@ -2486,7 +2486,7 @@ export default async function OperasyonPlaniPage({
                                 fontSize: 15,
                               }}
                             >
-                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
+                              {GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
                             </strong>
                             <span
                               style={{
@@ -3576,7 +3576,7 @@ export default async function OperasyonPlaniPage({
                         <div style={footerRightActionsStyle}>
                           <SessionRosterPrintButton
                             date={selectedDate}
-                            weekday={GUNLER[Number(schedule.weekday)] || "Ders"}
+                            weekday={GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"}
                             pool={branch?.name || "Şube / havuz"}
                             startTime={saatGoster(schedule.start_time)}
                             endTime={saatGoster(schedule.end_time)}
