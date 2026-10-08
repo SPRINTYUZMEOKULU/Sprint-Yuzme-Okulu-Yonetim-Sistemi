@@ -209,19 +209,20 @@ function OperationPanel() {
                         <span className="present">Geldi {session.statusCounts.present}</span>
                         <span className="absent">Gelmedi {session.statusCounts.absent}</span>
                         <span className="excused">İzinli {session.statusCounts.excused}</span>
+                        {session.notes.length > 0 && <span className="noted"><Icons.note />Not {session.notes.length}</span>}
                       </div>
                       {session.blockedCount > 0 && <small className="lessonBlocked">{session.blockedCount} öğrencinin ders hakkı bitmiş</small>}
                     </div>
                     <div className={`lessonStatus ${tone}`}><span className="lessonStatusIcon">{session.attendanceComplete ? <Icons.check /> : session.missingCount > 0 ? <Icons.clock /> : <Icons.users />}</span>{status}</div>
                     {(session.notes.length > 0 || !session.notesAvailable) && <div className="lessonNotes">
-                      <strong><Icons.note />Yoklama Notları · {session.notes.length}</strong>
+                      <strong><Icons.note />Bugünün Seans ve Yoklama Notları · {session.notes.length}</strong>
                       {session.notes.map((note) => <div className="lessonNote" key={note.id}>
                         <span>{note.title}{note.status === "completed" ? " · Tamamlandı" : ""}</span>
                         <p>{note.text}</p>
                       </div>)}
                       {!session.notesAvailable && <small>Seans notları yüklenemedi.</small>}
                     </div>}
-                    <span className="lessonAction" aria-live="polite">{openingSession === session.id ? "Açılıyor…" : openedSession === session.id ? "Son Açılan Seans" : "Kartı Aç"}<Icons.arrow /></span>
+                    {openingSession === session.id && <span className="lessonOpening" role="status">Seans açılıyor…</span>}
                   </Link>
                 );
               })}
@@ -283,17 +284,18 @@ function OperationPanel() {
         .lessonCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.lessonCounts span{margin:0;padding:4px 7px;border-radius:7px;font-size:10px;font-weight:800}
         .lessonCounts .present{color:#16875b;background:#ecfdf3}.lessonCounts .absent{color:#b42333;background:#fff0f2}.lessonCounts .excused{color:#8a6200;background:#fff8e8}
         .lessonBlocked{display:block;margin-top:7px;color:#8a6200;font-size:10px}
+        .lessonsPanel .livePanelHead{align-items:center}.lessonsPanel .livePanelHead>a{flex-shrink:0;padding:9px;border:1px solid #d5e4fa;border-radius:10px}
+        .lessonCounts .noted{display:inline-flex;align-items:center;gap:5px;color:#7050ad;background:#f3edff}.lessonCounts .noted svg{width:13px;height:13px}
+        .lessonOpening{grid-column:2;color:#176de9;font-size:11px;font-weight:800}
         .lessonStatus{grid-column:2;justify-self:start;white-space:normal;line-height:1.4}
         .lessonStatus.neutral{background:#f1f5f9;color:#64748b}.lessonStatus.neutral i{background:#94a3b8}
-        .lessonAction{grid-column:2;justify-self:end;display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:7px 11px;border:1px solid #c8ddfa;border-radius:10px;background:#f2f7ff;color:#176de9;font-size:11px;font-weight:900}
-        .lessonAction b{font-size:16px}.lessonsPanel .livePanelHead{align-items:center}.lessonsPanel .livePanelHead>a{flex-shrink:0;padding:9px;border:1px solid #d5e4fa;border-radius:10px}
         @media(max-width:640px){.lessonRows{padding:9px}.lessonRow{grid-template-columns:58px minmax(0,1fr);padding:13px;gap:9px 11px}.lessonTime strong{font-size:15px}.lessonInfo>strong{font-size:12px}.lessonsPanel .livePanelHead{flex-wrap:wrap}}
 
         .liveSummaryLabel{display:flex;align-items:center;gap:8px}.liveSummaryLabel svg{width:21px;height:21px;flex-shrink:0;color:#176de9}
         .liveSummaryCard.orange .liveSummaryLabel svg{color:#c56a13}.liveSummaryCard.green .liveSummaryLabel svg{color:#16875b}.liveSummaryCard.purple .liveSummaryLabel svg{color:#8154c7}.liveSummaryCard.red .liveSummaryLabel svg{color:#d03e45}
         .liveArrowIcon{display:grid;place-items:center;width:29px;height:29px;border:1px solid #dce7f4;border-radius:9px;background:#f4f8fd}.liveArrowIcon svg{width:16px;height:16px}
         .livePanelHead>a,.priorityRow b,.birthdayWhatsapp{display:inline-flex;align-items:center;gap:7px}.livePanelHead>a svg,.priorityRow b svg{width:15px;height:15px;flex-shrink:0}
-        .lessonTime>svg{width:17px;height:17px;margin:0 auto;color:#4c85d6}.lessonStatusIcon{display:flex}.lessonStatusIcon svg{width:14px;height:14px;flex-shrink:0}.lessonAction>svg{width:17px;height:17px;flex-shrink:0}
+        .lessonTime>svg{width:17px;height:17px;margin:0 auto;color:#4c85d6}.lessonStatusIcon{display:flex}.lessonStatusIcon svg{width:14px;height:14px;flex-shrink:0}
         .priorityRow>i:before,.priorityRow>i:after{content:none;animation:none}.priorityRow>i{border-radius:12px;box-shadow:none}.priorityRow>i svg{width:21px;height:21px;color:#fff}
         .birthdayPanel h3{display:flex;align-items:center;gap:8px}.birthdayPanel h3 svg{width:21px;height:21px;color:#bf7b20}.birthdayAvatar svg{width:24px;height:24px;color:#bf7b20}.birthdayWhatsapp svg{width:16px;height:16px}
 
@@ -301,7 +303,6 @@ function OperationPanel() {
         .lessonRow:hover,.lessonRow:focus-visible,.lessonRow.isOpened{background:#f0f7ff;border-color:#75aff5;box-shadow:0 0 0 2px rgba(23,109,233,.10),0 9px 24px rgba(23,109,233,.12)}
         .lessonRow:active{background:#e1efff;transform:scale(.99)}.lessonRow.isOpening{animation:lessonOpenGlow .75s ease-in-out infinite}
         @keyframes lessonOpenGlow{50%{box-shadow:0 0 0 4px rgba(23,109,233,.16),0 9px 28px rgba(23,109,233,.2)}}
-        .lessonRow.isOpened .lessonAction{background:#176de9;border-color:#176de9;color:#fff}
         .lessonNotes{grid-column:2;min-width:0;padding:11px 12px;border:1px solid #d8e5f6;border-radius:12px;background:#f7faff}
         .lessonNotes>strong{display:flex;align-items:center;gap:6px;font-size:11px;color:#325982}.lessonNotes>strong svg{width:15px;height:15px;flex-shrink:0}
         .lessonNote{margin-top:9px}.lessonNote>span{font-size:10px;font-weight:800;color:#6a7f99}.lessonNote p{margin:4px 0 0;color:#243d5c;font-size:11px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}.lessonNotes>small{display:block;margin-top:7px;color:#8b650c}
