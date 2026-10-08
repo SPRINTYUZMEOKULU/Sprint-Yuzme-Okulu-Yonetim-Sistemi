@@ -13,7 +13,7 @@ type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolea
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
-type Props={branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string};
+type Props={branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
@@ -27,11 +27,13 @@ function attendanceKey(scheduleId:string,studentId:string){return `${scheduleId}
 function groupSaveKey(groupId:string,scheduleId:string){return `${groupId}:${scheduleId}`}
 
 export default function QuickAttendanceClient(p:Props){
- const [date,setDate]=useState(today);
+ const initialDate = p.initialDate && /^\d{4}-\d{2}-\d{2}$/.test(p.initialDate) && !Number.isNaN(Date.parse(`${p.initialDate}T12:00:00`)) ? p.initialDate : today();
+ const targetSchedule = p.schedules.find(s=>s.id===p.initialScheduleId && scheduleWeekday(s.weekday)===weekday(initialDate));
+ const [date,setDate]=useState(initialDate);
  const day=weekday(date);
- const initialBranch=(p.branches.some(b=>b.id===p.initialBranchId)?p.initialBranchId:"")||p.schedules.find(s=>scheduleWeekday(s.weekday)===weekday(today()))?.branch_id||p.branches[0]?.id||"";
+ const initialBranch=(p.branches.some(b=>b.id===p.initialBranchId)?p.initialBranchId:"")||targetSchedule?.branch_id||p.schedules.find(s=>scheduleWeekday(s.weekday)===weekday(initialDate))?.branch_id||p.branches[0]?.id||"";
  const [branchId,setBranchId]=useState(initialBranch);
- const [time,setTime]=useState("");
+ const [time,setTime]=useState(targetSchedule?tm(targetSchedule.start_time):p.initialTime||"");
  const [statuses,setStatuses]=useState<Record<string,Status>>({});
  const [message,setMessage]=useState("");
  const [loaded,setLoaded]=useState(false);
@@ -73,6 +75,12 @@ export default function QuickAttendanceClient(p:Props){
  },[date,branchId,time]);
 
  useEffect(()=>{if(!loaded||!time)return;try{localStorage.setItem(draftKey,JSON.stringify({statuses,savedAt:new Date().toISOString()}))}catch{}},[statuses,draftKey,loaded,time]);
+
+ useEffect(()=>{
+   if(!loaded||!p.initialScheduleId)return;
+   const target=document.getElementById(`seans-${p.initialScheduleId}`);
+   target?.scrollIntoView({block:"start"});
+ },[loaded,p.initialScheduleId]);
 
  const total=groups.reduce((n,g)=>n+g.students.length,0);
  const marked=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[attendanceKey(g.schedule.id,s.id)]).length,0);
@@ -143,7 +151,7 @@ export default function QuickAttendanceClient(p:Props){
    <AttendanceReminderPanel key={draftKey} students={p.students} context={`${date} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
-   {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=>{const counts=groupCounts(g);return <section className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
+   {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
      <header><div><b>{g.group.name||"Grup"}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
      <div className="qaList">{g.students.map(s=>{const key=attendanceKey(g.schedule.id,s.id);const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=rem<=0&&!comp;return <article key={s.id} className={expired?"expired":last?"last":""}>
        <div className="qaStudent"><b>{fullName(s)}</b><span>{age(s.birth_date,date)!==null?`${age(s.birth_date,date)} yaş · `:""}{comp?"Telafi dersi":expired?"DERS HAKKI BİTTİ":last?"SON DERS":`${rem} ders kaldı`}</span></div>
@@ -162,7 +170,7 @@ export default function QuickAttendanceClient(p:Props){
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}
      .qaTop{padding:14px;margin-bottom:10px}.qaTop small{font-size:9px;font-weight:900;color:#1769e0;letter-spacing:.12em}.qaTop h1{font-size:18px;margin:3px 0 10px}.qaSelectors{display:grid;grid-template-columns:1fr 1fr 110px;gap:7px}.qaSelectors input,.qaSelectors select{height:42px;border:1px solid #d7e2ed;border-radius:10px;background:#fff;padding:0 8px;font-size:12px}.qaProgress{display:flex;gap:6px;align-items:baseline;margin-top:9px}.qaProgress b{font-size:17px}.qaProgress span{font-size:10px;color:#72839a}
-     .qaGroup{margin:10px 0;overflow:hidden}.qaGroup header{padding:11px 12px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center;gap:10px}.qaGroup header div{display:grid;gap:2px}.qaGroup header b{font-size:13px}.qaGroup header span{font-size:9px;color:#7a8a9c}.qaGroup header button{border:1px solid #bad5f4;background:#f4f9ff;color:#1769d2;border-radius:9px;min-height:36px;padding:0 10px;font-size:10px;font-weight:900}
+     .qaGroup{scroll-margin-top:110px;margin:10px 0;overflow:hidden}.qaGroup header{padding:11px 12px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center;gap:10px}.qaGroup header div{display:grid;gap:2px}.qaGroup header b{font-size:13px}.qaGroup header span{font-size:9px;color:#7a8a9c}.qaGroup header button{border:1px solid #bad5f4;background:#f4f9ff;color:#1769d2;border-radius:9px;min-height:36px;padding:0 10px;font-size:10px;font-weight:900}
      .qaGroup header>div{min-width:0;flex:1}.qaGroup header>button{flex-shrink:0}.qaGroup header .qaCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.qaGroup header .qaCounts span{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid;border-radius:7px;font-size:10px;font-weight:750;line-height:1.3}.qaCounts strong{font-size:11px;font-variant-numeric:tabular-nums}.qaGroup header .qaCounts .present{background:#eaf9ef;border-color:#9bd8af;color:#14733a}.qaGroup header .qaCounts .absent{background:#fff0f2;border-color:#f1b6bf;color:#b42333}.qaGroup header .qaCounts .excused{background:#fff8e8;border-color:#ebd08b;color:#8a6200}.qaGroup header .qaCounts .unmarked{background:#f4f8fc;border-color:#d8e2ec;color:#53677e}
      .qaList{display:grid}.qaList article{padding:11px 12px;border-bottom:1px solid #edf1f5}.qaList article:last-child{border-bottom:0}.qaList article.last{background:#fffaf0}.qaList article.expired{background:#fff1f2}.qaStudent{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.qaStudent b{font-size:13px}.qaStudent span{font-size:9px;font-weight:850;color:#607287}.last .qaStudent span{color:#a56800}.expired .qaStudent span{color:#b42333}
      .qaButtons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.qaButtons button{min-height:42px;border:1px solid #d8e2ec;border-radius:10px;background:#fff;font-size:10px;font-weight:900;color:#53677e}.qaButtons button.on.present{background:#eaf9ef;border-color:#9bd8af;color:#14733a}.qaButtons button.on.absent{background:#fff0f2;border-color:#f1b6bf;color:#b42333}.qaButtons button.on.excused{background:#fff8e8;border-color:#ebd08b;color:#8a6200}.qaButtons button:disabled{opacity:.45}
