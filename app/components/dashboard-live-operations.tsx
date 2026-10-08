@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
+import { Icons } from "@/app/components/dashboard-icons";
 import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
  type LiveData = {
@@ -132,10 +133,10 @@ function OperationPanel() {
   if (!data) return null;
 
   const summaryCards = [
-    { label: "Bugünkü Ders", value: data.summary.todayLessons, note: "Planlanan seans", href: "/ders-programi", tone: "blue" },
-    { label: "Yoklama Bekleyen", value: data.summary.pendingAttendance, note: data.summary.pendingAttendance ? "İşlem bekliyor" : "Tamamlandı", href: "/yoklama", tone: data.summary.pendingAttendance ? "orange" : "green" },
-    { label: "Doğum Günü", value: data.summary.birthdays, note: data.summary.birthdays ? "Kutlama bekliyor" : "Bugün yok", href: "#sprint-birthdays", tone: data.summary.birthdays ? "purple" : "calm" },
-    { label: "Yapılacak İşlem", value: actionCount, note: actionCount ? "Önceliklerinizi kontrol edin" : "Her şey yolunda", href: "/uyarilar", tone: actionCount ? "red" : "green" },
+    { label: "Bugünkü Ders", value: data.summary.todayLessons, note: "Planlanan seans", href: "/ders-programi", tone: "blue", icon: Icons.calendar },
+    { label: "Yoklama Bekleyen", value: data.summary.pendingAttendance, note: data.summary.pendingAttendance ? "İşlem bekliyor" : "Tamamlandı", href: "/yoklama", tone: data.summary.pendingAttendance ? "orange" : "green", icon: Icons.check },
+    { label: "Doğum Günü", value: data.summary.birthdays, note: data.summary.birthdays ? "Kutlama bekliyor" : "Bugün yok", href: "#sprint-birthdays", tone: data.summary.birthdays ? "purple" : "calm", icon: Icons.cake },
+    { label: "Yapılacak İşlem", value: actionCount, note: actionCount ? "Önceliklerinizi kontrol edin" : "Her şey yolunda", href: "/uyarilar", tone: actionCount ? "red" : "green", icon: Icons.bell },
   ];
 
   return (
@@ -156,10 +157,10 @@ function OperationPanel() {
       <div className="liveOpsSummary">
         {summaryCards.map((item) => (
           <a key={item.label} href={item.href} className={`liveSummaryCard ${item.tone}`}>
-            <span>{item.label}</span>
+            <span className="liveSummaryLabel"><item.icon />{item.label}</span>
             <strong>{item.value}</strong>
             <small>{item.note}</small>
-            <b>→</b>
+            <b className="liveArrowIcon"><Icons.arrow /></b>
           </a>
         ))}
       </div>
@@ -168,7 +169,7 @@ function OperationPanel() {
         <article className="livePanel lessonsPanel">
           <div className="livePanelHead">
             <div><span>GÜNLÜK PROGRAM</span><h3>Bugünkü Dersler ve Yoklamalar</h3></div>
-            <a href="/yoklama">Tüm Yoklamalar →</a>
+            <a href="/yoklama">Tüm Yoklamalar <Icons.arrow /></a>
           </div>
 
           {data.sessions.length ? (
@@ -183,7 +184,7 @@ function OperationPanel() {
                 const tone = session.attendanceComplete ? "done" : session.missingCount > 0 ? "pending" : "neutral";
                 return (
                   <a className="lessonRow" href={`/yoklama?${params.toString()}#seans-${session.id}`} key={session.id}>
-                    <div className="lessonTime"><strong>{session.startTime || "—"}</strong><small>{session.endTime || "Bitiş yok"}</small></div>
+                    <div className="lessonTime"><Icons.clock /><strong>{session.startTime || "—"}</strong><small>{session.endTime || "Bitiş yok"}</small></div>
                     <div className="lessonInfo">
                       <strong>{session.groupName}</strong>
                       <span>{session.branchName} · {session.studentCount} öğrenci</span>
@@ -194,8 +195,8 @@ function OperationPanel() {
                       </div>
                       {session.blockedCount > 0 && <small className="lessonBlocked">{session.blockedCount} öğrencinin ders hakkı bitmiş</small>}
                     </div>
-                    <div className={`lessonStatus ${tone}`}><i />{status}</div>
-                    <span className="lessonAction">{session.attendanceCount > 0 ? "Yoklamayı Aç" : "Yoklama Al"}<b aria-hidden="true">↗</b></span>
+                    <div className={`lessonStatus ${tone}`}><span className="lessonStatusIcon">{session.attendanceComplete ? <Icons.check /> : session.missingCount > 0 ? <Icons.clock /> : <Icons.users />}</span>{status}</div>
+                    <span className="lessonAction">{session.attendanceCount > 0 ? "Yoklamayı Aç" : "Yoklama Al"}<Icons.arrow /></span>
                   </a>
                 );
               })}
@@ -206,26 +207,26 @@ function OperationPanel() {
         </article>
 
         <article className="livePanel prioritiesPanel">
-          <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler →</a></div>
+          <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler <Icons.arrow /></a></div>
           <div className="priorityRows">
-            {data.summary.pendingAttendance > 0 && <a href="/yoklama" className="priorityRow urgent"><i /><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git →</b></a>}
-            {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i /><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git →</b></a>}
-            {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i /><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git →</b></a>}
-            {data.summary.openAlerts > 0 && <a href="/uyarilar" className="priorityRow urgent"><i /><div><strong>{data.summary.openAlerts} açık uyarı var</strong><span>Öncelikli işlemleri kontrol edin.</span></div><b>İşleme Git →</b></a>}
-            {data.summary.todayStartingStudents > 0 && <a href="/baslayacak-kursiyerler?filter=today#kursiyer-listesi" className="priorityRow info"><i /><div><strong>{data.summary.todayStartingStudents} kursiyer bugün başlayacak</strong><span>İlk dersine başlayacak kursiyerleri kontrol edin.</span></div><b>Aç →</b></a>}
-            {data.summary.preRegistrations > 0 && <a href="/on-kayitlar" className="priorityRow info"><i /><div><strong>{data.summary.preRegistrations} ön kayıt takipte</strong><span>Geri dönüş bekleyen kayıtları görüntüleyin.</span></div><b>Aç →</b></a>}
-            {actionCount === 0 && <div className="priorityRow success"><i /><div><strong>Operasyon düzenli</strong><span>Şu anda kritik bekleyen işlem görünmüyor.</span></div></div>}
+            {data.summary.pendingAttendance > 0 && <a href="/yoklama" className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.summary.openAlerts > 0 && <a href="/uyarilar" className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.openAlerts} açık uyarı var</strong><span>Öncelikli işlemleri kontrol edin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.summary.todayStartingStudents > 0 && <a href="/baslayacak-kursiyerler?filter=today#kursiyer-listesi" className="priorityRow info"><i><Icons.message /></i><div><strong>{data.summary.todayStartingStudents} kursiyer bugün başlayacak</strong><span>İlk dersine başlayacak kursiyerleri kontrol edin.</span></div><b>Aç <Icons.arrow /></b></a>}
+            {data.summary.preRegistrations > 0 && <a href="/on-kayitlar" className="priorityRow info"><i><Icons.message /></i><div><strong>{data.summary.preRegistrations} ön kayıt takipte</strong><span>Geri dönüş bekleyen kayıtları görüntüleyin.</span></div><b>Aç <Icons.arrow /></b></a>}
+            {actionCount === 0 && <div className="priorityRow success"><i><Icons.check /></i><div><strong>Operasyon düzenli</strong><span>Şu anda kritik bekleyen işlem görünmüyor.</span></div></div>}
           </div>
         </article>
       </div>
 
       <article className="livePanel birthdayPanel" id="sprint-birthdays">
-        <div className="livePanelHead"><div><span>KURSİYER İLETİŞİMİ</span><h3>🎂 Bugünün Doğum Günleri</h3></div><a href="/ogrenciler">Öğrenciler →</a></div>
+        <div className="livePanelHead"><div><span>KURSİYER İLETİŞİMİ</span><h3><Icons.cake />Bugünün Doğum Günleri</h3></div><a href="/ogrenciler">Öğrenciler <Icons.arrow /></a></div>
         {data.birthdays.length ? (
           <div className="birthdayRows">
             {data.birthdays.map((birthday) => (
               <div className="birthdayRow" key={birthday.id}>
-                <div className="birthdayAvatar">🎂</div>
+                <div className="birthdayAvatar"><Icons.cake /></div>
                 <div><strong>{birthday.name}</strong><span>{birthday.age !== null ? `${birthday.age} yaş` : "Doğum günü"}{birthday.branchName ? ` · ${birthday.branchName}` : ""}</span></div>
                 {birthday.celebrated ? (
                   <div className="birthdayCelebrated">
@@ -235,7 +236,7 @@ function OperationPanel() {
                   </div>
                 ) : birthday.whatsappUrl ? (
                   <button type="button" onClick={() => celebrateBirthday(birthday)} disabled={celebrationBusy === birthday.id} className="birthdayWhatsapp">
-                    {celebrationBusy === birthday.id ? "Kaydediliyor…" : "WhatsApp'tan Kutla"}
+                    <Icons.message /> {celebrationBusy === birthday.id ? "Kaydediliyor…" : "WhatsApp'tan Kutla"}
                   </button>
                 ) : <span className="birthdayNoPhone">Telefon yok</span>}
               </div>
@@ -262,6 +263,14 @@ function OperationPanel() {
         .lessonAction{grid-column:2;justify-self:end;display:inline-flex;align-items:center;gap:9px;min-height:36px;padding:7px 11px;border:1px solid #c8ddfa;border-radius:10px;background:#f2f7ff;color:#176de9;font-size:11px;font-weight:900}
         .lessonAction b{font-size:16px}.lessonsPanel .livePanelHead{align-items:center}.lessonsPanel .livePanelHead>a{flex-shrink:0;padding:9px;border:1px solid #d5e4fa;border-radius:10px}
         @media(max-width:640px){.lessonRows{padding:9px}.lessonRow{grid-template-columns:58px minmax(0,1fr);padding:13px;gap:9px 11px}.lessonTime strong{font-size:15px}.lessonInfo>strong{font-size:12px}.lessonsPanel .livePanelHead{flex-wrap:wrap}}
+
+        .liveSummaryLabel{display:flex;align-items:center;gap:8px}.liveSummaryLabel svg{width:21px;height:21px;flex-shrink:0;color:#176de9}
+        .liveSummaryCard.orange .liveSummaryLabel svg{color:#c56a13}.liveSummaryCard.green .liveSummaryLabel svg{color:#16875b}.liveSummaryCard.purple .liveSummaryLabel svg{color:#8154c7}.liveSummaryCard.red .liveSummaryLabel svg{color:#d03e45}
+        .liveArrowIcon{display:grid;place-items:center;width:29px;height:29px;border:1px solid #dce7f4;border-radius:9px;background:#f4f8fd}.liveArrowIcon svg{width:16px;height:16px}
+        .livePanelHead>a,.priorityRow b,.birthdayWhatsapp{display:inline-flex;align-items:center;gap:7px}.livePanelHead>a svg,.priorityRow b svg{width:15px;height:15px;flex-shrink:0}
+        .lessonTime>svg{width:17px;height:17px;margin:0 auto;color:#4c85d6}.lessonStatusIcon{display:flex}.lessonStatusIcon svg{width:14px;height:14px;flex-shrink:0}.lessonAction>svg{width:17px;height:17px;flex-shrink:0}
+        .priorityRow>i:before,.priorityRow>i:after{content:none;animation:none}.priorityRow>i{border-radius:12px;box-shadow:none}.priorityRow>i svg{width:21px;height:21px;color:#fff}
+        .birthdayPanel h3{display:flex;align-items:center;gap:8px}.birthdayPanel h3 svg{width:21px;height:21px;color:#bf7b20}.birthdayAvatar svg{width:24px;height:24px;color:#bf7b20}.birthdayWhatsapp svg{width:16px;height:16px}
       `}</style>
     </section>
   );
