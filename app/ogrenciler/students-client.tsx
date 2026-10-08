@@ -118,7 +118,8 @@ type StudentNoteItem = {
   created_at?: string | null;
   reminder_at?: string | null;
   reminder_completed?: boolean;
-  completion?: { reply: string; completed_at: string } | null;
+  author?: { name: string; role: string } | null;
+  completion?: { reply: string; completed_at: string; author?: { name: string; role: string } | null } | null;
 };
 
 type Props = {
@@ -3569,8 +3570,9 @@ thead{display:table-header-group}tr{break-inside:avoid}
                           <strong>{note.note_type === "management" ? "Yönetici Notu" : note.note_type === "coach" ? "Antrenör Notu" : note.note_type === "registration" ? "Kayıt Notu" : note.note_type === "payment" ? "Ödeme Notu" : "Genel Not"}</strong>
                           <small>{note.created_at ? new Date(note.created_at).toLocaleString("tr-TR") : ""}</small>
                         </div>
+                        <div className="noteAuthor">Yazan: <strong>{note.author?.name || "Kullanıcı bilgisi bulunamadı"}</strong><span>{note.author?.role === "owner" ? "Sahip" : note.author?.role === "admin" ? "Yönetici" : note.author?.role === "coach" ? "Antrenör" : note.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"}</span></div>
                         <p>{note.body}</p>
-                        {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>{new Date(note.completion.completed_at).toLocaleString("tr-TR")}</small></div>}
+                        {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>Tamamlayan: {note.completion.author?.name || "Kullanıcı bilgisi bulunamadı"} · {note.completion.author?.role === "owner" ? "Sahip" : note.completion.author?.role === "admin" ? "Yönetici" : note.completion.author?.role === "coach" ? "Antrenör" : note.completion.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.completion.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.completion.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"} · {new Date(note.completion.completed_at).toLocaleString("tr-TR")}</small></div>}
                         {note.reminder_at && !note.completion && !note.reminder_completed && (
                           <div className="noteReminderLine">
                             ⏰ {noteReminderDue(note.reminder_at) ? "Hatırlatma zamanı geldi" : `Hatırlatma: ${noteReminderLabel(note.reminder_at)}`}
@@ -6535,6 +6537,9 @@ thead{display:table-header-group}tr{break-inside:avoid}
 .noteHistoryItem{border:1px solid #dbe5f0;border-radius:13px;padding:11px;background:#fbfdff}
 .noteHistoryItem.due{border-color:#ef9b45;background:#fff8ef}
 .noteHistoryItem.completed{border-color:#b9dfcb;background:#f4fbf7}
+.noteAuthor{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:9px;color:#657993;font-size:11px}
+.noteAuthor strong{color:#183c65}
+.noteAuthor span{padding:3px 7px;background:#eaf2ff;color:#2458a1;border-radius:7px;font-weight:800}
 .noteCompletionInfo{display:grid;gap:5px;padding:10px 12px;margin:10px 0;border:1px solid #b9dfcb;border-radius:11px;background:#edf9f1;color:#235f3b;font-size:12px}
 .noteCompletionInfo span{white-space:pre-wrap;color:#2e4e3b}
 .noteCompletionInfo small{color:#648473}
