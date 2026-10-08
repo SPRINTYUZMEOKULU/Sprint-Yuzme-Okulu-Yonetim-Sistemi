@@ -90,9 +90,10 @@ function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number)
 
   // Eski kayıtlarda lesson_weekdays boş olabilir. Geriye dönük uyumluluk için
   // bu kayıtlar grup programını kullanmaya devam eder.
+  if (!enrollment) return false;
   if (!days.length) return true;
 
-  return days.includes(enrollmentWeekday(scheduleWeekday));
+  return days.map(enrollmentWeekday).includes(enrollmentWeekday(scheduleWeekday));
 }
 
 function enrollmentDaysText(enrollment: any) {
@@ -1166,7 +1167,7 @@ export default async function OperasyonPlaniPage({
       const scheduleText = groupSchedules
         .map((schedule: any) => {
           const day =
-            GUNLER[Number(schedule.weekday)] || "Ders";
+            GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün belirtilmedi";
           const start =
             saatGoster(schedule.start_time);
           const end =
@@ -1225,10 +1226,33 @@ export default async function OperasyonPlaniPage({
   selectedDaySchedules.forEach((schedule: any) => {
     const scheduleBranchId =
       schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+    // Aynı havuz ve saat yeterli değildir: eğitmen, kurs türü ve seviye de uyumlu olmalı.
+    const slotGroup = groupMap.get(schedule.group_id);
+    const assignedCoach = staffAssignments.find(
+      (assignment: any) =>
+        assignment.schedule_id === schedule.id &&
+        assignment.assignment_role === "coach"
+    )?.coach_id || schedule.coach_id || slotGroup?.primary_coach_id;
+    const slotLevels = Array.from(new Set(
+      memberships
+        .filter((membership: any) => membership.group_id === schedule.group_id)
+        .filter((membership: any) => {
+          const enrollment = enrollments.find(
+            (item: any) => item.student_id === membership.student_id && item.group_id === schedule.group_id
+          );
+          return enrollmentIncludesScheduleDay(enrollment, Number(schedule.weekday));
+        })
+        .map((membership: any) => studentMap.get(membership.student_id)?.swimming_level)
+        .filter(Boolean)
+    )).sort();
     const key = [
       scheduleBranchId,
       String(schedule.start_time || "").slice(0, 5),
       String(schedule.end_time || "").slice(0, 5),
+      slotGroup?.course_type || "",
+      // Eğitmeni atanmadıysa farklı grupları kendiliğinden birleştirme.
+      assignedCoach || schedule.group_id,
+      slotLevels.join(",") || "seviye-belirsiz",
     ].join("|");
 
     const rows = selectedDaySharedSlotsMap.get(key) || [];
@@ -1604,8 +1628,8 @@ export default async function OperasyonPlaniPage({
           </div>
           <div style={operationActionGridStyle}>
             <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
-              <span style={{ ...operationIconStyle, ...operationIconPrimaryStyle }}><Icons.branch /></span>
-              <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
+              <span style={{ ...operationIconStyle, ...operationIconPrimaryStyle }}><Icons.calendar /></span>
+              <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Havuz kapanışı · ders hakkı · telafi · yeniden başlatma</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
             <Link href="/ders-operasyonlari" style={operationActionStyle}>
