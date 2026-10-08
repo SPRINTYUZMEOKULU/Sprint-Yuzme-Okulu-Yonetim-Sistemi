@@ -92,6 +92,8 @@ function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number)
   // Eski kayıtlarda lesson_weekdays boş olabilir. Geriye dönük uyumluluk için
   // bu kayıtlar grup programını kullanmaya devam eder.
   if (!enrollment) return false;
+  // Günleri tanımlanmamış eski kayıtları yalnızca mevcut grup programında göster;
+  // bu durumda kayıt günü doğrulaması için ayrıca veri kontrolü gereklidir.
   if (!days.length) return true;
 
   return days.map(enrollmentWeekday).includes(enrollmentWeekday(scheduleWeekday));
@@ -1225,9 +1227,8 @@ export default async function OperasyonPlaniPage({
     return true;
   });
 
-  const selectedDaySharedSlotsMap = new Map<string, any[]>();
-
-  selectedDaySchedules.forEach((schedule: any) => {
+  // Tek eşleştirme kuralı: günlük ve haftalık görünüm aynı sonuçları verir.
+  function sharedSessionKey(schedule: any) {
     const scheduleBranchId =
       schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
     // Aynı havuz ve saat yeterli değildir: eğitmen, kurs türü ve seviye de uyumlu olmalı.
@@ -1258,6 +1259,14 @@ export default async function OperasyonPlaniPage({
       sharedModeOf(schedule.id) === "shared" ? "onayli" : (assignedCoach || schedule.group_id),
       sharedModeOf(schedule.id) === "shared" ? "onayli" : (slotLevels.join(",") || "seviye-belirsiz"),
     ].join("|");
+
+    return key;
+  }
+
+  const selectedDaySharedSlotsMap = new Map<string, any[]>();
+
+  selectedDaySchedules.forEach((schedule: any) => {
+    const key = sharedSessionKey(schedule);
 
     const rows = selectedDaySharedSlotsMap.get(key) || [];
     rows.push(schedule);
@@ -2273,10 +2282,7 @@ export default async function OperasyonPlaniPage({
                           item.id !== schedule.id &&
                           sharedModeOf(item.id) !== "separate" &&
                           Number(item.weekday) === Number(schedule.weekday) &&
-                          String(item.start_time || "").slice(0, 5) ===
-                            String(schedule.start_time || "").slice(0, 5) &&
-                          (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
-                            (schedule.branch_id || group?.branch_id)
+                          sharedSessionKey(item) === sharedSessionKey(schedule)
                       );
 
                 const sharedSlotRows = [schedule, ...sharedSlotSchedules].map(
@@ -2730,7 +2736,7 @@ export default async function OperasyonPlaniPage({
                         >
                           <span>Birlikte çalışacak öğrenci: {sharedSlotTotalStudents}</span>
                           {sharedSlotTotalCapacity > 0 ? (
-                            <span>Toplam kapasite: {sharedSlotTotalCapacity}</span>
+                            <span>Grup kontenjanlarının toplamı: {sharedSlotTotalCapacity} (havuz kapasitesi değil)</span>
                           ) : null}
                         </div>
                       </section>
