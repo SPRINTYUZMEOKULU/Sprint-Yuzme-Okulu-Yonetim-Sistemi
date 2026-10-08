@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
         .eq("activity_type", "student_note_reminder")
         .eq("source_type", "student_note"),
       supabase.from("student_timeline_events")
-        .select("description,created_at")
+        .select("description,created_at,created_by")
         .eq("organization_id", organizationId)
         .eq("student_id", studentId)
         .eq("title", "Öğrenci notu tamamlandı")
@@ -145,10 +145,14 @@ export async function GET(request: NextRequest) {
     (reminders || []).map((item: any) => [String(item.source_id || ""), item]),
   );
 
-  const completionMap = new Map<string, { reply: string; completed_at: string }>();
+  const profileIds = Array.from(new Set([...(notes || []).map((n: any) => n.author_id), ...(completions || []).map((n: any) => n.created_by)].filter(Boolean)));
+  const { data: authors, error: authorsError } = profileIds.length ? await supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId).in("id", profileIds) : { data: [], error: null };
+  if (authorsError) return NextResponse.json({ error: authorsError.message }, { status: 500 });
+  const authorMap = new Map((authors || []).map((person: any) => [String(person.id), { name: person.full_name || "İsim belirtilmemiş", role: person.role || "" }]));
+  const completionMap = new Map<string, { reply: string; completed_at: string; author: { name: string; role: string } | null }>();
   for (const item of completions || []) {
-    const match = /^SPRINT_NOTE_COMPLETED:([a-f0-9-]{36})\\n([\\s\\S]*)$/i.exec(item.description || "");
-    if (match && !completionMap.has(match[1])) completionMap.set(match[1], { reply: match[2], completed_at: item.created_at });
+    const match = /^SPRINT_NOTE_COMPLETED:([a-f0-9-]{36})\n([\s\S]*)$/i.exec(item.description || "");
+    if (match && !completionMap.has(match[1])) completionMap.set(match[1], { reply: match[2], completed_at: item.created_at, author: authorMap.get(String(item.created_by)) || null });
   }
 
   return NextResponse.json({
@@ -156,6 +160,7 @@ export async function GET(request: NextRequest) {
       const reminder = reminderMap.get(String(note.id));
       return {
         ...note,
+        author: authorMap.get(String(note.author_id)) || null,
         reminder_at: reminder?.reminder_at || null,
         reminder_completed: Boolean(reminder?.reminder_completed) || completionMap.has(String(note.id)),
         completion: completionMap.get(String(note.id)) || null,
