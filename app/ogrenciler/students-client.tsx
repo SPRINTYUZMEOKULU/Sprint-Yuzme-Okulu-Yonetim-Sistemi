@@ -118,6 +118,7 @@ type StudentNoteItem = {
   created_at?: string | null;
   reminder_at?: string | null;
   reminder_completed?: boolean;
+  completion?: { reply: string; completed_at: string } | null;
 };
 
 type Props = {
@@ -1051,6 +1052,8 @@ const [noteBody, setNoteBody] = useState("");
 const [noteType, setNoteType] = useState("general");
 const [noteReminderAt, setNoteReminderAt] = useState("");
 const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+const [completingNoteId, setCompletingNoteId] = useState<string | null>(null);
+const [noteCompletionReply, setNoteCompletionReply] = useState("");
 const noteReturnScrollYRef = useRef(0);
 
 async function loadStudentNotes(studentId: string) {
@@ -1074,6 +1077,8 @@ function openStudentNotes(student: StudentListItem) {
   noteReturnScrollYRef.current = window.scrollY;
   setNoteStudent(student);
   setEditingNoteId(null);
+  setCompletingNoteId(null);
+  setNoteCompletionReply("");
   setNoteBody("");
   setNoteType("general");
   setNoteReminderAt("");
@@ -1082,6 +1087,9 @@ function openStudentNotes(student: StudentListItem) {
 }
 
 function closeStudentNotes() {
+  window.requestAnimationFrame(() => window.scrollTo({ top: noteReturnScrollYRef.current, behavior: "auto" }));
+  setCompletingNoteId(null);
+  setNoteCompletionReply("");
   setNoteStudent(null);
   setNoteItems([]);
   setEditingNoteId(null);
@@ -1141,6 +1149,28 @@ async function saveStudentNote() {
     });
   } catch (error) {
     setNoteError(error instanceof Error ? error.message : "Not kaydedilemedi.");
+  } finally {
+    setNoteSaving(false);
+  }
+}
+
+async function completeStudentNote(noteId: string) {
+  if (!noteStudent || !noteCompletionReply.trim() || noteSaving) return;
+  setNoteSaving(true);
+  setNoteError("");
+  try {
+    const response = await fetch("/api/student-notes", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: noteId, student_id: noteStudent.id, reply: noteCompletionReply.trim() }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Not tamamlanamadı.");
+    setCompletingNoteId(null);
+    setNoteCompletionReply("");
+    await loadStudentNotes(noteStudent.id);
+    router.refresh();
+  } catch (error) {
+    setNoteError(error instanceof Error ? error.message : "Not tamamlanamadı.");
   } finally {
     setNoteSaving(false);
   }
@@ -3461,7 +3491,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                   <h3>{noteStudent.first_name} {noteStudent.last_name}</h3>
                   <p>Kartta görünen notlar dijital kursiyer dosyasındaki Notlar bölümüne aynı anda işlenir.</p>
                 </div>
-                <button type="button" onClick={closeStudentNotes} aria-label="Not penceresini kapat">×</button>
+                <button type="button" onClick={closeStudentNotes} aria-label="Geri dön" title="Öğrenci listesine geri dön">← Geri</button>
               </div>
 
               <div className="notePanelBody">
@@ -3532,7 +3562,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                       <article
                         key={note.id}
                         className={`noteHistoryItem ${
-                          noteReminderDue(note.reminder_at) && !note.reminder_completed ? "due" : ""
+                          note.completion ? "completed" : noteReminderDue(note.reminder_at) && !note.reminder_completed ? "due" : ""
                         }`}
                       >
                         <div>
@@ -3540,13 +3570,16 @@ thead{display:table-header-group}tr{break-inside:avoid}
                           <small>{note.created_at ? new Date(note.created_at).toLocaleString("tr-TR") : ""}</small>
                         </div>
                         <p>{note.body}</p>
-                        {note.reminder_at && (
+                        {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>{new Date(note.completion.completed_at).toLocaleString("tr-TR")}</small></div>}
+                        {note.reminder_at && !note.completion && !note.reminder_completed && (
                           <div className="noteReminderLine">
                             ⏰ {noteReminderDue(note.reminder_at) ? "Hatırlatma zamanı geldi" : `Hatırlatma: ${noteReminderLabel(note.reminder_at)}`}
                           </div>
                         )}
+                        {completingNoteId === note.id && !note.completion && <div className="noteCompleteEditor"><label htmlFor={`completion-${note.id}`}>Nasıl tamamlandı? / İşlem sonucu</label><textarea id={`completion-${note.id}`} value={noteCompletionReply} onChange={(event) => setNoteCompletionReply(event.target.value)} placeholder="Örn. Veli arandı, kayıt yenileme görüşmesi yapıldı." maxLength={3000} rows={3} /><div><button type="button" onClick={() => {setCompletingNoteId(null);setNoteCompletionReply("");}}>Vazgeç</button><button type="button" className="finish" disabled={noteSaving || !noteCompletionReply.trim()} onClick={() => void completeStudentNote(note.id)}>{noteSaving ? "Kaydediliyor…" : "Kaydet ve Tamamla"}</button></div></div>}
                         <div className="noteHistoryActions">
-                          <button type="button" onClick={() => editStudentNote(note)}>Düzenle</button>
+                          {!note.completion && <button type="button" className="finish" onClick={() => {setCompletingNoteId(note.id);setNoteCompletionReply("");setNoteError("");}}>✓ Tamamla / Cevapla</button>}
+                          {!note.completion && <button type="button" onClick={() => editStudentNote(note)}>Düzenle</button>}
                           <button type="button" className="danger" onClick={() => void deleteStudentNote(note.id)}>Sil</button>
                         </div>
                       </article>
@@ -6501,6 +6534,18 @@ thead{display:table-header-group}tr{break-inside:avoid}
 .noteHistoryTitle span{display:grid;place-items:center;min-width:28px;height:28px;border-radius:9px;background:#edf4fc;color:#176fe8;font-weight:900}
 .noteHistoryItem{border:1px solid #dbe5f0;border-radius:13px;padding:11px;background:#fbfdff}
 .noteHistoryItem.due{border-color:#ef9b45;background:#fff8ef}
+.noteHistoryItem.completed{border-color:#b9dfcb;background:#f4fbf7}
+.noteCompletionInfo{display:grid;gap:5px;padding:10px 12px;margin:10px 0;border:1px solid #b9dfcb;border-radius:11px;background:#edf9f1;color:#235f3b;font-size:12px}
+.noteCompletionInfo span{white-space:pre-wrap;color:#2e4e3b}
+.noteCompletionInfo small{color:#648473}
+.noteCompleteEditor{display:grid;gap:8px;padding:12px;margin-top:10px;border:1px solid #bfd2eb;border-radius:12px;background:#f3f8ff}
+.noteCompleteEditor label{font-weight:800;font-size:12px;color:#28496e}
+.noteCompleteEditor textarea{box-sizing:border-box;width:100%;border:1px solid #c9d8ea;border-radius:9px;padding:10px;font:inherit;resize:vertical;color:#17345c}
+.noteCompleteEditor>div{display:flex;justify-content:flex-end;gap:8px}
+.noteCompleteEditor button{border:1px solid #cedbed;background:#fff;border-radius:9px;padding:9px 12px;font-weight:800;color:#28496e}
+.noteHistoryActions .finish,.noteCompleteEditor .finish{background:#15835a;border-color:#15835a;color:#fff}
+.noteCompleteEditor button:disabled{opacity:.5;cursor:not-allowed}
+.notePanelHeader>button{font-size:13px;min-width:75px;width:auto;font-weight:800}
 .noteHistoryItem>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .noteHistoryItem>div:first-child strong{color:#17345c;font-size:12px}
 .noteHistoryItem>div:first-child small{color:#8898aa;font-size:10px}
