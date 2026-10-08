@@ -11,6 +11,7 @@ import OperationStudentManager, {
   type OperationStudentRow,
 } from "./operation-student-manager";
 import SessionRosterPrintButton from "./session-roster-print-button";
+import ConfirmSharedSessionButton from "./ConfirmSharedSessionButton";
 
 export const dynamic = "force-dynamic";
 
@@ -574,6 +575,9 @@ async function ortakSeansModuAyarla(formData: FormData) {
 
   const scheduleId = String(formData.get("schedule_id") || "");
   const mode = String(formData.get("mode") || "auto");
+  if (mode === "shared" && formData.get("confirmed") !== "yes") {
+    throw new Error("Ortak seans birleştirmesi açık yönetici onayı gerektirir.");
+  }
 
   if (!scheduleId || !["auto", "shared", "separate"].includes(mode)) {
     throw new Error("Ortak seans tercihi geçersiz.");
@@ -1249,10 +1253,10 @@ export default async function OperasyonPlaniPage({
       scheduleBranchId,
       String(schedule.start_time || "").slice(0, 5),
       String(schedule.end_time || "").slice(0, 5),
-      slotGroup?.course_type || "",
-      // Eğitmeni atanmadıysa farklı grupları kendiliğinden birleştirme.
-      assignedCoach || schedule.group_id,
-      slotLevels.join(",") || "seviye-belirsiz",
+      // Açık onay verilmiş gruplar aynı fiziksel oturumda birlikte görülebilir.
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (slotGroup?.course_type || ""),
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (assignedCoach || schedule.group_id),
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (slotLevels.join(",") || "seviye-belirsiz"),
     ].join("|");
 
     const rows = selectedDaySharedSlotsMap.get(key) || [];
@@ -1356,10 +1360,7 @@ export default async function OperasyonPlaniPage({
         startTime: saatGoster(firstSchedule.start_time),
         endTime: saatGoster(firstSchedule.end_time),
         groups: groupRows,
-        totalStudents: groupRows.reduce(
-          (sum: number, row: any) => sum + row.students.length,
-          0
-        ),
+        totalStudents: new Set(groupRows.flatMap((row: any) => row.students.map((student: any) => student.id))).size,
       };
     })
     .filter(Boolean) as any[];
@@ -1476,9 +1477,12 @@ export default async function OperasyonPlaniPage({
                               <form action={ortakSeansModuAyarla}>
                                 <input type="hidden" name="schedule_id" value={candidate.id} />
                                 <input type="hidden" name="mode" value="shared" />
-                                <button type="submit" style={dailySharedJoinButtonStyle}>
-                                  Ortak Seansa Al
-                                </button>
+                                <input type="hidden" name="confirmed" value="yes" />
+                                <ConfirmSharedSessionButton
+                                  label="Ortak Seansa Al"
+                                  style={dailySharedJoinButtonStyle}
+                                  warning="Bu grup ortak seansa dahil edilecek. Eğitmen, seviye veya kurs türü farklı olabilir; aynı havuz ve saatte çalışması gerçekten uygun mu?"
+                                />
                               </form>
                             ) : null}
                           </div>
@@ -2322,10 +2326,7 @@ export default async function OperasyonPlaniPage({
                   }
                 );
 
-                const sharedSlotTotalStudents = sharedSlotRows.reduce(
-                  (total: number, item: any) => total + item.studentCount,
-                  0
-                );
+                const sharedSlotTotalStudents = new Set(sharedSlotRows.flatMap((item: any) => item.students.map((student: any) => student.id))).size;
 
                 const sharedSlotTotalCapacity = sharedSlotRows.reduce(
                   (total: number, item: any) => total + item.capacity,
