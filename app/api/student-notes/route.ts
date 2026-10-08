@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
   }
 
-  const [{ data: notes, error: notesError }, { data: reminders, error: reminderError }] =
+  const [{ data: notes, error: notesError }, { data: reminders, error: reminderError }, { data: completions, error: completionError }] =
     await Promise.all([
       supabase
         .from("student_notes")
@@ -126,11 +126,17 @@ export async function GET(request: NextRequest) {
         .eq("student_id", studentId)
         .eq("activity_type", "student_note_reminder")
         .eq("source_type", "student_note"),
+      supabase.from("student_timeline_events")
+        .select("description,created_at")
+        .eq("organization_id", organizationId)
+        .eq("student_id", studentId)
+        .eq("title", "Öğrenci notu tamamlandı")
+        .order("created_at", { ascending: false }),
     ]);
 
-  if (notesError || reminderError) {
+  if (notesError || reminderError || completionError) {
     return NextResponse.json(
-      { error: notesError?.message || reminderError?.message || "Notlar yüklenemedi." },
+      { error: notesError?.message || reminderError?.message || completionError?.message || "Notlar yüklenemedi." },
       { status: 500 },
     );
   }
@@ -139,13 +145,20 @@ export async function GET(request: NextRequest) {
     (reminders || []).map((item: any) => [String(item.source_id || ""), item]),
   );
 
+  const completionMap = new Map<string, { reply: string; completed_at: string }>();
+  for (const item of completions || []) {
+    const match = /^SPRINT_NOTE_COMPLETED:([a-f0-9-]{36})\\n([\\s\\S]*)$/i.exec(item.description || "");
+    if (match && !completionMap.has(match[1])) completionMap.set(match[1], { reply: match[2], completed_at: item.created_at });
+  }
+
   return NextResponse.json({
     notes: (notes || []).map((note: any) => {
       const reminder = reminderMap.get(String(note.id));
       return {
         ...note,
         reminder_at: reminder?.reminder_at || null,
-        reminder_completed: Boolean(reminder?.reminder_completed),
+        reminder_completed: Boolean(reminder?.reminder_completed) || completionMap.has(String(note.id)),
+        completion: completionMap.get(String(note.id)) || null,
       };
     }),
   });
@@ -307,5 +320,42 @@ export async function DELETE(request: NextRequest) {
     created_by: profile.id,
   });
 
+  return NextResponse.json({ ok: true });
+}
+
+
+export async function PUT(request: NextRequest) {
+  const profile = await requireProfile([...staffRoles]);
+  const organizationId = profile.organization_id;
+  const payload = await request.json().catch(() => ({}));
+  const studentId = text(payload.student_id, 100);
+  const noteId = text(payload.id, 100);
+  const reply = text(payload.reply, 3000);
+  if (!organizationId || !studentId || !noteId || !reply) {
+    return NextResponse.json({ error: "Tamamlama açıklaması zorunludur." }, { status: 400 });
+  }
+  const supabase = await createClient();
+  if (!(await ensureStudent(supabase, organizationId, studentId))) {
+    return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
+  }
+  const { data: note } = await supabase.from("student_notes").select("id")
+    .eq("organization_id", organizationId).eq("student_id", studentId).eq("id", noteId).maybeSingle();
+  if (!note) return NextResponse.json({ error: "Not bulunamadı." }, { status: 404 });
+  const { data: existing } = await supabase.from("student_timeline_events").select("id,description")
+    .eq("organization_id", organizationId).eq("student_id", studentId)
+    .eq("title", "Öğrenci notu tamamlandı");
+  if ((existing || []).some((row: any) => (row.description || "").startsWith(`SPRINT_NOTE_COMPLETED:${noteId}\n`))) {
+    return NextResponse.json({ error: "Bu not zaten tamamlanmış." }, { status: 409 });
+  }
+  const { error } = await supabase.from("student_timeline_events").insert({
+    organization_id: organizationId, student_id: studentId,
+    event_type: "note_updated", title: "Öğrenci notu tamamlandı",
+    description: `SPRINT_NOTE_COMPLETED:${noteId}\n${reply}`, created_by: profile.id,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { error: reminderError } = await supabase.from("student_activity_logs").update({ reminder_completed: true })
+    .eq("organization_id", organizationId).eq("student_id", studentId)
+    .eq("activity_type", "student_note_reminder").eq("source_type", "student_note").eq("source_id", noteId);
+  if (reminderError) console.error("Completed note reminder update:", reminderError);
   return NextResponse.json({ ok: true });
 }
