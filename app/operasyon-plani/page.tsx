@@ -2417,6 +2417,29 @@ export default async function OperasyonPlaniPage({
                       <span className="opSessionChevron" style={sessionChevronStyle}>⌄</span>
                     </summary>
 
+                    {canEdit ? (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 16px" }}>
+                        {currentSharedMode !== "shared" ? (
+                          <form action={ortakSeansModuAyarla}>
+                            <input type="hidden" name="schedule_id" value={schedule.id} />
+                            <input type="hidden" name="mode" value="shared" />
+                            <input type="hidden" name="confirmed" value="yes" />
+                            <ConfirmSharedSessionButton
+                              label="Birlikte Çalıştır (Onaylı)"
+                              warning="Bu seans için ortak çalıştırma tercihi kaydedilecek. Aynı gün/havuz/saatteki onaylı seanslarla birlikte görüntülenebilir. Eğitmen, seviye ve kurs türü farklıysa uygunluğunu kontrol edin."
+                              style={dailySharedJoinButtonStyle}
+                            />
+                          </form>
+                        ) : (
+                          <form action={ortakSeansModuAyarla}>
+                            <input type="hidden" name="schedule_id" value={schedule.id} />
+                            <input type="hidden" name="mode" value="auto" />
+                            <button type="submit" style={dailySharedSeparateButtonStyle}>Otomatik Eşleştirmeye Dön</button>
+                          </form>
+                        )}
+                      </div>
+                    ) : null}
+
                     {sharedSlotSchedules.length > 0 ? (
                       <section
                         style={{
