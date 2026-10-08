@@ -32,8 +32,8 @@ self.addEventListener("push", (event) => {
       payload.body ||
       payload.message ||
       "Yeni bir bildiriminiz var.",
-    icon: payload.icon || "/icons/icon-192.png?v=6",
-    badge: payload.badge || "/icons/icon-192.png?v=6",
+    icon: payload.icon || "/icons/icon-192.png?v=7",
+    badge: payload.badge || "/icons/icon-192.png?v=7",
     tag:
       payload.tag ||
       payload.notificationId ||
