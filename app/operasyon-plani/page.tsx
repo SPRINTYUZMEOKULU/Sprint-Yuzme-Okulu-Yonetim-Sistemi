@@ -11,6 +11,7 @@ import OperationStudentManager, {
   type OperationStudentRow,
 } from "./operation-student-manager";
 import SessionRosterPrintButton from "./session-roster-print-button";
+import ConfirmSharedSessionButton from "./ConfirmSharedSessionButton";
 
 export const dynamic = "force-dynamic";
 
@@ -90,9 +91,12 @@ function enrollmentIncludesScheduleDay(enrollment: any, scheduleWeekday: number)
 
   // Eski kayıtlarda lesson_weekdays boş olabilir. Geriye dönük uyumluluk için
   // bu kayıtlar grup programını kullanmaya devam eder.
+  if (!enrollment) return false;
+  // Günleri tanımlanmamış eski kayıtları yalnızca mevcut grup programında göster;
+  // bu durumda kayıt günü doğrulaması için ayrıca veri kontrolü gereklidir.
   if (!days.length) return true;
 
-  return days.includes(enrollmentWeekday(scheduleWeekday));
+  return days.map(enrollmentWeekday).includes(enrollmentWeekday(scheduleWeekday));
 }
 
 function enrollmentDaysText(enrollment: any) {
@@ -573,6 +577,9 @@ async function ortakSeansModuAyarla(formData: FormData) {
 
   const scheduleId = String(formData.get("schedule_id") || "");
   const mode = String(formData.get("mode") || "auto");
+  if (mode === "shared" && formData.get("confirmed") !== "yes") {
+    throw new Error("Ortak seans birleştirmesi açık yönetici onayı gerektirir.");
+  }
 
   if (!scheduleId || !["auto", "shared", "separate"].includes(mode)) {
     throw new Error("Ortak seans tercihi geçersiz.");
@@ -1166,7 +1173,7 @@ export default async function OperasyonPlaniPage({
       const scheduleText = groupSchedules
         .map((schedule: any) => {
           const day =
-            GUNLER[Number(schedule.weekday)] || "Ders";
+            GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün belirtilmedi";
           const start =
             saatGoster(schedule.start_time);
           const end =
@@ -1220,16 +1227,46 @@ export default async function OperasyonPlaniPage({
     return true;
   });
 
-  const selectedDaySharedSlotsMap = new Map<string, any[]>();
-
-  selectedDaySchedules.forEach((schedule: any) => {
+  // Tek eşleştirme kuralı: günlük ve haftalık görünüm aynı sonuçları verir.
+  function sharedSessionKey(schedule: any) {
     const scheduleBranchId =
       schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+    // Aynı havuz ve saat yeterli değildir: eğitmen, kurs türü ve seviye de uyumlu olmalı.
+    const slotGroup = groupMap.get(schedule.group_id);
+    const assignedCoach = staffAssignments.find(
+      (assignment: any) =>
+        assignment.schedule_id === schedule.id &&
+        assignment.assignment_role === "coach"
+    )?.coach_id || schedule.coach_id || slotGroup?.primary_coach_id;
+    const slotLevels = Array.from(new Set(
+      memberships
+        .filter((membership: any) => membership.group_id === schedule.group_id)
+        .filter((membership: any) => {
+          const enrollment = enrollments.find(
+            (item: any) => item.student_id === membership.student_id && item.group_id === schedule.group_id
+          );
+          return enrollmentIncludesScheduleDay(enrollment, Number(schedule.weekday));
+        })
+        .map((membership: any) => studentMap.get(membership.student_id)?.swimming_level)
+        .filter(Boolean)
+    )).sort();
     const key = [
       scheduleBranchId,
       String(schedule.start_time || "").slice(0, 5),
       String(schedule.end_time || "").slice(0, 5),
+      // Açık onay verilmiş gruplar aynı fiziksel oturumda birlikte görülebilir.
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (slotGroup?.course_type || ""),
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (assignedCoach || schedule.group_id),
+      sharedModeOf(schedule.id) === "shared" ? "onayli" : (slotLevels.join(",") || "seviye-belirsiz"),
     ].join("|");
+
+    return key;
+  }
+
+  const selectedDaySharedSlotsMap = new Map<string, any[]>();
+
+  selectedDaySchedules.forEach((schedule: any) => {
+    const key = sharedSessionKey(schedule);
 
     const rows = selectedDaySharedSlotsMap.get(key) || [];
     rows.push(schedule);
@@ -1332,10 +1369,7 @@ export default async function OperasyonPlaniPage({
         startTime: saatGoster(firstSchedule.start_time),
         endTime: saatGoster(firstSchedule.end_time),
         groups: groupRows,
-        totalStudents: groupRows.reduce(
-          (sum: number, row: any) => sum + row.students.length,
-          0
-        ),
+        totalStudents: new Set(groupRows.flatMap((row: any) => row.students.map((student: any) => student.id))).size,
       };
     })
     .filter(Boolean) as any[];
@@ -1452,9 +1486,12 @@ export default async function OperasyonPlaniPage({
                               <form action={ortakSeansModuAyarla}>
                                 <input type="hidden" name="schedule_id" value={candidate.id} />
                                 <input type="hidden" name="mode" value="shared" />
-                                <button type="submit" style={dailySharedJoinButtonStyle}>
-                                  Ortak Seansa Al
-                                </button>
+                                <input type="hidden" name="confirmed" value="yes" />
+                                <ConfirmSharedSessionButton
+                                  label="Ortak Seansa Al"
+                                  style={dailySharedJoinButtonStyle}
+                                  warning="Bu grup ortak seansa dahil edilecek. Eğitmen, seviye veya kurs türü farklı olabilir; aynı havuz ve saatte çalışması gerçekten uygun mu?"
+                                />
                               </form>
                             ) : null}
                           </div>
@@ -1604,8 +1641,8 @@ export default async function OperasyonPlaniPage({
           </div>
           <div style={operationActionGridStyle}>
             <Link href="/tesis-sezon-yonetimi" style={operationActionPrimaryStyle}>
-              <span style={{ ...operationIconStyle, ...operationIconPrimaryStyle }}><Icons.branch /></span>
-              <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Kapat · hakkı dondur · yeniden başlat · aktar</small></span>
+              <span style={{ ...operationIconStyle, ...operationIconPrimaryStyle }}><Icons.calendar /></span>
+              <span style={operationActionTextStyle}><b>Havuz / Tesis İşlemleri</b><small>Havuz kapanışı · ders hakkı · telafi · yeniden başlatma</small></span>
               <span style={operationArrowStyle}>→</span>
             </Link>
             <Link href="/ders-operasyonlari" style={operationActionStyle}>
@@ -2245,10 +2282,7 @@ export default async function OperasyonPlaniPage({
                           item.id !== schedule.id &&
                           sharedModeOf(item.id) !== "separate" &&
                           Number(item.weekday) === Number(schedule.weekday) &&
-                          String(item.start_time || "").slice(0, 5) ===
-                            String(schedule.start_time || "").slice(0, 5) &&
-                          (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
-                            (schedule.branch_id || group?.branch_id)
+                          sharedSessionKey(item) === sharedSessionKey(schedule)
                       );
 
                 const sharedSlotRows = [schedule, ...sharedSlotSchedules].map(
@@ -2298,10 +2332,7 @@ export default async function OperasyonPlaniPage({
                   }
                 );
 
-                const sharedSlotTotalStudents = sharedSlotRows.reduce(
-                  (total: number, item: any) => total + item.studentCount,
-                  0
-                );
+                const sharedSlotTotalStudents = new Set(sharedSlotRows.flatMap((item: any) => item.students.map((student: any) => student.id))).size;
 
                 const sharedSlotTotalCapacity = sharedSlotRows.reduce(
                   (total: number, item: any) => total + item.capacity,
@@ -2330,7 +2361,7 @@ export default async function OperasyonPlaniPage({
                           {saatGoster(schedule.start_time)} – {saatGoster(schedule.end_time)}
                         </strong>
                         <span style={sessionDayTextStyle}>
-                          {GUNLER[Number(schedule.weekday)] || "Ders"}
+                          {GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"}
                         </span>
                       </div>
 
@@ -2392,6 +2423,29 @@ export default async function OperasyonPlaniPage({
                       <span className="opSessionChevron" style={sessionChevronStyle}>⌄</span>
                     </summary>
 
+                    {canEdit ? (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 16px" }}>
+                        {currentSharedMode !== "shared" ? (
+                          <form action={ortakSeansModuAyarla}>
+                            <input type="hidden" name="schedule_id" value={schedule.id} />
+                            <input type="hidden" name="mode" value="shared" />
+                            <input type="hidden" name="confirmed" value="yes" />
+                            <ConfirmSharedSessionButton
+                              label="Birlikte Çalıştır (Onaylı)"
+                              warning="Bu seans için ortak çalıştırma tercihi kaydedilecek. Aynı gün/havuz/saatteki onaylı seanslarla birlikte görüntülenebilir. Eğitmen, seviye ve kurs türü farklıysa uygunluğunu kontrol edin."
+                              style={dailySharedJoinButtonStyle}
+                            />
+                          </form>
+                        ) : (
+                          <form action={ortakSeansModuAyarla}>
+                            <input type="hidden" name="schedule_id" value={schedule.id} />
+                            <input type="hidden" name="mode" value="auto" />
+                            <button type="submit" style={dailySharedSeparateButtonStyle}>Otomatik Eşleştirmeye Dön</button>
+                          </form>
+                        )}
+                      </div>
+                    ) : null}
+
                     {sharedSlotSchedules.length > 0 ? (
                       <section
                         style={{
@@ -2432,7 +2486,7 @@ export default async function OperasyonPlaniPage({
                                 fontSize: 15,
                               }}
                             >
-                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
+                              {GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
                             </strong>
                             <span
                               style={{
@@ -2682,7 +2736,7 @@ export default async function OperasyonPlaniPage({
                         >
                           <span>Birlikte çalışacak öğrenci: {sharedSlotTotalStudents}</span>
                           {sharedSlotTotalCapacity > 0 ? (
-                            <span>Toplam kapasite: {sharedSlotTotalCapacity}</span>
+                            <span>Grup kontenjanlarının toplamı: {sharedSlotTotalCapacity} (havuz kapasitesi değil)</span>
                           ) : null}
                         </div>
                       </section>
@@ -3522,7 +3576,7 @@ export default async function OperasyonPlaniPage({
                         <div style={footerRightActionsStyle}>
                           <SessionRosterPrintButton
                             date={selectedDate}
-                            weekday={GUNLER[Number(schedule.weekday)] || "Ders"}
+                            weekday={GUNLER[Number(schedule.weekday) === 0 ? 7 : Number(schedule.weekday)] || "Gün bilgisi eksik"}
                             pool={branch?.name || "Şube / havuz"}
                             startTime={saatGoster(schedule.start_time)}
                             endTime={saatGoster(schedule.end_time)}
