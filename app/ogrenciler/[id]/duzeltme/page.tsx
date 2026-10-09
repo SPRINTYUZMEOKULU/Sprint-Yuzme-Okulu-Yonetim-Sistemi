@@ -65,7 +65,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     <main className="correctionPage">
       <div className="correctionShell">
         <div className="correctionTopNav">
-          <Link href={`/ogrenciler/${id}`}>← Öğrenci Dosyasına Dön</Link>
+          <Link href={`/ogrenciler/${id}`} scroll={true}>← Öğrenci Dosyasına Dön</Link>
           <Link href="/ogrenciler">Öğrenci Merkezi</Link>
         </div>
 
