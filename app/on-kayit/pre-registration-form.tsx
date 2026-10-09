@@ -6,6 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  registrationMeasurementConfigured,
+  enableRegistrationMeasurement,
+  disableRegistrationMeasurement,
+  reportSuccessfulRegistration,
+} from "@/lib/pre-registration-conversion";
 
 type Branch = {
   id: string;
@@ -67,6 +73,7 @@ const days = [
 ];
 
 export default function PreRegistrationForm() {
+  const [measurementConsent, setMeasurementConsent] = useState(false);
   const [status, setStatus] =
     useState<
       "idle" |
@@ -266,6 +273,16 @@ export default function PreRegistrationForm() {
         ).entries()
       );
 
+    const query = new URLSearchParams(window.location.search);
+    const submission = {
+      ...payload,
+      marketing_attribution: {
+        source: query.get("utm_source") || "",
+        medium: query.get("utm_medium") || "",
+        campaign: query.get("utm_campaign") || "",
+      },
+    };
+
     try {
       const response =
         await fetch(
@@ -280,7 +297,7 @@ export default function PreRegistrationForm() {
 
             body:
               JSON.stringify(
-                payload
+                submission
               ),
           }
         );
@@ -296,6 +313,14 @@ export default function PreRegistrationForm() {
       }
 
       setStatus("success");
+
+      // This is intentionally independent of UTM: Google determines ad attribution.
+      // Measurement failures must never prevent a successful registration.
+      try {
+        reportSuccessfulRegistration(result, measurementConsent);
+      } catch {
+        // Registration is already safely committed by the server.
+      }
 
       setMessage(
         "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
@@ -1580,6 +1605,22 @@ export default function PreRegistrationForm() {
         kayıt ekranına otomatik düşer. Kayıt ekibimiz
         başvuruyu kontrol ederek sizinle iletişime geçer.
       </div>
+
+      {registrationMeasurementConfigured && (
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, fontSize: 13, lineHeight: 1.55 }}>
+          <input
+            type="checkbox"
+            checked={measurementConsent}
+            onChange={(event) => {
+              const allowed = event.target.checked;
+              setMeasurementConsent(allowed);
+              if (allowed) enableRegistrationMeasurement();
+              else disableRegistrationMeasurement();
+            }}
+          />
+          <span>Reklamların başarılı başvurulara katkısının Google tarafından ölçülmesi için reklam ölçüm çerezlerine izin veriyorum. İsteğe bağlıdır; başvurumu etkilemez.</span>
+        </label>
+      )}
 
       <div className="submitRow">
         <button
