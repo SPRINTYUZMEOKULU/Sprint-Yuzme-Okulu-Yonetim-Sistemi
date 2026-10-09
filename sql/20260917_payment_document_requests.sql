@@ -43,3 +43,7 @@ alter table public.payment_document_requests enable row level security;
 comment on table public.payment_document_requests is 'IBAN/Havale/EFT odeme talebi, musteri tarafindan girilen belge alicisi bilgileri ve e-belge durumunu tek kayitta tutar.';
 comment on column public.payment_document_requests.public_token is 'Personele kimlik/vergi bilgisi girdirmeden musteriye gonderilecek tahmin edilemez baglanti anahtari.';
 comment on column public.payment_document_requests.document_status is 'Entegrator baglanana kadar not_created/document_pending durumunda tutulabilir.';
+
+-- Sensitive recipient details are accessible only through authorized server handlers.
+revoke all on public.payment_document_requests from anon, authenticated;
+grant select, insert, update, delete on public.payment_document_requests to service_role;
