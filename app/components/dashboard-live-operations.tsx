@@ -16,6 +16,7 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
     branchName: string;
     groupId: string | null;
     groupName: string;
+    groups: Array<{ id: string; groupName: string; studentCount: number; statusCounts: { present: number; absent: number; excused: number }; missingCount: number }>;
     startTime: string;
     endTime: string;
     studentCount: number;
@@ -185,7 +186,7 @@ function OperationPanel() {
           {data.sessions.length ? (
             <div className="lessonRows">
               {data.sessions.map((session) => {
-                const params = new URLSearchParams({ date: data.date, time: session.startTime, scheduleId: session.id });
+                const params = new URLSearchParams({ date: data.date, time: session.startTime });
                 if (session.branchId) params.set("branchId", session.branchId);
                 const status = session.studentCount === 0 ? "Öğrenci yok"
                   : session.attendanceComplete ? "Yoklama kaydedildi"
@@ -193,7 +194,7 @@ function OperationPanel() {
                   : "Kayıt yenileme gerekiyor";
                 const tone = session.attendanceComplete ? "done" : session.missingCount > 0 ? "pending" : "neutral";
                 return (
-                  <Link className={`lessonRow${openedSession === session.id ? " isOpened" : ""}${openingSession === session.id ? " isOpening" : ""}`} href={`/yoklama?${params.toString()}#seans-${session.id}`} key={session.id}
+                  <Link className={`lessonRow${openedSession === session.id ? " isOpened" : ""}${openingSession === session.id ? " isOpening" : ""}`} href={`/yoklama?${params.toString()}`} key={session.id}
                     onClick={(event) => {
                       if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
                       setOpenedSession(session.id);
@@ -205,6 +206,7 @@ function OperationPanel() {
                     <div className="lessonInfo">
                       <strong>{session.groupName}</strong>
                       <span>{session.branchName} · {session.studentCount} öğrenci</span>
+                      <div className="lessonGroups">{session.groups.filter((group) => group.studentCount > 0).map((group) => <span key={group.id}>{group.groupName.split(" · ").at(-1)} · {group.studentCount} öğrenci · Geldi {group.statusCounts.present} / Gelmedi {group.statusCounts.absent} / İzinli {group.statusCounts.excused}</span>)}</div>
                       <div className="lessonCounts">
                         <span className="present">Geldi {session.statusCounts.present}</span>
                         <span className="absent">Gelmedi {session.statusCounts.absent}</span>
@@ -281,6 +283,7 @@ function OperationPanel() {
         .lessonRow:focus-visible{outline:3px solid #176de9;outline-offset:2px}
         .lessonTime{grid-row:1/3;align-self:start;display:grid;gap:5px;padding:12px 5px;text-align:center;border-radius:14px;background:#eef5ff}
         .lessonTime small{margin:0}.lessonInfo{min-width:0}.lessonInfo>strong{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+        .lessonGroups{display:grid;gap:5px;margin-top:8px}.lessonGroups>span{padding:6px 8px;border-radius:8px;background:#f1f5fb;color:#47617f;font-size:10px;line-height:1.5}
         .lessonCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.lessonCounts span{margin:0;padding:4px 7px;border-radius:7px;font-size:10px;font-weight:800}
         .lessonCounts .present{color:#16875b;background:#ecfdf3}.lessonCounts .absent{color:#b42333;background:#fff0f2}.lessonCounts .excused{color:#8a6200;background:#fff8e8}
         .lessonBlocked{display:block;margin-top:7px;color:#8a6200;font-size:10px}
