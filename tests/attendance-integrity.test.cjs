@@ -9,3 +9,6 @@ test('editing days on the same enrollment immediately moves the daily roster',()
 
 const {mergeRemoteAttendance}=load('lib/attendance/integrity.ts');
 test('remote refresh shows coach saves and corrections, keeps local drafts, removes deleted/off-roster rows',()=>{const allowed=new Set(['s:a','s:b','s:c']);assert.deepEqual(mergeRemoteAttendance({'s:a':'present','s:b':'excused','s:c':'present','old:x':'present'},{'s:a':'present','s:b':'absent','s:c':'present'},{'s:a':'absent','s:b':'present'},allowed),{'s:a':'absent','s:b':'excused'});assert.deepEqual(mergeRemoteAttendance({}, {}, {'s:a':'present'},allowed),{'s:a':'present'});assert.deepEqual(mergeRemoteAttendance({'s:a':'absent'},{'s:a':'present'},{'s:a':'excused'},allowed),{'s:a':'absent'});});
+
+const {registrationDaysLabel,attendanceCourseLabel}=load('lib/attendance/presentation.ts');
+test('individual selected days differ from the group name; adults and team labels are explicit',()=>{assert.equal(registrationDaysLabel([2,4]),'Salı · Perşembe');assert.equal(registrationDaysLabel([6,0,7,6]),'Cumartesi · Pazar');assert.equal(attendanceCourseLabel({name:'Salı-Perşembe 20:00 / Cumartesi 19:00 · Yetişkin',course_type:'Yetişkin Yüzme Kursu'}),'Yetişkin');assert.equal(attendanceCourseLabel({course_type:'Takım / Performans'}),'Takım')});
