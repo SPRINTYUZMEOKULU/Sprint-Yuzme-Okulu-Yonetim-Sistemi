@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -13,6 +14,11 @@ function cleanIds(value: unknown) {
         .filter(Boolean),
     ),
   ).slice(0, 500);
+}
+
+function refreshStudentOperations(studentIds: string[]) {
+  for (const route of ["/operasyon-plani", "/yoklama", "/yoklama/aylik", "/yoklama/gecmis", "/ogrenciler", "/raporlar", "/", "/veli-paneli", "/veli-devam"]) revalidatePath(route);
+  for (const id of studentIds) revalidatePath(`/ogrenciler/${id}`);
 }
 
 export async function POST(request: NextRequest) {
@@ -176,6 +182,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: verifyStudentError?.message || "Seviye ataması doğrulanamadı." }, { status: 500 });
     }
 
+    const { data: verifiedMemberships, error: verifyMembershipError } = await supabase
+      .from("student_group_memberships").select("id,level_id")
+      .eq("organization_id", organizationId).eq("is_active", true).in("student_id", validIds);
+    if (verifyMembershipError || verifiedMemberships?.some((row: any) => row.level_id !== canonicalLevel.id)) {
+      return NextResponse.json({ error: "Grup üyeliği seviyesi yeniden doğrulanamadı." }, { status: 500 });
+    }
+    refreshStudentOperations(validIds);
+
     return NextResponse.json({
       ok: true,
       updated: changedIds.length,
@@ -280,6 +294,16 @@ export async function POST(request: NextRequest) {
     if (error || confirmedAssignments.length !== rows.length) {
       return NextResponse.json({ error: error?.message || "Toplu eğitmen ataması doğrulanamadı." }, { status: 500 });
     }
+
+    const { data: reread, error: readError } = await supabase
+      .from("lesson_student_assignments").select("student_id,schedule_id,coach_id,is_active")
+      .eq("organization_id", organizationId).in("student_id", validIds)
+      .in("schedule_id", rows.map((row) => row.schedule_id)).eq("is_active", true);
+    const readKeys = new Set((reread || []).filter((row: any) => row.coach_id === coachId).map((row: any) => `${row.student_id}:${row.schedule_id}`));
+    if (readError || rows.some((row) => !readKeys.has(`${row.student_id}:${row.schedule_id}`))) {
+      return NextResponse.json({ error: "Eğitmen kaydı yeniden okunup doğrulanamadı. Seçiminiz korunuyor." }, { status: 500 });
+    }
+    refreshStudentOperations(validIds);
 
     const appliedIds = Array.from(new Set(rows.map((row) => row.student_id)));
     await supabase.from("student_timeline_events").insert(

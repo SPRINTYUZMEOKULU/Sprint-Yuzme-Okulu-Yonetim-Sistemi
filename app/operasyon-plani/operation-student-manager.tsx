@@ -170,7 +170,7 @@ export default function OperationStudentManager({
   }
 
   return (
-    <section className="operationRoster">
+    <section className="operationRoster" aria-busy={busy}>
       <div className="operationRosterHeader">
         <div>
           <span>AKTİF KURSİYER YÖNETİMİ</span>
@@ -283,7 +283,7 @@ export default function OperationStudentManager({
                 </div>
                 <div className="inlineAssignments">
                 <select
-                  defaultValue={student.coach_id || ""}
+                  value={student.coach_id || ""}
                   onChange={(event) => {
                     if (event.target.value) void apply("coach", [student.id], event.target.value);
                   }}
@@ -296,7 +296,7 @@ export default function OperationStudentManager({
                 </select>
 
                 <select
-                  defaultValue={student.level || ""}
+                  value={student.level || ""}
                   onChange={(event) => {
                     if (event.target.value) void apply("level", [student.id], event.target.value);
                   }}

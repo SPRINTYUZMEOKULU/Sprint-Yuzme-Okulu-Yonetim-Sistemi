@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { mergeAttendanceDraft, verifyAttendanceRows } from "@/lib/attendance/integrity";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { mergeRemoteAttendance, mergeAttendanceDraft, verifyAttendanceRows } from "@/lib/attendance/integrity";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { getAttendanceForDate, saveAttendance } from "./actions";
@@ -28,6 +29,9 @@ function attendanceKey(scheduleId:string,studentId:string){return `${scheduleId}
 function groupSaveKey(groupId:string,scheduleId:string){return `${groupId}:${scheduleId}`}
 
 export default function QuickAttendanceClient(p:Props){
+ const router=useRouter();
+ const mutationVersion=useRef(0);
+ const [syncMessage,setSyncMessage]=useState("");
  const initialDate = p.initialDate && /^\d{4}-\d{2}-\d{2}$/.test(p.initialDate) && !Number.isNaN(Date.parse(`${p.initialDate}T12:00:00`)) ? p.initialDate : today();
  const targetSchedule = p.schedules.find(s=>s.id===p.initialScheduleId && scheduleWeekday(s.weekday)===weekday(initialDate));
  const [date,setDate]=useState(initialDate);
@@ -96,6 +100,38 @@ export default function QuickAttendanceClient(p:Props){
    target?.scrollIntoView({block:"start"});
  },[loaded,p.initialScheduleId]);
 
+ const latest=useRef({statuses,storedStatuses,pending,ready,groups});
+ latest.current={statuses,storedStatuses,pending,ready,groups};
+ const rosterSignature=groups.map(g=>`${g.schedule.id}:${g.students.map(s=>s.id).sort().join(",")}`).join("|");
+ useEffect(()=>{
+   let live=true,inFlight=false;
+   async function refresh(){
+     const snapshot=latest.current;
+     if(!live||inFlight||snapshot.pending||!snapshot.ready||document.visibilityState!=="visible")return;
+     inFlight=true;
+     const version=mutationVersion.current;
+     try{
+       const rows=await Promise.all(snapshot.groups.map(g=>getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date})));
+       if(!live||latest.current.pending||version!==mutationVersion.current)return;
+       if(rows.some(row=>!row.ok)){setSyncMessage("Güncel kayıtlar okunamadı. Mevcut seçimleriniz korunuyor.");return;}
+       const remote:Record<string,Status>={};
+       rows.forEach((row,i)=>{if(row.ok)for(const item of row.records||[])remote[attendanceKey(snapshot.groups[i].schedule.id,item.student_id)]=item.status as Status});
+       const allowed=new Set(snapshot.groups.flatMap(g=>g.students.map(s=>attendanceKey(g.schedule.id,s.id))));
+       const current=latest.current;
+       const merged=mergeRemoteAttendance(current.statuses,current.storedStatuses,remote,allowed);
+       const dirty=Array.from(allowed).some(key=>merged[key]!==remote[key]);
+       setStatuses(merged);setStoredStatuses(remote);
+       setSavedGroups(Object.fromEntries(snapshot.groups.map(g=>[groupSaveKey(g.group.id,g.schedule.id),g.students.length>0&&g.students.every(s=>{const key=attendanceKey(g.schedule.id,s.id);return Boolean(remote[key])&&remote[key]===merged[key]})])));
+       setSyncMessage(dirty?"Sunucu kayıtları güncellendi; kaydedilmemiş seçimleriniz korundu.":"Diğer hesapların kayıtlarıyla güncel.");
+       // Refresh roster and counters only when there are no local edits.
+       if(!dirty&&!document.activeElement?.matches("input,select,textarea"))router.refresh();
+     }catch{if(live)setSyncMessage("Bağlantı kurulamadı. Mevcut seçimleriniz korunuyor.");}
+     finally{inFlight=false;}
+   }
+   const timer=window.setInterval(()=>void refresh(),30000);
+   return()=>{live=false;window.clearInterval(timer)};
+ },[date,branchId,time,rosterSignature,router]);
+
  const total=groups.reduce((n,g)=>n+g.students.length,0);
  const marked=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[attendanceKey(g.schedule.id,s.id)]).length,0);
 
@@ -122,6 +158,7 @@ export default function QuickAttendanceClient(p:Props){
  function eligibleStudents(g:(typeof groups)[number]){return g.students.filter(s=>!(remaining(g.enrollmentByStudent.get(s.id))<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]))}
  function missingStudents(g:(typeof groups)[number]){return eligibleStudents(g).filter(s=>!statuses[attendanceKey(g.schedule.id,s.id)])}
  async function persistGroup(g:(typeof groups)[number]){
+   mutationVersion.current++;
    try{
    const students=eligibleStudents(g);
    if(!students.length)return {ok:false,count:0,message:"Bu seansta kaydedilecek aktif ders hakkı bulunmuyor. Yoklama kaydedilmedi."};
@@ -164,7 +201,7 @@ export default function QuickAttendanceClient(p:Props){
 
  return <main className="qaRoot">
    <section className="qaTop">
-     <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1></div>
+     <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1>{syncMessage&&<small role="status">{syncMessage}</small>}</div>
      <div className="qaSelectors">
        <input type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
        <select aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
