@@ -1,5 +1,8 @@
 "use server";
 
+import { verifyAttendanceRows } from "@/lib/attendance/integrity";
+import { attendanceRoster } from "@/lib/attendance/roster";
+import { createClient as createAuditClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -79,6 +82,19 @@ const PACKAGE_CONSUMING_STATUSES: AttendanceStatus[] = [
 
 async function getAuthorizedProfile() {
   return requireProfile([...ALLOWED_ROLES]);
+}
+
+// Only called after the user's organization, role, schedule and students have
+// been validated. The service client is used solely for the protected audit log.
+async function auditAttendance(profile: Awaited<ReturnType<typeof getAuthorizedProfile>>, action:string, scheduleId:string, metadata:Record<string,unknown>) {
+  try {
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!url||!key)return false;
+    const audit=createAuditClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+    const {error}=await audit.from("audit_logs").insert({organization_id:profile.organization_id,actor_profile_id:profile.id,module_key:"attendance",action_key:action,action_label:action==="save"?"Yoklama kaydı doğrulandı":"Yoklama temizleme isteği",entity_type:"lesson_schedule",entity_id:scheduleId,request_path:"/yoklama",success:true,metadata});
+    return !error;
+  } catch {return false;}
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
@@ -225,7 +241,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       error: scheduleError,
     } = await supabase
       .from("lesson_schedules")
-      .select("id, branch_id, group_id, coach_id")
+      .select("id, branch_id, group_id, coach_id, weekday, is_active")
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
       .eq("organization_id", organizationId)
@@ -237,6 +253,11 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         count: 0,
         message: "Seçilen ders programı bulunamadı.",
       };
+    }
+
+    const requestedDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
+    if (schedule.is_active === false || (Number(schedule.weekday) === 7 ? 0 : Number(schedule.weekday)) !== requestedDay) {
+      return {ok:false,count:0,message:"Seçilen tarih bu seansın ders günüyle eşleşmiyor."};
     }
 
     // Eğitmen yalnızca kendisine atanmış grup/seanslarda yoklama alabilir.
@@ -271,7 +292,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
           .eq("organization_id", organizationId)
           .in("coach_id", coachIds)
           .eq("is_active", true)
-          .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+          .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
           .limit(1)
           .maybeSingle();
 
@@ -401,15 +422,35 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       }
     }
 
-    const { data: previousAttendance } = await supabase
+    // Rebuild the eligible roster on the server: stale screens cannot save a
+    // normal lesson on a day that was not selected in the registration.
+    const [rosterStudents, rosterEnrollments, rosterMemberships, rosterCompensations] = await Promise.all([
+      supabase.from("students").select("id,status").eq("organization_id", organizationId).eq("is_deleted", false).in("id", studentIds),
+      supabase.from("student_enrollments").select("id,student_id,group_id,status,lesson_weekdays,start_date,created_at,updated_at,start_confirmation_required,actual_started_at").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("status", "active").in("student_id", studentIds),
+      supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("is_active", true).in("student_id", studentIds),
+      supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("lesson_date", input.lessonDate).eq("status", "planned").in("student_id", studentIds),
+    ]);
+    if (rosterStudents.error || rosterEnrollments.error || rosterMemberships.error || rosterCompensations.error) {
+      return {ok:false,count:0,message:"Öğrencilerin kayıt günleri doğrulanamadı. Yoklama kaydedilmedi."};
+    }
+    const lessonDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
+    const roster = attendanceRoster({students:rosterStudents.data||[],enrollments:rosterEnrollments.data||[],memberships:rosterMemberships.data||[],compensationLessons:rosterCompensations.data||[]}, input.groupId, input.scheduleId, input.lessonDate, lessonDay===0?7:lessonDay);
+    const eligibleIds = new Set(roster.students.map(student=>student.id));
+    if(input.records.some(record=>!eligibleIds.has(record.studentId))) {
+      return {ok:false,count:0,message:"Listede bu gün için kaydı veya telafisi olmayan öğrenci var. Yoklamayı yenileyip tekrar deneyin."};
+    }
+
+    const { data: previousAttendance, error: previousError } = await supabase
       .from("attendance_records")
-      .select("student_id,status")
+      .select("student_id,status,coach_note,recorded_by")
       .eq("organization_id", organizationId)
       .eq("group_id", input.groupId)
       .eq("schedule_id", input.scheduleId)
       .eq("lesson_date", input.lessonDate)
       .in("student_id", studentIds);
 
+    if(previousError)return {ok:false,count:0,message:"Mevcut yoklama okunamadı. Önceki kayıtları korumak için işlem durduruldu."};
+    const previousRows = new Map((previousAttendance||[]).map((item:any)=>[String(item.student_id),item]));
     const previousStatus = new Map(
       (previousAttendance || []).map((item: any) => [String(item.student_id), String(item.status || "")])
     );
@@ -443,9 +484,9 @@ export async function saveAttendance(input: SaveAttendanceInput) {
 
       status: record.status,
 
-      coach_note: record.coachNote?.trim() || null,
+      coach_note: record.coachNote===null ? previousRows.get(record.studentId)?.coach_note||null : record.coachNote.trim()||null,
 
-      recorded_by: profile.id,
+      recorded_by: previousRows.get(record.studentId)?.recorded_by||profile.id,
       updated_by: profile.id,
       edited_at: now,
       updated_at: now,
@@ -465,6 +506,16 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         message: `Yoklama kaydedilemedi: ${error.message}`,
       };
     }
+
+    const {data: written, error: verifyError} = await supabase.from("attendance_records")
+      .select("student_id,status").eq("organization_id",organizationId)
+      .eq("group_id",input.groupId).eq("schedule_id",input.scheduleId)
+      .eq("lesson_date",input.lessonDate).in("student_id",studentIds);
+    if(verifyError||!verifyAttendanceRows(rows,written)) {
+      return {ok:false,count:0,message:"Yoklama yazıldı ancak kayıt sonucu doğrulanamadı. Yenileyip kontrol edin; taslağınızı silmeyin."};
+    }
+
+    const auditOk=await auditAttendance(profile,"save",input.scheduleId,{lessonDate:input.lessonDate,groupId:input.groupId,before:previousAttendance||[],after:rows,count:rows.length});
 
     /*
      * -------------------------------------------------------
@@ -610,7 +661,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       ok: true,
       count: rows.length,
       message:
-        "Yoklama başarıyla kaydedildi ve ders hakları güncellendi.",
+        `Yoklama başarıyla kaydedildi ve ders hakları güncellendi.${auditOk?"":" İşlem günlüğü yazılamadı; yönetici kontrolü gerekiyor."}`,
     };
   } catch (error) {
     return {
@@ -676,7 +727,7 @@ export async function clearAttendance(input: ClearAttendanceInput) {
         .eq("organization_id", organizationId)
         .eq("coach_id", coachStaff.id)
         .eq("is_active", true)
-        .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+        .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
         .limit(1)
         .maybeSingle();
 
@@ -692,7 +743,7 @@ export async function clearAttendance(input: ClearAttendanceInput) {
 
     const { data: existing, error: existingError } = await supabase
       .from("attendance_records")
-      .select("id,enrollment_id")
+      .select("id,enrollment_id,student_id,status,coach_note,recorded_by,updated_at")
       .eq("organization_id", organizationId)
       .eq("student_id", input.studentId)
       .eq("group_id", input.groupId)
@@ -707,6 +758,9 @@ export async function clearAttendance(input: ClearAttendanceInput) {
     if (!existing?.id) {
       return { ok: true, message: "Yoklama seçimi zaten temiz." };
     }
+
+    const deletionAuditOk=await auditAttendance(profile,"clear_requested",input.scheduleId,{lessonDate:input.lessonDate,groupId:input.groupId,before:existing});
+    if(!deletionAuditOk)return {ok:false,message:"İşlem günlüğü oluşturulamadığı için yoklama silinmedi."};
 
     const { error: deleteError } = await supabase
       .from("attendance_records")

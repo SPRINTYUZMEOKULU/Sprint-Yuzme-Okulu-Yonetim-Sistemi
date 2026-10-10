@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { mergeAttendanceDraft, verifyAttendanceRows } from "@/lib/attendance/integrity";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { getAttendanceForDate, saveAttendance } from "./actions";
@@ -13,7 +14,7 @@ type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolea
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
-type Props={branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
+type Props={viewerId:string;allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
@@ -37,6 +38,10 @@ export default function QuickAttendanceClient(p:Props){
  const [statuses,setStatuses]=useState<Record<string,Status>>({});
  const [message,setMessage]=useState("");
  const [loaded,setLoaded]=useState(false);
+ const [loadedKey,setLoadedKey]=useState("");
+ const [storedStatuses,setStoredStatuses]=useState<Record<string,Status>>({});
+ const [loadAttempt,setLoadAttempt]=useState(0);
+ const [legacyDraft,setLegacyDraft]=useState<Record<string,Status>>({});
  const [pending,startTransition]=useTransition();
  const [savedGroups,setSavedGroups]=useState<Record<string,boolean>>({});
 
@@ -58,23 +63,32 @@ export default function QuickAttendanceClient(p:Props){
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
    const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)return null;
    const {students,enrollmentByStudent,compensationIds}=attendanceRoster(p,group.id,schedule.id,date,day);
-   return {group,schedule,students,enrollmentByStudent,compensationIds};
- }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,date,day]);
+   const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
+   return {group,schedule,students:allowed?students.filter(s=>allowed.includes(s.id)):students,enrollmentByStudent,compensationIds};
+ }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,p.allowedStudentIdsBySchedule,date,day]);
 
- const draftKey=`sprintos:quick-attendance:${date}:${branchId}:${time}`;
- useEffect(()=>{let live=true;setLoaded(false);setStatuses({});setMessage("");if(!time||!groups.length){setLoaded(true);return}
+ const draftKey=`sprintos:quick-attendance:v2:${p.viewerId}:${date}:${branchId}:${time}`;
+ const ready=loaded&&loadedKey===draftKey;
+ useEffect(()=>{let live=true;setLoaded(false);setStatuses({});setStoredStatuses({});setSavedGroups({});setLegacyDraft({});setMessage("");if(!time||!groups.length){setLoadedKey(draftKey);setLoaded(true);return}
    startTransition(async()=>{
+     try{
      const rows=await Promise.all(groups.map(g=>getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date})));
      if(!live)return;
-     const next:Record<string,Status>={};
+     if(rows.some(r=>!r.ok)){setMessage(rows.find(r=>!r.ok)?.message||"Yoklama yüklenemedi.");return}
+     let next:Record<string,Status>={};
      rows.forEach((r,i)=>{if(r.ok)(r.records||[]).forEach((x:any)=>next[attendanceKey(groups[i].schedule.id,x.student_id)]=x.status)});
-     try{const raw=localStorage.getItem(draftKey);if(raw)Object.assign(next,JSON.parse(raw)?.statuses||{})}catch{}
-     setStatuses(next);setLoaded(true);
+     setStoredStatuses({...next});
+     setSavedGroups(Object.fromEntries(groups.map(g=>[groupSaveKey(g.group.id,g.schedule.id),eligibleStudents(g).length>0&&eligibleStudents(g).every(s=>Boolean(next[attendanceKey(g.schedule.id,s.id)]))])));
+     const allowedKeys=new Set(groups.flatMap(g=>g.students.map(s=>attendanceKey(g.schedule.id,s.id))));
+     try{const raw=localStorage.getItem(draftKey);if(raw)next=mergeAttendanceDraft(next,JSON.parse(raw)?.statuses,allowedKeys)}catch{}
+     try{const raw=localStorage.getItem(`sprintos:quick-attendance:${date}:${branchId}:${time}`);if(raw){const old=JSON.parse(raw)?.statuses||{};const recover:Record<string,Status>={};for(const g of groups)for(const student of g.students){const key=attendanceKey(g.schedule.id,student.id);if(!next[key]&&["present","absent","excused","compensation"].includes(old[key]))recover[key]=old[key]}setLegacyDraft(recover)}}catch{}
+     setStatuses(next);setLoadedKey(draftKey);setLoaded(true);
+     }catch{if(live)setMessage("Yoklama sunucudan yüklenemedi. Bağlantıyı kontrol edip Tekrar Yükle’ye basın.")}
    });
    return()=>{live=false}
- },[date,branchId,time]);
+ },[date,branchId,time,loadAttempt]);
 
- useEffect(()=>{if(!loaded||!time)return;try{localStorage.setItem(draftKey,JSON.stringify({statuses,savedAt:new Date().toISOString()}))}catch{}},[statuses,draftKey,loaded,time]);
+ useEffect(()=>{if(!ready||!time)return;try{localStorage.setItem(draftKey,JSON.stringify({statuses,savedAt:new Date().toISOString()}))}catch{}},[statuses,draftKey,ready,time]);
 
  useEffect(()=>{
    if(!loaded||!p.initialScheduleId)return;
@@ -98,42 +112,53 @@ export default function QuickAttendanceClient(p:Props){
 
  function setStatus(g:(typeof groups)[number],s:Student,status:"present"|"absent"|"excused"){
    const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const isComp=g.compensationIds.has(s.id);
-   if(rem<=0&&!isComp){setMessage(`${fullName(s)} için ders hakkı bitmiş. Kayıt yenileme gerekiyor.`);return}
+   if(rem<=0&&!isComp&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]){setMessage(`${fullName(s)} için ders hakkı bitmiş. Kayıt yenileme gerekiyor.`);return}
    const key=attendanceKey(g.schedule.id,s.id);const next:Status=status==="present"&&isComp?"compensation":status;
    setStatuses(v=>({...v,[key]:next}));setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}));setMessage("");
  }
 
- function markAllPresent(g:(typeof groups)[number]){setStatuses(v=>{const n={...v};g.students.forEach(s=>{const e=g.enrollmentByStudent.get(s.id);if(remaining(e)<=0&&!g.compensationIds.has(s.id))return;n[attendanceKey(g.schedule.id,s.id)]=g.compensationIds.has(s.id)?"compensation":"present"});return n});setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}))}
+ function markAllPresent(g:(typeof groups)[number]){setStatuses(v=>{const n={...v};g.students.forEach(s=>{const e=g.enrollmentByStudent.get(s.id);if(remaining(e)<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)])return;n[attendanceKey(g.schedule.id,s.id)]=g.compensationIds.has(s.id)?"compensation":"present"});return n});setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}))}
 
- function eligibleStudents(g:(typeof groups)[number]){return g.students.filter(s=>!(remaining(g.enrollmentByStudent.get(s.id))<=0&&!g.compensationIds.has(s.id)))}
+ function eligibleStudents(g:(typeof groups)[number]){return g.students.filter(s=>!(remaining(g.enrollmentByStudent.get(s.id))<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]))}
  function missingStudents(g:(typeof groups)[number]){return eligibleStudents(g).filter(s=>!statuses[attendanceKey(g.schedule.id,s.id)])}
  async function persistGroup(g:(typeof groups)[number]){
+   try{
    const students=eligibleStudents(g);
-   if(!students.length)return {ok:true,message:"Bu seansta kaydedilecek aktif ders hakkı bulunmuyor."};
+   if(!students.length)return {ok:false,count:0,message:"Bu seansta kaydedilecek aktif ders hakkı bulunmuyor. Yoklama kaydedilmedi."};
    const r=await saveAttendance({branchId:g.schedule.branch_id||g.group.branch_id||null,groupId:g.group.id,scheduleId:g.schedule.id,coachId:g.schedule.coach_id||g.group.primary_coach_id||null,lessonDate:date,records:students.map(s=>({studentId:s.id,enrollmentId:g.enrollmentByStudent.get(s.id)?.id||null,status:statuses[attendanceKey(g.schedule.id,s.id)],coachNote:null}))});
+   if(!r.ok)return r;
+   const verified=await getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date});
+   if(!verified.ok||!verifyAttendanceRows(students.map(s=>({student_id:s.id,status:statuses[attendanceKey(g.schedule.id,s.id)]})),verified.records))return {ok:false,count:0,message:"Kayıt sonucu yeniden okunamadı veya seçimlerle eşleşmedi. Taslak korundu; yenileyip kontrol edin."};
+   setStoredStatuses(v=>({...v,...Object.fromEntries(students.map(s=>[attendanceKey(g.schedule.id,s.id),statuses[attendanceKey(g.schedule.id,s.id)]]))}));
    return r;
+   }catch{return {ok:false,count:0,message:"Sunucu yanıtı alınamadı. Kaydın durumu doğrulanamadı; taslak korundu. Yeniden yükleyip kontrol edin."}}
  }
  function saveGroup(g:(typeof groups)[number]){
+   if(!ready||pending)return;
    const missing=missingStudents(g);
    if(missing.length){setMessage(`${g.group.name||"Seans"}: ${missing.length} öğrencinin yoklaması işaretlenmedi.`);return}
    startTransition(async()=>{
      const r=await persistGroup(g);
      if(!r.ok){setMessage(r.message);return}
      setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
-     setMessage(`✓ ${g.group.name||"Seans"} kaydedildi. Diğer seansları daha sonra kaydedebilirsiniz.`);
+     setMessage(`✓ ${date} · ${time}: ${g.group.name||"Seans"}. ${r.message}`);
    })
  }
  function saveAll(){
-   const missing=groups.flatMap(g=>missingStudents(g));
-   if(missing.length){setMessage(`${missing.length} öğrencinin yoklaması işaretlenmedi.`);return}
+   if(!ready||pending)return;
+   const incompleteGroups=groups.filter(g=>missingStudents(g).length>0);
+   const writableGroups=groups.filter(g=>eligibleStudents(g).length>0&&missingStudents(g).length===0);
+   if(!writableGroups.length){setMessage(incompleteGroups.length?`${incompleteGroups.flatMap(g=>missingStudents(g)).length} öğrencinin yoklaması işaretlenmedi. Hiçbir seans kaydedilmedi.`:"Kaydedilecek öğrenci yok. Yoklama kaydedilmedi.");return}
    startTransition(async()=>{
-     for(const g of groups){
+     const warnings:string[]=[];
+     for(const g of writableGroups){
        const r=await persistGroup(g);
        if(!r.ok){setMessage(r.message);return}
+       if(r.message.includes("İşlem günlüğü"))warnings.push(r.message);
+       setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
      }
-     setSavedGroups(Object.fromEntries(groups.map(g=>[groupSaveKey(g.group.id,g.schedule.id),true])));
-     try{localStorage.removeItem(draftKey)}catch{}
-     setMessage("✓ Yoklama kaydedildi. Ders hakları ve bağlı ekranlar güncellendi.");
+     if(!incompleteGroups.length)try{localStorage.removeItem(draftKey)}catch{}
+     setMessage(`✓ ${date} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
    })
  }
 
@@ -141,19 +166,20 @@ export default function QuickAttendanceClient(p:Props){
    <section className="qaTop">
      <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1></div>
      <div className="qaSelectors">
-       <input type="date" value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
-       <select aria-label="Şube / Havuz" value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
-       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
+       <input type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
+       <select aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
+       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
      </div>
-     <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işlendi</span></div>
+     <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>statuses[key]).length} sunucuda kayıtlı</span></div>
    </section>
 
+   {ready&&Object.keys(legacyDraft).length>0&&<div className="qaMessage">Bu cihazda önceki sürümden {Object.keys(legacyDraft).length} kaydedilmemiş seçim bulundu. Seçimleri kontrol edip kaydedebilirsiniz. <button onClick={()=>{setStatuses(v=>({...v,...legacyDraft}));setLegacyDraft({});setMessage("Önceki taslak getirildi. Tarihi ve seçimleri kontrol edip Kaydet'e basın.")}}>Eski Taslağı Getir</button></div>}
    <AttendanceReminderPanel key={draftKey} students={p.students} context={`${date} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
-   {!loaded?<div className="qaLoading">Yoklama hazırlanıyor…</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
-     <header><div><b>{g.group.name||"Grup"}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
-     <div className="qaList">{g.students.map(s=>{const key=attendanceKey(g.schedule.id,s.id);const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=rem<=0&&!comp;return <article key={s.id} className={expired?"expired":last?"last":""}>
+   {!ready?<div className="qaLoading">{message||"Yoklama hazırlanıyor…"}{message&&<button onClick={()=>setLoadAttempt(v=>v+1)}>Tekrar Yükle</button>}</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
+     <header><div><b>{g.group.name||"Grup"}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button disabled={pending||!ready} onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
+     <div className="qaList">{g.students.map(s=>{const key=attendanceKey(g.schedule.id,s.id);const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=rem<=0&&!comp&&!storedStatuses[key];return <article key={s.id} className={expired?"expired":last?"last":""}>
        <div className="qaStudent"><b>{fullName(s)}</b><span>{age(s.birth_date,date)!==null?`${age(s.birth_date,date)} yaş · `:""}{comp?"Telafi dersi":expired?"DERS HAKKI BİTTİ":last?"SON DERS":`${rem} ders kaldı`}</span></div>
        <div className="qaButtons">
          <button disabled={expired||pending} className={cur==="present"||cur==="compensation"?"on present":""} onClick={()=>setStatus(g,s,"present")}>✓ Geldi</button>
@@ -161,11 +187,11 @@ export default function QuickAttendanceClient(p:Props){
          <button disabled={expired||pending} className={cur==="excused"?"on excused":""} onClick={()=>setStatus(g,s,"excused")}>○ İzinli</button>
        </div>
      </article>})}</div>
-     <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansı ayrı kaydedin</b><span>Diğer seansları beklemeden kayıt işlemini tamamlar.</span></>}</div><button disabled={pending||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>
+     <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansı ayrı kaydedin</b><span>Diğer seansları beklemeden kayıt işlemini tamamlar.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>
    </section>})}
 
-   {message&&<div className="qaMessage">{message}</div>}
-   <div className="qaSticky"><div><b>{marked}/{total}</b><span> tamamlandı</span></div><button disabled={pending||!groups.length} onClick={saveAll}>{pending?"Kaydediliyor…":"Yoklamayı Kaydet"}</button></div>
+   {message&&<div className="qaMessage" role="status" aria-live="polite">{message}</div>}
+   <div className="qaSticky"><div><b>{marked}/{total}</b><span> işaretlendi</span></div><button disabled={pending||!ready||!groups.length} onClick={saveAll}>{pending?"Kaydediliyor…":"Yoklamayı Kaydet"}</button></div>
    <style jsx>{`
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}

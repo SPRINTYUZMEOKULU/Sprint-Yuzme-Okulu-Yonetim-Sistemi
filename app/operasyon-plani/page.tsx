@@ -272,6 +272,8 @@ async function personelAta(formData: FormData) {
   }
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
 }
 
 /* =========================================================
@@ -310,6 +312,8 @@ async function personelCikar(formData: FormData) {
   }
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
 }
 
 /* =========================================================
@@ -375,6 +379,8 @@ async function grupAta(formData: FormData) {
   }
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
 }
 
 /* =========================================================
@@ -447,6 +453,8 @@ async function ogrenciAta(formData: FormData) {
   }
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
 }
 
 /* =========================================================
@@ -554,6 +562,8 @@ async function ogrenciSeviyeAta(formData: FormData) {
   });
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
   revalidatePath(`/ogrenciler/${studentId}`);
 }
 
@@ -598,6 +608,8 @@ async function ortakSeansModuAyarla(formData: FormData) {
   }
 
   revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama");
+  revalidatePath("/");
 }
 
 /* =========================================================
