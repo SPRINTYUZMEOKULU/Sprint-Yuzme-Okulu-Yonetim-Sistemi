@@ -10,6 +10,7 @@ import UstGezinme from "@/app/components/UstGezinme";
 import OperationStudentManager, {
   type OperationStudentRow,
 } from "./operation-student-manager";
+import StudentAssignmentSelect from "./student-assignment-select";
 import SessionRosterPrintButton from "./session-roster-print-button";
 
 export const dynamic = "force-dynamic";
@@ -427,6 +428,18 @@ async function ogrenciAta(formData: FormData) {
 
   const supabase = await createClient();
 
+  const [scheduleResult, studentResult, coachResult] = await Promise.all([
+    supabase.from("lesson_schedules").select("id,group_id,branch_id").eq("organization_id", organizationId).eq("id", scheduleId).eq("is_active", true).single(),
+    supabase.from("students").select("id").eq("organization_id", organizationId).eq("id", studentId).eq("is_deleted", false).single(),
+    coachId ? supabase.from("profiles").select("id").eq("organization_id", organizationId).eq("id", coachId).eq("is_active", true).in("role", ["coach", "admin", "branch_manager"]).single() : Promise.resolve({data: null, error: null}),
+  ]);
+  if (scheduleResult.error || studentResult.error || coachResult.error || !scheduleResult.data || !studentResult.data) {
+    throw new Error("Seans, öğrenci veya eğitmen doğrulanamadı. Atama kaydedilmedi.");
+  }
+  if (scheduleResult.data.group_id !== groupId || scheduleResult.data.branch_id !== branchId) {
+    throw new Error("Seans bilgileri değişmiş. Sayfayı yenileyip tekrar deneyin.");
+  }
+
   const { error } = await supabase
     .from("lesson_student_assignments")
     .upsert(
@@ -452,6 +465,14 @@ async function ogrenciAta(formData: FormData) {
     );
   }
 
+  const { data: verified, error: verifyError } = await supabase
+    .from("lesson_student_assignments").select("coach_id,is_active")
+    .eq("organization_id", organizationId).eq("schedule_id", scheduleId).eq("student_id", studentId).single();
+  if (verifyError || !verified || verified.coach_id !== coachId || verified.is_active !== true) {
+    throw new Error("Eğitmen ataması doğrulanamadı. Seçiminiz korunuyor; yeniden deneyin.");
+  }
+
+  revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/operasyon-plani");
   revalidatePath("/yoklama");
   revalidatePath("/");
@@ -531,14 +552,14 @@ async function ogrenciSeviyeAta(formData: FormData) {
     levelRow = created;
   }
 
-  const { error: studentLevelError } = await supabase
+  const { data: updatedStudent, error: studentLevelError } = await supabase
     .from("students")
     .update({ swimming_level: levelRow.name })
     .eq("organization_id", organizationId)
-    .eq("id", studentId);
+    .eq("id", studentId).select("id,swimming_level").single();
 
-  if (studentLevelError) {
-    throw new Error(`Öğrenci seviyesi güncellenemedi: ${studentLevelError.message}`);
+  if (studentLevelError || !updatedStudent || updatedStudent.swimming_level !== levelRow.name) {
+    throw new Error(`Öğrenci seviyesi güncellenemedi: ${studentLevelError?.message || "Kayıt doğrulanamadı"}`);
   }
 
   const { error: membershipLevelError } = await supabase
@@ -550,6 +571,14 @@ async function ogrenciSeviyeAta(formData: FormData) {
 
   if (membershipLevelError) {
     throw new Error(`Grup üyeliği seviyesi güncellenemedi: ${membershipLevelError.message}`);
+  }
+
+  const [studentCheck, membershipCheck] = await Promise.all([
+    supabase.from("students").select("swimming_level").eq("organization_id", organizationId).eq("id", studentId).single(),
+    supabase.from("student_group_memberships").select("level_id").eq("organization_id", organizationId).eq("student_id", studentId).eq("is_active", true),
+  ]);
+  if (studentCheck.error || membershipCheck.error || studentCheck.data?.swimming_level !== levelRow.name || membershipCheck.data?.some((row: any) => row.level_id !== levelRow.id)) {
+    throw new Error("Seviye kaydı tüm ekranlar için doğrulanamadı. Yeniden deneyin.");
   }
 
   await supabase.from("student_timeline_events").insert({
@@ -673,6 +702,7 @@ export default async function OperasyonPlaniPage({
     staffAssignmentsResult,
     studentAssignmentsResult,
     sharedPreferencesResult,
+    levelsResult,
   ] = await Promise.all([
     supabase
       .from("branches")
@@ -761,6 +791,8 @@ export default async function OperasyonPlaniPage({
       .from("lesson_shared_session_preferences")
       .select("schedule_id,mode,lane_label")
       .eq("organization_id", organizationId),
+
+    supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
   ]);
 
   const criticalError =
@@ -770,7 +802,10 @@ export default async function OperasyonPlaniPage({
     coachesResult.error ||
     studentsResult.error ||
     membershipsResult.error ||
-    enrollmentsResult.error;
+    enrollmentsResult.error ||
+    studentAssignmentsResult.error ||
+    staffAssignmentsResult.error ||
+    levelsResult.error;
 
   if (criticalError) {
     return (
@@ -899,6 +934,8 @@ export default async function OperasyonPlaniPage({
       "Orta",
       "İleri",
       "Takım Alt Yapı",
+      "Master",
+      ...(levelsResult.data || []).map((level: any) => level.name),
       ...students
         .map(
           (student: any) =>
@@ -3326,123 +3363,25 @@ export default async function OperasyonPlaniPage({
 
                                   {canEdit && (
                                     <>
-                                    <form
-                                      action={
-                                        ogrenciAta
-                                      }
-                                      style={
-                                        studentAssignFormStyle
-                                      }
-                                    >
-                                      <input
-                                        type="hidden"
-                                        name="schedule_id"
-                                        value={
-                                          schedule.id
-                                        }
-                                      />
-
-                                      <input
-                                        type="hidden"
-                                        name="student_id"
-                                        value={
-                                          student.id
-                                        }
-                                      />
-
-                                      <input
-                                        type="hidden"
-                                        name="group_id"
-                                        value={
-                                          schedule.group_id ||
-                                          ""
-                                        }
-                                      />
-
-                                      <input
-                                        type="hidden"
-                                        name="branch_id"
-                                        value={
-                                          schedule.branch_id ||
-                                          group?.branch_id ||
-                                          ""
-                                        }
-                                      />
-
-                                      <select
-                                        name="coach_id"
-                                        defaultValue={
-                                          studentAssignment?.coach_id ||
-                                          ""
-                                        }
-                                        style={
-                                          studentCoachSelectStyle
-                                        }
-                                      >
-                                        <option value="">
-                                          Eğitmen seç / kaldır
-                                        </option>
-
-                                        {coaches.map(
-                                          (
-                                            coach: any
-                                          ) => (
-                                            <option
-                                              key={
-                                                coach.id
-                                              }
-                                              value={
-                                                coach.id
-                                              }
-                                            >
-                                              {coach.full_name ||
-                                                coach.email}
-                                            </option>
-                                          )
-                                        )}
-                                      </select>
-
-                                      <button
-                                        type="submit"
-                                        style={
-                                          saveSmallButtonStyle
-                                        }
-                                      >
-                                        Kaydet
-                                      </button>
-                                    </form>
-
-                                    <form
+                                    <StudentAssignmentSelect
+                                      action={ogrenciAta}
+                                      name="coach_id"
+                                      value={studentAssignment?.coach_id || ""}
+                                      label="Eğitmen"
+                                      emptyLabel="Eğitmen atanmamış / atamayı kaldır"
+                                      options={coaches.map((coach: any) => ({ value: coach.id, label: coach.full_name || coach.email || "Eğitmen" }))}
+                                      fields={{ schedule_id: schedule.id, student_id: student.id, group_id: schedule.group_id || "", branch_id: schedule.branch_id || group?.branch_id || "" }}
+                                    />
+                                    <StudentAssignmentSelect
                                       action={ogrenciSeviyeAta}
-                                      style={studentAssignFormStyle}
-                                    >
-                                      <input
-                                        type="hidden"
-                                        name="student_id"
-                                        value={student.id}
-                                      />
-
-                                      <select
-                                        name="level"
-                                        defaultValue={student.swimming_level || ""}
-                                        style={studentCoachSelectStyle}
-                                        required
-                                      >
-                                        <option value="">Seviye seç</option>
-                                        {levels.map((level: any) => (
-                                          <option key={level} value={level}>
-                                            {level}
-                                          </option>
-                                        ))}
-                                      </select>
-
-                                      <button
-                                        type="submit"
-                                        style={saveSmallButtonStyle}
-                                      >
-                                        Seviyeyi Ata
-                                      </button>
-                                    </form>
+                                      name="level"
+                                      value={student.swimming_level || ""}
+                                      label="Yüzme seviyesi"
+                                      emptyLabel="Seviye seç"
+                                      allowEmpty={false}
+                                      options={levels.map((level: any) => ({ value: String(level), label: String(level) }))}
+                                      fields={{ student_id: student.id }}
+                                    />
                                     </>
                                   )}
                                 </div>
