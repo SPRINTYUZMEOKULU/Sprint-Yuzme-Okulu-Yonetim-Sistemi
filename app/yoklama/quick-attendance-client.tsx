@@ -146,10 +146,9 @@ export default function QuickAttendanceClient(p:Props){
  }
  function saveAll(){
    if(!ready||pending)return;
-   const writableGroups=groups.filter(g=>eligibleStudents(g).length>0);
-   if(!writableGroups.length){setMessage("Kaydedilecek öğrenci yok. Yoklama kaydedilmedi.");return}
-   const missing=groups.flatMap(g=>missingStudents(g));
-   if(missing.length){setMessage(`${missing.length} öğrencinin yoklaması işaretlenmedi.`);return}
+   const incompleteGroups=groups.filter(g=>missingStudents(g).length>0);
+   const writableGroups=groups.filter(g=>eligibleStudents(g).length>0&&missingStudents(g).length===0);
+   if(!writableGroups.length){setMessage(incompleteGroups.length?`${incompleteGroups.flatMap(g=>missingStudents(g)).length} öğrencinin yoklaması işaretlenmedi. Hiçbir seans kaydedilmedi.`:"Kaydedilecek öğrenci yok. Yoklama kaydedilmedi.");return}
    startTransition(async()=>{
      const warnings:string[]=[];
      for(const g of writableGroups){
@@ -158,8 +157,8 @@ export default function QuickAttendanceClient(p:Props){
        if(r.message.includes("İşlem günlüğü"))warnings.push(r.message);
        setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
      }
-     try{localStorage.removeItem(draftKey)}catch{}
-     setMessage(`✓ ${date} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${warnings.join(" ")}`);
+     if(!incompleteGroups.length)try{localStorage.removeItem(draftKey)}catch{}
+     setMessage(`✓ ${date} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
    })
  }
 
@@ -191,8 +190,8 @@ export default function QuickAttendanceClient(p:Props){
      <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansı ayrı kaydedin</b><span>Diğer seansları beklemeden kayıt işlemini tamamlar.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>
    </section>})}
 
-   {message&&<div className="qaMessage">{message}</div>}
-   <div className="qaSticky"><div><b>{marked}/{total}</b><span> tamamlandı</span></div><button disabled={pending||!ready||!groups.length} onClick={saveAll}>{pending?"Kaydediliyor…":"Yoklamayı Kaydet"}</button></div>
+   {message&&<div className="qaMessage" role="status" aria-live="polite">{message}</div>}
+   <div className="qaSticky"><div><b>{marked}/{total}</b><span> işaretlendi</span></div><button disabled={pending||!ready||!groups.length} onClick={saveAll}>{pending?"Kaydediliyor…":"Yoklamayı Kaydet"}</button></div>
    <style jsx>{`
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}
