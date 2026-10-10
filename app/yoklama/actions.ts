@@ -1,6 +1,8 @@
 "use server";
 
+import { verifyAttendanceRows } from "@/lib/attendance/integrity";
 import { attendanceRoster } from "@/lib/attendance/roster";
+import { createClient as createAuditClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -80,6 +82,19 @@ const PACKAGE_CONSUMING_STATUSES: AttendanceStatus[] = [
 
 async function getAuthorizedProfile() {
   return requireProfile([...ALLOWED_ROLES]);
+}
+
+// Only called after the user's organization, role, schedule and students have
+// been validated. The service client is used solely for the protected audit log.
+async function auditAttendance(profile: Awaited<ReturnType<typeof getAuthorizedProfile>>, action:string, scheduleId:string, metadata:Record<string,unknown>) {
+  try {
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!url||!key)return false;
+    const audit=createAuditClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+    const {error}=await audit.from("audit_logs").insert({organization_id:profile.organization_id,actor_profile_id:profile.id,module_key:"attendance",action_key:action,action_label:action==="save"?"Yoklama kaydı doğrulandı":"Yoklama temizleme isteği",entity_type:"lesson_schedule",entity_id:scheduleId,request_path:"/yoklama",success:true,metadata});
+    return !error;
+  } catch {return false;}
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
@@ -425,15 +440,17 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {ok:false,count:0,message:"Listede bu gün için kaydı veya telafisi olmayan öğrenci var. Yoklamayı yenileyip tekrar deneyin."};
     }
 
-    const { data: previousAttendance } = await supabase
+    const { data: previousAttendance, error: previousError } = await supabase
       .from("attendance_records")
-      .select("student_id,status")
+      .select("student_id,status,coach_note,recorded_by")
       .eq("organization_id", organizationId)
       .eq("group_id", input.groupId)
       .eq("schedule_id", input.scheduleId)
       .eq("lesson_date", input.lessonDate)
       .in("student_id", studentIds);
 
+    if(previousError)return {ok:false,count:0,message:"Mevcut yoklama okunamadı. Önceki kayıtları korumak için işlem durduruldu."};
+    const previousRows = new Map((previousAttendance||[]).map((item:any)=>[String(item.student_id),item]));
     const previousStatus = new Map(
       (previousAttendance || []).map((item: any) => [String(item.student_id), String(item.status || "")])
     );
@@ -467,9 +484,9 @@ export async function saveAttendance(input: SaveAttendanceInput) {
 
       status: record.status,
 
-      coach_note: record.coachNote?.trim() || null,
+      coach_note: record.coachNote===null ? previousRows.get(record.studentId)?.coach_note||null : record.coachNote.trim()||null,
 
-      recorded_by: profile.id,
+      recorded_by: previousRows.get(record.studentId)?.recorded_by||profile.id,
       updated_by: profile.id,
       edited_at: now,
       updated_at: now,
@@ -489,6 +506,16 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         message: `Yoklama kaydedilemedi: ${error.message}`,
       };
     }
+
+    const {data: written, error: verifyError} = await supabase.from("attendance_records")
+      .select("student_id,status").eq("organization_id",organizationId)
+      .eq("group_id",input.groupId).eq("schedule_id",input.scheduleId)
+      .eq("lesson_date",input.lessonDate).in("student_id",studentIds);
+    if(verifyError||!verifyAttendanceRows(rows,written)) {
+      return {ok:false,count:0,message:"Yoklama yazıldı ancak kayıt sonucu doğrulanamadı. Yenileyip kontrol edin; taslağınızı silmeyin."};
+    }
+
+    const auditOk=await auditAttendance(profile,"save",input.scheduleId,{lessonDate:input.lessonDate,groupId:input.groupId,before:previousAttendance||[],after:rows,count:rows.length});
 
     /*
      * -------------------------------------------------------
@@ -634,7 +661,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       ok: true,
       count: rows.length,
       message:
-        "Yoklama başarıyla kaydedildi ve ders hakları güncellendi.",
+        `Yoklama başarıyla kaydedildi ve ders hakları güncellendi.${auditOk?"":" İşlem günlüğü yazılamadı; yönetici kontrolü gerekiyor."}`,
     };
   } catch (error) {
     return {
@@ -716,7 +743,7 @@ export async function clearAttendance(input: ClearAttendanceInput) {
 
     const { data: existing, error: existingError } = await supabase
       .from("attendance_records")
-      .select("id,enrollment_id")
+      .select("id,enrollment_id,student_id,status,coach_note,recorded_by,updated_at")
       .eq("organization_id", organizationId)
       .eq("student_id", input.studentId)
       .eq("group_id", input.groupId)
@@ -731,6 +758,9 @@ export async function clearAttendance(input: ClearAttendanceInput) {
     if (!existing?.id) {
       return { ok: true, message: "Yoklama seçimi zaten temiz." };
     }
+
+    const deletionAuditOk=await auditAttendance(profile,"clear_requested",input.scheduleId,{lessonDate:input.lessonDate,groupId:input.groupId,before:existing});
+    if(!deletionAuditOk)return {ok:false,message:"İşlem günlüğü oluşturulamadığı için yoklama silinmedi."};
 
     const { error: deleteError } = await supabase
       .from("attendance_records")
