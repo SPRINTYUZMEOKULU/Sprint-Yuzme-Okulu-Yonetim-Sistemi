@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
+import { isScheduleOnDate } from "@/lib/schedules/weekday";
 
 const ROLES = ["owner","admin","branch_manager","registration_staff","accounting","coach"] as const;
 
@@ -23,11 +24,6 @@ function monthBounds(month: string) {
   const endDate = new Date(Date.UTC(year, m, 0));
   const end = `${year}-${String(m).padStart(2,"0")}-${String(endDate.getUTCDate()).padStart(2,"0")}`;
   return { year, month: m, start, end };
-}
-
-function weekdayIso(date: string) {
-  const d = new Date(`${date}T12:00:00+03:00`).getDay();
-  return d === 0 ? 7 : d;
 }
 
 const HOLIDAYS_2026 = [
@@ -104,8 +100,7 @@ export async function GET(request: NextRequest) {
 
     for (let day=1; day<=daysInMonth; day++) {
       const date = `${bounds.year}-${String(bounds.month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-      const weekday = weekdayIso(date);
-      const lessons = schedules.filter((s:any)=>Number(s.weekday)===weekday).map((s:any)=>({
+      const lessons = schedules.filter((s:any)=>isScheduleOnDate(Number(s.weekday), date)).map((s:any)=>({
         id:s.id, type:"lesson", title:groupMap.get(s.group_id || "") || "Ders", branchName:branchMap.get(s.branch_id || "") || "",
         startTime:String(s.start_time || "").slice(0,5), endTime:String(s.end_time || "").slice(0,5)
       }));
