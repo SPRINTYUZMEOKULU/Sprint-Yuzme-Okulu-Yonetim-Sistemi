@@ -54,7 +54,7 @@ export default function StudentAssignmentSelect(props: Props) {
   const options = props.options.some((option) => option.value === value) || !value
     ? props.options : [{ value, label: "Kayıtlı eğitmen (listede yok)" }, ...props.options];
 
-  return <div style={{ width: "100%", minWidth: 0 }}>
+  return <div aria-busy={pending} style={{ width: "100%", minWidth: 0 }}>
     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 5 }}>
       {props.label}
       <select aria-label={props.label} name={props.name} value={value} disabled={pending}

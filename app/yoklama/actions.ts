@@ -539,7 +539,8 @@ export async function saveAttendance(input: SaveAttendanceInput) {
        * Yoklama kaydedildi ancak ders sayacı güncellenemediyse
        * kullanıcıya bunu açıkça bildiriyoruz.
        */
-      revalidatePath("/yoklama");
+      for (const route of ["/yoklama", "/operasyon-plani", "/yoklama/aylik", "/yoklama/gecmis", "/raporlar", "/ogrenciler", "/", "/veli-paneli", "/veli-devam"]) revalidatePath(route);
+      for (const studentId of studentIds) revalidatePath(`/ogrenciler/${studentId}`);
 
       return {
         ok: false,
@@ -555,6 +556,10 @@ export async function saveAttendance(input: SaveAttendanceInput) {
      * -------------------------------------------------------
      */
     revalidatePath("/yoklama");
+    revalidatePath("/operasyon-plani");
+    revalidatePath("/yoklama/aylik");
+    revalidatePath("/yoklama/gecmis");
+    revalidatePath("/raporlar");
     revalidatePath("/ogrenciler");
     revalidatePath("/odemeler");
     revalidatePath("/");
@@ -798,6 +803,10 @@ export async function clearAttendance(input: ClearAttendanceInput) {
     }
 
     revalidatePath("/yoklama");
+    revalidatePath("/operasyon-plani");
+    revalidatePath("/yoklama/aylik");
+    revalidatePath("/yoklama/gecmis");
+    revalidatePath("/raporlar");
     revalidatePath("/ogrenciler");
     revalidatePath("/");
     revalidatePath("/veli-paneli");
