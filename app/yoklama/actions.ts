@@ -1,5 +1,6 @@
 "use server";
 
+import { attendanceRoster } from "@/lib/attendance/roster";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -225,7 +226,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       error: scheduleError,
     } = await supabase
       .from("lesson_schedules")
-      .select("id, branch_id, group_id, coach_id")
+      .select("id, branch_id, group_id, coach_id, weekday, is_active")
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
       .eq("organization_id", organizationId)
@@ -237,6 +238,11 @@ export async function saveAttendance(input: SaveAttendanceInput) {
         count: 0,
         message: "Seçilen ders programı bulunamadı.",
       };
+    }
+
+    const requestedDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
+    if (schedule.is_active === false || (Number(schedule.weekday) === 7 ? 0 : Number(schedule.weekday)) !== requestedDay) {
+      return {ok:false,count:0,message:"Seçilen tarih bu seansın ders günüyle eşleşmiyor."};
     }
 
     // Eğitmen yalnızca kendisine atanmış grup/seanslarda yoklama alabilir.
@@ -271,7 +277,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
           .eq("organization_id", organizationId)
           .in("coach_id", coachIds)
           .eq("is_active", true)
-          .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+          .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
           .limit(1)
           .maybeSingle();
 
@@ -399,6 +405,24 @@ export async function saveAttendance(input: SaveAttendanceInput) {
             "Yoklama listesinde öğrenciyle eşleşmeyen kayıt/paket bilgisi bulundu.",
         };
       }
+    }
+
+    // Rebuild the eligible roster on the server: stale screens cannot save a
+    // normal lesson on a day that was not selected in the registration.
+    const [rosterStudents, rosterEnrollments, rosterMemberships, rosterCompensations] = await Promise.all([
+      supabase.from("students").select("id,status").eq("organization_id", organizationId).eq("is_deleted", false).in("id", studentIds),
+      supabase.from("student_enrollments").select("id,student_id,group_id,status,lesson_weekdays,start_date,created_at,updated_at,start_confirmation_required,actual_started_at").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("status", "active").in("student_id", studentIds),
+      supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("is_active", true).in("student_id", studentIds),
+      supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("lesson_date", input.lessonDate).eq("status", "planned").in("student_id", studentIds),
+    ]);
+    if (rosterStudents.error || rosterEnrollments.error || rosterMemberships.error || rosterCompensations.error) {
+      return {ok:false,count:0,message:"Öğrencilerin kayıt günleri doğrulanamadı. Yoklama kaydedilmedi."};
+    }
+    const lessonDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
+    const roster = attendanceRoster({students:rosterStudents.data||[],enrollments:rosterEnrollments.data||[],memberships:rosterMemberships.data||[],compensationLessons:rosterCompensations.data||[]}, input.groupId, input.scheduleId, input.lessonDate, lessonDay===0?7:lessonDay);
+    const eligibleIds = new Set(roster.students.map(student=>student.id));
+    if(input.records.some(record=>!eligibleIds.has(record.studentId))) {
+      return {ok:false,count:0,message:"Listede bu gün için kaydı veya telafisi olmayan öğrenci var. Yoklamayı yenileyip tekrar deneyin."};
     }
 
     const { data: previousAttendance } = await supabase
@@ -676,7 +700,7 @@ export async function clearAttendance(input: ClearAttendanceInput) {
         .eq("organization_id", organizationId)
         .eq("coach_id", coachStaff.id)
         .eq("is_active", true)
-        .or(`schedule_id.eq.${input.scheduleId},group_id.eq.${input.groupId}`)
+        .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
         .limit(1)
         .maybeSingle();
 

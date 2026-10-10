@@ -13,7 +13,7 @@ type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolea
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
-type Props={branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
+type Props={allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
@@ -58,17 +58,19 @@ export default function QuickAttendanceClient(p:Props){
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
    const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)return null;
    const {students,enrollmentByStudent,compensationIds}=attendanceRoster(p,group.id,schedule.id,date,day);
-   return {group,schedule,students,enrollmentByStudent,compensationIds};
- }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,date,day]);
+   const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
+   return {group,schedule,students:allowed?students.filter(s=>allowed.includes(s.id)):students,enrollmentByStudent,compensationIds};
+ }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,p.allowedStudentIdsBySchedule,date,day]);
 
  const draftKey=`sprintos:quick-attendance:${date}:${branchId}:${time}`;
  useEffect(()=>{let live=true;setLoaded(false);setStatuses({});setMessage("");if(!time||!groups.length){setLoaded(true);return}
    startTransition(async()=>{
      const rows=await Promise.all(groups.map(g=>getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date})));
      if(!live)return;
+     if(rows.some(r=>!r.ok)){setMessage(rows.find(r=>!r.ok)?.message||"Yoklama yüklenemedi.");return}
      const next:Record<string,Status>={};
      rows.forEach((r,i)=>{if(r.ok)(r.records||[]).forEach((x:any)=>next[attendanceKey(groups[i].schedule.id,x.student_id)]=x.status)});
-     try{const raw=localStorage.getItem(draftKey);if(raw)Object.assign(next,JSON.parse(raw)?.statuses||{})}catch{}
+     try{const raw=localStorage.getItem(draftKey);if(raw){const draft=JSON.parse(raw)?.statuses||{};for(const [key,value] of Object.entries(draft)){if(!next[key])next[key]=value as Status}}}catch{}
      setStatuses(next);setLoaded(true);
    });
    return()=>{live=false}
