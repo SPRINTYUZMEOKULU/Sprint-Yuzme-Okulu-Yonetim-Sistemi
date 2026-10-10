@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { mergeRemoteAttendance, mergeAttendanceDraft, verifyAttendanceRows } from "@/lib/attendance/integrity";
+import { registrationDaysLabel, attendanceCourseLabel } from "@/lib/attendance/presentation";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { getAttendanceForDate, saveAttendance } from "./actions";
@@ -62,6 +63,19 @@ export default function QuickAttendanceClient(p:Props){
  const schedulesForDay=useMemo(()=>p.schedules.filter(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===day&&(!branchId||s.branch_id===branchId)),[p.schedules,day,branchId]);
  const times=useMemo(()=>Array.from(new Set(schedulesForDay.map(s=>tm(s.start_time)))).sort(),[schedulesForDay]);
  useEffect(()=>{if(!times.length)setTime("");else if(!times.includes(time))setTime(times[0])},[times,time]);
+ const timeSummaries=useMemo(()=>Object.fromEntries(times.map(t=>{
+   const counts=new Map<string,Set<string>>();
+   for(const schedule of schedulesForDay.filter(s=>tm(s.start_time)===t)){
+     const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)continue;
+     const kind=attendanceCourseLabel(group);
+     const ids=counts.get(kind)||new Set<string>();
+     const roster=attendanceRoster(p,group.id,schedule.id,date,day);
+     const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
+     for(const student of roster.students)if(!allowed||allowed.includes(student.id))ids.add(student.id);
+     counts.set(kind,ids);
+   }
+   return [t,Array.from(counts).map(([kind,ids])=>`${kind} (${ids.size})`).join(" · ")];
+ })),[times,schedulesForDay,p.groups,p.students,p.memberships,p.enrollments,p.compensationLessons,p.allowedStudentIdsBySchedule,date,day]);
  const schedulesAtTime=useMemo(()=>schedulesForDay.filter(s=>tm(s.start_time)===time),[schedulesForDay,time]);
 
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
@@ -205,8 +219,9 @@ export default function QuickAttendanceClient(p:Props){
      <div className="qaSelectors">
        <input type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
        <select aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
-       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t}>{t}</option>):<option>Ders yok</option>}</select>
+       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t} value={t}>{t} · {timeSummaries[t]}</option>):<option>Ders yok</option>}</select>
      </div>
+     {date!==today()&&<p className="qaDateNotice">{date>today()?"İleri tarih seçili":"Geçmiş tarih seçili"}: {date}. Gösterilen yoklama yalnızca bu tarihe aittir. <button type="button" disabled={pending} onClick={()=>changeDate(today())}>Bugüne dön</button></p>}
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>statuses[key]).length} sunucuda kayıtlı</span></div>
    </section>
 
@@ -215,9 +230,10 @@ export default function QuickAttendanceClient(p:Props){
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
    {!ready?<div className="qaLoading">{message||"Yoklama hazırlanıyor…"}{message&&<button onClick={()=>setLoadAttempt(v=>v+1)}>Tekrar Yükle</button>}</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
-     <header><div><b>{g.group.name||"Grup"}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button disabled={pending||!ready} onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
+     <header><div><b>{p.branches.find(b=>b.id===g.schedule.branch_id)?.short_name||p.branches.find(b=>b.id===g.schedule.branch_id)?.name||"Havuz"} · {DAYS[day]} · {time} · {attendanceCourseLabel(g.group)}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button disabled={pending||!ready} onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
      <div className="qaList">{g.students.map(s=>{const key=attendanceKey(g.schedule.id,s.id);const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=rem<=0&&!comp&&!storedStatuses[key];return <article key={s.id} className={expired?"expired":last?"last":""}>
        <div className="qaStudent"><b>{fullName(s)}</b><span>{age(s.birth_date,date)!==null?`${age(s.birth_date,date)} yaş · `:""}{comp?"Telafi dersi":expired?"DERS HAKKI BİTTİ":last?"SON DERS":`${rem} ders kaldı`}</span></div>
+       <div className="qaRegistrationDays">{comp?"Bu tarih için telafi dersi":`Kayıt günleri: ${registrationDaysLabel(e?.lesson_weekdays)}`}</div>
        <div className="qaButtons">
          <button disabled={expired||pending} className={cur==="present"||cur==="compensation"?"on present":""} onClick={()=>setStatus(g,s,"present")}>✓ Geldi</button>
          <button disabled={expired||pending} className={cur==="absent"?"on absent":""} onClick={()=>setStatus(g,s,"absent")}>✕ Gelmedi</button>
@@ -230,9 +246,12 @@ export default function QuickAttendanceClient(p:Props){
    {message&&<div className="qaMessage" role="status" aria-live="polite">{message}</div>}
    <div className="qaSticky"><div><b>{marked}/{total}</b><span> işaretlendi</span></div><button disabled={pending||!ready||!groups.length} onClick={saveAll}>{pending?"Kaydediliyor…":"Yoklamayı Kaydet"}</button></div>
    <style jsx>{`
+     .qaRegistrationDays{padding:0 0 8px;color:#475569;font-size:12px;font-weight:600}
+     .qaDateNotice{margin:10px 0;padding:10px 12px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:13px}
+     .qaDateNotice button{margin-left:6px;border:0;background:transparent;color:#1d4ed8;font-weight:700;text-decoration:underline;cursor:pointer}
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}
-     .qaTop{padding:14px;margin-bottom:10px}.qaTop small{font-size:9px;font-weight:900;color:#1769e0;letter-spacing:.12em}.qaTop h1{font-size:18px;margin:3px 0 10px}.qaSelectors{display:grid;grid-template-columns:1fr 1fr 110px;gap:7px}.qaSelectors input,.qaSelectors select{height:42px;border:1px solid #d7e2ed;border-radius:10px;background:#fff;padding:0 8px;font-size:12px}.qaProgress{display:flex;gap:6px;align-items:baseline;margin-top:9px}.qaProgress b{font-size:17px}.qaProgress span{font-size:10px;color:#72839a}
+     .qaTop{padding:14px;margin-bottom:10px}.qaTop small{font-size:9px;font-weight:900;color:#1769e0;letter-spacing:.12em}.qaTop h1{font-size:18px;margin:3px 0 10px}.qaSelectors{display:grid;grid-template-columns:1fr 1fr 240px;gap:7px}.qaSelectors input,.qaSelectors select{height:42px;border:1px solid #d7e2ed;border-radius:10px;background:#fff;padding:0 8px;font-size:12px}.qaProgress{display:flex;gap:6px;align-items:baseline;margin-top:9px}.qaProgress b{font-size:17px}.qaProgress span{font-size:10px;color:#72839a}
      .qaGroup{scroll-margin-top:110px;margin:10px 0;overflow:hidden}.qaGroup header{padding:11px 12px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center;gap:10px}.qaGroup header div{display:grid;gap:2px}.qaGroup header b{font-size:13px}.qaGroup header span{font-size:9px;color:#7a8a9c}.qaGroup header button{border:1px solid #bad5f4;background:#f4f9ff;color:#1769d2;border-radius:9px;min-height:36px;padding:0 10px;font-size:10px;font-weight:900}
      .qaGroup header>div{min-width:0;flex:1}.qaGroup header>button{flex-shrink:0}.qaGroup header .qaCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.qaGroup header .qaCounts span{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid;border-radius:7px;font-size:10px;font-weight:750;line-height:1.3}.qaCounts strong{font-size:11px;font-variant-numeric:tabular-nums}.qaGroup header .qaCounts .present{background:#eaf9ef;border-color:#9bd8af;color:#14733a}.qaGroup header .qaCounts .absent{background:#fff0f2;border-color:#f1b6bf;color:#b42333}.qaGroup header .qaCounts .excused{background:#fff8e8;border-color:#ebd08b;color:#8a6200}.qaGroup header .qaCounts .unmarked{background:#f4f8fc;border-color:#d8e2ec;color:#53677e}
      .qaList{display:grid}.qaList article{padding:11px 12px;border-bottom:1px solid #edf1f5}.qaList article:last-child{border-bottom:0}.qaList article.last{background:#fffaf0}.qaList article.expired{background:#fff1f2}.qaStudent{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.qaStudent b{font-size:13px}.qaStudent span{font-size:9px;font-weight:850;color:#607287}.last .qaStudent span{color:#a56800}.expired .qaStudent span{color:#b42333}
