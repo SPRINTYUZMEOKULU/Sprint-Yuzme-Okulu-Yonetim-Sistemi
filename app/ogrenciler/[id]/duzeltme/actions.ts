@@ -654,6 +654,9 @@ export async function applyManagerCorrection(formData: FormData) {
   revalidatePath("/ogrenciler");
   revalidatePath("/odemeler");
   revalidatePath("/yoklama");
+  revalidatePath("/operasyon-plani");
+  revalidatePath("/yoklama/aylik");
+  revalidatePath("/");
 
   redirect(`/ogrenciler/${studentId}/duzeltme?saved=1`);
 }
