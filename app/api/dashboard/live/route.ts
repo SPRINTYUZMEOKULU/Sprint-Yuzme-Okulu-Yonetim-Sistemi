@@ -1,3 +1,4 @@
+import { summarizeSessionSlots } from "@/lib/dashboard/session-summary";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -92,7 +93,7 @@ export async function GET() {
     if (studentId && !latestEnrollmentByStudent.has(studentId)) latestEnrollmentByStudent.set(studentId, enrollment);
   }
 
-  const sessions = schedules.map((schedule) => {
+  const groupSessions = schedules.map((schedule) => {
     const roster = attendanceRoster({students: rosterStudents, enrollments, memberships: membershipsResult.data || [], compensationLessons: compensationResult.data || []}, schedule.group_id || "", schedule.id, today.iso, today.weekday);
     const enrolled = new Set(roster.students.map((student) => student.id));
     const recorded = new Set(
@@ -140,6 +141,10 @@ export async function GET() {
       groupName: groupMap.get(schedule.group_id || "") || "Grup",
       startTime: String(schedule.start_time || "").slice(0, 5),
       endTime: String(schedule.end_time || "").slice(0, 5),
+      studentStates: roster.students.map((student) => {
+        const enrollment = roster.enrollmentByStudent.get(student.id);
+        return { id: student.id, status: statusByStudent.get(student.id) || null, blocked: !roster.compensationIds.has(student.id) && Math.max(0, Number(enrollment?.total_lessons || 0) - Number(enrollment?.used_lessons || 0)) <= 0 };
+      }),
       studentCount,
       attendanceCount,
       attendanceComplete,
@@ -150,6 +155,8 @@ export async function GET() {
       notesAvailable: !reminderNotesResult.error,
     };
   });
+
+  const sessions = summarizeSessionSlots(groupSessions);
 
   const celebrationMap = new Map((celebrationsResult.data || []).map((row: any) => [row.student_id, row]));
 
