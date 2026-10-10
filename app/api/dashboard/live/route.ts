@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
+import { isScheduleOnDate, scheduleWeekdaysForDate, weekdayForDate } from "@/lib/schedules/weekday";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,7 @@ function turkeyDateParts() {
   });
   const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
   const iso = `${parts.year}-${parts.month}-${parts.day}`;
-  const day = new Date(`${iso}T12:00:00+03:00`).getDay();
-  return { iso, weekday: day === 0 ? 7 : day, month: Number(parts.month), date: Number(parts.day) };
+  return { iso, weekday: weekdayForDate(iso), month: Number(parts.month), date: Number(parts.day) };
 }
 
 function phoneForWhatsApp(value?: string | null) {
@@ -49,7 +49,7 @@ export async function GET() {
   const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult, membershipsResult, compensationResult, reminderNotesResult] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
-    supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true).order("start_time"),
+    supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).in("weekday", scheduleWeekdaysForDate(today.iso)).eq("is_active", true).order("start_time"),
     supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,updated_at,lesson_weekdays,total_lessons,used_lessons,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date,coach_note").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
     supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
@@ -207,7 +207,7 @@ export async function GET() {
     if (enrollment.start_date && String(enrollment.start_date) > today.iso) return false;
 
     return (scheduleByGroup.get(String(enrollment.group_id)) || []).some(
-      (schedule) => Number(schedule.weekday) === today.weekday,
+      (schedule) => isScheduleOnDate(Number(schedule.weekday), today.iso),
     );
   }).length;
 
