@@ -236,9 +236,9 @@ export default function QuickAttendanceClient(p:Props){
    <section className="qaTop">
      <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1>{syncMessage&&<small role="status">{syncMessage}</small>}</div>
      <div className="qaSelectors">
-       <input type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
-       <select aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
-       <select aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t} value={t}>{t} · {timeSummaries[t]}</option>):<option>Ders yok</option>}</select>
+       <input autoComplete="off" type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
+       <select key={`branch:${date}:${branchId}`} autoComplete="off" aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
+       <select key={`time:${date}:${branchId}:${time}`} autoComplete="off" aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t} value={t}>{t} · {timeSummaries[t]}</option>):<option>Ders yok</option>}</select>
      </div>
      {date!==today()&&<p className="qaDateNotice">{date>today()?"İleri tarih seçili":"Geçmiş tarih seçili"}: {date}. Gösterilen yoklama yalnızca bu tarihe aittir. <button type="button" disabled={pending} onClick={()=>changeDate(today())}>Bugüne dön</button></p>}
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>statuses[key]).length} sunucuda kayıtlı</span></div>

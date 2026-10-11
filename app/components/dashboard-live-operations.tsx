@@ -143,9 +143,16 @@ function OperationPanel() {
 
   if (!data) return null;
 
+  const pendingSession = data.sessions.find(session => session.missingCount > 0);
+  const attendanceParams = new URLSearchParams({ date: data.date });
+  if (pendingSession?.branchId) attendanceParams.set("branchId", pendingSession.branchId);
+  if (pendingSession) attendanceParams.set("time", pendingSession.startTime);
+  const pendingAttendanceUrl = `/yoklama?${attendanceParams.toString()}`;
+  const todayAttendanceUrl = `/yoklama?date=${encodeURIComponent(data.date)}`;
+
   const summaryCards = [
     { label: "Bugünkü Ders", value: data.summary.todayLessons, note: "Planlanan seans", href: "/ders-programi", tone: "blue", icon: Icons.calendar },
-    { label: "Yoklama Bekleyen", value: data.summary.pendingAttendance, note: data.summary.pendingAttendance ? "İşlem bekliyor" : "Tamamlandı", href: "/yoklama", tone: data.summary.pendingAttendance ? "orange" : "green", icon: Icons.check },
+    { label: "Yoklama Bekleyen", value: data.summary.pendingAttendance, note: data.summary.pendingAttendance ? "İşlem bekliyor" : "Tamamlandı", href: pendingAttendanceUrl, tone: data.summary.pendingAttendance ? "orange" : "green", icon: Icons.check },
     { label: "Doğum Günü", value: data.summary.birthdays, note: data.summary.birthdays ? "Kutlama bekliyor" : "Bugün yok", href: "#sprint-birthdays", tone: data.summary.birthdays ? "purple" : "calm", icon: Icons.cake },
     { label: "Yapılacak İşlem", value: actionCount, note: actionCount ? "Önceliklerinizi kontrol edin" : "Her şey yolunda", href: "/uyarilar", tone: actionCount ? "red" : "green", icon: Icons.bell },
   ];
@@ -180,7 +187,7 @@ function OperationPanel() {
         <article className="livePanel lessonsPanel">
           <div className="livePanelHead">
             <div><span>GÜNLÜK PROGRAM</span><h3>Bugünkü Dersler ve Yoklamalar</h3></div>
-            <a href="/yoklama">Tüm Yoklamalar <Icons.arrow /></a>
+            <a href={todayAttendanceUrl}>Tüm Yoklamalar <Icons.arrow /></a>
           </div>
 
           {data.sessions.length ? (
@@ -237,7 +244,7 @@ function OperationPanel() {
         <article className="livePanel prioritiesPanel">
           <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler <Icons.arrow /></a></div>
           <div className="priorityRows">
-            {data.summary.pendingAttendance > 0 && <a href="/yoklama" className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.summary.pendingAttendance > 0 && <a href={pendingAttendanceUrl} className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.openAlerts > 0 && <a href="/uyarilar" className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.openAlerts} açık uyarı var</strong><span>Öncelikli işlemleri kontrol edin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
