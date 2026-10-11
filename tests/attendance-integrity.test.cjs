@@ -12,3 +12,13 @@ test('remote refresh shows coach saves and corrections, keeps local drafts, remo
 
 const {registrationDaysLabel,attendanceCourseLabel}=load('lib/attendance/presentation.ts');
 test('individual selected days differ from the group name; adults and team labels are explicit',()=>{assert.equal(registrationDaysLabel([2,4]),'Salı · Perşembe');assert.equal(registrationDaysLabel([6,0,7,6]),'Cumartesi · Pazar');assert.equal(attendanceCourseLabel({name:'Salı-Perşembe 20:00 / Cumartesi 19:00 · Yetişkin',course_type:'Yetişkin Yüzme Kursu'}),'Yetişkin');assert.equal(attendanceCourseLabel({course_type:'Takım / Performans'}),'Takım')});
+
+const {coachStudentScope}=load('lib/attendance/coach-roster.ts');
+test('student assignments override the session coach while preserving unassigned students and schedule isolation',()=>{
+ const rows=[{schedule_id:'s',student_id:'a',coach_id:'one'},{schedule_id:'s',student_id:'b',coach_id:'two'},{schedule_id:'s',student_id:'c',coach_id:null},{schedule_id:'other',student_id:'d',coach_id:'two'},{schedule_id:'s',student_id:'e',coach_id:'two',is_active:false}];
+ assert.deepEqual(coachStudentScope(rows,'s','g',new Set(['one']),true,['a','b','c','d','e']),['a','c','d','e']);
+ assert.deepEqual(coachStudentScope(rows,'s','g',new Set(['two']),false,['a','b','c','d','e']),['b']);
+ assert.deepEqual(coachStudentScope(rows,'s','g',new Set(['none']),false,['a']),[]);
+ assert.equal(coachStudentScope([],'s','g',new Set(['one']),true,['a']),undefined);
+ assert.deepEqual(coachStudentScope([{group_id:'g',student_id:'a',coach_id:'staff-id'}],'s','g',new Set(['profile-id','staff-id']),false,['a']),['a']);
+});

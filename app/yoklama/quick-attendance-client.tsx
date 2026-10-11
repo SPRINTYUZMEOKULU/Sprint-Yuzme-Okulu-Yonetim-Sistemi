@@ -6,7 +6,7 @@ import { mergeRemoteAttendance, mergeAttendanceDraft, verifyAttendanceRows } fro
 import { registrationDaysLabel, attendanceCourseLabel } from "@/lib/attendance/presentation";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
-import { getAttendanceForDate, saveAttendance } from "./actions";
+import { clearAttendance, getAttendanceForDate, saveAttendance } from "./actions";
 
 type Status="present"|"absent"|"excused"|"compensation";
 type Branch={id:string;name?:string|null;short_name?:string|null};
@@ -164,7 +164,26 @@ export default function QuickAttendanceClient(p:Props){
    const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const isComp=g.compensationIds.has(s.id);
    if(rem<=0&&!isComp&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]){setMessage(`${fullName(s)} için ders hakkı bitmiş. Kayıt yenileme gerekiyor.`);return}
    const key=attendanceKey(g.schedule.id,s.id);const next:Status=status==="present"&&isComp?"compensation":status;
-   setStatuses(v=>({...v,[key]:next}));setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}));setMessage("");
+   mutationVersion.current++;
+   if(statuses[key]===next){
+     if(storedStatuses[key]){
+       startTransition(async()=>{
+         try{
+           const result=await clearAttendance({studentId:s.id,groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date});
+           if(!result.ok){setMessage(result.message);return}
+           const verified=await getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date});
+           if(!verified.ok||verified.records?.some(row=>row.student_id===s.id)){setMessage("Temizleme doğrulanamadı. Yeniden yükleyip kontrol edin.");return}
+           setStatuses(v=>{const n={...v};delete n[key];return n});
+           setStoredStatuses(v=>{const n={...v};delete n[key];return n});
+           setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}));
+           setMessage(result.message);router.refresh();
+         }catch{setMessage("Yoklama temizlenemedi. Seçiminiz korundu; yeniden deneyin.")}
+       });
+       return;
+     }
+     setStatuses(v=>{const n={...v};delete n[key];return n});
+   }else setStatuses(v=>({...v,[key]:next}));
+   setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}));setMessage("");
  }
 
  function markAllPresent(g:(typeof groups)[number]){setStatuses(v=>{const n={...v};g.students.forEach(s=>{const e=g.enrollmentByStudent.get(s.id);if(remaining(e)<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)])return;n[attendanceKey(g.schedule.id,s.id)]=g.compensationIds.has(s.id)?"compensation":"present"});return n});setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}))}

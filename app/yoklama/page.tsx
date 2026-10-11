@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { coachStudentScope } from "@/lib/attendance/coach-roster";
 import AttendanceBackButton from "./attendance-back-button";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -34,7 +35,8 @@ if(profile.role==="coach"&&!profile.is_super_user){
     allowedStudentIdsBySchedule={};
     for(const schedule of coachVisibleSchedules as any[]){
       const broad=(schedule.coach_id&&coachIds.has(schedule.coach_id))||assignedScheduleIds.has(schedule.id)||assignedGroupIds.has(schedule.group_id);
-      if(!broad)allowedStudentIdsBySchedule[schedule.id]=studentAssignedRows.filter((item:any)=>item.schedule_id===schedule.id||(!item.schedule_id&&item.group_id===schedule.group_id)).map((item:any)=>item.student_id);
+      const allowed=coachStudentScope(studentAssignments.data||[],schedule.id,schedule.group_id,coachIds,Boolean(broad),(students.data||[]).map(student=>student.id));
+      if(allowed)allowedStudentIdsBySchedule[schedule.id]=allowed;
     }
 
   }else{

@@ -306,7 +306,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
           .from("lesson_student_assignments")
           .select("student_id")
           .eq("organization_id", organizationId)
-          .eq("schedule_id", input.scheduleId)
+          .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
           .in("coach_id", coachIds)
           .eq("is_active", true)
           .in("student_id", recordStudentIds);
@@ -722,28 +722,18 @@ export async function clearAttendance(input: ClearAttendanceInput) {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (!coachStaff?.id) {
-        return { ok: false, message: "Eğitmen personel kaydınız bulunamadı." };
-      }
-
-      const { data: staffAssignment } = await supabase
-        .from("lesson_staff_assignments")
-        .select("id")
-        .eq("organization_id", organizationId)
-        .eq("coach_id", coachStaff.id)
-        .eq("is_active", true)
-        .or(`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`)
-        .limit(1)
-        .maybeSingle();
-
-      const assignedDirectly =
-        schedule.coach_id === coachStaff.id ||
-        group.primary_coach_id === coachStaff.id ||
-        Boolean(staffAssignment?.id);
-
-      if (!assignedDirectly) {
-        return { ok: false, message: "Bu seans size atanmış değil." };
-      }
+      const coachIds=uniqueStrings([profile.id,coachStaff?.id]);
+      const scope=`schedule_id.eq.${input.scheduleId},and(schedule_id.is.null,group_id.eq.${input.groupId})`;
+      const [staffResult,studentResult]=await Promise.all([
+        supabase.from("lesson_staff_assignments").select("id").eq("organization_id",organizationId).in("coach_id",coachIds).eq("is_active",true).or(scope).limit(1).maybeSingle(),
+        supabase.from("lesson_student_assignments").select("id").eq("organization_id",organizationId).in("coach_id",coachIds).eq("student_id",input.studentId).eq("is_active",true).or(scope).limit(1).maybeSingle(),
+      ]);
+      if(staffResult.error||studentResult.error)return {ok:false,message:"Eğitmen ataması doğrulanamadı. Yoklama temizlenmedi."};
+      const assignedDirectly=
+        (schedule.coach_id?coachIds.includes(schedule.coach_id):false)||
+        (group.primary_coach_id?coachIds.includes(group.primary_coach_id):false)||
+        Boolean(staffResult.data?.id)||Boolean(studentResult.data?.id);
+      if(!assignedDirectly)return {ok:false,message:"Bu seans veya öğrenci size atanmış değil."};
     }
 
     const { data: existing, error: existingError } = await supabase
