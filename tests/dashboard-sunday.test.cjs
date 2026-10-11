@@ -27,7 +27,7 @@ function from(table) {
     eq: (key, value) => { rows = rows.filter(r => r[key] === value); return q; },
     in: (key, values) => { rows = rows.filter(r => values.includes(r[key])); return q; },
     neq: (key, value) => { rows = rows.filter(r => r[key] !== value); return q; },
-    gte: () => q, lte: () => q, is: () => q, not: () => q, like: () => q, order: () => q, limit: () => q,
+    lt: () => q, range: () => q, gte: () => q, lte: () => q, is: () => q, not: () => q, like: () => q, order: () => q, limit: () => q,
     then: (resolve, reject) => Promise.resolve({ data: rows, error: null, count: rows.length }).then(resolve, reject),
   };
   return q;

@@ -28,6 +28,9 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
     notes: Array<{ id: string; title: string; text: string; status: string }>;
     notesAvailable: boolean;
   }>;
+  pastAttendance?: Array<{date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string}>;
+  historyAvailable?: boolean;
+  historyDays?: number;
   birthdays: Array<{
     id: string;
     name: string;
@@ -92,7 +95,7 @@ function OperationPanel() {
 
   const actionCount = useMemo(() => {
     if (!data) return 0;
-    return data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents;
+    return (data.pastAttendance?.length || 0) + data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents;
   }, [data]);
 
   async function celebrateBirthday(birthday: LiveData["birthdays"][number]) {
@@ -245,6 +248,8 @@ function OperationPanel() {
           <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler <Icons.arrow /></a></div>
           <div className="priorityRows">
             {data.summary.pendingAttendance > 0 && <a href={pendingAttendanceUrl} className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
+            {data.pastAttendance?.length ? <div style={{padding:"12px 0"}}><strong>Geçmiş Eksik Yoklamalar · Son {data.historyDays || 90} gün</strong><details open={data.pastAttendance.length <= 3}><summary>{data.pastAttendance.length} eksik seans · Listeyi aç/kapat</summary>{data.pastAttendance.map(item => <a key={`${item.date}:${item.branchId}:${item.time}`} href={item.href} className="priorityRow warning"><i><Icons.calendar /></i><div><strong>{new Intl.DateTimeFormat("tr-TR",{dateStyle:"long"}).format(new Date(`${item.date}T12:00:00`))} · {item.time}</strong><span>{item.branchName} · {item.missingCount} öğrenci işaretlenmemiş</span></div><b>O Tarihe Git <Icons.arrow /></b></a>)}</details><small>Güncel kayıt ve programın doğrulanabildiği geçmiş seanslar gösterilir.</small></div> : null}
+            {data.historyAvailable === false && <p role="status">Geçmiş yoklama kontrolü yüklenemedi. Bugünkü yoklamalar günceldir.</p>}
             {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.openAlerts > 0 && <a href="/uyarilar" className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.openAlerts} açık uyarı var</strong><span>Öncelikli işlemleri kontrol edin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}

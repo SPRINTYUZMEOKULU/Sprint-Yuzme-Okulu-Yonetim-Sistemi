@@ -1,3 +1,4 @@
+import { pastAttendance, historyStart, ATTENDANCE_HISTORY_DAYS } from "@/lib/dashboard/past-attendance";
 import { summarizeSessionSlots } from "@/lib/dashboard/session-summary";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import { NextResponse } from "next/server";
@@ -66,6 +67,26 @@ export async function GET() {
       .eq("organization_id", profile.organization_id).eq("alert_type", "attendance_reminder")
       .like("description", `${today.iso} · %`).order("created_at", { ascending: false }),
   ]);
+
+  const pastStart = historyStart(today.iso);
+  async function readHistory(table: string, columns: string, dateColumn: string) {
+    const rows: any[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const response = await supabase.from(table).select(columns)
+        .eq("organization_id", profile.organization_id).gte(dateColumn, pastStart).lt(dateColumn, today.iso)
+        .order("id").range(offset, offset + 999);
+      if (response.error) return { data: [], error: response.error };
+      rows.push(...(response.data || []));
+      if ((response.data || []).length < 1000) return { data: rows, error: null };
+    }
+  }
+  const [historySchedules, historyRecords, historyClosures] = await Promise.all([
+    supabase.from("lesson_schedules").select("id,branch_id,group_id,weekday,start_time,end_time,is_active,created_at")
+      .eq("organization_id", profile.organization_id).eq("is_active", true),
+    readHistory("attendance_records", "id,student_id,group_id,schedule_id,lesson_date,status", "lesson_date"),
+    readHistory("calendar_events", "id,event_date,event_type,status,start_time,end_time", "event_date"),
+  ]);
+  const historyAvailable = !historySchedules.error && !historyRecords.error && !historyClosures.error;
 
   const rosterError = branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
   if (rosterError) return NextResponse.json({ ok: false, error: "Yoklama özeti yüklenemedi." }, { status: 500 });
@@ -216,6 +237,12 @@ export async function GET() {
     date: today.iso,
     sessions,
     birthdays,
+    pastAttendance: historyAvailable ? pastAttendance({today:today.iso,
+      schedules:filterEffectivelyActiveSchedules(historySchedules.data||[],branches,groups),
+      students:rosterStudents,enrollments,memberships:membershipsResult.data||[],
+      records:historyRecords.data||[],closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
+    historyAvailable,
+    historyDays: ATTENDANCE_HISTORY_DAYS,
     summary: {
       todayLessons: sessions.length,
       pendingAttendance,
