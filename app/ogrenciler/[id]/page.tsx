@@ -12,6 +12,7 @@ import {
   updateStudentProfile,
 } from "./actions";
 import StudentFileOperations from "./student-file-operations";
+import StudentStatusButton from "./student-status-button";
 import PendingSubmitButton from "./pending-submit-button";
 import "./student-detail.css";
 
@@ -742,9 +743,9 @@ export default async function StudentFile({
           </h1>
 
           <div className="heroBadges">
-            <span className={`status ${warningClass}`}>
-              {student.status || "aktif"}
-            </span>
+            <StudentStatusButton key={`${student.id}:${student.status}`} studentId={student.id}
+              name={`${student.first_name} ${student.last_name}`} status={student.status}
+              canApprove={canManageDestructiveActions} />
 
             <span className="ageBadge">
               {studentAge != null ? `${studentAge} yaş` : "Yaş bilgisi yok"}

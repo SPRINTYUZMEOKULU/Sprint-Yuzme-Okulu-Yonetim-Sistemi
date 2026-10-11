@@ -55,6 +55,22 @@
 .status.success {
   background: #16a34a;
 }
+.studentStatusButton {
+  min-height: 44px;
+  padding: 7px 14px;
+  border: 1px solid #86efac;
+  border-radius: 999px;
+  background: #15803d;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 3px 8px #0002;
+}
+.studentStatusButton:hover { background: #166534; }
+.studentStatusButton:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.studentStatusButton:disabled { opacity: .65; cursor: wait; }
 .status.warning {
   background: #d97706;
 }
