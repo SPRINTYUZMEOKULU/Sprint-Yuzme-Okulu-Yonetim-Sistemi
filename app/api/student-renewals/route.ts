@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { calculatePackageEndDate, isISODate, istanbulDate, normalizeWeekdays, renewalWeekdays } from "@/lib/enrollment/dates";
 
 const ROLES = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 
 function isoDate(value: unknown) {
   const text = String(value || "");
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+  return isISODate(text) ? text : null;
 }
 
 function errorText(error: unknown) {
@@ -24,19 +25,6 @@ function fail(step: string, error: unknown, status = 500) {
     { ok: false, error: `Kayıt yenileme tamamlanamadı: ${detail}`, step },
     { status },
   );
-}
-
-function calculateEndDate(startDate: string, lessonCount: number, weekdays: number[]) {
-  const selected = new Set(weekdays);
-  const cursor = new Date(`${startDate}T12:00:00`);
-  let count = 0;
-  let guard = 0;
-  while (count < lessonCount && guard < 730) {
-    if (selected.has(cursor.getDay())) count += 1;
-    if (count < lessonCount) cursor.setDate(cursor.getDate() + 1);
-    guard += 1;
-  }
-  return cursor.toISOString().slice(0, 10);
 }
 
 function formatDateTR(value: string) {
@@ -294,19 +282,18 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (branchError) return fail("branch", branchError);
 
-    const weekdays = Array.from(
-      new Set(
-        (schedulesResult.data || [])
-          .map((row) => Number(row.weekday))
-          .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-      ),
-    ).sort((a, b) => a - b);
-
-    if (!weekdays.length) {
+    const availableDays = normalizeWeekdays((schedulesResult.data || []).map(row => Number(row.weekday)));
+    if (!availableDays.length) {
       return NextResponse.json(
         { ok: false, error: "Seçilen grubun aktif ders programı bulunamadı." },
         { status: 400 },
       );
+    }
+    let weekdays: number[];
+    try {
+      weekdays = renewalWeekdays(activeEnrollment ? activeEnrollment.lesson_weekdays || [] : null, availableDays);
+    } catch (error) {
+      return fail("selected-weekdays", error, 400);
     }
 
     const customNeedsApproval = customLessonCount !== null && lessonCount !== 8 && lessonCount !== 12;
@@ -423,7 +410,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const plannedEndDate = calculateEndDate(startDate, lessonCount, weekdays);
+    const plannedEndDate = calculatePackageEndDate(startDate, lessonCount, weekdays);
     const now = new Date().toISOString();
 
     const insertResult = await insertEnrollmentCompat(supabase, {
@@ -440,6 +427,8 @@ export async function POST(request: NextRequest) {
       total_lessons: lessonCount,
       used_lessons: 0,
       status: "renewal_pending",
+      start_confirmation_required: startDate >= istanbulDate(),
+      actual_started_at: null,
       created_at: now,
       updated_at: now,
     });
@@ -495,7 +484,7 @@ export async function POST(request: NextRequest) {
       ? `Özel ${lessonCount} Ders (referans: ${selectedPackage.name})`
       : `${selectedPackage.name} (${lessonCount} ders)`;
     const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-    const scheduleText = (schedulesResult.data || []).map(row => {
+    const scheduleText = (schedulesResult.data || []).filter(row => weekdays.includes(Number(row.weekday) === 7 ? 0 : Number(row.weekday))).map(row => {
       const day = Number(row.weekday) === 7 ? 0 : Number(row.weekday);
       const start = String(row.start_time || "").slice(0, 5);
       const end = String(row.end_time || "").slice(0, 5);

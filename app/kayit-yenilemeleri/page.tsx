@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import RenewalStatusCenterClient, { type CenterItem, type RenewalApproval, type RenewalHistory } from "./renewal-status-center-client";
 import DecisionCompletionSummary from "./decision-completion-summary";
+import { enrollmentDateEnded } from "@/lib/enrollment/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,8 @@ export default async function RenewalOperationsPage(){
   if(!profile.organization_id) redirect("/");
   const organizationId=profile.organization_id;
   const supabase=await createClient();
-  await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
+  const { error: syncError } = await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
+  if (syncError) throw syncError;
 
   const [studentsRes,branchesRes,groupsRes,membershipsRes,enrollmentsRes,balanceRes,statusRequestsRes,activityResult,approvalResult]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]),
@@ -34,12 +36,14 @@ export default async function RenewalOperationsPage(){
     supabase.from("approval_requests").select("id,student_id,status,new_values,metadata,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).eq("request_type","registration_custom_lesson_count").order("created_at",{ascending:false}).limit(250),
   ]);
 
+  const dataError=studentsRes.error||branchesRes.error||groupsRes.error||membershipsRes.error||enrollmentsRes.error||balanceRes.error||statusRequestsRes.error||activityResult.error||approvalResult.error;
+  if(dataError) throw dataError;
   const branches=new Map(((branchesRes.data||[]) as any[]).map(x=>[x.id,x.name]));
   const groups=new Map(((groupsRes.data||[]) as any[]).map(x=>[x.id,x.name]));
   const memberships=new Map<string,any>();
   for(const row of (membershipsRes.data||[]) as any[]){if(!memberships.has(row.student_id))memberships.set(row.student_id,row)}
   const enrollments=new Map<string,any>();
-  for(const row of (enrollmentsRes.data||[]) as any[]){if(!enrollments.has(row.student_id))enrollments.set(row.student_id,row)}
+  for(const row of (enrollmentsRes.data||[]) as any[]){const current=enrollments.get(row.student_id);if(!current||(row.status==="active"&&current.status!=="active"))enrollments.set(row.student_id,row)}
   const balances=new Map(((balanceRes.data||[]) as any[]).map(x=>[x.student_id,Number(x.compensation_lesson_balance||0)]));
   const latestStatusRequest=new Map<string,any>();
   for(const row of (statusRequestsRes.data||[]) as any[]){if(!latestStatusRequest.has(row.student_id))latestStatusRequest.set(row.student_id,row)}
@@ -58,7 +62,7 @@ export default async function RenewalOperationsPage(){
     const membership=memberships.get(student.id);
     const statusRequest=latestStatusRequest.get(student.id);
     const endedByRights=student.status==="active"&&total>0&&remaining<=0;
-    const endedByDate=student.status==="active"&&Boolean(endDate&&endDate<=today);
+    const endedByDate=student.status==="active"&&enrollmentDateEnded(endDate,today);
     const endingSoon=student.status==="active"&&!endedByRights&&!endedByDate&&((total>0&&remaining<=3)||Boolean(endDate&&endDate<=soonDate));
     const category:CenterItem["category"]=student.status==="passive"?"passive":endedByRights||endedByDate?"action":endingSoon?"soon":"active";
     const status:CenterItem["status"]=student.status==="passive"?"passive":"active";

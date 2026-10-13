@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { enrollmentDateEnded, istanbulDate } from "@/lib/enrollment/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ export async function GET() {
     const organizationId = profile.organization_id;
 
     // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
-    await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
+    const { error: syncError } = await supabase.rpc("sync_scheduled_used_lessons", { p_organization_id: organizationId });
+    if (syncError) throw syncError;
 
     const { data: students, error: studentError } = await supabase
       .from("students")
@@ -47,12 +49,14 @@ export async function GET() {
         .eq("status", "pending"),
     ]);
 
+    const dataError = enrollmentRes.error || balanceRes.error || requestRes.error;
+    if (dataError) throw dataError;
     const latestEnrollment = new Map<string, any>();
     for (const row of enrollmentRes.data || []) if (!latestEnrollment.has(row.student_id)) latestEnrollment.set(row.student_id, row);
     const balanceMap = new Map((balanceRes.data || []).map((row: any) => [row.student_id, Number(row.compensation_lesson_balance || 0)]));
     const pendingPassive = new Set((requestRes.data || []).map((row: any) => row.student_id));
 
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const today = istanbulDate();
 
     const items = (students || []).flatMap((student: any) => {
       const enrollment = latestEnrollment.get(student.id);
@@ -63,7 +67,7 @@ export async function GET() {
       const remaining = Math.max(total - used, 0) + Math.max(compensation, 0);
       const endDate = enrollment.planned_end_date || null;
       const endedByRights = total > 0 && remaining <= 0;
-      const endedByDate = Boolean(endDate && endDate <= today);
+      const endedByDate = enrollmentDateEnded(endDate, today);
       if (!endedByRights && !endedByDate) return [];
       return [{
         studentId: student.id,
