@@ -627,7 +627,7 @@ export default function StudentFileOperations({
       </section>
 
       {portalOpen && (
-        <div className="fileOpsOverlay" onClick={() => { if (!portalBusy) setPortalOpen(false); }}>
+        <div className="fileOpsOverlay portalOverlay" onClick={() => { if (!portalBusy) setPortalOpen(false); }}>
           <aside className="fileOpsPanel portalPanel" role="dialog" aria-modal="true" aria-labelledby="portal-access-title" onClick={(event) => event.stopPropagation()}>
             <header>
               <div><span>VELİ / KURSİYER PORTALI</span><h2 id="portal-access-title">Giriş Bilgilerini Gönder</h2></div>
@@ -636,22 +636,42 @@ export default function StudentFileOperations({
             <div className="fileOpsBody portalBody">
               <div className="portalIntro">
                 <div className="portalIcon"><FileIcon name="key" /></div>
-                <div><strong>Portal erişimini hazırlayın</strong><p>Giriş bilgilerini oluşturun, ardından hazır mesajı WhatsApp üzerinden gönderin.</p></div>
+                <div><strong>Portal erişimini hazırlayın</strong><p>{fullName} için giriş bilgilerini oluşturun ve WhatsApp üzerinden paylaşın.</p></div>
               </div>
-              <div className="portalRecipient"><span>KURSİYER</span><strong>{fullName}</strong><p>Çocuklarda kayıtlı veli, yetişkinlerde kursiyerin iletişim bilgileri kullanılır.</p></div>
-              <div className="portalNotice"><strong>Şifre güncellemesi</strong><p>Hesap yoksa oluşturulur ve öğrenciye bağlanır. Mevcut hesabın şifresi yeni geçici şifreyle değiştirilir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerlidir.</p></div>
+              <div className="portalSteps" aria-label="İşlem adımları">
+                <span className={!portalAccess ? "current" : "complete"}><b>1</b> Bilgileri hazırla</span>
+                <span className={portalAccess ? "current" : ""}><b>2</b> WhatsApp’ta gönder</span>
+              </div>
+              <div className="portalCard">
+                <span className="portalCardLabel">ALICI BİLGİLERİ</span>
+                <strong>{portalAccess?.fullName || student.guardian_name || fullName}</strong>
+                <span>{portalAccess?.phone || phone || "Telefon bilgisi kayıtlı değil"}</span>
+                <p>Çocuklarda kayıtlı veli, yetişkinlerde kursiyerin iletişim bilgileri kullanılır.</p>
+              </div>
+              <div className="portalNotice">
+                <FileIcon name="key" />
+                <div><strong>Geçici şifre hakkında</strong><p>Hesap yoksa oluşturulur ve kursiyere bağlanır. Mevcut hesabın şifresi yenilenir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerli olur.</p></div>
+              </div>
               {portalAccess && (
-                <div className="portalReady"><span>GİRİŞ BİLGİLERİ HAZIR</span><strong>{portalAccess.fullName}</strong><p>Kullanıcı adı (telefon): {portalAccess.phone}</p><p>Gönderimi WhatsApp üzerinden tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p></div>
+                <div className="portalReady"><strong>Giriş bilgileri hazır</strong><p>WhatsApp mesajını açıp gönderimi tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p></div>
               )}
               {portalStatus && <div className="portalStatus" role="status" aria-live="polite">{portalStatus}</div>}
             </div>
             <footer className="portalFooter">
               {portalAccess ? (
-                <a className="portalAction portalWhatsApp" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer"><FileIcon name="message" /><span>WhatsApp Mesajını Aç</span><span aria-hidden="true">↗</span></a>
+                <a className="portalAction portalWhatsapp" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer">
+                  <span className="portalActionIcon"><FileIcon name="message" /></span>
+                  <span className="portalActionText"><b>WhatsApp Mesajını Aç</b><small>Hazır giriş bilgilerini paylaşın</small></span>
+                  <span aria-hidden="true">↗</span>
+                </a>
               ) : (
-                <button className="portalAction" type="button" disabled={portalBusy} aria-busy={portalBusy} onClick={preparePortalAccess}><FileIcon name="key" /><span>{portalBusy ? "Giriş bilgileri hazırlanıyor…" : "Hesap ve Geçici Şifre Hazırla"}</span></button>
+                <button className="portalAction" type="button" disabled={portalBusy} aria-busy={portalBusy} onClick={preparePortalAccess}>
+                  <span className={portalBusy ? "portalActionIcon portalSpinner" : "portalActionIcon"}>{portalBusy ? null : <FileIcon name="key" />}</span>
+                  <span className="portalActionText"><b>{portalBusy ? "Bilgiler Hazırlanıyor…" : "Giriş Bilgilerini Hazırla"}</b><small>{portalBusy ? "Lütfen bekleyin" : "Hesap ve geçici şifre oluştur"}</small></span>
+                  <span aria-hidden="true">→</span>
+                </button>
               )}
-              <small>{portalAccess ? "Mesajı kontrol ederek WhatsApp üzerinden gönderin." : "1. Giriş bilgilerini hazırlayın · 2. WhatsApp mesajını açın"}</small>
+              <small className="portalFooterHint">Gönderim WhatsApp üzerinden tamamlanır.</small>
             </footer>
           </aside>
         </div>
@@ -1064,30 +1084,54 @@ export default function StudentFileOperations({
       )}
 
       <style jsx>{`
-        .fileCommandActions .portalLaunch { background: #edf5ff; border-color: #bed5f2; color: #135da3; }
-        .portalPanel { height: 100dvh; }
-        .portalPanel header h2 { margin: 7px 0 0; font-size: clamp(20px, 4vw, 26px); line-height: 1.25; }
-        .portalBody { display: flex; flex-direction: column; gap: 18px; }
-        .portalIntro { display: flex; align-items: flex-start; gap: 14px; }
-        .portalIcon { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 14px; color: #1569b5; background: #e4effb; }
-        .portalIntro strong { color: #143759; font-size: 18px; }
-        .portalBody p { margin: 7px 0 0; font-size: 14px; line-height: 1.65; color: #52677f; }
-        .portalRecipient, .portalReady { padding: 18px; border: 1px solid #d8e4f0; border-radius: 16px; background: #fff; overflow-wrap: anywhere; }
-        .portalRecipient span, .portalReady span { display: block; margin-bottom: 7px; color: #627990; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
-        .portalRecipient strong, .portalReady strong { color: #143759; font-size: 17px; }
-        .portalNotice { padding: 16px 18px; border: 1px solid #f2d5a5; border-radius: 14px; background: #fff8ed; }
-        .portalNotice strong { color: #875218; font-size: 14px; }
-        .portalNotice p { color: #795e3f; font-size: 13px; }
-        .portalReady { border-color: #b9e1d1; background: #effaf5; }
-        .portalReady span { color: #18724e; }
-        .portalStatus { padding: 13px 16px; border-radius: 12px; background: #eaf2fc; color: #244d78; font-size: 14px; line-height: 1.5; }
-        .fileOpsPanel > .portalFooter { flex-direction: column; padding: 18px 22px calc(18px + env(safe-area-inset-bottom)); gap: 10px; }
-        .fileOpsPanel > .portalFooter .portalAction { display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; width: 100%; min-height: 54px; padding: 14px 18px; border: 1px solid #125d9e; border-radius: 14px; background: linear-gradient(135deg, #124e89, #1678be); color: #fff; font: inherit; font-size: 14px; font-weight: 750; line-height: 1.45; text-align: center; text-decoration: none; box-shadow: 0 6px 16px rgba(17, 86, 151, .2); cursor: pointer; }
-        .portalAction span { min-width: 0; }
-        .portalAction:focus-visible, .portalLaunch:focus-visible { outline: 3px solid #71b4f3; outline-offset: 3px; }
-        .portalAction:hover { filter: brightness(1.07); }
-        .fileOpsPanel > .portalFooter .portalWhatsApp { background: linear-gradient(135deg, #0a744e, #139361); border-color: #0a744e; box-shadow: 0 6px 16px rgba(10, 116, 78, .18); }
-        .portalFooter small { color: #62768b; font-size: 11px; line-height: 1.5; text-align: center; }
+        .portalOverlay { z-index: 10000; }
+        .portalPanel { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+        .portalPanel > header { flex-shrink: 0; align-items: center; padding: 24px; }
+        .portalPanel > header > div { min-width: 0; }
+        .portalPanel > header h2 { margin: 8px 0 0; font-size: 23px; line-height: 1.25; color: #fff; }
+        .portalPanel > header button { flex-shrink: 0; }
+        .portalBody { min-height: 0; padding: 24px; }
+        .portalIntro { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+        .portalIcon { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 15px; color: #1268d6; background: #e6f0ff; }
+        .portalIntro strong { color: #12385e; font-size: 17px; }
+        .portalIntro p { margin: 5px 0 0; color: #64758b; font-size: 13px; line-height: 1.6; }
+        .portalSteps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .portalSteps > span { display: flex; align-items: center; gap: 8px; color: #6b7d92; font-size: 12px; font-weight: 700; }
+        .portalSteps b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #e7edf5; }
+        .portalSteps .current { color: #0b60bd; }
+        .portalSteps .current b { background: #1268d6; color: white; }
+        .portalSteps .complete b { background: #dcf4e7; color: #087443; }
+        .portalCard { display: grid; gap: 7px; padding: 20px; border: 1px solid #d9e5f0; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px rgba(20,56,92,.04); overflow-wrap: anywhere; }
+        .portalCardLabel { color: #718197; font-size: 10px; font-weight: 850; letter-spacing: .1em; }
+        .portalCard strong { color: #12385e; font-size: 17px; }
+        .portalCard > span:not(.portalCardLabel) { color: #36516f; font-size: 14px; }
+        .portalCard p { margin: 5px 0 0; padding-top: 12px; border-top: 1px solid #edf1f6; color: #6b7d92; font-size: 12px; line-height: 1.6; }
+        .portalNotice { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid #f2dfb8; border-radius: 14px; background: #fff8eb; color: #a16b13; }
+        .portalNotice strong { font-size: 13px; }
+        .portalNotice p { margin: 5px 0 0; color: #806b48; font-size: 12px; line-height: 1.65; }
+        .portalReady { margin-top: 16px; padding: 16px; border: 1px solid #c4e7d3; border-radius: 14px; background: #eefaf4; color: #157148; }
+        .portalReady p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; }
+        .portalStatus { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: #edf3fa; color: #294968; font-size: 13px; line-height: 1.5; }
+        .portalPanel > .portalFooter { display: grid; gap: 10px; flex-shrink: 0; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); }
+        .portalPanel .portalAction { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 64px; box-sizing: border-box; padding: 14px 18px; border: 1px solid #135da1; border-radius: 14px; background: linear-gradient(135deg, #0c3159, #146db4); color: #fff; box-shadow: 0 8px 20px rgba(14,77,132,.2); text-decoration: none; cursor: pointer; font: inherit; transition: filter .15s, transform .15s; }
+        .portalActionIcon { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.14); }
+        .portalActionText { display: grid; gap: 4px; flex: 1; text-align: left; }
+        .portalActionText b { font-size: 14px; line-height: 1.35; }
+        .portalActionText small { font-size: 11px; font-weight: 500; color: rgba(255,255,255,.8); }
+        .portalPanel .portalWhatsapp { background: linear-gradient(135deg, #087443, #129561); border-color: #087443; box-shadow: 0 8px 20px rgba(8,116,67,.16); }
+        .portalAction:focus-visible { outline: 3px solid #69b5ff; outline-offset: 3px; }
+        .portalAction:not(:disabled):hover { filter: brightness(1.08); }
+        .portalFooterHint { text-align: center; color: #718197; font-size: 11px; }
+        .portalSpinner { width: 22px; height: 22px; flex-basis: 22px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; background: transparent; animation: portalSpin .8s linear infinite; }
+        @keyframes portalSpin { to { transform: rotate(360deg); } }
+        @media (max-width: 480px) {
+          .portalPanel > header { padding: 20px; padding-top: max(20px, env(safe-area-inset-top)); }
+          .portalPanel > header h2 { font-size: 20px; }
+          .portalBody { padding: 20px; }
+          .portalPanel > .portalFooter { padding-left: 20px; padding-right: 20px; }
+        }
+        @media (prefers-reduced-motion: reduce) { .portalSpinner { animation: none; } }
+
         .fileCommandBar {
           display: flex;
           align-items: center;
