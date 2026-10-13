@@ -279,6 +279,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   if (inconsistentActiveEnrollmentCount) addNote("Kayıt tutarlılığı",`${inconsistentActiveEnrollmentCount} pasif/silinmiş öğrencinin aktif kayıt dönemi var. Aktif toplamlarına dahil edilmedi.`,"/ogrenciler?status=passive");
   const duplicateIds = activeEnrollments.filter((e,i,arr) => arr.findIndex(other => other.student_id === e.student_id) !== i);
   duplicateIds.forEach(e => addNote(studentMap.get(e.student_id)?.first_name || "Öğrenci","Birden fazla aktif kayıt dönemi var; toplam ders hakkı kontrol edilmeli.",`/ogrenciler/${e.student_id}`));
+  financeRows.forEach(r => {
+    if (r.recordStatus === "Süresi doldu" || r.recordStatus === "Bugün bitiyor" || r.recordStatus.startsWith("Bitişi yaklaşıyor")) addNote(r.name,`${r.recordStatus}: kayıt yenilemesini görüşün veya dönem durumunu kontrol edin.`,`/ogrenciler/${r.studentId}`);
+    if ((r.balance || 0) > 0) addNote(r.name,`${r.paid === 0 ? "Ödeme yapılmadı" : "Kısmi ödeme"}: kalan ${money(r.balance!)} için ödeme kaydını ve tahsilat durumunu kontrol edin.`,`/ogrenciler/${r.studentId}`);
+  });
   const noteGroups = Array.from(notes.reduce((map, n) => {
     const key = n.detail;
     const existing = map.get(key);
@@ -287,6 +291,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return map;
   }, new Map<string,{detail:string;count:number;subjects:Set<string>}>()).values()).sort((a,b)=>b.count-a.count);
   const uniqueNotes = Array.from(new Map(notes.map(n=>[`${n.subject}:${n.detail}`,n])).values());
+  const requiredActions = uniqueNotes.map(n => {
+    const financial = /ücret|ödeme|tahsilat/i.test(n.detail);
+    const renewal = /yenileme|Süresi doldu|Bugün bitiyor|Bitişi yaklaşıyor/.test(n.detail);
+    const assignment = /atama|eğitmen|seans/i.test(n.detail);
+    const action = financial ? "Ödeme ve ücret kaydını kontrol et" : renewal ? "Kaydı yenile veya dönem durumunu değerlendir" : /yoklama/i.test(n.detail) ? "İlgili yoklama kaydını kontrol et" : assignment ? "Seans ve eğitmen atamasını tamamla" : /gün/.test(n.detail) ? "Kayıt günlerini kontrol et" : "Öğrenci kayıt bilgilerini kontrol et";
+    const priority = /Ödeme yapılmadı|Süresi doldu|aşıyor|birden fazla|Birden fazla|sırası hatalı/.test(n.detail) ? "Yüksek" : "Normal";
+    return {...n,action,priority,category:financial ? "Finans" : renewal ? "Kayıt yenileme" : assignment ? "Seans / eğitmen" : "Kayıt bilgileri"};
+  }).sort((a,b)=>(a.priority === "Yüksek" ? 0 : 1)-(b.priority === "Yüksek" ? 0 : 1) || a.subject.localeCompare(b.subject,"tr"));
   const debtTotal = financeRows.reduce((sum,r)=>sum+(r.balance || 0),0);
   const overdueTotal = financeRows.reduce((sum,r)=>sum+r.overdue,0);
   const exportSheets = [
@@ -316,6 +328,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
     {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note])]},
     {name:"Tahsilat hareketleri",rows:[["Öğrenci","Tarih","Tutar","Durum","Yöntem","Kasa teslimi"],...paymentRows.map(r=>[r.name,r.date,r.amount,r.status,r.method,r.handover])]},
+    {name:"Yapılacak işlemler",rows:[["Sıra","Öncelik","Kategori","İlgili kayıt","Eksik / kontrol konusu","Yapılması gereken"],...requiredActions.map((r,i)=>[i+1,r.priority,r.category,r.subject,r.detail,r.action])]},
     {name:"Kontrol notları",rows:[["İlgili","Kontrol notu"],...uniqueNotes.map(r=>[r.subject,r.detail])]},
     {name:"Şubeler",rows:[["Şube","Aktif öğrenci","Grup","Katılım %","Tahsilat"],...branchRows.map(r=>[r.name,r.students,r.groups,Math.round(r.attendance),r.collection])]},
     {name:"Eğitmenler",rows:[["Eğitmen","Grup","Yoklamaya işlenen ders","Katılım %"],...coachRows.map(r=>[r.name,r.groups,r.lessons,Math.round(r.attendance)])]},
@@ -357,6 +370,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <article className="kpiCard kpiViolet"><div className="kpiTop"><span>Kalan ders</span><b>∑</b></div><strong>{remainingLessons}</strong><small>Aktif kursiyer paketlerinin toplamı</small></article>
         </section>
 
+        <article className="reportPanel reportTasks">
+          <div className="panelHead"><div><span className="panelKicker">YAPILMASI GEREKENLER</span><h2>Eksik işlemler ve kontrol listesi</h2></div><strong>{requiredActions.length} işlem</strong></div>
+          <p className="reportScope">Seçilen şube ve kayıt kapsamındaki tespitler. Yüksek öncelikli işlemler önce gösterilir. Uyarılar kontrol gerektirir; kayıtlar düzeltildiğinde rapor yenilenerek güncel durum alınır. PDF için “Yapılacak işlemler” raporunu seçin.</p>
+          <div className="tableScroll"><table><thead><tr><th>Sıra</th><th>Öncelik</th><th>İlgili kayıt</th><th>Eksik / kontrol konusu</th><th>Yapılması gereken</th></tr></thead><tbody>{requiredActions.map((r,i)=><tr key={`${r.subject}:${r.detail}`}><td>{i+1}</td><td><span className={r.priority === "Yüksek" ? "reportTag reportDanger" : "reportTag reportWarning"}>{r.priority}</span></td><td><strong>{r.subject}</strong><br/><small>{r.category}</small></td><td>{r.detail}</td><td><Link className="detailLink" href={r.href}>{r.action} →</Link></td></tr>)}{!requiredActions.length && <tr><td colSpan={5}>Seçilen kapsamda eksik işlem tespit edilmedi.</td></tr>}</tbody></table></div>
+        </article>
         <section className="reportsGrid">
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">KAYIT VE FİNANS</span><h2>Kayıt tarihleri ve ödeme durumu</h2></div></div>
