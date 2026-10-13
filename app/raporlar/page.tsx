@@ -238,15 +238,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const balance = price !== null && Number.isFinite(price) ? Math.max(0, price - paid) : null;
     const planIds = new Set(activePlans.map(p => p.id));
     const overdue = installments.filter(i => i.enrollment_id === e.id && planIds.has(i.plan_id) && i.due_date < today && !["cancelled","paid"].includes(i.status)).reduce((sum,i) => sum + Math.max(0, Number(i.amount)-Number(i.paid_amount)), 0);
-    const status = balance === null ? "Ücret kontrolü gerekli" : balance === 0 ? "Ödendi" : overdue > 0 || (e.payment_due_date && e.payment_due_date < today) ? "Gecikmiş" : paid > 0 ? "Kısmi ödeme" : "Bekliyor";
+    const status = balance === null ? "Ücret kontrolü gerekli" : balance === 0 ? "Ödendi" : overdue > 0 || (e.payment_due_date && e.payment_due_date < today) ? "Gecikmiş" : paid > 0 ? "Kısmi ödeme" : "Ödeme yapılmadı";
     if (balance === null) addNote(name,"Kayıt ücreti belirlenemedi veya birden fazla ödeme planı var.",`/ogrenciler/${student.id}`);
     if (!activePlans.length && balance !== null) addNote(name,"Ücret güncel paket fiyatından hesaplandı; kayıt tarihindeki tutar ve varsa indirim kontrol edilmeli.",`/ogrenciler/${student.id}`);
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
     if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Kullanılan ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
     if (e.status === "active" && student.status === "active" && ((e.planned_end_date && e.planned_end_date < today) || Number(e.used_lessons) >= Number(e.total_lessons))) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
     if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
-    return {id:e.id, studentId:student.id,name, recordStatus:`${student.status || "—"} / ${e.status || "—"}`, registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),price,paid,balance,overdue,status};
+    return {id:e.id, studentId:student.id,name, recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),price,paid,balance,overdue,status};
   });
+  financeRows.sort((a,b) => a.endIso.localeCompare(b.endIso) || a.name.localeCompare(b.name,"tr") || a.id.localeCompare(b.id));
+  const financeSheet = (name: string, rows: typeof financeRows) => ({name,rows:[["Sıra","Öğrenci","Kayıt uyarısı","Kayıt tarihi","Başlangıç","Bitiş","Ücret","Ödenen","Kalan","Gecikmiş taksit","Ödeme durumu"],...rows.map((r,i)=>[i+1,r.name,r.recordStatus,r.registered,r.start,r.end,r.price,r.paid,r.balance,r.overdue,r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status])]});
   const assignmentRows = activeEnrollments.flatMap(e => {
     const student = studentMap.get(e.student_id)!;
     const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
@@ -305,7 +307,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       ["Öncelikli kontrol özeti",`${uniqueNotes.length} farklı kayıt uyarısı; ayrıntılar Kontrol notları raporunda.`],
       ...noteGroups.slice(0,5).map(r=>[`${r.count} kayıt`,r.detail]),
     ]},
-    {name:"Kayıt ve ödeme",rows:[["Öğrenci","Öğrenci / kayıt durumu","Kayıt tarihi","Başlangıç","Bitiş","Ücret","Ödenen","Kalan","Gecikmiş taksit","Durum"],...financeRows.map(r=>[r.name,r.recordStatus,r.registered,r.start,r.end,r.price,r.paid,r.balance,r.overdue,r.status])]},
+    financeSheet("Kayıt ve ödeme",financeRows),
+    financeSheet("Bitişi yaklaşanlar",financeRows.filter(r=>r.recordStatus.startsWith("Bitişi yaklaşıyor") || r.recordStatus === "Bugün bitiyor")),
+    financeSheet("Süresi dolanlar",financeRows.filter(r=>r.recordStatus === "Süresi doldu")),
+    financeSheet("Ödeme yapılmayanlar",financeRows.filter(r=>r.paid === 0 && (r.balance || 0)>0)),
+    financeSheet("Kısmi ödeme yapanlar",financeRows.filter(r=>r.paid > 0 && (r.balance || 0)>0)),
     {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,Math.round(r.attendance)])]},
     {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
     {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note])]},
@@ -354,8 +360,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <section className="reportsGrid">
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">KAYIT VE FİNANS</span><h2>Kayıt tarihleri ve ödeme durumu</h2></div></div>
-            <p className="reportScope">Her kayıt dönemi ayrı satırdır; kayıt kapsamı filtresi geçmiş kayıtları da gösterir. Ödenen ve kalan tutarlar kayıt döneminin tüm geçmişini kapsar. Ödeme planı bulunmayan tutarlar güncel paket fiyatıyla hesaplanır ve kontrol notunda belirtilir.</p>
-            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Öğrenci / kayıt durumu</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Bitiş</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Durum</th></tr></thead><tbody>{financeRows.map(r=><tr key={r.id}><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td>{r.recordStatus}</td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td>{r.status}</td></tr>)}</tbody></table></div>
+            <p className="reportScope">Sıralama: bitiş tarihi en yakın olan önce, aynı tarihte ad-soyad A–Z. Bitişe 7 gün kalanlar ayrıca işaretlenir. Her kayıt dönemi ayrı satırdır; kayıt kapsamı filtresi geçmiş kayıtları da gösterir. Ödenen ve kalan tutarlar kayıt döneminin tüm geçmişini kapsar. Ödeme planı bulunmayan tutarlar güncel paket fiyatıyla hesaplanır ve kontrol notunda belirtilir.</p>
+            <div className="tableScroll"><table><thead><tr><th>Sıra</th><th>Öğrenci</th><th>Kayıt uyarısı</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Bitiş</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Durum</th></tr></thead><tbody>{financeRows.map((r,i)=><tr key={r.id}><td>{i+1}</td><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td><span className={r.recordStatus === "Süresi doldu" ? "reportTag reportDanger" : /yaklaşıyor|Bugün/.test(r.recordStatus) ? "reportTag reportWarning" : "reportTag"}>{r.recordStatus}</span></td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td><span className={r.balance === 0 ? "reportTag reportGood" : "reportTag reportDanger"}>{r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status}</span></td></tr>)}</tbody></table></div>
           </article>
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">GÜNCEL OPERASYON PLANI</span><h2>Öğrenci ve eğitmen atamaları</h2></div><Link href="/operasyon-plani">Atamaları düzenle →</Link></div>

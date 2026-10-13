@@ -5,3 +5,5 @@ body{background:white!important}.reportsShell{padding:0!important;background:whi
 }
 .reportFilters{grid-template-columns:repeat(4,minmax(0,1fr)) auto}@media(max-width:900px){.reportFilters{grid-template-columns:1fr 1fr}.reportFilters label:nth-child(3){grid-column:auto}.reportFilters button{grid-column:1/-1}}
 .reportPrintChoice{display:grid;gap:6px;font-size:12px;font-weight:700}.reportPrintChoice select{padding:12px;background:white;color:#10213a;border:1px solid #a9bbd6;border-radius:8px;min-width:230px;font:inherit}.reportNotesDetails{margin-top:14px}.reportNotesDetails summary{padding:12px;background:#edf3fb;border-radius:8px;cursor:pointer;font-weight:700;color:#17325c}
+
+.reportTag{display:inline-block;padding:5px 8px;border-radius:6px;background:#edf3fb;color:#38516f;font-size:11px;font-weight:700}.reportDanger{background:#fff0f0;color:#a62020}.reportWarning{background:#fff5d6;color:#805400}.reportGood{background:#e9f8ef;color:#086b3c}
