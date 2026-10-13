@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+
+import { prepareGuardianAccountBatch, type GuardianBulkResult } from "../../veliler/ogrenciden-olustur/bulk-account-actions";
 
 import { bulkTransferStudents } from "../bulk-actions";
 import { createStudentPayment } from "../../odemeler/actions";
@@ -169,6 +171,50 @@ export default function StudentFileOperations({
   const [panel, setPanel] = useState<
     "payment" | "transfer" | "compensation" | "message" | "delete" | null
   >(null);
+
+  const [portalOpen, setPortalOpen] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalStatus, setPortalStatus] = useState("");
+  const [portalAccess, setPortalAccess] = useState<GuardianBulkResult | null>(null);
+  const portalLock = useRef(false);
+
+  function portalWhatsAppUrl(access: GuardianBulkResult) {
+    const body = [
+      "*SPRİNT YÜZME OKULU*",
+      `Merhaba ${access.fullName},`,
+      "SprintOS Veli / Kursiyer Portalı giriş bilgileriniz hazırdır.",
+      `Kursiyer: ${access.studentNames.join(", ")}`,
+      `Giriş adresi: ${window.location.origin}/login`,
+      `Kullanıcı adı (telefon): ${access.phone}`,
+      access.email ? `E-posta: ${access.email}` : "",
+      `Geçici şifre: ${access.password}`,
+      "Giriş ekranında Veli Girişi bölümünü seçin. Giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.",
+      "Bilgilendirme Hattı: 0551 896 83 19",
+    ].filter(Boolean).join("\n\n");
+    return `https://wa.me/${access.phone.replace(/\D/g, "")}?text=${encodeURIComponent(body)}`;
+  }
+
+  async function preparePortalAccess() {
+    if (portalLock.current || portalAccess) return;
+    portalLock.current = true;
+    setPortalBusy(true);
+    setPortalStatus("Hesap ve öğrenci bağlantısı hazırlanıyor…");
+    try {
+      const [access] = await prepareGuardianAccountBatch([student.id]);
+      if (!access?.ok || !access.password) {
+        setPortalStatus(access?.message || "Kayıtlı veli / kursiyer adı ve cep telefonu eksik veya geçersiz. Bilgileri Düzenle bölümünden kontrol edin.");
+        return;
+      }
+      setPortalAccess(access);
+      setPortalStatus("Giriş bilgileri hazır. WhatsApp mesajını açıp gönderin.");
+      router.refresh();
+    } catch {
+      setPortalStatus("Giriş bilgileri hazırlanamadı. Bağlantınızı ve işlem yetkinizi kontrol edin.");
+    } finally {
+      portalLock.current = false;
+      setPortalBusy(false);
+    }
+  }
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<
@@ -550,6 +596,10 @@ export default function StudentFileOperations({
             <FileIcon name="message" /> Mesaj / WhatsApp
           </button>
 
+          <button type="button" className="blue" onClick={() => setPortalOpen(true)}>
+            <FileIcon name="message" /> Giriş Bilgilerini Gönder
+          </button>
+
           <button
             type="button"
             onClick={() => router.push(`/odemeler?student=${student.id}`)}
@@ -574,6 +624,29 @@ export default function StudentFileOperations({
           </button>
         </div>
       </section>
+
+      {portalOpen && (
+        <div className="fileOpsOverlay" onClick={() => { if (!portalBusy) setPortalOpen(false); }}>
+          <aside className="fileOpsPanel" role="dialog" aria-modal="true" aria-labelledby="portal-access-title" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div><span>VELİ / KURSİYER PORTALI</span><h2 id="portal-access-title">Giriş Bilgilerini Gönder</h2></div>
+              <button type="button" aria-label="Kapat" disabled={portalBusy} onClick={() => setPortalOpen(false)}>×</button>
+            </header>
+            <p>Bu kursiyerin kayıtlı iletişim bilgileri kullanılır. Çocuklarda veliye, yetişkinlerde kursiyerin kendisine hazırlanır.</p>
+            <p>Hesap yoksa oluşturulur ve öğrenciye bağlanır. Mevcut hesabın şifresi yeni geçici şifreyle değiştirilir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerlidir.</p>
+            {portalAccess ? (
+              <>
+                <p><strong>{portalAccess.fullName}</strong><br />Kullanıcı adı (telefon): {portalAccess.phone}</p>
+                <a className="blue" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer">WhatsApp Mesajını Aç</a>
+                <p>Gönderimi WhatsApp üzerinden tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p>
+              </>
+            ) : (
+              <button type="button" disabled={portalBusy} onClick={preparePortalAccess}>{portalBusy ? "Hazırlanıyor…" : "Hesap ve Geçici Şifre Hazırla"}</button>
+            )}
+            {portalStatus && <p role="status" aria-live="polite">{portalStatus}</p>}
+          </aside>
+        </div>
+      )}
 
       <nav
         className="fileSectionNav"
