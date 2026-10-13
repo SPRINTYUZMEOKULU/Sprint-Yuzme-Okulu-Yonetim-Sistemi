@@ -277,14 +277,40 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   if (inconsistentActiveEnrollmentCount) addNote("Kayıt tutarlılığı",`${inconsistentActiveEnrollmentCount} pasif/silinmiş öğrencinin aktif kayıt dönemi var. Aktif toplamlarına dahil edilmedi.`,"/ogrenciler?status=passive");
   const duplicateIds = activeEnrollments.filter((e,i,arr) => arr.findIndex(other => other.student_id === e.student_id) !== i);
   duplicateIds.forEach(e => addNote(studentMap.get(e.student_id)?.first_name || "Öğrenci","Birden fazla aktif kayıt dönemi var; toplam ders hakkı kontrol edilmeli.",`/ogrenciler/${e.student_id}`));
+  const noteGroups = Array.from(notes.reduce((map, n) => {
+    const key = n.detail;
+    const existing = map.get(key);
+    if (existing) { existing.count++; existing.subjects.add(n.subject); }
+    else map.set(key, {detail:key,count:1,subjects:new Set([n.subject])});
+    return map;
+  }, new Map<string,{detail:string;count:number;subjects:Set<string>}>()).values()).sort((a,b)=>b.count-a.count);
+  const uniqueNotes = Array.from(new Map(notes.map(n=>[`${n.subject}:${n.detail}`,n])).values());
+  const debtTotal = financeRows.reduce((sum,r)=>sum+(r.balance || 0),0);
+  const overdueTotal = financeRows.reduce((sum,r)=>sum+r.overdue,0);
   const exportSheets = [
-    {name:"Yönetici özeti",rows:[["Rapor aralığı",from,to],["Şube",branchId === "all" ? "Tüm şubeler" : branchMap.get(branchId) || ""],["Oluşturulma",new Date().toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"})],["Aktif öğrenci",activeStudentIds.size],["Tahsilat",collectionTotal],["Kalan ders",remainingLessons],["Uyarı",notes.length]]},
+    {name:"Yönetici özeti",rows:[
+      ["Rapor aralığı",`${dateLabel(from)} – ${dateLabel(to)}`],
+      ["Şube",branchId === "all" ? "Tüm şubeler" : branchMap.get(branchId) || ""],
+      ["Kayıt kapsamı",reportStatus === "all" ? "Tüm kayıt geçmişi" : reportStatus === "passive" ? "Pasif / kapanmış kayıtlar" : "Aktif kayıtlar"],
+      ["Aktif öğrenci",activeStudentIds.size],
+      ["Tahsilat",collectionTotal],["Tahsilat açıklaması",`${validPayments.length} alınmış ödeme · ${money(collectionTotal)}`],
+      ["Kayıt bazında kalan borç",money(debtTotal)],["Gecikmiş taksit",money(overdueTotal)],
+      ["Kalan ders",remainingLessons],["Katılım",`${presentCount} katıldı · ${absentCount} gelmedi · ${pct(attendanceRate)}`],
+      ["Eğitmeni eksik yoklama",lessonRows.filter(r=>r.actual === "Kaydedilmedi").length],
+      ["Öğrenci ataması eksik seans",assignmentRows.filter(r=>r.assigned === "Öğrenci ataması eksik").length],
+      ["Borçlu kayıt sayısı",financeRows.filter(r=>(r.balance || 0)>0).length],
+      ["Ücreti bilinmeyen kayıt",financeRows.filter(r=>r.balance === null).length],
+      ["Ücret açıklaması","Ödeme planı yoksa güncel paket fiyatı esas alınır; geçmiş ücret ve indirim kontrol edilmelidir."],
+      ...branchRows.map(r=>[`Şube: ${r.name}`,`${r.students} aktif öğrenci · ${money(r.collection)} tahsilat · %${Math.round(r.attendance)} katılım`]),
+      ["Öncelikli kontrol özeti",`${uniqueNotes.length} farklı kayıt uyarısı; ayrıntılar Kontrol notları raporunda.`],
+      ...noteGroups.slice(0,5).map(r=>[`${r.count} kayıt`,r.detail]),
+    ]},
     {name:"Kayıt ve ödeme",rows:[["Öğrenci","Öğrenci / kayıt durumu","Kayıt tarihi","Başlangıç","Bitiş","Ücret","Ödenen","Kalan","Gecikmiş taksit","Durum"],...financeRows.map(r=>[r.name,r.recordStatus,r.registered,r.start,r.end,r.price,r.paid,r.balance,r.overdue,r.status])]},
     {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,Math.round(r.attendance)])]},
     {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
     {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note])]},
     {name:"Tahsilat hareketleri",rows:[["Öğrenci","Tarih","Tutar","Durum","Yöntem","Kasa teslimi"],...paymentRows.map(r=>[r.name,r.date,r.amount,r.status,r.method,r.handover])]},
-    {name:"Kontrol notları",rows:[["İlgili","Kontrol notu"],...notes.map(r=>[r.subject,r.detail])]},
+    {name:"Kontrol notları",rows:[["İlgili","Kontrol notu"],...uniqueNotes.map(r=>[r.subject,r.detail])]},
     {name:"Şubeler",rows:[["Şube","Aktif öğrenci","Grup","Katılım %","Tahsilat"],...branchRows.map(r=>[r.name,r.students,r.groups,Math.round(r.attendance),r.collection])]},
     {name:"Eğitmenler",rows:[["Eğitmen","Grup","Yoklamaya işlenen ders","Katılım %"],...coachRows.map(r=>[r.name,r.groups,r.lessons,Math.round(r.attendance)])]},
   ];
@@ -327,10 +353,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
         <section className="reportsGrid">
           <article className="reportPanel reportPanelWide">
-            <div className="panelHead"><div><span className="panelKicker">YÖNETİCİ KONTROLÜ</span><h2>Eksikler ve kontrol notları · {notes.length}</h2></div></div>
-            <div className="tableScroll"><table><thead><tr><th>İlgili kayıt</th><th>Kontrol notu</th><th>İşlem</th></tr></thead><tbody>{notes.map((n,i)=><tr key={i}><td>{n.subject}</td><td>{n.detail}</td><td><Link href={n.href}>Kontrol et →</Link></td></tr>)}{!notes.length && <tr><td colSpan={3}>Bu kontrollerde eksik bulunmadı.</td></tr>}</tbody></table></div>
-          </article>
-          <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">KAYIT VE FİNANS</span><h2>Kayıt tarihleri ve ödeme durumu</h2></div></div>
             <p className="reportScope">Her kayıt dönemi ayrı satırdır; kayıt kapsamı filtresi geçmiş kayıtları da gösterir. Ödenen ve kalan tutarlar kayıt döneminin tüm geçmişini kapsar. Ödeme planı bulunmayan tutarlar güncel paket fiyatıyla hesaplanır ve kontrol notunda belirtilir.</p>
             <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Öğrenci / kayıt durumu</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Bitiş</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Durum</th></tr></thead><tbody>{financeRows.map(r=><tr key={r.id}><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td>{r.recordStatus}</td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td>{r.status}</td></tr>)}</tbody></table></div>
@@ -366,6 +388,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">ÖĞRENCİ RAPORU</span><h2>Kursiyer ve kayıt özeti</h2></div><Link href="/ogrenciler">Öğrenci merkezini aç →</Link></div>
             <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={7} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">YÖNETİCİ KONTROLÜ</span><h2>Eksik ve kontrol özeti</h2></div></div>
+            <div className="tableScroll"><table><thead><tr><th>Kayıt sayısı</th><th>Kontrol konusu</th></tr></thead><tbody>{noteGroups.slice(0,8).map((n,i)=><tr key={i}><td>{n.count}</td><td>{n.detail}</td></tr>)}</tbody></table></div>
+            <details className="reportNotesDetails"><summary>Tüm kontrol notlarını aç ({uniqueNotes.length})</summary><div className="tableScroll"><table><thead><tr><th>İlgili kayıt</th><th>Kontrol notu</th><th>İşlem</th></tr></thead><tbody>{uniqueNotes.map((n,i)=><tr key={i}><td>{n.subject}</td><td>{n.detail}</td><td><Link href={n.href}>Kontrol et →</Link></td></tr>)}{!uniqueNotes.length && <tr><td colSpan={3}>Eksik bulunmadı.</td></tr>}</tbody></table></div></details>
           </article>
         </section>
 

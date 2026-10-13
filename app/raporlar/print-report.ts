@@ -1,0 +1,17 @@
+export type ReportSheet = { name: string; rows: (string | number | null | undefined)[][] };
+export function printReportHtml(sheet: ReportSheet, filename: string) {
+  const escape = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
+  const summary = sheet.name === "Yönetici özeti";
+  const columns = sheet.rows[0] || [];
+  const cell = (value: string | number | null | undefined, index: number) => {
+    if (typeof value !== "number") return escape(value);
+    const monetary = /ücret|ödenen|kalan|tutar|tahsilat|taksit|borç/i.test(String(columns[index])) && !/ders/i.test(String(columns[index]));
+    return escape(new Intl.NumberFormat("tr-TR", monetary ? {style:"currency",currency:"TRY",maximumFractionDigits:2} : {maximumFractionDigits:2}).format(value));
+  };
+  const body = summary
+    ? `<table class="summary"><tbody>${sheet.rows.map(row => `<tr><th>${escape(row[0])}</th><td>${row.slice(1).map(escape).join(" · ")}</td></tr>`).join("")}</tbody></table>`
+    : `<table><thead><tr>${columns.map(c=>`<th>${escape(c)}</th>`).join("")}</tr></thead><tbody>${sheet.rows.slice(1).map(row=>`<tr>${row.map((v,i)=>`<td>${cell(v,i)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${columns.length}">Seçilen kapsamda kayıt yok.</td></tr>`}</tbody></table>`;
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(filename)} — ${escape(sheet.name)}</title><style>
+@page{size:A4 ${summary?"portrait":"landscape"};margin:12mm}*{box-sizing:border-box}body{font:11pt Arial,sans-serif;color:#14243b;background:white;margin:0;padding:20px}header{border-bottom:2px solid #2457d6;margin-bottom:16px;padding-bottom:12px}h1{font-size:22pt;margin:5px 0}p{font-size:10pt;line-height:1.4}.brand{color:#2457d6;font-weight:bold;letter-spacing:1px}table{width:100%;border-collapse:collapse;table-layout:auto}th,td{text-align:left;padding:7px 6px;border:1px solid #d6dfeb;font-size:10pt;line-height:1.35;vertical-align:top;overflow-wrap:break-word}thead th{background:#eaf0fa;font-weight:bold}thead{display:table-header-group}tr{break-inside:avoid}.summary th{width:35%;background:#edf3fb}.summary td{font-size:11pt}footer{font-size:9pt;margin-top:12px;color:#526179}.toolbar{padding:14px;background:#edf3fb;border-radius:8px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap}.toolbar button{font:inherit;padding:10px 14px;cursor:pointer;background:#2457d6;color:white;border:0;border-radius:6px}.toolbar small{width:100%}@media print{body{padding:0}.toolbar{display:none}header{break-after:avoid}h1{font-size:19pt}th,td{font-size:9.5pt}a{color:inherit}}
+</style></head><body><div class="toolbar"><button onclick="window.print()">Yazdır / PDF kaydet</button><button onclick="window.close()">Rapor merkezine dön</button><small>Yalnızca seçtiğiniz rapor açıldı. PDF için yazdırma ekranının paylaşma/kaydetme seçeneğini kullanın.</small></div><header><div class="brand">SPRİNT YÜZME OKULU</div><h1>${escape(sheet.name)}</h1><p>${escape(filename)}</p></header>${body}<footer>Türkiye saatiyle oluşturulma: ${escape(new Date().toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"}))}. ${summary?"Ayrıntılar için ödeme, atama veya ders raporunu ayrı seçin.":`${Math.max(0,sheet.rows.length-1)} kayıt. Öğrenci ve dönem kapsamı rapor merkezindeki filtrelerden alınır.`}</footer></body></html>`;
+}

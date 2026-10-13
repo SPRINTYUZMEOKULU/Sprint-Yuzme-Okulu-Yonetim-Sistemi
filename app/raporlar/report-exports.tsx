@@ -1,8 +1,18 @@
 "use client";
 import { useState } from "react";
+import { printReportHtml } from "./print-report";
 
 type Sheet = { name: string; rows: (string | number | null | undefined)[][] };
 export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename:string}) {
+  const [selected,setSelected]=useState("Yönetici özeti");
+  function printSelected() {
+    setError("");
+    const sheet=sheets.find(s=>s.name===selected);
+    if(!sheet) return;
+    const popup=window.open("", "_blank");
+    if(!popup) {setError("Rapor önizlemesi açılamadı. Tarayıcıda bu site için açılır pencerelere izin verin.");return;}
+    popup.document.open();popup.document.write(printReportHtml(sheet,filename));popup.document.close();popup.focus();
+  }
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   async function excel() {
@@ -21,9 +31,10 @@ export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename
     finally {setBusy(false);}
   }
   return <div className="reportExportBar">
-    <div><strong>Yönetici raporunu dışa aktar</strong><span>Seçili şube ve dönem · tüm satırlar · kontrol notları dahil</span></div>
-    <div className="reportExportButtons"><button onClick={()=>window.print()}>A4 yazdır</button><button onClick={()=>window.print()}>PDF olarak kaydet</button><button onClick={excel} disabled={busy}>{busy?"Excel hazırlanıyor…":"Excel indir (.xlsx)"}</button></div>
-    <small>PDF için açılan yazdırma ekranında “PDF olarak kaydet” veya paylaşma seçeneğini kullanın. A4 yatay düzen hazırlanır.</small>
+    <div><strong>Yönetici raporunu dışa aktar</strong><span>Önce rapor türünü seçin; yalnızca o bölüm çıktıya alınır.</span></div>
+    <label className="reportPrintChoice">Çıktı türü<select value={selected} onChange={e=>setSelected(e.target.value)}>{sheets.map(s=><option key={s.name} value={s.name}>{s.name}{s.name === "Yönetici özeti" ? " (kısa özet)" : ` (${Math.max(0,s.rows.length-1)} satır)`}</option>)}</select></label>
+    <div className="reportExportButtons"><button onClick={printSelected}>A4 / PDF önizle</button><button onClick={excel} disabled={busy}>{busy?"Excel hazırlanıyor…":"Excel indir (.xlsx)"}</button></div>
+    <small>Özet varsayılan olarak açılır. Ayrıntılı ödeme, öğrenci ve eğitmen raporlarını ayrı ayrı yazdırabilirsiniz. Excel tüm raporları ayrı sekmelerde içerir.</small>
     {error && <span role="alert">{error}</span>}
   </div>;
 }
