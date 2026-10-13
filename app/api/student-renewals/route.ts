@@ -494,12 +494,20 @@ export async function POST(request: NextRequest) {
     const packageText = customNeedsApproval
       ? `Özel ${lessonCount} Ders (referans: ${selectedPackage.name})`
       : `${selectedPackage.name} (${lessonCount} ders)`;
+    const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+    const scheduleText = (schedulesResult.data || []).map(row => {
+      const day = Number(row.weekday) === 7 ? 0 : Number(row.weekday);
+      const start = String(row.start_time || "").slice(0, 5);
+      const end = String(row.end_time || "").slice(0, 5);
+      return `${dayNames[day] || ""}${start ? ` ${start}${end ? `–${end}` : ""}` : ""}`;
+    }).filter(Boolean).join(" / ");
     const renewalMessage =
       `Merhaba${student.guardian_name ? ` ${student.guardian_name}` : ""},\n\n` +
       `${studentName} öğrencimizin Sprint Yüzme Okulu kaydı başarıyla yenilenmiştir.\n\n` +
       `*Yeni Dönem Bilgileri*\n` +
       `Şube: ${branch?.name || "-"}\n` +
       `Grup: ${group.name || "-"}\n` +
+      `Ders Günleri ve Saatleri: ${scheduleText || "-"}\n` +
       `Paket: ${packageText}\n` +
       `Ders Sayısı: ${lessonCount}\n` +
       `Başlangıç: ${formatDateTR(startDate)}\n` +
