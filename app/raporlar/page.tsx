@@ -1,4 +1,7 @@
 import Link from "next/link";
+import ReportExports from "./report-exports";
+import { normalizeWeekday } from "@/lib/schedules/weekday";
+import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import "./reports.css";
@@ -7,14 +10,14 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | undefined>;
 
-type Branch = { id: string; name: string };
-type Group = { id: string; branch_id: string | null; name: string; primary_coach_id: string | null };
-type Student = { id: string; first_name: string | null; last_name: string | null; status: string | null; branch_id: string | null };
-type Enrollment = { id: string; student_id: string; branch_id: string | null; group_id: string | null; start_date: string | null; planned_end_date: string | null; total_lessons: number | null; used_lessons: number | null; status: string | null };
-type Attendance = { id: string; student_id: string; group_id: string | null; schedule_id: string | null; coach_id: string | null; lesson_date: string; status: string | null };
-type Payment = { id: string; student_id: string | null; enrollment_id: string | null; amount: number | string | null; payment_status: string | null; payment_method: string | null; received_at: string | null; cancelled_at: string | null };
+type Branch = { id: string; name: string; is_active: boolean };
+type Group = { id: string; branch_id: string | null; name: string; primary_coach_id: string | null; is_active: boolean };
+type Student = { id: string; first_name: string | null; last_name: string | null; status: string | null; branch_id: string | null; created_at: string };
+type Enrollment = { id: string; student_id: string; branch_id: string | null; group_id: string | null; start_date: string | null; planned_end_date: string | null; total_lessons: number | null; used_lessons: number | null; status: string | null; created_at: string; lesson_weekdays: number[] | null; package_id: string | null; payment_due_date: string | null };
+type Attendance = { id: string; student_id: string; group_id: string | null; schedule_id: string | null; coach_id: string | null; lesson_date: string; status: string | null; branch_id: string | null; coach_note: string | null };
+type Payment = { id: string; student_id: string | null; enrollment_id: string | null; amount: number | string | null; payment_status: string | null; payment_method: string | null; received_at: string | null; cancelled_at: string | null; cash_handover_status: string | null };
 type Profile = { id: string; full_name: string | null; role: string | null };
-type Schedule = { id: string; branch_id: string | null; group_id: string | null; coach_id: string | null };
+type Schedule = { id: string; branch_id: string | null; group_id: string | null; coach_id: string | null; weekday: number; start_time: string; is_active: boolean };
 
 function isoToday() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -26,7 +29,9 @@ function isoToday() {
 }
 
 function isIsoDate(value?: string) {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
 }
 
 function money(value: number) {
@@ -56,6 +61,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const from = isIsoDate(params.from) ? params.from! : monthStart;
   const to = isIsoDate(params.to) ? params.to! : today;
   const requestedBranch = params.branch || "all";
+  if (from > to) return <main className="reportsShell"><div className="reportsError">Başlangıç tarihi bitişten sonra olamaz.<Link href="/raporlar">Tarihleri yeniden seç</Link></div></main>;
 
   if (!organizationId) {
     return <main className="reportsShell"><div className="reportsError">Kurum bilgisi bulunamadı.</div></main>;
@@ -63,21 +69,34 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const supabase = await createClient();
 
-  // Tüm ekranlar aynı merkezi normal ders bakiyesini okur.
-  await supabase.rpc("sync_scheduled_used_lessons");
+  // Read every page rather than silently accepting the Data API row limit.
+  async function readAll(query: any) {
+    const data: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const result = await query.order("id").range(offset, offset + 499);
+      if (result.error) return { data: null, error: result.error };
+      data.push(...(result.data || []));
+      if ((result.data || []).length < 500) return { data, error: null };
+    }
+  }
 
-  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, paymentsResult, profilesResult, schedulesResult] = await Promise.all([
-    supabase.from("branches").select("id,name").eq("organization_id", organizationId).order("name"),
-    supabase.from("training_groups").select("id,branch_id,name,primary_coach_id").eq("organization_id", organizationId).order("name"),
-    supabase.from("students").select("id,first_name,last_name,status,branch_id").eq("organization_id", organizationId).eq("is_deleted", false),
-    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status").eq("organization_id", organizationId),
-    supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,coach_id,lesson_date,status").eq("organization_id", organizationId).gte("lesson_date", from).lte("lesson_date", to),
-    supabase.from("student_payments").select("id,student_id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at").eq("organization_id", organizationId).gte("received_at", `${from}T00:00:00`).lte("received_at", `${to}T23:59:59`),
-    supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId).eq("role", "coach"),
-    supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id").eq("organization_id", organizationId).eq("is_active", true),
+  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, paymentsResult, profilesResult, schedulesResult, staffResult, assignmentsResult, packagesResult, plansResult, installmentsResult] = await Promise.all([
+    readAll(supabase.from("branches").select("id,name,is_active").eq("organization_id", organizationId).order("name")),
+    readAll(supabase.from("training_groups").select("id,branch_id,name,is_active,primary_coach_id").eq("organization_id", organizationId).order("name")),
+    readAll(supabase.from("students").select("id,first_name,last_name,status,branch_id,created_at").eq("organization_id", organizationId).eq("is_deleted", false)),
+    readAll(supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status,created_at,lesson_weekdays,package_id,payment_due_date").eq("organization_id", organizationId)),
+    readAll(supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,coach_id,lesson_date,status,branch_id,coach_note").eq("organization_id", organizationId).gte("lesson_date", from).lte("lesson_date", to)),
+    readAll(supabase.from("student_payments").select("id,student_id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at,cash_handover_status").eq("organization_id", organizationId)),
+    readAll(supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId)),
+    readAll(supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,is_active").eq("organization_id", organizationId).eq("is_active", true)),
+    readAll(supabase.from("lesson_staff_assignments").select("id,schedule_id,coach_id,assignment_role").eq("organization_id", organizationId).eq("is_active", true)),
+    readAll(supabase.from("lesson_student_assignments").select("id,schedule_id,student_id,coach_id").eq("organization_id", organizationId).eq("is_active", true)),
+    readAll(supabase.from("course_packages").select("id,name,price").eq("organization_id", organizationId)),
+    readAll(supabase.from("student_payment_plans").select("id,enrollment_id,total_amount,status").eq("organization_id", organizationId)),
+    readAll(supabase.from("student_payment_installments").select("id,plan_id,enrollment_id,due_date,amount,paid_amount,status").eq("organization_id", organizationId)),
   ]);
 
-  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error;
+  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error || staffResult.error || assignmentsResult.error || packagesResult.error || plansResult.error || installmentsResult.error;
   if (loadError) {
     return <main className="reportsShell"><div className="reportsError"><strong>Rapor verileri yüklenemedi.</strong><span>{loadError.message}</span><Link href="/">Yönetim paneline dön</Link></div></main>;
   }
@@ -91,6 +110,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const coaches = (profilesResult.data || []) as Profile[];
   const schedules = (schedulesResult.data || []) as Schedule[];
 
+  const staff = staffResult.data || [];
+  const assignments = assignmentsResult.data || [];
+  const packages = packagesResult.data || [];
+  const plans = plansResult.data || [];
+  const installments = installmentsResult.data || [];
+  const received = (p: Payment) => !p.cancelled_at && ["received", "paid", "completed"].includes(String(p.payment_status).toLowerCase());
+  const paymentDate = (p: Payment) => p.received_at ? new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Istanbul"}).format(new Date(p.received_at)) : "";
+  const inPeriod = (p: Payment) => Boolean(paymentDate(p) && paymentDate(p) >= from && paymentDate(p) <= to);
+  const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat("tr-TR", {timeZone:"Europe/Istanbul"}).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value)) : "—";
+  const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
   const branchId = requestedBranch !== "all" && branches.some((b) => b.id === requestedBranch) ? requestedBranch : "all";
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
   const groupMap = new Map(groups.map((g) => [g.id, g]));
@@ -105,13 +134,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     if (branchId === "all") return true;
     const schedule = a.schedule_id ? scheduleMap.get(a.schedule_id) : null;
     const group = a.group_id ? groupMap.get(a.group_id) : null;
-    return schedule?.branch_id === branchId || group?.branch_id === branchId || relevantStudentIds.has(a.student_id);
+    return (a.branch_id || schedule?.branch_id || group?.branch_id || studentMap.get(a.student_id)?.branch_id) === branchId;
   });
   const filteredPayments = payments.filter((p) => {
+    if (!inPeriod(p)) return false;
     if (branchId === "all") return true;
     const paymentEnrollment = p.enrollment_id ? enrollmentMap.get(p.enrollment_id) : null;
     const paymentStudent = p.student_id ? studentMap.get(p.student_id) : null;
-    return paymentEnrollment?.branch_id === branchId || paymentStudent?.branch_id === branchId || (p.student_id ? relevantStudentIds.has(p.student_id) : false);
+    return (paymentEnrollment?.branch_id || groupMap.get(paymentEnrollment?.group_id || "")?.branch_id || paymentStudent?.branch_id) === branchId;
   });
 
   // "Aktif öğrenci" raporu, yalnızca öğrenci kartı ve kayıt dönemi birlikte aktifse sayılır.
@@ -119,12 +149,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const activeEnrollments = filteredEnrollments.filter((e) => e.status === "active" && studentMap.get(e.student_id)?.status === "active");
   const inconsistentActiveEnrollmentCount = filteredEnrollments.filter((e) => e.status === "active" && studentMap.get(e.student_id)?.status !== "active").length;
   const activeStudentIds = new Set(activeEnrollments.map((e) => e.student_id));
-  const activeStudents = students.filter((s) => activeStudentIds.has(s.id));
+  const reportStatus = ["all","passive"].includes(params.status || "") ? params.status! : "active";
+  const reportEnrollments = filteredEnrollments.filter(e => studentMap.has(e.student_id) && (reportStatus === "all" || (reportStatus === "active" ? activeEnrollments.some(a => a.id === e.id) : studentMap.get(e.student_id)?.status !== "active" || e.status !== "active")));
   const presentCount = filteredAttendance.filter((a) => statusIsPresent(a.status)).length;
   const absentCount = filteredAttendance.filter((a) => statusIsAbsent(a.status)).length;
   const attendanceBase = presentCount + absentCount;
   const attendanceRate = attendanceBase ? (presentCount / attendanceBase) * 100 : 0;
-  const validPayments = filteredPayments.filter((p) => !p.cancelled_at && !["cancelled", "canceled", "void"].includes(String(p.payment_status || "").toLowerCase()));
+  const validPayments = filteredPayments.filter(received);
   const collectionTotal = validPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const remainingLessons = activeEnrollments.reduce((sum, e) => sum + Math.max(0, Number(e.total_lessons || 0) - Number(e.used_lessons || 0)), 0);
 
@@ -136,15 +167,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const branchAttendance = attendance.filter((a) => {
         const schedule = a.schedule_id ? scheduleMap.get(a.schedule_id) : null;
         const group = a.group_id ? groupMap.get(a.group_id) : null;
-        return schedule?.branch_id === branch.id || group?.branch_id === branch.id || studentIds.has(a.student_id);
+        return (a.branch_id || schedule?.branch_id || group?.branch_id || studentMap.get(a.student_id)?.branch_id) === branch.id;
       });
       const p = branchAttendance.filter((a) => statusIsPresent(a.status)).length;
       const a = branchAttendance.filter((row) => statusIsAbsent(row.status)).length;
       const branchPayments = payments.filter((payment) => {
         const paymentEnrollment = payment.enrollment_id ? enrollmentMap.get(payment.enrollment_id) : null;
         const paymentStudent = payment.student_id ? studentMap.get(payment.student_id) : null;
-        const belongsToBranch = paymentEnrollment?.branch_id === branch.id || paymentStudent?.branch_id === branch.id;
-        return belongsToBranch && !payment.cancelled_at && !["cancelled", "canceled", "void"].includes(String(payment.payment_status || "").toLowerCase());
+        const belongsToBranch = (paymentEnrollment?.branch_id || groupMap.get(paymentEnrollment?.group_id || "")?.branch_id || paymentStudent?.branch_id) === branch.id;
+        return belongsToBranch && received(payment) && inPeriod(payment);
       });
       return {
         id: branch.id,
@@ -157,8 +188,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     })
     .sort((a, b) => b.students - a.students);
 
-  const coachRows = coaches.map((coach) => {
-    const coachAttendance = filteredAttendance.filter((a) => a.coach_id === coach.id || (a.schedule_id && scheduleMap.get(a.schedule_id)?.coach_id === coach.id));
+  const coachRows = coaches.filter(c => ["coach","admin","branch_manager","owner"].includes(c.role || "")).map((coach) => {
+    const coachAttendance = filteredAttendance.filter((a) => a.coach_id === coach.id);
     const uniqueLessons = new Set(coachAttendance.map((a) => `${a.lesson_date}:${a.schedule_id || a.group_id || "lesson"}`));
     const p = coachAttendance.filter((a) => statusIsPresent(a.status)).length;
     const a = coachAttendance.filter((row) => statusIsAbsent(row.status)).length;
@@ -166,13 +197,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return { id: coach.id, name: coach.full_name || "İsimsiz antrenör", lessons: uniqueLessons.size, students: p + a, attendance: p + a ? (p / (p + a)) * 100 : 0, groups: assignedGroups.size };
   }).filter((row) => row.lessons > 0 || row.groups > 0).sort((a, b) => b.lessons - a.lessons || a.name.localeCompare(b.name, "tr"));
 
-  const studentRows = activeStudents.map((student) => {
-    const enrollment = activeEnrollments.find((e) => e.student_id === student.id);
+  const studentRows = reportEnrollments.map((enrollment) => {
+    const student = studentMap.get(enrollment.student_id)!;
     const records = filteredAttendance.filter((a) => a.student_id === student.id);
     const p = records.filter((a) => statusIsPresent(a.status)).length;
     const a = records.filter((row) => statusIsAbsent(row.status)).length;
     return {
       id: student.id,
+      enrollmentId: enrollment.id,
+      registered: dateLabel(enrollment.created_at),
+      start: dateLabel(enrollment.start_date),
+      end: dateLabel(enrollment.planned_end_date),
+      days: (enrollment.lesson_weekdays || []).map(d => dayNames[normalizeWeekday(d)]).join(", ") || "Belirtilmedi",
       name: `${student.first_name || ""} ${student.last_name || ""}`.trim(),
       branch: branchMap.get(enrollment?.branch_id || student.branch_id || "") || "—",
       group: groupMap.get(enrollment?.group_id || "")?.name || "—",
@@ -188,6 +224,71 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return map;
   }, new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]);
 
+  type Note = { subject: string; detail: string; href: string };
+  const notes: Note[] = [];
+  const addNote = (subject: string, detail: string, href = "/operasyon-plani") => notes.push({subject, detail, href});
+  const currentSchedules = filterEffectivelyActiveSchedules(schedules, branches, groups).filter(sc => branchId === "all" || sc.branch_id === branchId);
+  const financeRows = reportEnrollments.map(e => {
+    const student = studentMap.get(e.student_id)!;
+    const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    const paid = payments.filter(p => p.enrollment_id === e.id && received(p)).reduce((sum,p) => sum + Number(p.amount || 0), 0);
+    const activePlans = plans.filter(p => p.enrollment_id === e.id && !["cancelled","canceled"].includes(p.status));
+    const rawPrice = activePlans.length === 1 ? Number(activePlans[0].total_amount) : activePlans.length > 1 ? null : Number(packages.find(p => p.id === e.package_id)?.price ?? NaN);
+    const price = rawPrice !== null && Number.isFinite(rawPrice) ? rawPrice : null;
+    const balance = price !== null && Number.isFinite(price) ? Math.max(0, price - paid) : null;
+    const planIds = new Set(activePlans.map(p => p.id));
+    const overdue = installments.filter(i => i.enrollment_id === e.id && planIds.has(i.plan_id) && i.due_date < today && !["cancelled","paid"].includes(i.status)).reduce((sum,i) => sum + Math.max(0, Number(i.amount)-Number(i.paid_amount)), 0);
+    const status = balance === null ? "Ücret kontrolü gerekli" : balance === 0 ? "Ödendi" : overdue > 0 || (e.payment_due_date && e.payment_due_date < today) ? "Gecikmiş" : paid > 0 ? "Kısmi ödeme" : "Bekliyor";
+    if (balance === null) addNote(name,"Kayıt ücreti belirlenemedi veya birden fazla ödeme planı var.",`/ogrenciler/${student.id}`);
+    if (!activePlans.length && balance !== null) addNote(name,"Ücret güncel paket fiyatından hesaplandı; kayıt tarihindeki tutar ve varsa indirim kontrol edilmeli.",`/ogrenciler/${student.id}`);
+    if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
+    if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Kullanılan ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
+    if (e.status === "active" && student.status === "active" && ((e.planned_end_date && e.planned_end_date < today) || Number(e.used_lessons) >= Number(e.total_lessons))) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
+    if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
+    return {id:e.id, studentId:student.id,name, recordStatus:`${student.status || "—"} / ${e.status || "—"}`, registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),price,paid,balance,overdue,status};
+  });
+  const assignmentRows = activeEnrollments.flatMap(e => {
+    const student = studentMap.get(e.student_id)!;
+    const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    const days = new Set((e.lesson_weekdays || []).map(normalizeWeekday));
+    const studentAssignments = assignments.filter(a => a.student_id === e.student_id);
+    const sessions = currentSchedules.filter(sc => days.has(normalizeWeekday(sc.weekday)) && (sc.group_id === e.group_id || studentAssignments.some(a => a.schedule_id === sc.id)));
+    for (const day of days) if (!sessions.some(sc => normalizeWeekday(sc.weekday) === day)) addNote(name,`${dayNames[day]} günü için eşleşen aktif seans yok.`, `/ogrenciler/${student.id}`);
+    if (!sessions.length) addNote(name,"Seçili kayıt günleriyle eşleşen aktif seans bulunamadı.",`/ogrenciler/${student.id}`);
+    return sessions.map(sc => {
+      const assigned = studentAssignments.filter(a => a.schedule_id === sc.id && a.coach_id);
+      const names = [...new Set(assigned.map(a => coachMap.get(a.coach_id) || "Bilinmeyen eğitmen"))];
+      const plannedIds = [...new Set([sc.coach_id, ...staff.filter(a => a.schedule_id === sc.id).map(a => a.coach_id)].filter(Boolean))];
+      assigned.filter(a => !plannedIds.includes(a.coach_id)).forEach(a => addNote(name,`${sc.start_time.slice(0,5)}: öğrenci eğitmeni seans eğitmen listesinde yok.`));
+      const planned = plannedIds.map(id => coachMap.get(String(id)) || "Bilinmeyen eğitmen");
+      if (!names.length) addNote(name,`${dayNames[normalizeWeekday(sc.weekday)]} ${sc.start_time.slice(0,5)}: öğrenciye özel eğitmen ataması eksik.`);
+      if (!planned.length) addNote(name,`${sc.start_time.slice(0,5)} seansında eğitmen ataması eksik.`);
+      return {id:`${e.id}:${sc.id}`,name,branch:branchMap.get(sc.branch_id || "") || "—",group:groupMap.get(sc.group_id || "")?.name || "—",session:`${dayNames[normalizeWeekday(sc.weekday)]} ${sc.start_time.slice(0,5)}`,planned:planned.join(", ") || "Atama yok",assigned:names.join(", ") || "Öğrenci ataması eksik"};
+    });
+  });
+  const lessonRows = filteredAttendance.map(a => {
+    const sc = scheduleMap.get(a.schedule_id || "");
+    const student = studentMap.get(a.student_id);
+    const name = student ? `${student.first_name || ""} ${student.last_name || ""}`.trim() : "Silinmiş/bulunamayan öğrenci";
+    if (!a.coach_id) addNote(name,`${dateLabel(a.lesson_date)} yoklamasında dersi veren eğitmen kaydı yok.`,"/yoklama");
+    return {id:a.id,name,date:dateLabel(a.lesson_date),group:groupMap.get(a.group_id || sc?.group_id || "")?.name || "—",time:sc?.start_time?.slice(0,5) || "—",planned:coachMap.get(sc?.coach_id || "") || "Belirtilmedi",actual:coachMap.get(a.coach_id || "") || "Kaydedilmedi",status:statusIsPresent(a.status) ? "Katıldı" : statusIsAbsent(a.status) ? "Gelmedi" : a.status || "Belirtilmedi",note:a.coach_note || "—"};
+  });
+  const paymentRows = filteredPayments.map(p => ({id:p.id,name:studentMap.has(p.student_id || "") ? `${studentMap.get(p.student_id!)!.first_name || ""} ${studentMap.get(p.student_id!)!.last_name || ""}`.trim() : "Öğrenci bulunamadı",date:dateLabel(p.received_at),amount:Number(p.amount || 0),status:received(p) ? "Tahsil edildi" : p.cancelled_at ? "İptal" : p.payment_status || "Belirtilmedi",method:p.payment_method || "—",handover:p.cash_handover_status || "—"}));
+  if (inconsistentActiveEnrollmentCount) addNote("Kayıt tutarlılığı",`${inconsistentActiveEnrollmentCount} pasif/silinmiş öğrencinin aktif kayıt dönemi var. Aktif toplamlarına dahil edilmedi.`,"/ogrenciler?status=passive");
+  const duplicateIds = activeEnrollments.filter((e,i,arr) => arr.findIndex(other => other.student_id === e.student_id) !== i);
+  duplicateIds.forEach(e => addNote(studentMap.get(e.student_id)?.first_name || "Öğrenci","Birden fazla aktif kayıt dönemi var; toplam ders hakkı kontrol edilmeli.",`/ogrenciler/${e.student_id}`));
+  const exportSheets = [
+    {name:"Yönetici özeti",rows:[["Rapor aralığı",from,to],["Şube",branchId === "all" ? "Tüm şubeler" : branchMap.get(branchId) || ""],["Oluşturulma",new Date().toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"})],["Aktif öğrenci",activeStudentIds.size],["Tahsilat",collectionTotal],["Kalan ders",remainingLessons],["Uyarı",notes.length]]},
+    {name:"Kayıt ve ödeme",rows:[["Öğrenci","Öğrenci / kayıt durumu","Kayıt tarihi","Başlangıç","Bitiş","Ücret","Ödenen","Kalan","Gecikmiş taksit","Durum"],...financeRows.map(r=>[r.name,r.recordStatus,r.registered,r.start,r.end,r.price,r.paid,r.balance,r.overdue,r.status])]},
+    {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,Math.round(r.attendance)])]},
+    {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
+    {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note])]},
+    {name:"Tahsilat hareketleri",rows:[["Öğrenci","Tarih","Tutar","Durum","Yöntem","Kasa teslimi"],...paymentRows.map(r=>[r.name,r.date,r.amount,r.status,r.method,r.handover])]},
+    {name:"Kontrol notları",rows:[["İlgili","Kontrol notu"],...notes.map(r=>[r.subject,r.detail])]},
+    {name:"Şubeler",rows:[["Şube","Aktif öğrenci","Grup","Katılım %","Tahsilat"],...branchRows.map(r=>[r.name,r.students,r.groups,Math.round(r.attendance),r.collection])]},
+    {name:"Eğitmenler",rows:[["Eğitmen","Grup","Yoklamaya işlenen ders","Katılım %"],...coachRows.map(r=>[r.name,r.groups,r.lessons,Math.round(r.attendance)])]},
+  ];
+
   return (
     <main className="reportsShell">
       <div className="reportsWrap">
@@ -200,9 +301,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="reportsHeaderActions"><Link href="/" className="reportSecondary">← Yönetim paneli</Link><Link href="/odemeler" className="reportPrimary">Ödeme merkezini aç</Link></div>
         </header>
 
+        <ReportExports sheets={exportSheets} filename={`Sprint-Yonetim-Raporu-${from}-${to}`} />
+        <p className="reportScope">Tahsilat ve yoklama: seçilen tarih aralığı. Kayıt, borç ve atamalar: güncel durum. Tarihler Türkiye saatine göredir.</p>
         <form className="reportFilters" method="get">
           <label><span>Başlangıç</span><input type="date" name="from" defaultValue={from} /></label>
           <label><span>Bitiş</span><input type="date" name="to" defaultValue={to} /></label>
+          <label><span>Kayıt kapsamı</span><select name="status" defaultValue={reportStatus}><option value="active">Aktif kayıtlar</option><option value="all">Tüm kayıt geçmişi</option><option value="passive">Pasif / kapanmış kayıtlar</option></select></label>
           <label><span>Şube</span><select name="branch" defaultValue={branchId}><option value="all">Tüm şubeler</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
           <button type="submit">Raporu getir</button>
         </form>
@@ -223,6 +327,28 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
         <section className="reportsGrid">
           <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">YÖNETİCİ KONTROLÜ</span><h2>Eksikler ve kontrol notları · {notes.length}</h2></div></div>
+            <div className="tableScroll"><table><thead><tr><th>İlgili kayıt</th><th>Kontrol notu</th><th>İşlem</th></tr></thead><tbody>{notes.map((n,i)=><tr key={i}><td>{n.subject}</td><td>{n.detail}</td><td><Link href={n.href}>Kontrol et →</Link></td></tr>)}{!notes.length && <tr><td colSpan={3}>Bu kontrollerde eksik bulunmadı.</td></tr>}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">KAYIT VE FİNANS</span><h2>Kayıt tarihleri ve ödeme durumu</h2></div></div>
+            <p className="reportScope">Her kayıt dönemi ayrı satırdır; kayıt kapsamı filtresi geçmiş kayıtları da gösterir. Ödenen ve kalan tutarlar kayıt döneminin tüm geçmişini kapsar. Ödeme planı bulunmayan tutarlar güncel paket fiyatıyla hesaplanır ve kontrol notunda belirtilir.</p>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Öğrenci / kayıt durumu</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Bitiş</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Durum</th></tr></thead><tbody>{financeRows.map(r=><tr key={r.id}><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td>{r.recordStatus}</td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td>{r.status}</td></tr>)}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">GÜNCEL OPERASYON PLANI</span><h2>Öğrenci ve eğitmen atamaları</h2></div><Link href="/operasyon-plani">Atamaları düzenle →</Link></div>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube / grup</th><th>Seçili seans</th><th>Seans eğitmenleri</th><th>Öğrenci eğitmeni</th></tr></thead><tbody>{assignmentRows.map(r=><tr key={r.id}><td>{r.name}</td><td>{r.branch}<br/>{r.group}</td><td>{r.session}</td><td>{r.planned}</td><td>{r.assigned}</td></tr>)}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">DERS GEÇMİŞİ</span><h2>Hangi öğrencinin dersine kim girdi?</h2></div></div>
+            <p className="reportScope">Gerçekleşen eğitmen yoklama kaydından okunur. Plan eğitmeni güncel atamadır; geçmiş atamayı kanıtlamaz.</p>
+            <div className="tableScroll"><table><thead><tr><th>Tarih / saat</th><th>Öğrenci / grup</th><th>Mevcut plan eğitmeni</th><th>Yoklamadaki eğitmen</th><th>Yoklama</th><th>Ders notu</th></tr></thead><tbody>{lessonRows.map(r=><tr key={r.id}><td>{r.date}<br/>{r.time}</td><td>{r.name}<br/>{r.group}</td><td>{r.planned}</td><td>{r.actual}</td><td>{r.status}</td><td>{r.note}</td></tr>)}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
+            <div className="panelHead"><div><span className="panelKicker">FİNANS HAREKETLERİ</span><h2>Tahsilat ve kasa teslimi</h2></div></div>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Tarih</th><th>Tutar</th><th>Ödeme durumu</th><th>Yöntem</th><th>Kasa teslimi</th></tr></thead><tbody>{paymentRows.map(r=><tr key={r.id}><td>{r.name}</td><td>{r.date}</td><td>{money(r.amount)}</td><td>{r.status}</td><td>{r.method}</td><td>{r.handover}</td></tr>)}</tbody></table></div>
+          </article>
+          <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">ŞUBE PERFORMANSI</span><h2>Şube karşılaştırması</h2></div><Link href="/gruplar">Gruplara git →</Link></div>
             <div className="tableScroll"><table><thead><tr><th>Şube</th><th>Aktif öğrenci</th><th>Grup</th><th>Katılım</th><th>Tahsilat</th></tr></thead><tbody>{branchRows.length ? branchRows.map((row) => <tr key={row.id}><td><strong>{row.name}</strong></td><td>{row.students}</td><td>{row.groups}</td><td><span className={row.attendance >= 80 ? "metricGood" : row.attendance > 0 ? "metricWarn" : "metricMuted"}>{pct(row.attendance)}</span></td><td>{money(row.collection)}</td></tr>) : <tr><td colSpan={5} className="emptyCell">Şube verisi bulunamadı.</td></tr>}</tbody></table></div>
           </article>
@@ -234,16 +360,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
           <article className="reportPanel">
             <div className="panelHead"><div><span className="panelKicker">ANTRENÖR RAPORU</span><h2>Ders ve katılım</h2></div><Link href="/yoklama">Yoklamaya git →</Link></div>
-            <div className="coachList">{coachRows.length ? coachRows.slice(0, 10).map((row) => <div className="coachRow" key={row.id}><div><strong>{row.name}</strong><span>{row.groups} grup · {row.lessons} ders</span></div><b>{pct(row.attendance)}</b></div>) : <div className="emptyBox">Seçilen dönemde antrenör ders verisi yok.</div>}</div>
+            <div className="coachList">{coachRows.length ? coachRows.map((row) => <div className="coachRow" key={row.id}><div><strong>{row.name}</strong><span>{row.groups} grup · {row.lessons} ders</span></div><b>{pct(row.attendance)}</b></div>) : <div className="emptyBox">Seçilen dönemde antrenör ders verisi yok.</div>}</div>
           </article>
 
           <article className="reportPanel reportPanelWide">
-            <div className="panelHead"><div><span className="panelKicker">ÖĞRENCİ RAPORU</span><h2>Aktif kursiyer özeti</h2></div><Link href="/ogrenciler">Öğrenci merkezini aç →</Link></div>
-            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Ders kullanımı</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.slice(0, 100).map((row) => <tr key={row.id}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.used}/{row.total || "—"}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={6} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
+            <div className="panelHead"><div><span className="panelKicker">ÖĞRENCİ RAPORU</span><h2>Kursiyer ve kayıt özeti</h2></div><Link href="/ogrenciler">Öğrenci merkezini aç →</Link></div>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={7} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
           </article>
         </section>
 
-        <div className="reportFootnote">Rapor aralığı: <strong>{from}</strong> – <strong>{to}</strong>. Veriler doğrudan SprintOS modüllerinde kullanılan Supabase tablolarından okunur; rapor ekranı kayıt değiştirmez.</div>
+        <div className="reportFootnote">Rapor aralığı: <strong>{from}</strong> – <strong>{to}</strong>. Veriler doğrudan SprintOS modüllerinde kullanılan kayıtlardan okunur; rapor ekranı kayıt değiştirmez. Eğitmen ders sayısı yalnızca eğitmeni kaydedilmiş yoklamaları kapsar.</div>
       </div>
     </main>
   );
