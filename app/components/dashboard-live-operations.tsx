@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Icons } from "@/app/components/dashboard-icons";
 import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
+type PastSlot = {date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string};
  type LiveData = {
   ok: boolean;
   date: string;
@@ -28,7 +29,9 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
     notes: Array<{ id: string; title: string; text: string; status: string }>;
     notesAvailable: boolean;
   }>;
-  pastAttendance?: Array<{date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string}>;
+  pastAttendance?: PastSlot[];
+  closedPastAttendance?: Array<PastSlot & {status: "completed" | "removed"; updatedAt?: string}>;
+  canManagePastAttendance?: boolean;
   historyAvailable?: boolean;
   historyDays?: number;
   birthdays: Array<{
@@ -60,14 +63,20 @@ function OperationPanel() {
   const [loading, setLoading] = useState(true);
   const [celebrationBusy, setCelebrationBusy] = useState<string | null>(null);
 
+  const [historyBusy, setHistoryBusy] = useState<string | null>(null);
+  const [historyMessage, setHistoryMessage] = useState("");
+  const historyLock = useRef(false);
+  const loadVersion = useRef(0);
+
   useEffect(() => {
     let active = true;
 
     async function load() {
+      const version = ++loadVersion.current;
       try {
         const response = await fetch("/api/dashboard/live", { cache: "no-store" });
         const result = (await response.json()) as LiveData;
-        if (active && response.ok && result.ok) setData(result);
+        if (active && version === loadVersion.current && response.ok && result.ok) setData(result);
       } catch (error) {
         console.error("SprintOS canlı operasyon:", error);
       } finally {
@@ -126,6 +135,38 @@ function OperationPanel() {
       console.error("Doğum günü kutlama kaydı:", error);
     } finally {
       setCelebrationBusy(null);
+    }
+  }
+
+  async function updateHistory(item: PastSlot, status: "open" | "completed" | "removed") {
+    if (historyLock.current) return;
+    historyLock.current = true;
+    const slotKey = (slot: PastSlot) => JSON.stringify([slot.date, slot.branchId, slot.time]);
+    setHistoryBusy(slotKey(item));
+    setHistoryMessage("");
+    try {
+      const response = await fetch("/api/dashboard/attendance-followups", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({date: item.date, branchId: item.branchId, time: item.time, status}),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "İşlem kaydedilemedi.");
+      ++loadVersion.current; // A refresh started before this save must not resurrect the warning.
+      setData(current => {
+        if (!current) return current;
+        const pending = (current.pastAttendance || []).filter(slot => slotKey(slot) !== slotKey(item));
+        const closed = (current.closedPastAttendance || []).filter(slot => slotKey(slot) !== slotKey(item));
+        return { ...current,
+          pastAttendance: status === "open" ? [...pending, item].sort((a,b) => b.date.localeCompare(a.date) || a.time.localeCompare(b.time)) : pending,
+          closedPastAttendance: status === "open" ? closed : [{...item, status, updatedAt: payload.updatedAt}, ...closed],
+        };
+      });
+      setHistoryMessage(status === "open" ? "İşlem bekleyen listeye geri alındı." : status === "completed" ? "Takip işlemi tamamlandı." : "Uyarı listeden kaldırıldı.");
+    } catch (error) {
+      setHistoryMessage(error instanceof Error ? error.message : "İşlem kaydedilemedi. Tekrar deneyin.");
+    } finally {
+      historyLock.current = false;
+      setHistoryBusy(null);
     }
   }
 
@@ -248,7 +289,32 @@ function OperationPanel() {
           <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler <Icons.arrow /></a></div>
           <div className="priorityRows">
             {data.summary.pendingAttendance > 0 && <a href={pendingAttendanceUrl} className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
-            {data.pastAttendance?.length ? <div style={{padding:"12px 0"}}><strong>Geçmiş Eksik Yoklamalar · Son {data.historyDays || 90} gün</strong><details open={data.pastAttendance.length <= 3}><summary>{data.pastAttendance.length} eksik seans · Listeyi aç/kapat</summary>{data.pastAttendance.map(item => <a key={`${item.date}:${item.branchId}:${item.time}`} href={item.href} className="priorityRow warning"><i><Icons.calendar /></i><div><strong>{new Intl.DateTimeFormat("tr-TR",{dateStyle:"long"}).format(new Date(`${item.date}T12:00:00`))} · {item.time}</strong><span>{item.branchName} · {item.missingCount} öğrenci işaretlenmemiş</span></div><b>O Tarihe Git <Icons.arrow /></b></a>)}</details><small>Güncel kayıt ve programın doğrulanabildiği geçmiş seanslar gösterilir.</small></div> : null}
+            {(Boolean(data.pastAttendance?.length) || Boolean(data.closedPastAttendance?.length)) && <section className="pastAttendancePanel" aria-label="Geçmiş yoklama takibi">
+              <details className="pastAttendanceDetails">
+                <summary>
+                  <span className="pastHistoryIcon"><Icons.calendar /></span>
+                  <span className="pastHistoryTitle"><strong>Geçmiş Yoklama Takibi</strong><small>Son {data.historyDays || 90} gün · Eksik seanslar</small></span>
+                  <span className="pastHistoryCount">{data.pastAttendance?.length || 0}<small>bekleyen</small></span>
+                  <span className="pastHistoryChevron" aria-hidden="true">⌄</span>
+                </summary>
+                <div className="pastAttendanceList">
+                  {(data.pastAttendance || []).map(item => <article className="pastAttendanceCard" key={`${item.date}:${item.branchId}:${item.time}`}>
+                    <div className="pastSlotHead"><span className="pastSlotDate"><Icons.calendar />{new Intl.DateTimeFormat("tr-TR",{day:"numeric",month:"long",year:"numeric"}).format(new Date(`${item.date}T12:00:00`))}</span><span className="pastSlotTime"><Icons.clock />{item.time}</span></div>
+                    <strong className="pastSlotBranch">{item.branchName}</strong>
+                    <span className="pastSlotMissing">{item.missingCount} öğrencinin yoklaması eksik</span>
+                    <div className="pastSlotActions">
+                      <a href={item.href}>Yoklamaya Git <Icons.arrow /></a>
+                      {data.canManagePastAttendance && <><button type="button" className="pastComplete" disabled={historyBusy !== null} onClick={() => updateHistory(item,"completed")}><Icons.check />Tamamlandı</button><button type="button" className="pastRemove" disabled={historyBusy !== null} onClick={() => updateHistory(item,"removed")}>Kaldır</button></>}
+                    </div>
+                    {historyBusy === JSON.stringify([item.date,item.branchId,item.time]) && <small role="status">Kaydediliyor…</small>}
+                  </article>)}
+                  {!data.pastAttendance?.length && <p className="pastAllDone"><Icons.check />Bekleyen geçmiş yoklama işlemi yok.</p>}
+                </div>
+                <p className="pastHistoryHelp">“Tamamlandı” takip işlemini kapatır; “Kaldır” uyarıyı listeden çıkarır. Yoklama girmek için “Yoklamaya Git”i kullanın.</p>
+              </details>
+              {Boolean(data.closedPastAttendance?.length) && <details className="pastClosedDetails"><summary>Kapatılan işlemler <span>{data.closedPastAttendance?.length}</span></summary><div className="pastClosedList">{data.closedPastAttendance?.map(item => <div className="pastClosedRow" key={`${item.date}:${item.branchId}:${item.time}`}><div><strong>{new Intl.DateTimeFormat("tr-TR",{day:"numeric",month:"short"}).format(new Date(`${item.date}T12:00:00`))} · {item.time}</strong><span>{item.branchName}</span><small className={item.status === "completed" ? "completed" : "removed"}>{item.status === "completed" ? "Takip tamamlandı" : "Listeden kaldırıldı"}</small></div>{data.canManagePastAttendance && <button type="button" disabled={historyBusy !== null} onClick={() => updateHistory(item,"open")}>Geri Al</button>}</div>)}</div></details>}
+            </section>}
+            {historyMessage && <p className="pastHistoryMessage" role="status">{historyMessage}</p>}
             {data.historyAvailable === false && <p role="status">Geçmiş yoklama kontrolü yüklenemedi. Bugünkü yoklamalar günceldir.</p>}
             {data.summary.pendingApprovals > 0 && <a href="/onay-merkezi" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingApprovals} yönetici onayı bekliyor</strong><span>Bekleyen talepleri inceleyin.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {data.summary.pendingCash > 0 && <a href="/kasa" className="priorityRow warning"><i><Icons.approval /></i><div><strong>{data.summary.pendingCash} kasa teslimi bekliyor</strong><span>Kasa onaylarını tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
@@ -322,6 +388,21 @@ function OperationPanel() {
         .lessonNotes>strong{display:flex;align-items:center;gap:6px;font-size:11px;color:#325982}.lessonNotes>strong svg{width:15px;height:15px;flex-shrink:0}
         .lessonNote{margin-top:9px}.lessonNote>span{font-size:10px;font-weight:800;color:#6a7f99}.lessonNote p{margin:4px 0 0;color:#243d5c;font-size:11px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}.lessonNotes>small{display:block;margin-top:7px;color:#8b650c}
         @media(prefers-reduced-motion:reduce){.lessonRow,.lessonRow.isOpening{animation:none;transition:none}.lessonRow:active{transform:none}}
+
+        .pastAttendancePanel{border:1px solid #dbe5f2;border-radius:16px;background:linear-gradient(135deg,#f5f8ff,#fff);overflow:hidden}
+        .pastAttendanceDetails>summary{display:flex;align-items:center;gap:10px;padding:15px;cursor:pointer;list-style:none}
+        .pastAttendanceDetails>summary::-webkit-details-marker,.pastClosedDetails>summary::-webkit-details-marker{display:none}
+        .pastHistoryIcon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#e7efff;color:#3469ca;flex-shrink:0}.pastHistoryIcon svg{width:21px;height:21px}
+        .pastHistoryTitle{flex:1;min-width:0}.pastHistoryTitle strong{display:block;color:#203858;font-size:13px;line-height:1.5}.pastHistoryTitle small{display:block;margin-top:3px;color:#7a8ba4;font-size:10px}
+        .pastHistoryCount{display:grid;gap:2px;min-width:44px;padding:7px;border-radius:10px;background:#fff0dc;text-align:center;color:#a55e0a;font-size:19px;font-weight:900}.pastHistoryCount small{font-size:9px;font-weight:700}
+        .pastHistoryChevron{color:#6d85a8;font-size:23px;transition:transform .15s}.pastAttendanceDetails[open] .pastHistoryChevron{transform:rotate(180deg)}
+        .pastAttendanceList{display:grid;gap:10px;padding:0 12px 12px}.pastAttendanceCard{padding:14px;border:1px solid #e0e8f3;border-radius:13px;background:#fff;box-shadow:0 3px 10px #19375606}
+        .pastSlotHead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.pastSlotDate,.pastSlotTime{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#4d6587}.pastSlotHead svg{width:14px;height:14px}.pastSlotTime{padding:5px 8px;border-radius:7px;background:#eef4ff;color:#2765bb}
+        .pastSlotBranch{display:block;margin-top:10px;color:#1b3153;font-size:13px;line-height:1.5;overflow-wrap:anywhere}.pastSlotMissing{display:inline-block;margin-top:7px;padding:5px 8px;border-radius:7px;background:#fff7e8;color:#a06413;font-size:10px;font-weight:700}
+        .pastSlotActions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid #edf1f6}.pastSlotActions a,.pastSlotActions button,.pastClosedRow button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:36px;padding:7px 10px;border:1px solid #dbe5f2;border-radius:9px;font:inherit;font-size:10px;font-weight:800;cursor:pointer;text-decoration:none;background:#f8faff;color:#2765bb}.pastSlotActions svg{width:14px;height:14px}.pastSlotActions a{margin-right:auto;background:#eaf2ff;border-color:#d0e2fc}.pastSlotActions .pastComplete{color:#17835c;background:#effbf5;border-color:#ceeedc}.pastSlotActions .pastRemove{color:#7b5360;background:#fff8f9;border-color:#f0dfe3}.pastSlotActions button:disabled,.pastClosedRow button:disabled{opacity:.5;cursor:wait}
+        .pastAttendanceCard>small{display:block;margin-top:7px;color:#6d85a8;font-size:10px}.pastHistoryHelp{margin:0;padding:0 15px 14px;color:#7a8ba4;font-size:10px;line-height:1.7}.pastClosedDetails{border-top:1px solid #e0e8f3;background:#fbfcfe}.pastClosedDetails>summary{display:flex;align-items:center;gap:7px;padding:12px 15px;font-size:11px;font-weight:800;color:#73839b;cursor:pointer;list-style:none}.pastClosedDetails>summary span{background:#edf1f6;border-radius:6px;padding:2px 6px}.pastClosedList{padding:0 12px 12px;display:grid;gap:7px}.pastClosedRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid #e4eaf3;border-radius:10px;background:#fff}.pastClosedRow>div{min-width:0}.pastClosedRow strong{display:block;color:#4d6587;font-size:11px}.pastClosedRow span{display:block;margin-top:4px;color:#7a8ba4;font-size:10px;overflow-wrap:anywhere}.pastClosedRow small{display:inline-block;margin-top:6px;font-size:9px;color:#17835c}.pastClosedRow small.removed{color:#8a7180}.pastClosedRow button{flex-shrink:0}.pastAllDone{display:flex;align-items:center;gap:7px;color:#17835c;font-size:11px}.pastAllDone svg{width:16px;height:16px}.pastHistoryMessage{margin:0;padding:10px 12px;border-radius:10px;background:#f0f5ff;color:#35557c;font-size:11px;line-height:1.5}
+        .pastAttendancePanel summary:focus-visible,.pastSlotActions a:focus-visible,.pastSlotActions button:focus-visible,.pastClosedRow button:focus-visible{outline:3px solid #176de9;outline-offset:2px}
+        @media(max-width:400px){.pastAttendanceDetails>summary{padding:12px;gap:8px}.pastHistoryTitle strong{font-size:12px}.pastHistoryIcon{width:32px;height:32px}.pastSlotActions a{flex-basis:100%;margin-right:0}.pastSlotActions button{flex:1}}
       `}</style>
     </section>
   );

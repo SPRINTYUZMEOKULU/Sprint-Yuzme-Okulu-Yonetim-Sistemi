@@ -1,3 +1,4 @@
+import { partitionAttendance } from "@/lib/dashboard/attendance-followup";
 import { pastAttendance, historyStart, ATTENDANCE_HISTORY_DAYS } from "@/lib/dashboard/past-attendance";
 import { summarizeSessionSlots } from "@/lib/dashboard/session-summary";
 import { attendanceRoster } from "@/lib/attendance/roster";
@@ -80,13 +81,14 @@ export async function GET() {
       if ((response.data || []).length < 1000) return { data: rows, error: null };
     }
   }
-  const [historySchedules, historyRecords, historyClosures] = await Promise.all([
+  const [historySchedules, historyRecords, historyClosures, historyFollowups] = await Promise.all([
     supabase.from("lesson_schedules").select("id,branch_id,group_id,weekday,start_time,end_time,is_active,created_at")
       .eq("organization_id", profile.organization_id).eq("is_active", true),
     readHistory("attendance_records", "id,student_id,group_id,schedule_id,lesson_date,status", "lesson_date"),
     readHistory("calendar_events", "id,event_date,event_type,status,start_time,end_time", "event_date"),
+    readHistory("attendance_followups", "id,branch_id,lesson_date,start_time,status,updated_at", "lesson_date"),
   ]);
-  const historyAvailable = !historySchedules.error && !historyRecords.error && !historyClosures.error;
+  const historyAvailable = !historySchedules.error && !historyRecords.error && !historyClosures.error && !historyFollowups.error;
 
   const rosterError = branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
   if (rosterError) return NextResponse.json({ ok: false, error: "Yoklama özeti yüklenemedi." }, { status: 500 });
@@ -232,15 +234,20 @@ export async function GET() {
     );
   }).length;
 
+  const history = partitionAttendance(historyAvailable ? pastAttendance({today:today.iso,
+      schedules:filterEffectivelyActiveSchedules(historySchedules.data||[],branches,groups),
+      students:rosterStudents,enrollments,memberships:membershipsResult.data||[],
+      records:historyRecords.data||[],closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
+    (historyFollowups.data || []).map(row => ({ date: row.lesson_date, branchId: row.branch_id, time: String(row.start_time).slice(0, 5), status: row.status, updatedAt: row.updated_at })));
+
   return NextResponse.json({
     ok: true,
     date: today.iso,
     sessions,
     birthdays,
-    pastAttendance: historyAvailable ? pastAttendance({today:today.iso,
-      schedules:filterEffectivelyActiveSchedules(historySchedules.data||[],branches,groups),
-      students:rosterStudents,enrollments,memberships:membershipsResult.data||[],
-      records:historyRecords.data||[],closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
+    pastAttendance: history.pending,
+    closedPastAttendance: history.closed,
+    canManagePastAttendance: ["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role) || profile.is_super_user,
     historyAvailable,
     historyDays: ATTENDANCE_HISTORY_DAYS,
     summary: {
