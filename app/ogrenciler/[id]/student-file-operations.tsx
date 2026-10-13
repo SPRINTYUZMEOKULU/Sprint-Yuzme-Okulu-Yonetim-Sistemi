@@ -90,7 +90,7 @@ function normalizePhone(value?: string | null) {
 }
 
 type FileIconName =
-  "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print";
+  "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print" | "key";
 function FileIcon({ name }: { name: FileIconName }) {
   const base = {
     width: 18,
@@ -104,6 +104,7 @@ function FileIcon({ name }: { name: FileIconName }) {
     "aria-hidden": true,
   };
   const p: Record<FileIconName, ReactNode> = {
+    key: (<><circle cx="8" cy="9" r="4" /><path d="m11 12 9 9m-3-3 3-3m-6 0 3-3" /></>),
     edit: (
       <>
         <path d="M12 20h9" />
@@ -596,8 +597,8 @@ export default function StudentFileOperations({
             <FileIcon name="message" /> Mesaj / WhatsApp
           </button>
 
-          <button type="button" className="blue" onClick={() => setPortalOpen(true)}>
-            <FileIcon name="message" /> Giriş Bilgilerini Gönder
+          <button type="button" className="portalLaunch" onClick={() => setPortalOpen(true)}>
+            <FileIcon name="key" /> Giriş Bilgilerini Gönder
           </button>
 
           <button
@@ -627,23 +628,31 @@ export default function StudentFileOperations({
 
       {portalOpen && (
         <div className="fileOpsOverlay" onClick={() => { if (!portalBusy) setPortalOpen(false); }}>
-          <aside className="fileOpsPanel" role="dialog" aria-modal="true" aria-labelledby="portal-access-title" onClick={(event) => event.stopPropagation()}>
+          <aside className="fileOpsPanel portalPanel" role="dialog" aria-modal="true" aria-labelledby="portal-access-title" onClick={(event) => event.stopPropagation()}>
             <header>
               <div><span>VELİ / KURSİYER PORTALI</span><h2 id="portal-access-title">Giriş Bilgilerini Gönder</h2></div>
               <button type="button" aria-label="Kapat" disabled={portalBusy} onClick={() => setPortalOpen(false)}>×</button>
             </header>
-            <p>Bu kursiyerin kayıtlı iletişim bilgileri kullanılır. Çocuklarda veliye, yetişkinlerde kursiyerin kendisine hazırlanır.</p>
-            <p>Hesap yoksa oluşturulur ve öğrenciye bağlanır. Mevcut hesabın şifresi yeni geçici şifreyle değiştirilir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerlidir.</p>
-            {portalAccess ? (
-              <>
-                <p><strong>{portalAccess.fullName}</strong><br />Kullanıcı adı (telefon): {portalAccess.phone}</p>
-                <a className="blue" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer">WhatsApp Mesajını Aç</a>
-                <p>Gönderimi WhatsApp üzerinden tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p>
-              </>
-            ) : (
-              <button type="button" disabled={portalBusy} onClick={preparePortalAccess}>{portalBusy ? "Hazırlanıyor…" : "Hesap ve Geçici Şifre Hazırla"}</button>
-            )}
-            {portalStatus && <p role="status" aria-live="polite">{portalStatus}</p>}
+            <div className="fileOpsBody portalBody">
+              <div className="portalIntro">
+                <div className="portalIcon"><FileIcon name="key" /></div>
+                <div><strong>Portal erişimini hazırlayın</strong><p>Giriş bilgilerini oluşturun, ardından hazır mesajı WhatsApp üzerinden gönderin.</p></div>
+              </div>
+              <div className="portalRecipient"><span>KURSİYER</span><strong>{fullName}</strong><p>Çocuklarda kayıtlı veli, yetişkinlerde kursiyerin iletişim bilgileri kullanılır.</p></div>
+              <div className="portalNotice"><strong>Şifre güncellemesi</strong><p>Hesap yoksa oluşturulur ve öğrenciye bağlanır. Mevcut hesabın şifresi yeni geçici şifreyle değiştirilir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerlidir.</p></div>
+              {portalAccess && (
+                <div className="portalReady"><span>GİRİŞ BİLGİLERİ HAZIR</span><strong>{portalAccess.fullName}</strong><p>Kullanıcı adı (telefon): {portalAccess.phone}</p><p>Gönderimi WhatsApp üzerinden tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p></div>
+              )}
+              {portalStatus && <div className="portalStatus" role="status" aria-live="polite">{portalStatus}</div>}
+            </div>
+            <footer className="portalFooter">
+              {portalAccess ? (
+                <a className="portalAction portalWhatsApp" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer"><FileIcon name="message" /><span>WhatsApp Mesajını Aç</span><span aria-hidden="true">↗</span></a>
+              ) : (
+                <button className="portalAction" type="button" disabled={portalBusy} aria-busy={portalBusy} onClick={preparePortalAccess}><FileIcon name="key" /><span>{portalBusy ? "Giriş bilgileri hazırlanıyor…" : "Hesap ve Geçici Şifre Hazırla"}</span></button>
+              )}
+              <small>{portalAccess ? "Mesajı kontrol ederek WhatsApp üzerinden gönderin." : "1. Giriş bilgilerini hazırlayın · 2. WhatsApp mesajını açın"}</small>
+            </footer>
           </aside>
         </div>
       )}
@@ -1055,6 +1064,30 @@ export default function StudentFileOperations({
       )}
 
       <style jsx>{`
+        .fileCommandActions .portalLaunch { background: #edf5ff; border-color: #bed5f2; color: #135da3; }
+        .portalPanel { height: 100dvh; }
+        .portalPanel header h2 { margin: 7px 0 0; font-size: clamp(20px, 4vw, 26px); line-height: 1.25; }
+        .portalBody { display: flex; flex-direction: column; gap: 18px; }
+        .portalIntro { display: flex; align-items: flex-start; gap: 14px; }
+        .portalIcon { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 14px; color: #1569b5; background: #e4effb; }
+        .portalIntro strong { color: #143759; font-size: 18px; }
+        .portalBody p { margin: 7px 0 0; font-size: 14px; line-height: 1.65; color: #52677f; }
+        .portalRecipient, .portalReady { padding: 18px; border: 1px solid #d8e4f0; border-radius: 16px; background: #fff; overflow-wrap: anywhere; }
+        .portalRecipient span, .portalReady span { display: block; margin-bottom: 7px; color: #627990; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+        .portalRecipient strong, .portalReady strong { color: #143759; font-size: 17px; }
+        .portalNotice { padding: 16px 18px; border: 1px solid #f2d5a5; border-radius: 14px; background: #fff8ed; }
+        .portalNotice strong { color: #875218; font-size: 14px; }
+        .portalNotice p { color: #795e3f; font-size: 13px; }
+        .portalReady { border-color: #b9e1d1; background: #effaf5; }
+        .portalReady span { color: #18724e; }
+        .portalStatus { padding: 13px 16px; border-radius: 12px; background: #eaf2fc; color: #244d78; font-size: 14px; line-height: 1.5; }
+        .fileOpsPanel > .portalFooter { flex-direction: column; padding: 18px 22px calc(18px + env(safe-area-inset-bottom)); gap: 10px; }
+        .fileOpsPanel > .portalFooter .portalAction { display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; width: 100%; min-height: 54px; padding: 14px 18px; border: 1px solid #125d9e; border-radius: 14px; background: linear-gradient(135deg, #124e89, #1678be); color: #fff; font: inherit; font-size: 14px; font-weight: 750; line-height: 1.45; text-align: center; text-decoration: none; box-shadow: 0 6px 16px rgba(17, 86, 151, .2); cursor: pointer; }
+        .portalAction span { min-width: 0; }
+        .portalAction:focus-visible, .portalLaunch:focus-visible { outline: 3px solid #71b4f3; outline-offset: 3px; }
+        .portalAction:hover { filter: brightness(1.07); }
+        .fileOpsPanel > .portalFooter .portalWhatsApp { background: linear-gradient(135deg, #0a744e, #139361); border-color: #0a744e; box-shadow: 0 6px 16px rgba(10, 116, 78, .18); }
+        .portalFooter small { color: #62768b; font-size: 11px; line-height: 1.5; text-align: center; }
         .fileCommandBar {
           display: flex;
           align-items: center;
