@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function AdminCorrectionLauncher({ studentId }: { studentId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [host, setHost] = useState<Element | null>(null);
 
   useEffect(() => {
-    setHost(document.querySelector(".fileCommandActions"));
-  }, []);
+    // [id] layout alt rotalarda kalıcıdır. Düzeltme ekranına gidip geri
+    // dönüldüğünde eski/detached .fileCommandActions referansını kullanma.
+    setHost(document.querySelector(".studentFilePage .fileCommandActions"));
+  }, [pathname]);
 
   if (!host) return null;
 
