@@ -1,3 +1,4 @@
+import { studentLessonRights } from "@/lib/students/lesson-rights";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -546,20 +547,31 @@ export default async function StudentFile({
    * =========================================================
    */
 
+  const [compensationsResult,cancellationsResult,cancellationSchedulesResult,scheduledUsageResult]=await Promise.all([
+    supabase.from("student_compensation_lessons").select("id,enrollment_id,lesson_date,status,note,target_schedule_id")
+      .eq("organization_id",profile.organization_id).eq("student_id",id).order("lesson_date"),
+    supabase.from("student_activity_logs").select("source_id,old_value,new_value")
+      .eq("organization_id",profile.organization_id).eq("student_id",id).eq("activity_type","lesson_cancellation_compensation"),
+    supabase.from("lesson_schedules").select("id,group_id,start_time,end_time").eq("organization_id",profile.organization_id),
+    enrollment?.id ? supabase.rpc("scheduled_used_lessons",{p_enrollment_id:enrollment.id}) : Promise.resolve({data:0,error:null})
+  ]);
+  const plannedCompensations=compensationsResult.data||[];
+  const rightsAvailable=!compensationsResult.error&&!cancellationsResult.error&&!cancellationSchedulesResult.error&&!scheduledUsageResult.error;
+  const clock=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+  const part=(type:string)=>clock.find(p=>p.type===type)?.value||"";
   const normalTotal = Number(
     enrollment?.total_lessons ?? packageInfo?.lesson_count ?? 0,
   );
 
-  const usedLessons = Number(enrollment?.used_lessons ?? 0);
-
-  const normalRemaining = Math.max(0, normalTotal - usedLessons);
-
-  const compensationBalance = Math.max(
-    0,
-    Number(lessonBalance?.compensation_lesson_balance ?? 0),
-  );
-
-  const totalRights = normalRemaining + compensationBalance;
+  const rights=studentLessonRights({total:normalTotal,
+    scheduledUsed:Number(rightsAvailable?scheduledUsageResult.data:enrollment?.used_lessons||0),
+    legacyCompensation:Number(lessonBalance?.compensation_lesson_balance||0),enrollment,
+    compensations:rightsAvailable?plannedCompensations:[],cancellations:rightsAvailable?cancellationsResult.data||[]:[],
+    schedules:cancellationSchedulesResult.data||[],today:`${part("year")}-${part("month")}-${part("day")}`,time:`${part("hour")}:${part("minute")}`});
+  const usedLessons=rights.used;
+  const normalRemaining=rights.normal;
+  const compensationBalance=rights.compensation;
+  const totalRights=rights.total;
 
   const packagePrice = Number(
     packageInfo?.price ??
@@ -1289,6 +1301,12 @@ export default async function StudentFile({
         </div>
 
         <div className="list">
+          {!rightsAvailable && <p className="empty">Telafi bilgileri doğrulanamadı. Sayfayı yenileyip kontrol edin.</p>}
+          {plannedCompensations.map((item:any)=><article key={`planned-${item.id}`}>
+            <div><strong>TELAFİ · {item.status==="planned"?"Planlandı":item.status==="completed"?"Tamamlandı":"İptal edildi"}</strong>
+              <p>{fmtDate(item.lesson_date)} · {String(cancellationSchedulesResult.data?.find((schedule:any)=>schedule.id===item.target_schedule_id)?.start_time||"").slice(0,5)} · {item.note||"Telafi dersi"}</p>
+            </div><span>{fmtDate(item.lesson_date)}</span>
+          </article>)}
           {lessonLedger.map((item: any) => (
             <article key={item.id}>
               <div>
@@ -1310,7 +1328,7 @@ export default async function StudentFile({
             </article>
           ))}
 
-          {!lessonLedger.length && (
+          {!lessonLedger.length && !plannedCompensations.length && (
             <p className="empty">Henüz ders hareketi yok.</p>
           )}
         </div>
