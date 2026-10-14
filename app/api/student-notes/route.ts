@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -346,21 +347,32 @@ export async function PUT(request: NextRequest) {
   const { data: note } = await supabase.from("student_notes").select("id")
     .eq("organization_id", organizationId).eq("student_id", studentId).eq("id", noteId).maybeSingle();
   if (!note) return NextResponse.json({ error: "Not bulunamadı." }, { status: 404 });
-  const { data: existing } = await supabase.from("student_timeline_events").select("id,description")
+  const { data: existing, error: existingError } = await supabase.from("student_timeline_events").select("id,description")
     .eq("organization_id", organizationId).eq("student_id", studentId)
     .eq("title", "Öğrenci notu tamamlandı");
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
   if ((existing || []).some((row: any) => (row.description || "").startsWith(`SPRINT_NOTE_COMPLETED:${noteId}\n`))) {
-    return NextResponse.json({ error: "Bu not zaten tamamlanmış." }, { status: 409 });
-  }
+    // Retrying a saved completion must also repair its reminder state.
+  } else {
   const { error } = await supabase.from("student_timeline_events").insert({
     organization_id: organizationId, student_id: studentId,
     event_type: "note_updated", title: "Öğrenci notu tamamlandı",
     description: `SPRINT_NOTE_COMPLETED:${noteId}\n${reply}`, created_by: profile.id,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const { error: reminderError } = await supabase.from("student_activity_logs").update({ reminder_completed: true })
+  }
+  // Profile and student ownership were checked above; scope privileged cleanup to this note.
+  const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: reminders, error: reminderError } = await admin.from("student_activity_logs").update({ reminder_completed: true })
     .eq("organization_id", organizationId).eq("student_id", studentId)
-    .eq("activity_type", "student_note_reminder").eq("source_type", "student_note").eq("source_id", noteId);
-  if (reminderError) console.error("Completed note reminder update:", reminderError);
+    .eq("activity_type", "student_note_reminder").eq("source_type", "student_note").eq("source_id", noteId).select("id");
+  if (reminderError) return NextResponse.json({ error: reminderError.message }, { status: 500 });
+  const sourceIds = [noteId, ...(reminders || []).map((row) => row.id)];
+  const { error: notificationError } = await admin.from("system_notifications")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("organization_id", organizationId).eq("student_id", studentId)
+    .in("notification_type", ["student_note_reminder"]).in("source_id", sourceIds);
+  if (notificationError) return NextResponse.json({ error: notificationError.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

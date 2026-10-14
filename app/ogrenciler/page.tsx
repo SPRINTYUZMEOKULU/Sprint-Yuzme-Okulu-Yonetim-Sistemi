@@ -204,6 +204,7 @@ export default async function StudentsPage() {
     lastAttendanceResult,
     notesResult,
     noteRemindersResult,
+    noteCompletionsResult,
   ] = studentIds.length
     ? await Promise.all([
         supabase
@@ -281,8 +282,14 @@ export default async function StudentsPage() {
           .not("reminder_at", "is", null)
           .order("reminder_at", { ascending: true })
           .limit(5000),
+        supabase.from("student_timeline_events")
+          .select("student_id,description")
+          .eq("organization_id", organizationId)
+          .in("student_id", studentIds)
+          .eq("title", "Öğrenci notu tamamlandı"),
       ])
     : [
+        { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
@@ -306,6 +313,7 @@ export default async function StudentsPage() {
     lastAttendanceResult.error,
     notesResult.error,
     noteRemindersResult.error,
+    noteCompletionsResult.error,
   ].filter(Boolean);
 
   if (secondaryErrors.length) {
@@ -410,7 +418,12 @@ export default async function StudentsPage() {
 
   const lastAttendanceMap = new Map<string, any>();
   const lastAbsentMap = new Map<string, any>();
-  const noteRows = (notesResult.data || []) as any[];
+  const completedNoteIds = new Set<string>();
+  for (const row of noteCompletionsResult.data || []) {
+    const match = /^SPRINT_NOTE_COMPLETED:([a-f0-9-]{36})\n/i.exec(row.description || "");
+    if (match) completedNoteIds.add(match[1]);
+  }
+  const noteRows = ((notesResult.data || []) as any[]).filter((row) => !completedNoteIds.has(String(row.id)));
   const latestNoteMap = latestByStudent(noteRows);
   const noteByIdMap = new Map<string, any>(
     noteRows.filter((row) => row?.id).map((row) => [String(row.id), row]),
@@ -418,13 +431,13 @@ export default async function StudentsPage() {
   const noteCountMap = new Map<string, number>();
   const activeReminderMap = new Map<string, any>();
 
-  for (const row of (notesResult.data || []) as any[]) {
+  for (const row of noteRows) {
     if (!row.student_id) continue;
     noteCountMap.set(row.student_id, (noteCountMap.get(row.student_id) || 0) + 1);
   }
 
   for (const row of (noteRemindersResult.data || []) as any[]) {
-    if (!row.student_id || activeReminderMap.has(row.student_id)) continue;
+    if (!row.student_id || completedNoteIds.has(String(row.source_id)) || activeReminderMap.has(row.student_id)) continue;
     activeReminderMap.set(row.student_id, row);
   }
 
