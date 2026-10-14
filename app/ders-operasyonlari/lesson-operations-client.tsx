@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { applyLessonCancellation, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { applyLessonCancellation, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
 type Branch = { id: string; name: string };
 type Group = { id: string; name: string; branch_id: string | null; course_type?: string | null };
@@ -68,6 +68,19 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
   const [preparedMessages, setPreparedMessages] = useState<PreparedCancellationMessage[]>([]);
+  const [sentMessageKeys,setSentMessageKeys]=useState<string[]>([]);
+  const [confirmingMessage,setConfirmingMessage]=useState<string|null>(null);
+  const confirmationLock=useRef(false);
+  async function confirmSent(item:PreparedCancellationMessage){
+    if(confirmationLock.current)return;
+    confirmationLock.current=true;
+    const key=item.studentId+item.message;setConfirmingMessage(key);
+    try{const response=await confirmCancellationMessageSent({studentId:item.studentId,message:item.message});
+      if(response.ok)setSentMessageKeys(keys=>keys.includes(key)?keys:[...keys,key]);
+      setResult(response.message);
+    }catch{setResult("Gönderim durumu kaydedilemedi. Tekrar deneyin.");}
+    finally{confirmationLock.current=false;setConfirmingMessage(null);}
+  }
   const [queueIndex, setQueueIndex] = useState(0);
   const [openedStudentIds, setOpenedStudentIds] = useState<string[]>([]);
 
@@ -150,6 +163,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     setPreparedMessages([]);
     setQueueIndex(0);
     setOpenedStudentIds([]);
+    setSentMessageKeys([]);
 
     try {
       const messages: PreparedCancellationMessage[] = [];
@@ -417,7 +431,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           <div className="messageHead">
             <div>
               <span>3 · VELİ BİLGİLENDİRME</span>
-              <h2>{preparedMessages.length} mesaj hazır</h2>
+              <h2>{preparedMessages.length} mesaj · {sentMessageKeys.length} gönderildi</h2>
+              <p>WhatsApp’ta gönderdiğiniz mesajın durumunu “Gönderildi olarak kaydet” ile onaylayın.</p>
               <p>Her mesaj gerçek öğrenci tarihlerini kullanır. Önce iptal bilgisi, sonra telafi ve iki bitiş tarihi gösterilir.</p>
             </div>
             <button type="button" className="whatsappButton" onClick={openNextWhatsapp}>
@@ -439,9 +454,14 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   <span>Güncellenen bitiş <b>{formatDate(item.newCompensationEndDate)}</b></span>
                   <span>Telafi <b>{formatDate(item.compensationDate)}</b></span>
                 </div>
-                <span className={openedStudentIds.includes(item.studentId) ? "sentFlag opened" : "sentFlag"}>
-                  {openedStudentIds.includes(item.studentId) ? "WhatsApp açıldı" : item.recipient ? "Sırada" : "Eksik"}
-                </span>
+                <div className="messageSendState">
+                  <span className={sentMessageKeys.includes(item.studentId+item.message) ? "sentFlag opened" : "sentFlag"}>
+                    {sentMessageKeys.includes(item.studentId+item.message) ? "Gönderildi" : openedStudentIds.includes(item.studentId) ? "WhatsApp açıldı" : item.recipient ? "Sırada" : "Eksik"}
+                  </span>
+                  {item.recipient && !sentMessageKeys.includes(item.studentId+item.message) && <button type="button" disabled={Boolean(confirmingMessage)} onClick={()=>void confirmSent(item)}>
+                    {confirmingMessage===item.studentId+item.message ? "Kaydediliyor…" : "Gönderildi olarak kaydet"}
+                  </button>}
+                </div>
               </article>
             ))}
           </div>

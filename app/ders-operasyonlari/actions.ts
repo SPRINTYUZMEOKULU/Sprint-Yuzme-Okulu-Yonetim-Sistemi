@@ -545,3 +545,23 @@ export async function startingCancellationMessages(input: {
   }
   return {ok:true,message:input.prepare ? `${messages.length} başlangıç bilgilendirme mesajı hazırlandı.` : "",messages};
 }
+
+export async function confirmCancellationMessageSent(input: {studentId:string;message:string}) {
+  const profile=await requireProfile([...ALLOWED_ROLES]);
+  if(!profile.organization_id||!input.studentId||!input.message?.trim())return {ok:false,message:"Mesaj bilgisi eksik."};
+  const supabase=await createClient();
+  const {data:row,error}=await supabase.from("message_logs").select("id,status,metadata")
+    .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
+    .eq("template_key","lesson_cancellation_compensation").eq("channel","whatsapp")
+    .eq("message_body",input.message).in("status",["prepared","sent","delivered","read"])
+    .order("prepared_at",{ascending:false}).limit(1).maybeSingle();
+  if(error||!row)return {ok:false,message:"Hazırlanmış iptal mesajı bulunamadı. Sayfayı yenileyin."};
+  if(row.status!=="prepared")return {ok:true,message:"Gönderim zaten kayıtlı."};
+  const now=new Date().toISOString();
+  const {data:updated,error:updateError}=await supabase.from("message_logs").update({status:"sent",sent_at:now,sent_by:profile.id,
+    metadata:{...(row.metadata||{}),delivery_confirmation:"user_confirmed",confirmed_at:now,confirmed_by:profile.id}})
+    .eq("organization_id",profile.organization_id).eq("id",row.id).eq("status","prepared").select("id");
+  if(updateError||!updated?.length)return {ok:false,message:"Gönderim kaydı güncellenemedi. Sayfayı yenileyip kontrol edin."};
+  revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath(`/ogrenciler/${input.studentId}`);
+  return {ok:true,message:"Mesaj gönderildi olarak kaydedildi."};
+}
