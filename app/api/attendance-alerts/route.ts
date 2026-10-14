@@ -1,3 +1,5 @@
+import { createNotification } from "@/lib/notifications/create-notification";
+import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
 // @ts-nocheck
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -24,7 +26,7 @@ export async function GET(){
     const day=weekday(now.date);
 
     const [scheduleResult,attendanceResult,historyResult,groupResult,studentResult,existingMissingResult,existingFirstResult]=await Promise.all([
-      supabase.from("lesson_schedules").select("id,group_id,branch_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id",organizationId).eq("is_active",true).eq("weekday",day),
+      supabase.from("lesson_schedules").select("id,group_id,branch_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id",organizationId).eq("is_active",true).in("weekday",day===7?[0,7]:[day]),
       supabase.from("attendance_records").select("id,student_id,schedule_id,group_id,lesson_date,status").eq("organization_id",organizationId).eq("lesson_date",now.date),
       supabase.from("attendance_records").select("id,student_id,lesson_date,status,created_at").eq("organization_id",organizationId).order("lesson_date",{ascending:true}).order("created_at",{ascending:true}),
       supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
@@ -35,6 +37,7 @@ export async function GET(){
     const error=scheduleResult.error||attendanceResult.error||historyResult.error||groupResult.error||studentResult.error||existingMissingResult.error||existingFirstResult.error;
     if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
 
+    const eligibility=await loadAttendanceEligibility(supabase,organizationId);
     const attendedScheduleIds=new Set((attendanceResult.data||[]).map((r:any)=>String(r.schedule_id||"")).filter(Boolean));
     const attendedGroupIds=new Set((attendanceResult.data||[]).map((r:any)=>String(r.group_id||"")).filter(Boolean));
     const groupMap=new Map((groupResult.data||[]).map((g:any)=>[String(g.id),g.name||"Grup"]));
@@ -45,11 +48,12 @@ export async function GET(){
     const overdue=(scheduleResult.data||[]).filter((s:any)=>{
       const start=minutes(s.start_time);
       if(now.minutes<start+15)return false;
-      if(attendedScheduleIds.has(String(s.id)))return false;
-      if(!s.id&&attendedGroupIds.has(String(s.group_id||"")))return false;
-      return true;
+      return missingAttendanceStudents(eligibility,s,now.date,attendanceResult.data||[]).length>0;
     });
 
+    const overdueIds=new Set(overdue.map(s=>s.id));
+    const obsolete=(existingMissingResult.data||[]).filter(row=>!row.is_read&&row.metadata?.lesson_date===now.date&&!overdueIds.has(row.entity_id));
+    for(const row of obsolete){const {error:closeError}=await supabase.from("system_notifications").update({is_read:true,metadata:{...(row.metadata||{}),resolved_reason:"cancelled_or_no_pending_attendance",resolved_at:new Date().toISOString()}}).eq("organization_id",organizationId).eq("id",row.id);if(closeError)throw closeError;}
     const missingInserts=overdue.filter((s:any)=>!existingKeys.has(key(s.id,now.date))).map((s:any)=>{
       const groupName=groupMap.get(String(s.group_id||""))||"Grup";
       const time=String(s.start_time||"").slice(0,5);
@@ -69,7 +73,7 @@ export async function GET(){
         source_id:String(s.id),
         entity_type:"lesson_schedule",
         entity_id:String(s.id),
-        target_path:`/yoklama?groupId=${encodeURIComponent(String(s.group_id||""))}&scheduleId=${encodeURIComponent(String(s.id))}`,
+        target_path:`/yoklama?date=${now.date}&branchId=${encodeURIComponent(String(s.branch_id||""))}&time=${String(s.start_time||"").slice(0,5)}&scheduleId=${encodeURIComponent(String(s.id))}`,
         is_read:false,
         push_required:false,
         push_requested:false,
@@ -86,7 +90,7 @@ export async function GET(){
     const firstLessonInserts=[];
     for(const row of attendanceResult.data||[]){
       const studentId=String(row.student_id||"");
-      if(!studentId)continue;
+      if(!studentId||!["present","absent","excused","compensation"].includes(row.status))continue;
       const first=firstHistoryByStudent.get(studentId);
       if(!first||String(first.id)!==String(row.id))continue;
       const firstKey=`${studentId}:${now.date}`;
@@ -131,8 +135,11 @@ export async function GET(){
       existingFirstKeys.add(firstKey);
     }
 
-    const inserts=[...missingInserts,...firstLessonInserts];
-    if(inserts.length){const {error:insertError}=await supabase.from("system_notifications").insert(inserts);if(insertError)return NextResponse.json({ok:false,error:insertError.message},{status:500});}
+    for(const row of missingInserts){
+      const result=await createNotification({organizationId,title:row.title,body:row.body,category:"attendance",eventKey:"attendance_missing",notificationType:"attendance_missing",priority:"high",severity:"warning",sourceType:"lesson_schedule",sourceId:row.source_id,entityType:"lesson_schedule",entityId:row.entity_id,targetPath:row.target_path,metadata:row.metadata,createdBy:profile.id,push:true});
+      if(!result.ok)throw new Error(result.message);
+    }
+    if(firstLessonInserts.length){const {error:insertError}=await supabase.from("system_notifications").insert(firstLessonInserts);if(insertError)return NextResponse.json({ok:false,error:insertError.message},{status:500});}
 
     return NextResponse.json({
       ok:true,

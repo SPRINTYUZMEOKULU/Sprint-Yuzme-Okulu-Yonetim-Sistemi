@@ -38,6 +38,8 @@ self.addEventListener("push", (event) => {
       payload.tag ||
       payload.notificationId ||
       `sprintos-${Date.now()}`,
+    silent: false,
+    vibrate: [250, 120, 250, 120, 400],
     renotify: Boolean(payload.renotify),
     requireInteraction: Boolean(payload.requireInteraction),
     data: {

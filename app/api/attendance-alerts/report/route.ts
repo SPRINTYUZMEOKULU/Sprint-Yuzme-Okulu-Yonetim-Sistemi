@@ -1,3 +1,4 @@
+import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
 // @ts-nocheck
 import { NextRequest, NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
@@ -21,15 +22,16 @@ export async function GET(req:NextRequest){
     supabase.from("attendance_records").select("id,schedule_id,group_id,lesson_date").eq("organization_id",org).gte("lesson_date",from).lte("lesson_date",to),
   ]);
   const error=schedulesResult.error||groupsResult.error||attendanceResult.error;if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
+  const eligibility=await loadAttendanceEligibility(supabase,org);
   const groupMap=new Map((groupsResult.data||[]).map((g:any)=>[String(g.id),g]));
   const recordKeys=new Set((attendanceResult.data||[]).flatMap((r:any)=>[r.schedule_id?`${r.lesson_date}:${r.schedule_id}`:null,r.group_id?`${r.lesson_date}:g:${r.group_id}`:null].filter(Boolean)));
   const nowDate=today; const nowParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date()); const gh=(t:string)=>nowParts.find(p=>p.type===t)?.value||"0"; const nowMinutes=Number(gh("hour"))*60+Number(gh("minute"));
   const items:any[]=[];
   for(const date of eachDate(from,to)){
     for(const s of schedulesResult.data||[]){
-      if(Number(s.weekday)!==weekday(date))continue;
+      if((Number(s.weekday)||7)!==weekday(date))continue;
       const group=groupMap.get(String(s.group_id||"")); const effectiveBranch=s.branch_id||group?.branch_id||null; if(branch!=="all"&&effectiveBranch!==branch)continue;
-      if(recordKeys.has(`${date}:${s.id}`)||recordKeys.has(`${date}:g:${s.group_id}`))continue;
+      if(!missingAttendanceStudents(eligibility,s,date,attendanceResult.data||[]).length)continue;
       const [h,m]=String(s.start_time||"00:00").slice(0,5).split(":").map(Number); const start=(h||0)*60+(m||0);
       if(date>nowDate)continue; if(date===nowDate&&nowMinutes<start+15)continue;
       items.push({date,scheduleId:s.id,groupId:s.group_id,groupName:group?.name||"Grup",startTime:String(s.start_time||"").slice(0,5),endTime:String(s.end_time||"").slice(0,5),branchId:effectiveBranch});

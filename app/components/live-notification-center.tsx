@@ -1,4 +1,5 @@
 "use client";
+import { unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -86,6 +87,7 @@ export default function LiveNotificationCenter() {
 
       currentRef.current = next;
       setCurrent(next);
+      void playNotificationSound();
 
       if ("Notification" in window && Notification.permission === "granted") {
         try {
@@ -109,6 +111,9 @@ export default function LiveNotificationCenter() {
   }, [markRead, rememberHandled]);
 
   useEffect(() => {
+    const unlock=()=>void unlockNotificationAudio();
+    document.addEventListener("pointerdown",unlock);
+    document.addEventListener("keydown",unlock);
     seenRef.current = readSeen();
     void check();
     const timer = window.setInterval(() => void check(), 12000);
@@ -117,6 +122,8 @@ export default function LiveNotificationCenter() {
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onFocus);
     return () => {
+      document.removeEventListener("pointerdown",unlock);
+      document.removeEventListener("keydown",unlock);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);

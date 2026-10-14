@@ -1,5 +1,6 @@
 "use client";
 
+import { notificationSoundEnabled, setNotificationSoundEnabled, unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
 import { useEffect, useMemo, useState } from "react";
 
 type PushState = "checking" | "unsupported" | "blocked" | "off" | "on" | "working" | "error";
@@ -24,6 +25,8 @@ function getDeviceName() {
 }
 
 export default function NotificationSettingsClient() {
+  const [longSound,setLongSound]=useState(true);
+  useEffect(()=>setLongSound(notificationSoundEnabled()),[]);
   const [state, setState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
@@ -45,6 +48,11 @@ export default function NotificationSettingsClient() {
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
+      if(subscription){
+        const json=subscription.toJSON();
+        const response=await fetch("/api/push/subscribe",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:subscription.endpoint,keys:{p256dh:json.keys?.p256dh,auth:json.keys?.auth},deviceName:getDeviceName()})});
+        if(!response.ok)throw new Error("Cihazın sunucu bildirim kaydı yenilenemedi.");
+      }
       setState(subscription ? "on" : "off");
     } catch {
       setState("error");
@@ -147,6 +155,11 @@ export default function NotificationSettingsClient() {
     <section className="notificationSettingsCard">
       <div className="notificationStatusIcon">🔔</div>
       <div className="notificationSettingsCopy">
+        <div className="notificationActions">
+          <button type="button" className="notificationSecondary" aria-pressed={longSound} onClick={()=>{const enabled=!longSound;setLongSound(enabled);setNotificationSoundEnabled(enabled);void unlockNotificationAudio()}}>{longSound?"Uzun bildirim sesi açık":"Uzun bildirim sesi kapalı"}</button>
+          <button type="button" className="notificationSecondary" onClick={async()=>{if(await unlockNotificationAudio()){await playNotificationSound(true);setMessage("Yaklaşık 4 saniyelik uygulama içi ses çalındı.")}else setMessage("Ses başlatılamadı. Cihazın ses ayarlarını kontrol edin.")}}>Sesi test et</button>
+        </div>
+        <p>Uzun ses uygulama açıkken çalışır. iPhone’da uygulama kapalıyken bildirim sesi ve Odak/sessiz ayarları iOS tarafından yönetilir. Ana ekrana eklenen SprintOS için bildirim izni açık olmalıdır.</p>
         <div className="notificationTitleRow">
           <div>
             <span>BU CİHAZ</span>
