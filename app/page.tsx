@@ -168,6 +168,14 @@ const menu: MenuItem[] = [
     moduleKey: "finance",
   },
   {
+    label: "Fatura Merkezi",
+    href: "/fatura-merkezi",
+    roles: ["owner", "admin", "accounting"],
+    icon: "approval",
+    group: "FİNANS",
+    moduleKey: "finance",
+  },
+  {
     label: "Ödemeler",
     href: "/odemeler",
     roles: ["owner", "admin", "branch_manager", "accounting", "guardian"],

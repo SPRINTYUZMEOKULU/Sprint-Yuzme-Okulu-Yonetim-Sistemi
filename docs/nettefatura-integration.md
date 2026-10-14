@@ -30,3 +30,17 @@ Test adresleri:
 8. Sağlayıcı sonucu belge ID/numarasıyla sakla; PDF/XML'yi yetkili öğrenci dosyasına bağla. Erişim linklerini herkese açık loglara koyma.
 
 Bu değişiklik SOAP gönderim istemcisi veya banka hareketi içe aktarıcısı içermez. IBAN hareketlerini otomatik almak ayrıca VakıfBank bağlantısı gerektirir. Otomatik öğrenci eşleştirmesi yalnızca isim/tutarla kesin kabul edilmemelidir.
+
+## Fatura Merkezi ve Excel alternatif yolu
+
+Ana menü → Fatura Merkezi (`/fatura-merkezi`). Kesilen Faturalar sekmesi aynı payment_document_requests kayıtlarındaki sağlayıcı ID/numarası ve belge bağlantılarını gösterir; geçmiş NetteFatura arşivini henüz çekmez. PDF/XML erişimi rol ve kurum kontrolünden geçer; yalnızca doğrulanmış HTTPS sağlayıcı alan adlarına yönlendirilir.
+
+`/fatura-merkezi/banka`: Excel/CSV dosyası en fazla 5 MB ve bir yüklemede 500 hareket. Sütunlar ve başlık satırı açıkça seçilir, yalnızca kontrol edilerek seçilen pozitif TRY girişler kaydedilir. Ham dosya sunucuya gönderilmez; normalize satırlar ve dosyanın SHA256 özeti saklanır. Tarihler Türkiye saatine göre okunur. Bakiye/borç sütununu seçmeyiniz. Başlıktaki hesap IBAN'ı bankadan doğrulanmalıdır; yalnızca mevcut yapılandırılmış VakıfBank hesabı desteklenir.
+
+invoice_bank_entries yalnızca kontrol kuyruğudur; yeni tahsilat/kasa/fatura yaratmaz. Aynı banka referansı veya aynı dosya/sayfa/satır tekrarı eklenmez. Referans numarası aynı ama içerik farklıysa yükleme durur. Referanssız benzer kayıtlar tutulur, gerekçeli ayrı işlem onayı veya mükerrer dışlama gerekir. Yetkili yönetici gerçek ödeme sahibini/kursiyeri seçer; tek bir hareket için atomik olarak tek bir ortak belge talebi yaratılır. Bu talep mevcut güvenli müşteri formunu ve ödeme eşleştirme adımını kullanır. Gönderen adı, fatura alıcısının TCKN/VKN/adres bilgileri yerine geçmez.
+
+Banka kayıtları ve kontrol görünümü anon/authenticated rollerine kapalıdır. Server-side servis rolü her sorguyu organization_id ile sınırlar. Link RPC security invoker çalışır, yalnızca service_role çağırabilir; aktif yönetici ve kurum kontrolü yapar. RLS politika yok uyarısı burada beklenen kapalı erişimdir.
+
+Testler: `node scripts/test-bank-import.cjs`, `node scripts/test-payment-documents.cjs`, `npm run typecheck`, `npm run build`. `scripts/test-invoice-bank-db.sql` aktif bir owner/kursiyer bağlamında sentetik banka kaydıyla atomik talep, tekrar ve kurum kontrolünü dener; transaction sonunda rollback yapar. Gerçek ödeme/fatura gönderimi yapmaz.
+
+Kalan girdiler: VakıfBank'tan alınmış örnek Excel/CSV (gerçek sütun biçimi ve alacak/borç işaretlerini doğrulamak için), sağlayıcının test firma VKN/kullanım bilgileri ve fatura hizmet/vergi ayarları. Vergi oranı dekonttan veya paket fiyatından tahmin edilmez.
