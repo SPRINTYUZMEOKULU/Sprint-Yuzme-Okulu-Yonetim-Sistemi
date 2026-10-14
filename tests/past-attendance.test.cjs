@@ -21,3 +21,7 @@ test('partial saves retain only missing students and completed sessions disappea
 test('closures, future starts, exhausted rights and new registrations do not create historic warnings',()=>{
  for(const transform of [p=>p.closures.push({event_date:'2026-10-04'}),p=>p.enrollments.forEach(e=>e.start_date='2026-10-05'),p=>p.enrollments.forEach(e=>e.used_lessons=8),p=>p.enrollments.forEach(e=>e.created_at='2026-10-05')]){const p=fixture();transform(p);assert.equal(pastAttendance(p).length,0)}
 });
+test('cancelled students do not create historical attendance warnings; unaffected students still do',()=>{
+ const p=fixture();p.cancellations=[{source_id:'s',student_id:'one',old_value:{cancelled_lesson_date:'2026-10-04'}}];assert.equal(pastAttendance(p)[0].missingCount,1);
+ p.cancellations.push({source_id:'s',student_id:'two',old_value:{cancelled_lesson_date:'2026-10-04'}});assert.deepEqual(pastAttendance(p),[]);
+});

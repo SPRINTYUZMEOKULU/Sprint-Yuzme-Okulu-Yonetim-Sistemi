@@ -13,7 +13,7 @@ export function historyStart(today: string) {
 export function pastAttendance(p: {
   today: string; schedules: any[]; students: any[]; enrollments: any[];
   memberships: any[]; records: any[]; closures: any[];
-  branches: any[]; groups: any[];
+  branches: any[]; groups: any[]; cancellations?: any[];
 }) {
   const result: Array<{date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string}> = [];
   const records = new Map<string, any[]>();
@@ -32,13 +32,14 @@ export function pastAttendance(p: {
         (!row.created_at || String(row.created_at).slice(0,10)<=date)
         && (!row.actual_started_at || String(row.actual_started_at).slice(0,10)<=date));
       const roster = attendanceRoster({...p,enrollments,compensationLessons:[]}, schedule.group_id, schedule.id, date, weekdayForDate(date));
+      const cancelled = new Set((p.cancellations || []).filter(row=>row.source_id===schedule.id && row.old_value?.cancelled_lesson_date===date).map(row=>row.student_id));
       const saved = new Set((records.get(date)||[]).filter(row => row.schedule_id===schedule.id || (!row.schedule_id && row.group_id===schedule.group_id)).map(row=>row.student_id));
       const time = String(schedule.start_time||"").slice(0,5);
       const key = JSON.stringify([schedule.branch_id,time]);
       const slot = slots.get(key)||{branchId:schedule.branch_id,time,missing:new Set<string>()};
       for (const student of roster.students) {
         const enrollment = roster.enrollmentByStudent.get(student.id);
-        if (!saved.has(student.id) && Number(enrollment?.total_lessons||0)>Number(enrollment?.used_lessons||0)) slot.missing.add(student.id);
+        if (!cancelled.has(student.id) && !saved.has(student.id) && Number(enrollment?.total_lessons||0)>Number(enrollment?.used_lessons||0)) slot.missing.add(student.id);
       }
       slots.set(key,slot);
     }

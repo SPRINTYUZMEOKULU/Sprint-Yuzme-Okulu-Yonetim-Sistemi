@@ -1,3 +1,4 @@
+import { cancellationSummary } from "@/lib/dashboard/cancellation-summary";
 import { partitionAttendance } from "@/lib/dashboard/attendance-followup";
 import { pastAttendance, historyStart, ATTENDANCE_HISTORY_DAYS } from "@/lib/dashboard/past-attendance";
 import { summarizeSessionSlots } from "@/lib/dashboard/session-summary";
@@ -88,9 +89,23 @@ export async function GET() {
     readHistory("calendar_events", "id,event_date,event_type,status,start_time,end_time", "event_date"),
     readHistory("attendance_followups", "id,branch_id,lesson_date,start_time,status,updated_at", "lesson_date"),
   ]);
-  const historyAvailable = !historySchedules.error && !historyRecords.error && !historyClosures.error && !historyFollowups.error;
+  async function readCancellationData(table: string, columns: string, dateColumn: string, kindColumn: string, kind: string) {
+    const rows: any[] = [];
+    for (let offset=0; ; offset+=1000) {
+      const result=await supabase.from(table).select(columns).eq("organization_id",profile.organization_id)
+        .eq(kindColumn,kind).gte(dateColumn,pastStart).lte(dateColumn,today.iso).order("id").range(offset,offset+999);
+      if(result.error)return {data:[],error:result.error};
+      rows.push(...(result.data||[]));
+      if((result.data||[]).length<1000)return {data:rows,error:null};
+    }
+  }
+  const [cancellationsResult,cancellationMessagesResult]=await Promise.all([
+    readCancellationData("student_activity_logs","id,student_id,source_id,old_value,new_value,performed_at","old_value->>cancelled_lesson_date","activity_type","lesson_cancellation_compensation"),
+    readCancellationData("message_logs","id,student_id,status,metadata","metadata->>cancelled_date","template_key","lesson_cancellation_compensation")
+  ]);
+  const historyAvailable = !cancellationsResult.error && !historySchedules.error && !historyRecords.error && !historyClosures.error && !historyFollowups.error;
 
-  const rosterError = branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
+  const rosterError = cancellationsResult.error || branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
   if (rosterError) return NextResponse.json({ ok: false, error: "Yoklama özeti yüklenemedi." }, { status: 500 });
 
   const branches = branchesResult.data || [];
@@ -132,7 +147,8 @@ export async function GET() {
       return !recorded.has(student.id) && !roster.compensationIds.has(student.id)
         && Math.max(0, Number(enrollment?.total_lessons || 0) - Number(enrollment?.used_lessons || 0)) <= 0;
     }).length;
-    const missingCount = Math.max(0, studentCount - attendanceCount - blockedCount);
+    const cancellation = cancellationSummary(schedule.id,today.iso,cancellationsResult.data,cancellationMessagesResult.data);
+    const missingCount = roster.students.filter(student=>!cancellation.studentIds.includes(student.id) && !recorded.has(student.id) && (roster.compensationIds.has(student.id) || Number(roster.enrollmentByStudent.get(student.id)?.total_lessons||0)>Number(roster.enrollmentByStudent.get(student.id)?.used_lessons||0))).length;
     const attendanceComplete = attendanceCount > 0 && missingCount === 0;
     const records = attendance.filter((row) => recorded.has(row.student_id)
       && (row.schedule_id === schedule.id || (!row.schedule_id && row.group_id === schedule.group_id)));
@@ -157,6 +173,7 @@ export async function GET() {
     }
 
     return {
+      cancellation,
       id: schedule.id,
       branchId: schedule.branch_id,
       branchName: branchMap.get(schedule.branch_id || "") || "Şube",
@@ -237,13 +254,14 @@ export async function GET() {
   const history = partitionAttendance(historyAvailable ? pastAttendance({today:today.iso,
       schedules:filterEffectivelyActiveSchedules(historySchedules.data||[],branches,groups),
       students:rosterStudents,enrollments,memberships:membershipsResult.data||[],
-      records:historyRecords.data||[],closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
+      records:historyRecords.data||[],cancellations:cancellationsResult.data,closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
     (historyFollowups.data || []).map(row => ({ date: row.lesson_date, branchId: row.branch_id, time: String(row.start_time).slice(0, 5), status: row.status, updatedAt: row.updated_at })));
 
   return NextResponse.json({
     ok: true,
     date: today.iso,
     sessions,
+    cancellationMessagesAvailable: !cancellationMessagesResult.error,
     birthdays,
     pastAttendance: history.pending,
     closedPastAttendance: history.closed,

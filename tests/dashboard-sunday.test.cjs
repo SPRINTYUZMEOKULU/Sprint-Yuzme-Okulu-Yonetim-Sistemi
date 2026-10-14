@@ -68,3 +68,13 @@ test('monthly calendar includes all October Sundays and excludes inactive sessio
   assert.deepEqual(body.days.find(d => d.date === '2026-10-10').lessons.map(s => s.id), ['saturday']);
   assert.equal(body.days.find(d => d.date === '2026-10-12').lessons.length, 0);
 });
+
+test('cancelled shared session shows compensation and message counts and no pending attendance',async()=>{
+ tables.student_activity_logs=['child','adult'].map(id=>({id:`cancel-${id}`,organization_id:'org',student_id:id,activity_type:'lesson_cancellation_compensation',source_id:`${id}-s`,old_value:{cancelled_lesson_date:'2026-10-11'},new_value:{compensation_date:'2026-10-18'},performed_at:fixedNow}));
+ tables.message_logs=['child','adult'].map(id=>({id:`message-${id}`,organization_id:'org',student_id:id,template_key:'lesson_cancellation_compensation',status:id==='child'?'sent':'prepared',metadata:{source_schedule_id:`${id}-s`,cancelled_date:'2026-10-11'}}));
+ try {
+  const {GET}=load('app/api/dashboard/live/route.ts');const {body}=await GET();
+  assert.equal(body.summary.pendingAttendance,0);assert.equal(body.sessions.length,1);assert.equal(body.sessions[0].cancelled,true);assert.equal(body.sessions[0].missingCount,0);assert.equal(body.sessions[0].attendanceCount,0);
+  assert.equal(body.sessions[0].cancellation.plannedStudentIds.length,2);assert.equal(body.sessions[0].cancellation.sentStudentIds.length,1);assert.equal(body.sessions[0].cancellation.preparedStudentIds.length,1);
+ } finally {delete tables.student_activity_logs;delete tables.message_logs;}
+});

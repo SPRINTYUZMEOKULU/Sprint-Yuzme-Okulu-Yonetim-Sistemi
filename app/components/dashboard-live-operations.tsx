@@ -11,13 +11,16 @@ type PastSlot = {date:string;branchId:string;branchName:string;time:string;missi
  type LiveData = {
   ok: boolean;
   date: string;
+  cancellationMessagesAvailable?: boolean;
   sessions: Array<{
+    cancelled?: boolean;
+    cancellation?: {studentIds:string[];plannedStudentIds:string[];reservedStudentIds:string[];sentStudentIds:string[];preparedStudentIds:string[];reasons:string[]};
     id: string;
     branchId: string | null;
     branchName: string;
     groupId: string | null;
     groupName: string;
-    groups: Array<{ id: string; groupName: string; studentCount: number; statusCounts: { present: number; absent: number; excused: number }; missingCount: number }>;
+    groups: Array<{ id: string; groupName: string; studentCount: number; statusCounts: { present: number; absent: number; excused: number }; missingCount: number; cancelled?: boolean }>;
     startTime: string;
     endTime: string;
     studentCount: number;
@@ -239,13 +242,13 @@ function OperationPanel() {
               {data.sessions.map((session) => {
                 const params = new URLSearchParams({ date: data.date, time: session.startTime });
                 if (session.branchId) params.set("branchId", session.branchId);
-                const status = session.studentCount === 0 ? "Öğrenci yok"
+                const status = session.cancelled ? "Ders iptal edildi" : session.studentCount === 0 ? "Öğrenci yok"
                   : session.attendanceComplete ? "Yoklama kaydedildi"
                   : session.missingCount > 0 ? (session.attendanceCount > 0 ? `Kısmen kaydedildi · ${session.missingCount} eksik` : "Yoklama bekliyor")
                   : "Kayıt yenileme gerekiyor";
-                const tone = session.attendanceComplete ? "done" : session.missingCount > 0 ? "pending" : "neutral";
+                const tone = session.cancelled ? "cancelled" : session.attendanceComplete ? "done" : session.missingCount > 0 ? "pending" : "neutral";
                 return (
-                  <Link className={`lessonRow${openedSession === session.id ? " isOpened" : ""}${openingSession === session.id ? " isOpening" : ""}`} href={`/yoklama?${params.toString()}`} key={session.id}
+                  <Link className={`lessonRow${openedSession === session.id ? " isOpened" : ""}${openingSession === session.id ? " isOpening" : ""}`} href={session.cancelled ? "/telafi-yonetimi" : `/yoklama?${params.toString()}`} key={session.id}
                     onClick={(event) => {
                       if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
                       setOpenedSession(session.id);
@@ -257,16 +260,23 @@ function OperationPanel() {
                     <div className="lessonInfo">
                       <strong>{session.groupName}</strong>
                       <span>{session.branchName} · {session.studentCount} öğrenci</span>
-                      <div className="lessonGroups">{session.groups.filter((group) => group.studentCount > 0).map((group) => <span key={group.id}>{group.groupName.split(" · ").at(-1)} · {group.studentCount} öğrenci · Geldi {group.statusCounts.present} / Gelmedi {group.statusCounts.absent} / İzinli {group.statusCounts.excused}</span>)}</div>
-                      <div className="lessonCounts">
+                      <div className="lessonGroups">{session.groups.filter((group) => group.studentCount > 0).map((group) => <span key={group.id}>{group.groupName.split(" · ").at(-1)} · {group.studentCount} öğrenci · {group.cancelled ? "Ders iptal edildi" : `Geldi ${group.statusCounts.present} / Gelmedi ${group.statusCounts.absent} / İzinli ${group.statusCounts.excused}`}</span>)}</div>
+                      {!session.cancelled && <div className="lessonCounts">
                         <span className="present">Geldi {session.statusCounts.present}</span>
                         <span className="absent">Gelmedi {session.statusCounts.absent}</span>
                         <span className="excused">İzinli {session.statusCounts.excused}</span>
                         {session.notes.length > 0 && <span className="noted"><Icons.note />Not {session.notes.length}</span>}
-                      </div>
+                      </div>}
+                      {Boolean(session.cancellation?.studentIds.length) && <div className="lessonCancellation">
+                        <strong>{session.cancelled ? "Ders iptal edildi" : `${session.cancellation!.studentIds.length} kursiyer için iptal işlendi`}</strong>
+                        {session.cancellation!.plannedStudentIds.length > 0 && <span>Toplu telafi planlandı · {session.cancellation!.plannedStudentIds.length} kursiyer</span>}
+                        {session.cancellation!.reservedStudentIds.length > 0 && <span>Telafi hakkı saklı · {session.cancellation!.reservedStudentIds.length} kursiyer · Tarih bekleniyor</span>}
+                        <span>{data.cancellationMessagesAvailable === false ? "Mesaj durumu yüklenemedi" : `Mesaj: ${session.cancellation!.sentStudentIds.length} kişiye gönderildi olarak kayıtlı · ${session.cancellation!.preparedStudentIds.length} kişiye hazır`}</span>
+                        {session.cancellation!.reasons.length > 0 && <small>{session.cancellation!.reasons.join(" · ")}</small>}
+                      </div>}
                       {session.blockedCount > 0 && <small className="lessonBlocked">{session.blockedCount} öğrencinin ders hakkı bitmiş</small>}
                     </div>
-                    <div className={`lessonStatus ${tone}`}><span className="lessonStatusIcon">{session.attendanceComplete ? <Icons.check /> : session.missingCount > 0 ? <Icons.clock /> : <Icons.users />}</span>{status}</div>
+                    <div className={`lessonStatus ${tone}`}><span className="lessonStatusIcon">{session.cancelled || session.attendanceComplete ? <Icons.check /> : session.missingCount > 0 ? <Icons.clock /> : <Icons.users />}</span>{status}</div>
                     {(session.notes.length > 0 || !session.notesAvailable) && <div className="lessonNotes">
                       <strong><Icons.note />Bugünün Seans ve Yoklama Notları · {session.notes.length}</strong>
                       {session.notes.map((note) => <div className="lessonNote" key={note.id}>
@@ -362,6 +372,7 @@ function OperationPanel() {
         .lessonTime{grid-row:1/3;align-self:start;display:grid;gap:5px;padding:12px 5px;text-align:center;border-radius:14px;background:#eef5ff}
         .lessonTime small{margin:0}.lessonInfo{min-width:0}.lessonInfo>strong{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
         .lessonGroups{display:grid;gap:5px;margin-top:8px}.lessonGroups>span{padding:6px 8px;border-radius:8px;background:#f1f5fb;color:#47617f;font-size:10px;line-height:1.5}
+        .lessonCancellation{display:grid;gap:5px;margin-top:9px;padding:10px 12px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff}.lessonCancellation strong{color:#6d28d9;font-size:11px}.lessonCancellation span{margin:0;color:#5b4879;font-size:10px}.lessonCancellation small{color:#76678b;font-size:9px}.lessonStatus.cancelled{background:#f3e8ff;color:#7e22ce}
         .lessonCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.lessonCounts span{margin:0;padding:4px 7px;border-radius:7px;font-size:10px;font-weight:800}
         .lessonCounts .present{color:#16875b;background:#ecfdf3}.lessonCounts .absent{color:#b42333;background:#fff0f2}.lessonCounts .excused{color:#8a6200;background:#fff8e8}
         .lessonBlocked{display:block;margin-top:7px;color:#8a6200;font-size:10px}
