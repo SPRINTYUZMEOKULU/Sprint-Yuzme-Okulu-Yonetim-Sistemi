@@ -6513,13 +6513,13 @@ thead{display:table-header-group}tr{break-inside:avoid}
 @keyframes studentNotePulse{0%,100%{box-shadow:0 0 0 0 rgba(232,109,0,.05)}50%{box-shadow:0 0 0 5px rgba(232,109,0,.18)}}
 .studentActionButton.note{border-color:#d8cdfd!important;background:#f7f4ff!important;color:#6245c5!important}
 .noteOverlay{position:fixed;inset:0;z-index:1000;background:rgba(9,24,44,.48);display:flex;justify-content:flex-end}
-.notePanel{width:min(720px,96vw);height:100%;background:#f7faff;box-shadow:-20px 0 60px rgba(17,47,83,.2);overflow:auto}
-.notePanelHeader{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;padding:20px;background:#fff;border-bottom:1px solid #dbe5f0}
+.notePanel{width:min(720px,96vw);height:100%;display:flex;flex-direction:column;background:#f7faff;box-shadow:-20px 0 60px rgba(17,47,83,.2);overflow:auto}
+.notePanelHeader{flex-shrink:0;position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:16px;padding:20px;background:#fff;border-bottom:1px solid #dbe5f0}
 .notePanelHeader span{font-size:11px;font-weight:900;color:#6d55c7;letter-spacing:.06em}
 .notePanelHeader h3{margin:4px 0 2px;color:#17345c}
 .notePanelHeader p{margin:0;color:#71839a;font-size:12px}
 .notePanelHeader>button{width:40px;height:40px;border:1px solid #d7e2ef;border-radius:12px;background:#fff;font-size:24px;color:#405a78;cursor:pointer}
-.notePanelBody{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;padding:14px}
+.notePanelBody{overflow-y:auto;min-height:0;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;padding:14px}
 .noteEditor,.noteHistory{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:14px}
 .noteEditor{display:grid;gap:12px;align-content:start}
 .noteEditor label{display:grid;gap:6px;color:#566c86;font-size:12px;font-weight:800}
@@ -6550,7 +6550,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 .noteCompleteEditor button{border:1px solid #cedbed;background:#fff;border-radius:9px;padding:9px 12px;font-weight:800;color:#28496e}
 .noteHistoryActions .finish,.noteCompleteEditor .finish{background:#15835a;border-color:#15835a;color:#fff}
 .noteCompleteEditor button:disabled{opacity:.5;cursor:not-allowed}
-.notePanelHeader>button{font-size:13px;min-width:75px;width:auto;font-weight:800}
+.notePanelHeader>button{flex-shrink:0;order:-1;align-self:flex-start;font-size:13px;min-width:75px;width:auto;font-weight:800}
 .noteHistoryItem>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .noteHistoryItem>div:first-child strong{color:#17345c;font-size:12px}
 .noteHistoryItem>div:first-child small{color:#8898aa;font-size:10px}
