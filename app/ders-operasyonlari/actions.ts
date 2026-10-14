@@ -175,6 +175,10 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     }
 
     const sourceWeekday = Number(sourceSchedule.weekday || 0);
+    const cancelledDay = new Date(`${input.cancelledDate}T12:00:00Z`).getUTCDay() || 7;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.cancelledDate) || !sourceSchedule.is_active || cancelledDay !== sourceWeekday) {
+      return { ok: false as const, message: "İptal tarihi seçilen seansın gününe uygun değil.", preparedMessages };
+    }
     const allMembershipStudentIds = Array.from(new Set((membershipsResult.data || []).map((row: any) => row.student_id).filter(Boolean)));
     const membershipStudentIds = selectedStudentIds.length
       ? allMembershipStudentIds.filter((id: string) => selectedStudentIds.includes(id))
@@ -193,13 +197,14 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     const [studentsResult, enrollmentsResult, plansResult] = await Promise.all([
       supabase
         .from("students")
-        .select("id,first_name,last_name,phone,guardian_phone,status")
+        .select("id,first_name,last_name,phone,guardian_phone,status,is_deleted")
         .eq("organization_id", organizationId)
         .eq("status", "active")
+        .eq("is_active", true)
         .in("id", membershipStudentIds),
       supabase
         .from("student_enrollments")
-        .select("id,student_id,group_id,planned_end_date,status,created_at")
+        .select("id,student_id,group_id,planned_end_date,status,created_at,start_date,start_confirmation_required,actual_started_at")
         .eq("organization_id", organizationId)
         .eq("group_id", input.groupId)
         .eq("status", "active")
@@ -221,6 +226,9 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
     const enrollmentMap = new Map<string, any>();
     for (const row of enrollmentsResult.data || []) {
+      if (!row.start_date || row.start_date > input.cancelledDate
+        || (row.start_confirmation_required && !row.actual_started_at)
+        || (row.actual_started_at && row.actual_started_at.slice(0, 10) > input.cancelledDate)) continue;
       if (!enrollmentMap.has(row.student_id)) enrollmentMap.set(row.student_id, row);
     }
 
@@ -243,6 +251,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     let compensationCreated = 0;
 
     for (const student of studentsResult.data || []) {
+      if (student.is_deleted) continue;
       const enrollment = enrollmentMap.get(student.id);
       const plan = planMap.get(student.id);
 

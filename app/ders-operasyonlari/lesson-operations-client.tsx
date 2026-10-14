@@ -51,6 +51,8 @@ function whatsappPhone(value: string) {
 export default function LessonOperationsClient({ branches, groups, schedules, memberCounts }: Props) {
   const [branchId, setBranchId] = useState("");
   const [groupId, setGroupId] = useState("");
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [sourceSchedules, setSourceSchedules] = useState<Record<string, string>>({});
   const [scheduleId, setScheduleId] = useState("");
   const [cancelledDate, setCancelledDate] = useState("");
   const [reason, setReason] = useState("Havuz / tesis kaynaklı kapanış");
@@ -77,7 +79,15 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
 
   const selectedGroup = groups.find((group) => group.id === groupId) || null;
   const selectedSchedule = groupSchedules.find((schedule) => schedule.id === scheduleId) || null;
-  const memberCount = groupId ? memberCounts[groupId] || 0 : 0;
+  const selectedIds = groupIds.length ? groupIds : groupId ? [groupId] : [];
+  const multiple = selectedIds.length > 1;
+  const memberCount = selectedIds.reduce((sum, id) => sum + (memberCounts[id] || 0), 0);
+  const dateWeekday = cancelledDate ? (new Date(`${cancelledDate}T12:00:00Z`).getUTCDay() || 7) : 0;
+  function sourceFor(id: string) {
+    return schedules.find((s) => s.group_id === id && s.id === (multiple ? sourceSchedules[id] : scheduleId) && Number(s.weekday) === dateWeekday)
+      || (multiple ? schedules.filter((s) => s.group_id === id && Number(s.weekday) === dateWeekday).length === 1
+        ? schedules.find((s) => s.group_id === id && Number(s.weekday) === dateWeekday) : undefined : undefined);
+  }
 
   function scheduleText(schedule?: Schedule | null) {
     if (!schedule) return "—";
@@ -85,13 +95,13 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   }
 
   async function submitOperation() {
-    if (!groupId || !scheduleId || !cancelledDate || !reason.trim()) {
-      setResult("Şube/grup, iptal edilen seans, tarih ve gerekçe seçilmelidir.");
+    if (!selectedIds.length || !cancelledDate || !reason.trim() || selectedIds.some((id) => !sourceFor(id))) {
+      setResult("Grup, tarih ve gerekçe seçin; her grup için iptal tarihinin gününe uygun seansı seçin.");
       return;
     }
 
-    if (mode === "custom" && (!customDate || !customScheduleId)) {
-      setResult("Farklı telafi planında telafi tarihi ve seansı seçilmelidir.");
+    if (mode === "custom" && (multiple || !customDate || !customScheduleId)) {
+      setResult("Farklı tarih / seans telafisi için tek grup seçin ve telafi tarihi ile seansını belirtin.");
       return;
     }
 
@@ -102,7 +112,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           ? "telafileri seçilen özel tarih/seansa planlamak"
           : "telafi haklarını saklı tutup daha sonra planlamak";
 
-    if (!window.confirm(`${selectedGroup?.name || "Seçili grup"} için ${formatDate(cancelledDate)} tarihli ders iptal edilecek ve ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
+    if (!window.confirm(`${selectedIds.map((id) => groups.find((g) => g.id === id)?.name).join("; ")} için ${formatDate(cancelledDate)} tarihli ders iptal edilecek ve ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
       return;
     }
 
@@ -113,20 +123,24 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     setOpenedStudentIds([]);
 
     try {
-      const response = await applyLessonCancellation({
-        groupId,
-        scheduleId,
-        cancelledDate,
-        reason,
-        description,
-        compensationMode: mode,
-        customDate: mode === "custom" ? customDate : null,
-        customScheduleId: mode === "custom" ? customScheduleId : null,
-        prepareMessages,
-      });
-
-      setResult(response.message);
-      setPreparedMessages(response.preparedMessages || []);
+      const messages: PreparedCancellationMessage[] = [];
+      const results: string[] = [];
+      for (const id of selectedIds) {
+        const response = await applyLessonCancellation({
+          groupId: id,
+          scheduleId: sourceFor(id)!.id,
+          cancelledDate, reason, description,
+          compensationMode: mode,
+          customDate: mode === "custom" ? customDate : null,
+          customScheduleId: mode === "custom" ? customScheduleId : null,
+          prepareMessages,
+        });
+        results.push(`${groups.find((g) => g.id === id)?.name}: ${response.message}`);
+        messages.push(...(response.preparedMessages || []));
+        setResult(results.join("\n"));
+        setPreparedMessages([...messages]);
+        if (!response.ok) break;
+      }
     } catch (error) {
       console.error(error);
       setResult("Ders operasyonu sırasında bağlantı hatası oluştu.");
@@ -186,6 +200,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                 onChange={(event) => {
                   setBranchId(event.target.value);
                   setGroupId("");
+                  setGroupIds([]);
+                  setSourceSchedules({});
                   setScheduleId("");
                 }}
               >
@@ -194,13 +210,17 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               </select>
             </label>
 
-            <label>
-              <span>Grup</span>
+            <div className="groupField">
+              <span>Gruplar · birden fazla seçebilirsiniz</span>
               <select
                 value={groupId}
+                style={{ display: "none" }}
+                aria-hidden="true"
+                tabIndex={-1}
                 disabled={!branchId}
                 onChange={(event) => {
                   setGroupId(event.target.value);
+                  setGroupIds(event.target.value ? [event.target.value] : []);
                   setScheduleId("");
                   setCustomScheduleId("");
                 }}
@@ -212,9 +232,28 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   </option>
                 ))}
               </select>
-            </label>
+              <div className="groupChoices">
+                <button type="button" disabled={!branchId || submitting} onClick={() => {
+                  const ids = visibleGroups.map((g) => g.id);
+                  setGroupIds(selectedIds.length === ids.length ? [] : ids);
+                  setGroupId(selectedIds.length === ids.length ? "" : ids[0] || "");
+                  setScheduleId(""); setSourceSchedules({});
+                  if (ids.length > 1 && mode === "custom") setMode("append_end");
+                }}>Tüm grupları seç / kaldır</button>
+                {branchId && visibleGroups.map((group) => (
+                  <label key={group.id} className="groupChoice">
+                    <input aria-label={group.name} type="checkbox" disabled={submitting} checked={selectedIds.includes(group.id)} onChange={(event) => {
+                      const ids = event.target.checked ? [...selectedIds, group.id] : selectedIds.filter((id) => id !== group.id);
+                      setGroupIds(ids); setGroupId(ids[0] || ""); setScheduleId(""); setCustomScheduleId("");
+                      if (ids.length > 1 && mode === "custom") setMode("append_end");
+                    }} />
+                    <span>{group.name}<small>{memberCounts[group.id] || 0} aktif kursiyer</small></span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
-            <label>
+            {!multiple && <label>
               <span>İptal Edilen Seans</span>
               <select value={scheduleId} disabled={!groupId} onChange={(event) => setScheduleId(event.target.value)}>
                 <option value="">Seans seçin</option>
@@ -222,7 +261,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>
                 ))}
               </select>
-            </label>
+            </label>}
 
             <label>
               <span>İptal Tarihi</span>
@@ -230,12 +269,24 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             </label>
           </div>
 
+          {multiple && <div className="sourcePreview">
+            <strong>{selectedIds.length} grup seçili · {memberCount} aktif kursiyer</strong>
+            {selectedIds.map((id) => <label key={id}>
+              <span>{groups.find((g) => g.id === id)?.name}</span>
+              <select disabled={submitting || !cancelledDate} value={sourceFor(id)?.id || ""} onChange={(event) => setSourceSchedules((prev) => ({...prev, [id]: event.target.value}))}>
+                <option value="">Tarihe uygun seans seçin</option>
+                {schedules.filter((s) => s.group_id === id && Number(s.weekday) === dateWeekday).map((s) => <option key={s.id} value={s.id}>{scheduleText(s)}</option>)}
+              </select>
+            </label>)}
+          </div>}
+
           <div className="fieldGrid">
             <label>
               <span>Gerekçe</span>
               <select value={reason} onChange={(event) => setReason(event.target.value)}>
                 <option value="Havuz / tesis kaynaklı kapanış">Havuz / tesis kaynaklı kapanış</option>
                 <option value="Hijyen tedbiri / tesis kararı">Hijyen tedbiri / tesis kararı</option>
+                <option value="Olumsuz hava koşulları">Olumsuz hava koşulları</option>
                 <option value="Teknik arıza">Teknik arıza</option>
                 <option value="Resmî tatil">Resmî tatil</option>
                 <option value="Yönetim kararı">Yönetim kararı</option>
@@ -265,9 +316,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               <strong>✓ Kayıt sonuna otomatik ekle</strong>
               <span>Varsayılan. Öğrencinin mevcut telafili bitişinden sonraki ilk gerçek ders günü bulunur; aynı programda telafi oluşturulur.</span>
             </button>
-            <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+            <button type="button" disabled={multiple} className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
               <strong>Farklı tarih / seans planla</strong>
-              <span>İstisnai durumda aynı grup içindeki başka uygun seansa telafi planla.</span>
+              <span>Tek grup seçiliyken aynı grup içindeki başka uygun seansa telafi planla.</span>
             </button>
             <button type="button" className={mode === "reserve" ? "active" : ""} onClick={() => setMode("reserve")}>
               <strong>Hakkı saklı tut, sonra planla</strong>
@@ -355,7 +406,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       )}
 
       <style jsx>{`
-        .lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.resultBox{margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
+        .lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.groupField{display:grid;gap:6px}.groupField>span{font-size:12px;font-weight:800;color:#526980}.groupChoices{display:grid;gap:8px}.fieldGrid .groupChoice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #cfdae7;border-radius:11px;background:#f6faff}.groupChoice input{width:20px;min-height:20px;height:20px;flex-shrink:0}.groupChoice small{display:block;color:#526980;margin-top:4px}.sourcePreview label{display:grid;gap:6px}.sourcePreview select{width:100%;min-height:44px;border:1px solid #cfdae7;border-radius:11px;background:#fff}.modeCards button:disabled{opacity:.5;cursor:not-allowed}.resultBox{white-space:pre-line;margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
       `}</style>
     </div>
   );
