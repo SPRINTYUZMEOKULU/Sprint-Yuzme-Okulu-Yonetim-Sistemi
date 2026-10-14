@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import "server-only";
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -394,12 +395,23 @@ export async function createNotification(input: CreateNotificationInput): Promis
     created_by: input.createdBy ?? null,
   }));
 
+  const claimDate=String(input.metadata?.lesson_date||"");
+  const claim=input.eventKey==="attendance_missing"&&input.entityId&&/^\d{4}-\d{2}-\d{2}$/.test(claimDate)
+    ? {organization_id:input.organizationId,schedule_id:input.entityId,lesson_date:claimDate,claim_token:randomUUID()} : null;
+  if(claim){
+    const {error}=await admin.from("attendance_notification_claims").insert(claim);
+    if(error?.code==="23505")return {ok:true,notificationIds:[],recipientCount:0,push:{requested:pushRequested,sent:0,failed:0},message:"Bu seans için bildirim zaten oluşturulmuş."};
+    if(error)throw new Error("Yoklama bildirimi kilidi alınamadı.");
+  }
   const { data: insertedRows, error: insertError } = await admin
     .from("system_notifications")
     .insert(rows)
     .select("id,recipient_profile_id,push_required");
 
-  if (insertError) throw new Error(`Bildirim oluşturulamadı: ${insertError.message}`);
+  if(insertError){
+    if(claim)await admin.from("attendance_notification_claims").delete().eq("organization_id",claim.organization_id).eq("schedule_id",claim.schedule_id).eq("lesson_date",claim.lesson_date).eq("claim_token",claim.claim_token);
+    throw new Error(`Bildirim oluşturulamadı: ${insertError.message}`);
+  }
 
   const notifications = (insertedRows ?? []) as InsertedNotification[];
   if (!pushRequested) {
