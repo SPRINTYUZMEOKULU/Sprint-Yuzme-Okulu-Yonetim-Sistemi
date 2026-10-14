@@ -1,3 +1,4 @@
+import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -390,6 +391,7 @@ export default async function StudentsPage() {
     );
   }
 
+  const rightsContext=await loadLessonRightsContext(supabase,organizationId,studentIds);
   const plannedCompensationCount = new Map<string, number>();
   const nextCompensationMap = new Map<string, any>();
 
@@ -492,26 +494,11 @@ export default async function StudentsPage() {
           0
       );
 
-      const usedLessons = toNumber(
-        enrollment?.used_lessons ?? 0
-      );
-
-      const normalRemaining = Math.max(
-        normalTotal - usedLessons,
-        0
-      );
-
-      const compensationBalance = Math.max(
-        toNumber(
-          lessonBalance?.compensation_lesson_balance ??
-            plannedCompensationCount.get(student.id) ??
-            0
-        ),
-        0
-      );
-
-      const totalRemaining =
-        normalRemaining + compensationBalance;
+      const rights=rightsForEnrollment(rightsContext,enrollment,toNumber(lessonBalance?.compensation_lesson_balance||0));
+      const usedLessons=rights.used;
+      const normalRemaining=rights.normal;
+      const compensationBalance=rights.compensation;
+      const totalRemaining=rights.total;
 
       const regularSchedules = groupId
         ? schedulesByGroup.get(groupId) || []

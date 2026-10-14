@@ -1,3 +1,4 @@
+import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { redirect } from "next/navigation";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
@@ -29,7 +30,7 @@ export default async function RenewalOperationsPage(){
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
     supabase.from("student_group_memberships").select("student_id,group_id,started_at,is_active").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
-    supabase.from("student_enrollments").select("id,student_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
+    supabase.from("student_enrollments").select("id,student_id,group_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_lesson_balance").select("student_id,compensation_lesson_balance"),
     supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_activity_logs").select("id,student_id,title,description,new_value,performed_at").eq("organization_id",organizationId).eq("activity_type","registration_renewed").order("performed_at",{ascending:false}).limit(250),
@@ -52,17 +53,19 @@ export default async function RenewalOperationsPage(){
 
   const today=isoDateInIstanbul();
   const soonDate=addDays(today,14);
+  const rightsContext=await loadLessonRightsContext(supabase,organizationId,(studentsRes.data||[]).map(student=>student.id));
   const items:CenterItem[]=((studentsRes.data||[]) as any[]).map((student):CenterItem=>{
     const enrollment=enrollments.get(student.id);
     const total=Number(enrollment?.total_lessons||0);
-    const used=Number(enrollment?.used_lessons||0);
-    const compensation=Number(balances.get(student.id)||0);
-    const remaining=Math.max(total-used,0)+Math.max(compensation,0);
-    const endDate=enrollment?.planned_end_date||null;
+    const rights=rightsForEnrollment(rightsContext,enrollment,Number(balances.get(student.id)||0));
+    const used=rights.used;
+    const compensation=rights.compensation;
+    const remaining=rights.total;
+    const endDate=rights.endDate;
     const membership=memberships.get(student.id);
     const statusRequest=latestStatusRequest.get(student.id);
     const endedByRights=student.status==="active"&&total>0&&remaining<=0;
-    const endedByDate=student.status==="active"&&enrollmentDateEnded(endDate,today);
+    const endedByDate=student.status==="active"&&compensation<=0&&enrollmentDateEnded(endDate,today);
     const endingSoon=student.status==="active"&&!endedByRights&&!endedByDate&&((total>0&&remaining<=3)||Boolean(endDate&&endDate<=soonDate));
     const category:CenterItem["category"]=student.status==="passive"?"passive":endedByRights||endedByDate?"action":endingSoon?"soon":"active";
     const status:CenterItem["status"]=student.status==="passive"?"passive":"active";

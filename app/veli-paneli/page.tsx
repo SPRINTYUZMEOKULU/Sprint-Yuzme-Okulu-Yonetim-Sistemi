@@ -17,8 +17,8 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
-  const used = Number(data.enrollment?.used_lessons || 0);
-  const remaining = Math.max(0, total - used);
+  const used = Number(data.enrollment?.lesson_rights?.used ?? data.enrollment?.used_lessons ?? 0);
+  const remaining = Number(data.enrollment?.lesson_rights?.total ?? Math.max(0,total-used));
   const attendanceTotal = data.attendance.length;
   const presentCount = data.attendance.filter((item: any) => item.status === "present").length;
   const attendanceRate = attendanceTotal ? Math.round((presentCount / attendanceTotal) * 100) : 0;
@@ -39,7 +39,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
     <div className="guardianContent">
       <section className="guardianHero">
         <div className="guardianHeroMain"><small>ÖĞRENCİ PANELİ · GÜNCEL VERİ</small><h1>{data.selected.first_name} {data.selected.last_name}</h1><p>{data.branch?.name || "Şube belirlenmedi"} · {data.group?.name || "Grup belirlenmedi"}</p><div className="guardianHeroMeta"><span><i/> Sistem verileri otomatik güncellenir</span></div></div>
-        <div className="lessonRing"><b>{remaining}</b><span>Kalan ders</span></div>
+        <div className="lessonRing"><b>{remaining}</b><span>Kalan ders</span><small>Normal {data.enrollment?.lesson_rights?.normal ?? remaining} · Telafi +{data.enrollment?.lesson_rights?.compensation ?? 0}</small></div>
       </section>
 
       {latestAbsence ? <section className="guardianAttendanceAlert" style={{margin:"0 0 16px",padding:"15px 17px",border:"1px solid #f3c9c9",borderRadius:16,background:"#fff7f7",color:"#7f1d1d"}}>

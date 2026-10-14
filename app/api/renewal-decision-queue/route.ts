@@ -1,3 +1,4 @@
+import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +32,7 @@ export async function GET() {
     const [enrollmentRes, balanceRes, requestRes] = await Promise.all([
       supabase
         .from("student_enrollments")
-        .select("id,student_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at")
+        .select("id,student_id,group_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at")
         .eq("organization_id", organizationId)
         .in("student_id", ids)
         .eq("status", "active")
@@ -56,18 +57,19 @@ export async function GET() {
     const balanceMap = new Map((balanceRes.data || []).map((row: any) => [row.student_id, Number(row.compensation_lesson_balance || 0)]));
     const pendingPassive = new Set((requestRes.data || []).map((row: any) => row.student_id));
 
+    const rightsContext=await loadLessonRightsContext(supabase,organizationId,ids);
     const today = istanbulDate();
 
     const items = (students || []).flatMap((student: any) => {
       const enrollment = latestEnrollment.get(student.id);
       if (!enrollment) return [];
       const total = Number(enrollment.total_lessons || 0);
-      const used = Number(enrollment.used_lessons || 0);
-      const compensation = Number(balanceMap.get(student.id) || 0);
-      const remaining = Math.max(total - used, 0) + Math.max(compensation, 0);
-      const endDate = enrollment.planned_end_date || null;
+      const rights=rightsForEnrollment(rightsContext,enrollment,Number(balanceMap.get(student.id)||0));
+      const used=rights.used;
+      const remaining=rights.total;
+      const endDate=rights.endDate;
       const endedByRights = total > 0 && remaining <= 0;
-      const endedByDate = enrollmentDateEnded(endDate, today);
+      const endedByDate = rights.compensation<=0 && enrollmentDateEnded(endDate, today);
       if (!endedByRights && !endedByDate) return [];
       return [{
         studentId: student.id,

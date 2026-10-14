@@ -1,3 +1,4 @@
+import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import Link from "next/link";
 import ReportExports from "./report-exports";
 import { normalizeWeekday } from "@/lib/schedules/weekday";
@@ -68,6 +69,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }
 
   const supabase = await createClient();
+  const {error:lessonSyncError}=await supabase.rpc("sync_scheduled_used_lessons",{p_organization_id:organizationId});
+  if(lessonSyncError)return <main className="reportsShell"><div className="reportsError">Ders bakiyesi doğrulanamadı.</div></main>;
 
   // Read every page rather than silently accepting the Data API row limit.
   async function readAll(query: any) {
@@ -157,7 +160,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const attendanceRate = attendanceBase ? (presentCount / attendanceBase) * 100 : 0;
   const validPayments = filteredPayments.filter(received);
   const collectionTotal = validPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const remainingLessons = activeEnrollments.reduce((sum, e) => sum + Math.max(0, Number(e.total_lessons || 0) - Number(e.used_lessons || 0)), 0);
+  const rightsContext=await loadLessonRightsContext(supabase,organizationId,students.map(s=>s.id));
+  const remainingLessons=activeEnrollments.reduce((sum,e)=>sum+rightsForEnrollment(rightsContext,e).total,0);
 
   const branchRows = branches
     .filter((b) => branchId === "all" || b.id === branchId)
@@ -212,7 +216,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       name: `${student.first_name || ""} ${student.last_name || ""}`.trim(),
       branch: branchMap.get(enrollment?.branch_id || student.branch_id || "") || "—",
       group: groupMap.get(enrollment?.group_id || "")?.name || "—",
-      used: Number(enrollment?.used_lessons || 0),
+      used: rightsForEnrollment(rightsContext,enrollment).used,
+      normalRemaining: rightsForEnrollment(rightsContext,enrollment).normal,
+      compensation: rightsForEnrollment(rightsContext,enrollment).compensation,
+      remaining: rightsForEnrollment(rightsContext,enrollment).total,
       total: Number(enrollment?.total_lessons || 0),
       attendance: p + a ? (p / (p + a)) * 100 : 0,
     };
@@ -243,7 +250,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     if (!activePlans.length && balance !== null) addNote(name,"Ücret güncel paket fiyatından hesaplandı; kayıt tarihindeki tutar ve varsa indirim kontrol edilmeli.",`/ogrenciler/${student.id}`);
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
     if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Kullanılan ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
-    if (e.status === "active" && student.status === "active" && ((e.planned_end_date && e.planned_end_date < today) || Number(e.used_lessons) >= Number(e.total_lessons))) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
+    if (e.status === "active" && student.status === "active" && ((rightsForEnrollment(rightsContext,e).compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rightsForEnrollment(rightsContext,e).total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
     if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
     return {id:e.id, studentId:student.id,name, recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),price,paid,balance,overdue,status};
   });
@@ -324,7 +331,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     financeSheet("Süresi dolanlar",financeRows.filter(r=>r.recordStatus === "Süresi doldu")),
     financeSheet("Ödeme yapılmayanlar",financeRows.filter(r=>r.paid === 0 && (r.balance || 0)>0)),
     financeSheet("Kısmi ödeme yapanlar",financeRows.filter(r=>r.paid > 0 && (r.balance || 0)>0)),
-    {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,Math.round(r.attendance)])]},
+    {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Normal kalan","Telafi","Toplam kalan","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,r.normalRemaining,r.compensation,r.remaining,Math.round(r.attendance)])]},
     {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
     {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note])]},
     {name:"Tahsilat hareketleri",rows:[["Öğrenci","Tarih","Tutar","Durum","Yöntem","Kasa teslimi"],...paymentRows.map(r=>[r.name,r.date,r.amount,r.status,r.method,r.handover])]},
@@ -411,7 +418,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">ÖĞRENCİ RAPORU</span><h2>Kursiyer ve kayıt özeti</h2></div><Link href="/ogrenciler">Öğrenci merkezini aç →</Link></div>
-            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={7} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Normal kalan</th><th>Telafi</th><th>Toplam kalan</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{row.normalRemaining}</td><td>+{row.compensation}</td><td>{row.remaining}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={10} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
           </article>
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">YÖNETİCİ KONTROLÜ</span><h2>Eksik ve kontrol özeti</h2></div></div>

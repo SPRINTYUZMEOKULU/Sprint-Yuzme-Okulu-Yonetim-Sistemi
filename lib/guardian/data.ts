@@ -1,3 +1,4 @@
+import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
@@ -119,6 +120,10 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   ]);
 
   const enrollment = enrollmentRes.data || null;
+  if(enrollment){
+    const context=await loadLessonRightsContext(admin,profile.organization_id,[selected.id]);
+    enrollment.lesson_rights=rightsForEnrollment(context,enrollment);
+  }
   let group: any = null;
   let branch: any = null;
   let coursePackage: any = null;
