@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
+import { istanbulDate } from "@/lib/enrollment/dates";
 import LessonOperationsClient from "./lesson-operations-client";
 import OperationSelectionHydrator from "./operation-selection-hydrator";
 import OperationSelectionCookieGuard from "./operation-selection-cookie-guard";
@@ -44,7 +45,7 @@ export default async function LessonOperationsPage({
     return <main className="operationPage"><section className="operationCard">Organizasyon bilgisi bulunamadı.</section></main>;
   }
 
-  const [branchesResult, groupsResult, schedulesResult, membershipsResult, selectedStudentsResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, membershipsResult, selectedStudentsResult, activeStudentsResult, enrollmentsResult] = await Promise.all([
     supabase
       .from("branches")
       .select("id,name")
@@ -77,7 +78,24 @@ export default async function LessonOperationsPage({
           .eq("status", "active")
           .in("id", requestedStudentIds)
       : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("students")
+      .select("id,is_deleted")
+      .eq("organization_id", organizationId)
+      .eq("status", "active")
+      .eq("is_active", true),
+    supabase
+      .from("student_enrollments")
+      .select("student_id,group_id,start_date,start_confirmation_required,actual_started_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "active"),
   ]);
+
+  const loadError = branchesResult.error || groupsResult.error || schedulesResult.error
+    || membershipsResult.error || selectedStudentsResult.error || activeStudentsResult.error || enrollmentsResult.error;
+  if (loadError) {
+    return <main className="operationPage"><section className="operationCard">Operasyon verileri yüklenemedi: {loadError.message}</section></main>;
+  }
 
   const activeSchedules = filterEffectivelyActiveSchedules(
     schedulesResult.data || [],
@@ -86,8 +104,20 @@ export default async function LessonOperationsPage({
   );
 
   const memberCounts: Record<string, number> = {};
+  const activeStudentIds = new Set((activeStudentsResult.data || [])
+    .filter((student) => !student.is_deleted).map((student) => student.id));
+  const today = istanbulDate();
+  const startedMemberships = new Set((enrollmentsResult.data || [])
+    .filter((enrollment) => enrollment.start_date && enrollment.start_date <= today
+      && (!enrollment.start_confirmation_required || Boolean(enrollment.actual_started_at))
+      && (!enrollment.actual_started_at || enrollment.actual_started_at.slice(0, 10) <= today))
+    .map((enrollment) => `${enrollment.group_id}:${enrollment.student_id}`));
+  const countedMemberships = new Set<string>();
   for (const row of membershipsResult.data || []) {
     if (!row.group_id || !row.student_id) continue;
+    const key = `${row.group_id}:${row.student_id}`;
+    if (!activeStudentIds.has(row.student_id) || !startedMemberships.has(key) || countedMemberships.has(key)) continue;
+    countedMemberships.add(key);
     memberCounts[row.group_id] = (memberCounts[row.group_id] || 0) + 1;
   }
 
