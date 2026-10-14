@@ -462,3 +462,86 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     };
   }
 }
+
+export type StartingCancellationMessage = {
+  studentId: string;
+  studentName: string;
+  groupName: string;
+  recipient: string | null;
+  message: string;
+};
+
+export async function startingCancellationMessages(input: {
+  date: string;
+  groupIds: string[];
+  reason: string;
+  prepare?: boolean;
+}) {
+  const profile = await requireProfile([...ALLOWED_ROLES]);
+  const organizationId = profile.organization_id;
+  if (!organizationId || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return { ok: false, message: "Geçerli iptal tarihi seçin.", messages: [] as StartingCancellationMessage[] };
+  }
+  const groupIds = [...new Set(input.groupIds.filter((id) => UUID_RE.test(id)))].slice(0, 100);
+  if (!groupIds.length) return { ok: true, message: "", messages: [] as StartingCancellationMessage[] };
+  const supabase = await createClient();
+  const [enrollments, groups, schedules] = await Promise.all([
+    supabase.from("student_enrollments")
+      .select("id,student_id,group_id,lesson_weekdays")
+      .eq("organization_id", organizationId).eq("status", "active")
+      .eq("start_date", input.date).eq("start_confirmation_required", true)
+      .is("actual_started_at", null).in("group_id", groupIds),
+    supabase.from("training_groups").select("id,name,course_type,branch_id")
+      .eq("organization_id", organizationId).eq("is_active", true).in("id", groupIds),
+    supabase.from("lesson_schedules").select("group_id,weekday,start_time")
+      .eq("organization_id", organizationId).eq("is_active", true).in("group_id", groupIds),
+  ]);
+  const error = enrollments.error || groups.error || schedules.error;
+  if (error) return { ok: false, message: error.message, messages: [] as StartingCancellationMessage[] };
+  const ids = [...new Set((enrollments.data || []).map((e) => e.student_id))];
+  if (!ids.length) return { ok: true, message: "", messages: [] as StartingCancellationMessage[] };
+  const students = await supabase.from("students")
+    .select("id,first_name,last_name,status,is_active,is_deleted,phone,guardian_phone")
+    .eq("organization_id", organizationId).in("id", ids);
+  if (students.error) return { ok: false, message: students.error.message, messages: [] as StartingCancellationMessage[] };
+  const cookieStore = await cookies();
+  const selectedIds = selectedStudentIdsFromCookie(cookieStore.get("sprintos-lesson-operation-students")?.value);
+  const weekday = new Date(`${input.date}T12:00:00Z`).getUTCDay() || 7;
+  const messages: StartingCancellationMessage[] = [];
+  const seen = new Set<string>();
+  for (const enrollment of enrollments.data || []) {
+    const student = students.data?.find((s) => s.id === enrollment.student_id);
+    const group = groups.data?.find((g) => g.id === enrollment.group_id);
+    const groupSessions = (schedules.data || []).filter((s) => s.group_id === enrollment.group_id && Number(s.weekday) === weekday);
+    const days = enrollment.lesson_weekdays;
+    if (!student || !group || !groupSessions.length || student.is_deleted || !student.is_active
+      || student.status === "passive" || seen.has(student.id)
+      || (selectedIds.length && !selectedIds.includes(student.id))
+      || (Array.isArray(days) && days.length && !days.map(Number).includes(weekday))) continue;
+    seen.add(student.id);
+    const adult = isAdultCourse(group.course_type);
+    const recipient = adult ? cleanPhone(student.phone) || cleanPhone(student.guardian_phone) || null
+      : cleanPhone(student.guardian_phone) || cleanPhone(student.phone) || null;
+    const studentName = `${student.first_name} ${student.last_name}`.trim();
+    const time = [...new Set(groupSessions.map((s) => String(s.start_time).slice(0,5)))].join(" / ");
+    const message = `*SPRİNT YÜZME OKULU | BAŞLANGIÇ DERSİ BİLGİLENDİRMESİ*\n\nDeğerli ${adult ? "Kursiyerimiz" : "Velimiz"},\n\n*${studentName}* için ${formatDateTR(input.date)} tarihinde saat ${time} itibarıyla başlaması planlanan ilk yüzme dersimiz *${input.reason.trim() || "ders iptali"}* nedeniyle gerçekleştirilemeyecektir.\n\nİlk dersiniz henüz başlamamıştır; bu iptal nedeniyle paketinizden ders hakkı düşülmez. Yeni başlangıç tarihiniz planlandığında ayrıca bilgilendirme yapılacaktır.\n\nAnlayışınız için teşekkür ederiz.\n*Sprint Yüzme Okulu Yönetimi*`;
+    if (input.prepare) {
+      const existing = await supabase.from("message_logs").select("id,status")
+        .eq("organization_id", organizationId).eq("student_id", student.id)
+        .eq("template_key", "starting_lesson_cancellation")
+        .contains("metadata", {cancelled_date: input.date, group_id: group.id}).limit(1);
+      if (existing.error) return { ok: false, message: existing.error.message, messages };
+      const row = existing.data?.[0];
+      const payload = {recipient, message_body: message};
+      const saved = row
+        ? row.status === "prepared" ? await supabase.from("message_logs").update(payload).eq("id", row.id).eq("organization_id", organizationId) : {error:null}
+        : await supabase.from("message_logs").insert({organization_id: organizationId,student_id: student.id,
+          template_key:"starting_lesson_cancellation",channel:"whatsapp",...payload,
+          subject:"Başlangıç dersiniz iptal edildi",status:"prepared",prepared_by:profile.id,
+          metadata:{cancelled_date:input.date,group_id:group.id,enrollment_id:enrollment.id,reason:input.reason,starting_student:true}});
+      if (saved.error) return { ok: false, message: saved.error.message, messages };
+    }
+    messages.push({studentId:student.id,studentName,groupName:group.name,recipient,message});
+  }
+  return {ok:true,message:input.prepare ? `${messages.length} başlangıç bilgilendirme mesajı hazırlandı.` : "",messages};
+}

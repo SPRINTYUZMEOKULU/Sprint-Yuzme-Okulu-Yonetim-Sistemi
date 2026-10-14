@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { applyLessonCancellation, type PreparedCancellationMessage } from "./actions";
+import { useEffect, useMemo, useState } from "react";
+import { applyLessonCancellation, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
 type Branch = { id: string; name: string };
 type Group = { id: string; name: string; branch_id: string | null; course_type?: string | null };
@@ -49,6 +49,10 @@ function whatsappPhone(value: string) {
 }
 
 export default function LessonOperationsClient({ branches, groups, schedules, memberCounts }: Props) {
+  const [startingMessages, setStartingMessages] = useState<StartingCancellationMessage[]>([]);
+  const [startingStatus, setStartingStatus] = useState("");
+  const [startingPrepared, setStartingPrepared] = useState(false);
+  const [preparingStarting, setPreparingStarting] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [groupId, setGroupId] = useState("");
   const [groupIds, setGroupIds] = useState<string[]>([]);
@@ -83,6 +87,31 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const multiple = selectedIds.length > 1;
   const memberCount = selectedIds.reduce((sum, id) => sum + (memberCounts[id] || 0), 0);
   const dateWeekday = cancelledDate ? (new Date(`${cancelledDate}T12:00:00Z`).getUTCDay() || 7) : 0;
+  const startingGroupKey = [...selectedIds].sort().join(",");
+  useEffect(() => {
+    let cancelled = false;
+    setStartingMessages([]); setStartingPrepared(false); setStartingStatus("");
+    if (!cancelledDate || !startingGroupKey) return;
+    setStartingStatus("Başlaması planlanan kursiyerler kontrol ediliyor…");
+    void startingCancellationMessages({date:cancelledDate,groupIds:startingGroupKey.split(","),reason}).then((response) => {
+      if (cancelled) return;
+      setStartingMessages(response.messages);
+      setStartingStatus(response.ok ? "" : `Başlangıç kontrolü yapılamadı: ${response.message}`);
+    }).catch(() => {if (!cancelled) setStartingStatus("Başlangıç kontrolünde bağlantı hatası oluştu.");});
+    return () => {cancelled = true;};
+  }, [cancelledDate, startingGroupKey, reason]);
+
+  async function prepareStarting() {
+    setPreparingStarting(true);
+    try {
+      const response = await startingCancellationMessages({date:cancelledDate,groupIds:selectedIds,reason,prepare:true});
+      setStartingStatus(response.message);
+      setStartingMessages(response.messages);
+      setStartingPrepared(response.ok);
+    } catch {setStartingStatus("Mesajlar hazırlanamadı. Tekrar deneyin.");}
+    finally {setPreparingStarting(false);}
+  }
+
   function sourceFor(id: string) {
     return schedules.find((s) => s.group_id === id && s.id === (multiple ? sourceSchedules[id] : scheduleId) && Number(s.weekday) === dateWeekday)
       || (multiple ? schedules.filter((s) => s.group_id === id && Number(s.weekday) === dateWeekday).length === 1
@@ -310,6 +339,20 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
         </div>
 
         <div className="lessonOpsCard">
+          {(startingMessages.length > 0 || startingStatus) && <aside className="startingWarning" role="status">
+            {startingMessages.length > 0 && <>
+              <strong>⚠ {startingMessages.length} kursiyerin ilk dersi iptal tarihine denk geliyor</strong>
+              <p>Bu kursiyerler henüz başlamadı. Ayrı başlangıç mesajı hazırlanır; başlangıç ve ders hakları değiştirilmez.</p>
+              {startingMessages.map((item) => <div key={item.studentId} className="startingPerson">
+                <b>{item.studentName}</b><span>{item.groupName}</span>
+                {!item.recipient && <span>Telefon bilgisi eksik</span>}
+                {startingPrepared && item.recipient && <a href={`https://wa.me/${whatsappPhone(item.recipient)}?text=${encodeURIComponent(item.message)}`} target="_blank" rel="noopener noreferrer">Başlangıç mesajını WhatsApp’ta aç</a>}
+              </div>)}
+              <button type="button" disabled={preparingStarting || submitting} onClick={() => void prepareStarting()}>{preparingStarting ? "Mesaj hazırlanıyor…" : "Ayrı başlangıç mesajlarını hazırla"}</button>
+              <small>WhatsApp açıldığında mesajı göndermek için Gönder’e basın.</small>
+            </>}
+            {startingStatus && <p>{startingStatus}</p>}
+          </aside>}
           <h2>2 · Telafi yöntemi</h2>
           <div className="modeCards">
             <button type="button" className={mode === "append_end" ? "active" : ""} onClick={() => setMode("append_end")}>
@@ -406,7 +449,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       )}
 
       <style jsx>{`
-        .lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.groupField{display:grid;gap:6px}.groupField>span{font-size:12px;font-weight:800;color:#526980}.groupChoices{display:grid;gap:8px}.fieldGrid .groupChoice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #cfdae7;border-radius:11px;background:#f6faff}.groupChoice input{width:20px;min-height:20px;height:20px;flex-shrink:0}.groupChoice small{display:block;color:#526980;margin-top:4px}.sourcePreview label{display:grid;gap:6px}.sourcePreview select{width:100%;min-height:44px;border:1px solid #cfdae7;border-radius:11px;background:#fff}.modeCards button:disabled{opacity:.5;cursor:not-allowed}.resultBox{white-space:pre-line;margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
+        .startingWarning{padding:16px;margin-bottom:18px;border:1px solid #edbd62;border-radius:14px;background:#fff8e8;color:#704811}.startingWarning p{font-size:13px;line-height:1.5}.startingPerson{display:grid;gap:5px;padding:10px 0;border-top:1px solid #eddbb6}.startingPerson span,.startingWarning small{font-size:12px}.startingWarning button,.startingPerson a{display:block;padding:11px;border:0;border-radius:10px;background:#1268d6;color:#fff;text-decoration:none;font-weight:700;margin:8px 0}.startingWarning small{display:block}.lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.groupField{display:grid;gap:6px}.groupField>span{font-size:12px;font-weight:800;color:#526980}.groupChoices{display:grid;gap:8px}.fieldGrid .groupChoice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #cfdae7;border-radius:11px;background:#f6faff}.groupChoice input{width:20px;min-height:20px;height:20px;flex-shrink:0}.groupChoice small{display:block;color:#526980;margin-top:4px}.sourcePreview label{display:grid;gap:6px}.sourcePreview select{width:100%;min-height:44px;border:1px solid #cfdae7;border-radius:11px;background:#fff}.modeCards button:disabled{opacity:.5;cursor:not-allowed}.resultBox{white-space:pre-line;margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
       `}</style>
     </div>
   );
