@@ -22,3 +22,11 @@ test('student assignments override the session coach while preserving unassigned
  assert.equal(coachStudentScope([],'s','g',new Set(['one']),true,['a']),undefined);
  assert.deepEqual(coachStudentScope([{group_id:'g',student_id:'a',coach_id:'staff-id'}],'s','g',new Set(['profile-id','staff-id']),false,['a']),['a']);
 });
+
+test('pending manual start is excluded from attendance even with planned compensation; confirmation admits the student',()=>{
+ const e={id:'e',student_id:'a',group_id:'g',status:'active',lesson_weekdays:[3],start_date:'2026-10-07',start_confirmation_required:true,actual_started_at:null};
+ const p={students:[{id:'a'}],enrollments:[e],memberships:[{student_id:'a',group_id:'g',is_active:true}],compensationLessons:[{student_id:'a',target_group_id:'g',target_schedule_id:'s',lesson_date:'2026-10-14',status:'planned'}]};
+ assert.deepEqual(attendanceRoster(p,'g','s','2026-10-14',3).students,[]);
+ e.actual_started_at='2026-10-14T12:00:00Z';
+ assert.deepEqual(attendanceRoster(p,'g','s','2026-10-14',3).students.map(s=>s.id),['a']);
+});

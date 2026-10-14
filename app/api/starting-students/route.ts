@@ -25,7 +25,7 @@ export async function GET(){
     const [studentsResult,enrollmentsResult,attendanceResult,transferStartedResult,groupsResult,branchesResult,schedulesResult]=await Promise.all([
       supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status,registration_source").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false),
       supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
-      supabase.from("attendance_records").select("student_id").eq("organization_id",organizationId),
+      supabase.from("attendance_records").select("student_id,enrollment_id,lesson_date,status").eq("organization_id",organizationId).in("status",["present","absent","excused"]),
       supabase.from("student_activity_logs").select("student_id").eq("organization_id",organizationId).eq("activity_type","legacy_transfer_manager_confirmed"),
       supabase.from("training_groups").select("id,name,branch_id").eq("organization_id",organizationId).eq("is_active",true),
       supabase.from("branches").select("id,name").eq("organization_id",organizationId).eq("is_active",true),
@@ -35,7 +35,8 @@ export async function GET(){
     const error=studentsResult.error||enrollmentsResult.error||attendanceResult.error||transferStartedResult.error||groupsResult.error||branchesResult.error||schedulesResult.error;
     if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
 
-    const attended=new Set((attendanceResult.data||[]).map((r:any)=>String(r.student_id||"")).filter(Boolean));
+    const attendanceByEnrollment=new Map<string,any[]>();
+    for(const row of attendanceResult.data||[]){if(!row.enrollment_id)continue;const rows=attendanceByEnrollment.get(row.enrollment_id)||[];rows.push(row);attendanceByEnrollment.set(row.enrollment_id,rows);}
     const transferStarted=new Set((transferStartedResult.data||[]).map((r:any)=>String(r.student_id||"")).filter(Boolean));
     const enrollmentMap=new Map<string,any>();
     for(const row of enrollmentsResult.data||[]){if(row.student_id&&!enrollmentMap.has(row.student_id))enrollmentMap.set(row.student_id,row);}
@@ -53,7 +54,8 @@ export async function GET(){
       if(!enrollment||enrollment.actual_started_at)return [];
       const pendingStart=enrollment.start_confirmation_required&&!enrollment.actual_started_at;
       const futureStart=Boolean(enrollment.start_date&&enrollment.start_date>today);
-      if(!pendingStart&&!futureStart&&(attended.has(studentId)||transferStarted.has(studentId)))return [];
+      const attended=(attendanceByEnrollment.get(enrollment.id)||[]).some(row=>row.student_id===studentId && enrollment.start_date && row.lesson_date>=enrollment.start_date);
+      if(!pendingStart&&!futureStart&&(attended||transferStarted.has(studentId)))return [];
       const group=groupMap.get(String(enrollment.group_id||""));
       const branchId=String(group?.branch_id||enrollment.branch_id||"");
       const startDate=enrollment.start_date||null;
