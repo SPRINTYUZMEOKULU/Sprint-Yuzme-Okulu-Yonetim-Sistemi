@@ -509,7 +509,7 @@ async function ogrenciSeviyeAta(formData: FormData) {
     .from("swimming_levels")
     .select("id,name,is_active")
     .eq("organization_id", organizationId)
-    .ilike("name", levelName)
+    .eq("name", levelName)
     .limit(1)
     .maybeSingle();
 
@@ -517,39 +517,9 @@ async function ogrenciSeviyeAta(formData: FormData) {
     throw new Error(`Seviye doğrulanamadı: ${lookupError.message}`);
   }
 
-  let levelRow = existingLevel;
-
-  if (levelRow && levelRow.is_active === false) {
-    const { data: reactivated, error: reactivateError } = await supabase
-      .from("swimming_levels")
-      .update({ is_active: true, updated_at: new Date().toISOString() })
-      .eq("id", levelRow.id)
-      .eq("organization_id", organizationId)
-      .select("id,name,is_active")
-      .single();
-
-    if (reactivateError || !reactivated) {
-      throw new Error(`Seviye aktifleştirilemedi: ${reactivateError?.message || "Bilinmeyen hata"}`);
-    }
-    levelRow = reactivated;
-  }
-
-  if (!levelRow) {
-    const { data: created, error: createError } = await supabase
-      .from("swimming_levels")
-      .insert({
-        organization_id: organizationId,
-        name: levelName,
-        is_active: true,
-        updated_at: new Date().toISOString(),
-      })
-      .select("id,name,is_active")
-      .single();
-
-    if (createError || !created) {
-      throw new Error(`Seviye oluşturulamadı: ${createError?.message || "Bilinmeyen hata"}`);
-    }
-    levelRow = created;
+  const levelRow = existingLevel;
+  if (!levelRow || !levelRow.is_active) {
+    throw new Error("Aktif bir seviye seçin. Seviyeler Ayarlar > Seviye Yönetimi ekranından yönetilir.");
   }
 
   const { data: updatedStudent, error: studentLevelError } = await supabase
@@ -927,14 +897,10 @@ export default async function OperasyonPlaniPage({
     .filter(Boolean)
     .sort();
 
+  const activeLevels = (levelsResult.data || []).map((level: any) => String(level.name));
+
   const levels = Array.from(
     new Set([
-      "Başlangıç",
-      "2. Seviye",
-      "Orta",
-      "İleri",
-      "Takım Alt Yapı",
-      "Master",
       ...(levelsResult.data || []).map((level: any) => level.name),
       ...students
         .map(
@@ -2003,7 +1969,7 @@ export default async function OperasyonPlaniPage({
           <OperationStudentManager
             students={activeStudentPlans}
             coaches={coaches}
-            levels={levels as string[]}
+            levels={activeLevels as string[]}
           />
         )}
 
@@ -3379,7 +3345,7 @@ export default async function OperasyonPlaniPage({
                                       label="Yüzme seviyesi"
                                       emptyLabel="Seviye seç"
                                       allowEmpty={false}
-                                      options={levels.map((level: any) => ({ value: String(level), label: String(level) }))}
+                                      options={activeLevels.map((level: any) => ({ value: String(level), label: String(level) }))}
                                       fields={{ student_id: student.id }}
                                     />
                                     </>

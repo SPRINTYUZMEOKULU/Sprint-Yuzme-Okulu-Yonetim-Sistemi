@@ -32,6 +32,7 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
   ],
   "/gruplar": [
     { label: "Grup Merkezi", href: "/gruplar" },
+    { label: "Seviye Yönetimi", href: "/ayarlar/seviyeler" },
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
   ],
