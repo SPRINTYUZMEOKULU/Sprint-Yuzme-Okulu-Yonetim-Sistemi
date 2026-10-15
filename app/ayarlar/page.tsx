@@ -14,6 +14,7 @@ type SettingsCard = {
 };
 
 const settingsCards: SettingsCard[] = [
+  { title: "Hazır Mesajlar", description: "WhatsApp ve kayıt bilgilendirme şablonlarını yönetin.", href: "/hazir-mesajlar", icon: "💬", accent: "#0891b2", status: "Aktif", statusTone: "active" },
   { title: "Seviye Yönetimi", description: "Yüzme seviyelerinin beceri açıklamalarını, sırasını ve aktifliğini yönetin.", href: "/ayarlar/seviyeler", icon: "🏊", accent: "#176de9", status: "Aktif", statusTone: "active" },
   {
     title: "Ön Kayıt Formu",
@@ -28,11 +29,11 @@ const settingsCards: SettingsCard[] = [
   {
     title: "Kurum Bilgileri",
     description:
-      "Sprint Yüzme Okulu adı, logo, iletişim bilgileri ve genel kurum bilgilerini yönetin.",
+      "Kurumun şube, tesis ve iletişim yönetimine ulaşın.",
     href: "/ayarlar/kurum",
     icon: "🏢",
     accent: "#0f766e",
-    status: "Yakında",
+    status: "Bağlantılı",
     statusTone: "neutral",
   },
   {
@@ -58,21 +59,21 @@ const settingsCards: SettingsCard[] = [
   {
     title: "Mesaj ve Bildirimler",
     description:
-      "WhatsApp mesajları, hazır şablonlar, kayıt bilgilendirmeleri ve sistem bildirimlerini yönetin.",
-    href: "/ayarlar/mesajlar",
+      "Bildirim tercihlerini, seslerini ve dağıtım yetkilerini yönetin.",
+    href: "/ayarlar/bildirimler",
     icon: "💬",
     accent: "#0891b2",
-    status: "Yakında",
+    status: "Bağlantılı",
     statusTone: "neutral",
   },
   {
     title: "Kullanıcı ve Yetkiler",
     description:
       "Yönetici, şube yöneticisi, kayıt personeli ve antrenörlerin sistem yetkilerini belirleyin.",
-    href: "/ayarlar/yetkiler",
+    href: "/kullanicilar-ve-yetkiler",
     icon: "👥",
     accent: "#be123c",
-    status: "Yakında",
+    status: "Bağlantılı",
     statusTone: "neutral",
   },
   {
@@ -82,27 +83,27 @@ const settingsCards: SettingsCard[] = [
     href: "/ayarlar/kurallar",
     icon: "✅",
     accent: "#15803d",
-    status: "Planlandı",
+    status: "Bağlantılı",
     statusTone: "warning",
   },
   {
     title: "Belge ve PDF",
     description:
-      "Ön kayıt kabul belgesi, sağlık beyanı ve öğrenci dosyası PDF çıktılarının ayarlarını yönetin.",
+      "Veli belgelerini yönetin; rapor ve öğrenci dosyası çıktılarına ulaşın.",
     href: "/ayarlar/belgeler",
     icon: "📄",
     accent: "#475569",
-    status: "Planlandı",
+    status: "Bağlantılı",
     statusTone: "warning",
   },
     {
     title: "Sistem Ayarları",
     description:
-      "Öğrenci numarası, varsayılan kayıt tercihleri ve SprintOS genel çalışma ayarlarını yönetin.",
+      "Kayıt, onay, bildirim ve denetim modüllerine tek merkezden ulaşın.",
     href: "/ayarlar/sistem",
     icon: "⚙️",
     accent: "#334155",
-    status: "Planlandı",
+    status: "Bağlantılı",
     statusTone: "warning",
   },
   {
@@ -181,7 +182,7 @@ export default async function SettingsPage() {
           </article>
 
           <article>
-            <div className="overviewIcon purple">9</div>
+            <div className="overviewIcon purple">{settingsCards.length}</div>
 
             <div>
               <span>Ayar Modülü</span>
@@ -253,9 +254,7 @@ export default async function SettingsPage() {
             <strong>Merkezi ayar yapısı</strong>
 
             <p>
-              Burada yapılan ayarlar ilerleyen aşamalarda
-              SprintOS'un ilgili modüllerine otomatik uygulanacak.
-              Ön Kayıt Formu ayarları ilk bağlanacak modüldür.
+              Ayarlar mevcut yönetim modüllerine bağlıdır. Form alanları ön kayıt formundan; belge ve onay metinleri veli içerik yönetiminden; kullanıcı yetkileri yetki merkezinden yönetilir.
             </p>
           </div>
         </section>
