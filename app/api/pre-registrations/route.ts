@@ -1,3 +1,4 @@
+import { readSettings } from "@/lib/settings/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notifications/create-notification";
@@ -150,6 +151,9 @@ export async function POST(
         )
       );
     }
+
+    const { values: registrationSettings } = await readSettings(supabase, organization.id, "kayit");
+    if (!registrationSettings.public_enabled) return NextResponse.json({ error: String(registrationSettings.closed_text) }, { status: 403 });
 
     /*
      * =====================================================

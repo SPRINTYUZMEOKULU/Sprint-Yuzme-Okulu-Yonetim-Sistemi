@@ -1,3 +1,4 @@
+import { readSettings } from "@/lib/settings/server";
 import Link from "next/link";
 
 import { requireProfile } from "@/lib/auth/profile";
@@ -213,6 +214,7 @@ export default async function GroupsPage({
   ]);
 
   const organizationId = profile.organization_id || "";
+  const { values: groupDefaults } = await readSettings(await createClient(), organizationId, "gruplar");
   const supabase = await createClient();
 
   const [
@@ -1018,7 +1020,7 @@ export default async function GroupsPage({
                 type="number"
                 min={1}
                 max={50}
-                defaultValue={6}
+                defaultValue={Number(groupDefaults.default_capacity)}
                 required
               />
             </label>

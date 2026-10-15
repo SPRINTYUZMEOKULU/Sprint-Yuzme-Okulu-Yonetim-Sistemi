@@ -1,5 +1,3 @@
 import { redirect } from "next/navigation";
-
-export default function MessageSettingsPage() {
-  redirect("/ayarlar/bildirimler");
-}
+import { requireProfile } from "@/lib/auth/profile";
+export default async function Page(){await requireProfile(["owner","admin"]);redirect("/ayarlar?bolum=mesajlar");}

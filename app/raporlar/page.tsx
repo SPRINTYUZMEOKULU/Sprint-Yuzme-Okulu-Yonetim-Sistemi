@@ -1,3 +1,4 @@
+import { readSettings } from "@/lib/settings/server";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import Link from "next/link";
 import ReportExports from "./report-exports";
@@ -56,6 +57,8 @@ function statusIsAbsent(status?: string | null) {
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const profile = await requireProfile(["owner", "admin", "branch_manager"]);
   const organizationId = profile.organization_id;
+  const settingsDb = await createClient();
+  const [brandSettings, reportSettings] = organizationId ? await Promise.all([readSettings(settingsDb, organizationId, "kurum"), readSettings(settingsDb, organizationId, "sistem")]) : [null, null];
   const params = await searchParams;
   const today = isoToday();
   const monthStart = `${today.slice(0, 7)}-01`;
@@ -346,8 +349,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <div className="reportsWrap">
         <header className="reportsHeader">
           <div className="reportsHeaderCopy">
-            <div className="reportsTitleLine"><p className="reportsEyebrow">SPRİNT YÜZME OKULU · YÖNETİM RAPORLARI</p><span className="liveBadge"><i /> Canlı veri</span></div>
-            <h1>Rapor Merkezi</h1>
+            <div className="reportsTitleLine"><p className="reportsEyebrow">{String(brandSettings?.values.display_name || "Sprint Yüzme Okulu")} · YÖNETİM RAPORLARI</p><span className="liveBadge"><i /> Canlı veri</span></div>
+            <h1>{String(reportSettings?.values.report_title || "Rapor Merkezi")}</h1>
             <p>Öğrenci, şube, yoklama, tahsilat ve antrenör performansını tek ekrandan izleyin.</p>
           </div>
           <div className="reportsHeaderActions"><Link href="/" className="reportSecondary">← Yönetim paneli</Link><Link href="/odemeler" className="reportPrimary">Ödeme merkezini aç</Link></div>
@@ -427,6 +430,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </article>
         </section>
 
+        {reportSettings?.values.report_footer ? <div className="reportFootnote">{String(reportSettings.values.report_footer)}</div> : null}
         <div className="reportFootnote">Rapor aralığı: <strong>{from}</strong> – <strong>{to}</strong>. Veriler doğrudan SprintOS modüllerinde kullanılan kayıtlardan okunur; rapor ekranı kayıt değiştirmez. Eğitmen ders sayısı yalnızca eğitmeni kaydedilmiş yoklamaları kapsar.</div>
       </div>
     </main>

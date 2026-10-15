@@ -1,3 +1,4 @@
+import { readSettings } from "@/lib/settings/server";
 import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
 // @ts-nocheck
 import { NextRequest, NextResponse } from "next/server";
@@ -161,15 +162,16 @@ export async function GET(){
   let rows=data||[];
   const attendanceWarnings=rows.filter(row=>row.event_key==="attendance_missing");
   if(attendanceWarnings.length){
+    const {values:attendanceSettings}=await readSettings(supabase,profile.organization_id,"ders");
     const [eligibility,schedules,records]=await Promise.all([
       loadAttendanceEligibility(supabase,profile.organization_id),
-      supabase.from("lesson_schedules").select("id,group_id").eq("organization_id",profile.organization_id),
+      supabase.from("lesson_schedules").select("id,group_id,start_time").eq("organization_id",profile.organization_id),
       supabase.from("attendance_records").select("student_id,schedule_id,group_id,lesson_date").eq("organization_id",profile.organization_id).gte("lesson_date",since.slice(0,10))
     ]);
     if(schedules.error||records.error)throw new Error("Yoklama uyarıları doğrulanamadı.");
     const obsolete=new Set<string>();
     for(const row of attendanceWarnings){const schedule=(schedules.data||[]).find(s=>s.id===row.entity_id);const date=row.metadata?.lesson_date;
-      if(schedule&&date&&!missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length){obsolete.add(row.id);await supabase.from("system_notifications").update({is_read:true,metadata:{...(row.metadata||{}),resolved_reason:"cancelled_or_no_pending_attendance"}}).eq("organization_id",profile.organization_id).eq("id",row.id);}
+      if(!attendanceSettings.missing_alert_enabled || (schedule&&date&&(Date.now()<trTimestamp(date,String(schedule.start_time).slice(0,5))+Number(attendanceSettings.missing_alert_minutes)*60000 || !missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length))){obsolete.add(row.id);await supabase.from("system_notifications").update({is_read:true,metadata:{...(row.metadata||{}),resolved_reason:"cancelled_or_no_pending_attendance"}}).eq("organization_id",profile.organization_id).eq("id",row.id);}
     }rows=rows.filter(row=>!obsolete.has(row.id));
   }
   const renewalApprovalIds=rows.filter((row:any)=>row.event_key==="registration_custom_lesson_count_approved"&&row.entity_id).map((row:any)=>row.entity_id as string);

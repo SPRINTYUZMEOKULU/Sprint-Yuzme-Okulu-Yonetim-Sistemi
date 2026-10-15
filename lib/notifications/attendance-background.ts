@@ -1,8 +1,11 @@
+import { readSettings } from "@/lib/settings/server";
 import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
 import { filterEffectivelyActiveSchedules } from "@/lib/schedules/effective";
 import { createNotification } from "@/lib/notifications/create-notification";
 
 export async function runAttendanceBackground(client:any,organizationId:string,date:string,currentMinutes:number,notify:typeof createNotification=createNotification){
+ const {values:attendanceSettings}=await readSettings(client,organizationId,"ders");
+ const warningMinutes=Number(attendanceSettings.missing_alert_minutes);
  const day=new Date(`${date}T12:00:00Z`).getUTCDay()||7;
  const [eligibility,schedules,groups,branches,records,existing]=await Promise.all([
   loadAttendanceEligibility(client,organizationId),
@@ -14,7 +17,7 @@ export async function runAttendanceBackground(client:any,organizationId:string,d
  ]);
  if(schedules.error||groups.error||branches.error||records.error||existing.error)throw new Error("Arka plan yoklama verileri yüklenemedi.");
  const active=filterEffectivelyActiveSchedules<any>(schedules.data||[],branches.data||[],groups.data||[]);
- const overdue=active.filter((schedule:any)=>{const [h,m]=String(schedule.start_time).slice(0,5).split(':').map(Number);return currentMinutes>=h*60+m+15&&missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length>0});
+ const overdue=active.filter((schedule:any)=>{const [h,m]=String(schedule.start_time).slice(0,5).split(':').map(Number);return attendanceSettings.missing_alert_enabled&&currentMinutes>=h*60+m+warningMinutes&&missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length>0});
  const overdueIds=new Set(overdue.map(s=>s.id));
  let resolved=0,created=0,pushSent=0,pushFailed=0;
  for(const row of existing.data||[]){if(!row.is_read&&!overdueIds.has(row.entity_id)){
@@ -26,7 +29,7 @@ export async function runAttendanceBackground(client:any,organizationId:string,d
   if(sentSchedules.has(schedule.id))continue;
   const group=(groups.data||[]).find((g:any)=>g.id===schedule.group_id);
   const time=String(schedule.start_time).slice(0,5);
-  const result=await notify({organizationId,title:"Yoklama alınmadı",body:`${group?.name||"Grup"} · ${time} dersi başlayalı 15 dakikadan fazla oldu. Yoklama henüz tamamlanmadı.`,category:"attendance",eventKey:"attendance_missing",notificationType:"attendance_missing",priority:"high",severity:"warning",sourceType:"lesson_schedule",sourceId:schedule.id,entityType:"lesson_schedule",entityId:schedule.id,
+  const result=await notify({organizationId,title:"Yoklama alınmadı",body:`${group?.name||"Grup"} · ${time} dersi başlayalı ${warningMinutes} dakikadan fazla oldu. Yoklama henüz tamamlanmadı.`,category:"attendance",eventKey:"attendance_missing",notificationType:"attendance_missing",priority:"high",severity:"warning",sourceType:"lesson_schedule",sourceId:schedule.id,entityType:"lesson_schedule",entityId:schedule.id,
    targetPath:`/yoklama?${new URLSearchParams({date,branchId:schedule.branch_id||"",time,scheduleId:schedule.id})}`,
    metadata:{lesson_date:date,group_id:schedule.group_id,schedule_id:schedule.id,start_time:schedule.start_time,branch_id:schedule.branch_id,coach_id:schedule.coach_id,trigger:"server_scheduler"},push:true});
   if(!result.ok)throw new Error(result.message);created+=result.notificationIds.length?1:0;pushSent+=result.push.sent;pushFailed+=result.push.failed;

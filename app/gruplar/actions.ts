@@ -1,4 +1,5 @@
 "use server";
+import { readSettings } from "@/lib/settings/server";
 
 import { validateGroupLevel } from "@/lib/levels/validate-group-level";
 import { revalidatePath } from "next/cache";
@@ -82,10 +83,11 @@ async function getOrganizationContext() {
 
 export async function createGroup(formData: FormData) {
   const { organizationId, supabase } = await getOrganizationContext();
+  const { values: groupDefaults } = await readSettings(supabase, organizationId, "gruplar");
 
   const branchId = cleanText(formData.get("branch_id"), 80);
   const levelId = cleanText(formData.get("level_id"), 80) || null;
-  const capacity = Math.min(50, Math.max(1, Number(formData.get("capacity") || 6)));
+  const capacity = Math.min(50, Math.max(1, Number(formData.get("capacity") || groupDefaults.default_capacity)));
 
   const weekdays = Array.from(
     new Set(

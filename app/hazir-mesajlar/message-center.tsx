@@ -5,6 +5,7 @@ import {
   SPRINT_MESSAGE_TEMPLATES,
   renderSprintMessage,
   type SprintMessageKey,
+  type SprintMessageTemplate,
 } from "@/lib/messaging/sprint-message-catalog";
 import { addGiftLessons } from "./actions";
 import styles from "./page.module.css";
@@ -15,7 +16,7 @@ type Schedule = { id:string; group_id:string; branch_id:string; weekday:number; 
 type Student = { id:string; first_name:string; last_name:string; phone?:string|null; guardian_phone?:string|null; branch_id?:string|null; preferred_group_id?:string|null; status:string };
 type Membership = { student_id:string; group_id:string; is_active:boolean };
 type AttendancePlan = { student_id:string; group_id?:string|null; selected_weekdays?:number[]|null; is_active:boolean };
-type Props = { branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
+type Props = { templates?:SprintMessageTemplate[]; branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
 type QueueItem = { studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
 
 const DAYS:Record<number,string> = {1:"Pzt",2:"Sal",3:"Çar",4:"Per",5:"Cum",6:"Cmt",7:"Paz"};
@@ -30,14 +31,14 @@ function cleanPhone(v?:string|null){
   return digits;
 }
 
-export default function MessageCenter({branches,groups,schedules,students,memberships,attendancePlans,whatsappApiReady=false}:Props){
+export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branches,groups,schedules,students,memberships,attendancePlans,whatsappApiReady=false}:Props){
   const [tab,setTab] = useState<"compose"|"templates"|"media"|"history"|"gift">("compose");
   const [branchId,setBranchId] = useState("");
   const [groupId,setGroupId] = useState("");
   const [scheduleId,setScheduleId] = useState("");
   const [selected,setSelected] = useState<string[]>([]);
   const [templateKey,setTemplateKey] = useState<SprintMessageKey>("registration");
-  const [message,setMessage] = useState(SPRINT_MESSAGE_TEMPLATES[0].body);
+  const [message,setMessage] = useState(templates[0].body);
   const [mediaUrl,setMediaUrl] = useState("");
   const [giftCount,setGiftCount] = useState(1);
   const [giftNote,setGiftNote] = useState("");
@@ -109,7 +110,7 @@ export default function MessageCenter({branches,groups,schedules,students,member
   const missingPhoneCount = Math.max(0,activeStudents.length-sendableCount);
 
   function chooseTemplate(key:SprintMessageKey){
-    const t=SPRINT_MESSAGE_TEMPLATES.find(x=>x.key===key); if(!t)return;
+    const t=templates.find(x=>x.key===key); if(!t)return;
     setTemplateKey(key); setMessage(t.body); setTab("compose"); setQueue([]); setApiResult("");
   }
 
@@ -194,13 +195,13 @@ export default function MessageCenter({branches,groups,schedules,students,member
           </div>
         </div>
 
-        {tab==="templates" ? <div className={styles.card}><div className={styles.cardHead}><div><span>2</span><h2>Merkezi Akıllı Mesaj Kütüphanesi</h2></div><strong>{SPRINT_MESSAGE_TEMPLATES.length} şablon</strong></div><p className={styles.muted}>Öğrenci, ödeme, ders operasyonu ve Hazır Mesajlar ekranlarında aynı durum için aynı mesaj dili kullanılacak merkezi katalog budur.</p><div className={styles.templateGrid}>{SPRINT_MESSAGE_TEMPLATES.map(t=><button key={t.key} className={styles.templateCard} onClick={()=>chooseTemplate(t.key)}><i>{t.icon}</i><b>{t.title}</b><small>{t.category} · şablonu aç ve düzenle</small></button>)}</div></div> : null}
+        {tab==="templates" ? <div className={styles.card}><div className={styles.cardHead}><div><span>2</span><h2>Merkezi Akıllı Mesaj Kütüphanesi</h2></div><strong>{templates.length} şablon</strong></div><p className={styles.muted}>Öğrenci, ödeme, ders operasyonu ve Hazır Mesajlar ekranlarında aynı durum için aynı mesaj dili kullanılacak merkezi katalog budur.</p><div className={styles.templateGrid}>{templates.map(t=><button key={t.key} className={styles.templateCard} onClick={()=>chooseTemplate(t.key)}><i>{t.icon}</i><b>{t.title}</b><small>{t.category} · şablonu aç ve düzenle</small></button>)}</div></div> : null}
 
         {tab==="gift" ? <div className={styles.card}><div className={styles.cardHead}><div><span>🎁</span><h2>SPRİNT Hediye Ders Merkezi</h2></div></div><div className={styles.giftBanner}><div className={styles.giftIcon}>🎁</div><div><b>Kursiyerinize özel hediye ders tanımlayın</b><p>Ders hakkı otomatik artar, planlanan bitiş tarihi seçilen grup/seans düzenine göre uzar ve kursiyer işlem geçmişine kaydedilir.</p></div></div><div className={styles.filters}><label>Hediye ders sayısı<select value={giftCount} onChange={e=>setGiftCount(Number(e.target.value))}>{[1,2,3,4,5,6,8,10,12].map(n=><option key={n} value={n}>{n} ders</option>)}</select></label><label className={styles.wide}>Özel not<input value={giftNote} onChange={e=>setGiftNote(e.target.value)} placeholder="Örn. SPRİNT tarafından başarı hediyesi"/></label></div><div className={styles.summaryBox}><span>Seçili kursiyer <b>{activeIds.length}</b></span><span>Grup <b>{selectedGroup?.name||"Seçilmedi"}</b></span><span>Seans <b>{programText}</b></span></div><button className={styles.primary} disabled={pending||!activeIds.length||!groupId} onClick={applyGift}>{pending?"Hediye dersler işleniyor…":`${activeIds.length} Kişiye Hediye Ders Ekle`}</button>{result&&<div className={result.ok?styles.success:styles.error}>{result.message}</div>}</div> : null}
 
         {tab!=="templates" && tab!=="gift" ? <div className={styles.card}>
           <div className={styles.cardHead}><div><span>2</span><h2>Mesaj İçeriği</h2></div></div>
-          <div className={styles.quickTemplates}>{SPRINT_MESSAGE_TEMPLATES.map(t=><button key={t.key} className={templateKey===t.key?styles.chipActive:""} onClick={()=>chooseTemplate(t.key)}>{t.icon} {t.title}</button>)}</div>
+          <div className={styles.quickTemplates}>{templates.map(t=><button key={t.key} className={templateKey===t.key?styles.chipActive:""} onClick={()=>chooseTemplate(t.key)}>{t.icon} {t.title}</button>)}</div>
           <textarea className={styles.textarea} value={message} onChange={e=>{setMessage(e.target.value);setQueue([]);}} rows={13}/>
           <div className={styles.variables}><b>Akıllı alanlar:</b> <code>{`{ogrenci_adi}`}</code> <code>{`{sube}`}</code> <code>{`{grup}`}</code> <code>{`{program}`}</code> <code>{`{bitis_tarihi}`}</code> <code>{`{kalan_ders}`}</code></div>
           <label className={styles.mediaField}>Afiş / görsel bağlantısı<input value={mediaUrl} onChange={e=>{setMediaUrl(e.target.value);setQueue([]);}} placeholder="https://... görsel bağlantısı"/></label>

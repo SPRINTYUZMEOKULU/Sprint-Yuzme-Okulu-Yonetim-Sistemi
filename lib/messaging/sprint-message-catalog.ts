@@ -245,7 +245,7 @@ export function renderSprintMessage(
   body: string,
   values: Record<string, string | number | null | undefined>,
 ) {
-  return body.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key: string) => {
+  return body.replace(/\{\{?([a-zA-Z0-9_]+)\}\}?/g, (match, key: string) => {
     const value = values[key];
     return value === null || value === undefined || value === "" ? "—" : String(value);
   });

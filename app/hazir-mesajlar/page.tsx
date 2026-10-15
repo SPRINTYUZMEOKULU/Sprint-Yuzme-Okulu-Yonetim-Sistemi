@@ -1,3 +1,4 @@
+import { loadMessageTemplates } from "@/lib/messaging/settings-catalog";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +12,7 @@ export default async function ReadyMessagesPage() {
   const organizationId = profile.organization_id;
   if (!organizationId) throw new Error("Organizasyon bilgisi bulunamadı.");
   const supabase = await createClient();
+  const templates = await loadMessageTemplates(supabase, organizationId);
   const canDirectWhatsApp = ["owner","admin","branch_manager","registration_staff"].includes(profile.role);
   const whatsappApiReady = canDirectWhatsApp && Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
@@ -43,6 +45,7 @@ export default async function ReadyMessagesPage() {
         <div className={styles.error}>Veriler yüklenemedi: {loadError.message}</div>
       ) : (
         <MessageCenter
+          templates={templates}
           branches={branchesRes.data || []}
           groups={groupsRes.data || []}
           schedules={schedulesRes.data || []}

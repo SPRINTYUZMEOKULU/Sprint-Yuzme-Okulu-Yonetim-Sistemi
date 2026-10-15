@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { SPRINT_MESSAGE_TEMPLATE_MAP } from "@/lib/messaging/sprint-message-catalog";
+import { loadMessageTemplates } from "@/lib/messaging/settings-catalog";
 import PaymentActions from "./payment-actions";
 import SecurePaymentLink from "./secure-payment-link";
 
@@ -16,7 +16,7 @@ function addCandidate(list:PhoneCandidate[],phone:unknown,label:string,source:st
 export default async function PaymentInformationPage({searchParams}:{searchParams:SearchParams}){
  const params=await searchParams;const studentId=typeof params.studentId==="string"?params.studentId:"";
  const profile=await requireProfile(["owner","admin","branch_manager","registration_staff","accounting"]);const organizationId=profile.organization_id;
- const template=SPRINT_MESSAGE_TEMPLATE_MAP.bank_info;const message=template?.body||"Ödeme bilgisi şablonu bulunamadı.";
+ const templates=organizationId?await loadMessageTemplates(await createClient(),organizationId):[];const template=templates.find(t=>t.key==="bank_info");const message=template?.body||"Ödeme bilgisi şablonu bulunamadı.";
  let studentName="";let phoneCandidates:PhoneCandidate[]=[];let lastSentAt="";
  if(organizationId&&studentId){const supabase=await createClient();const[{data:student},{data:latestMessage}]=await Promise.all([
   supabase.from("students").select("id,first_name,last_name,birth_date,phone,guardian_name,guardian_phone,preferred_group_id").eq("organization_id",organizationId).eq("id",studentId).maybeSingle(),
