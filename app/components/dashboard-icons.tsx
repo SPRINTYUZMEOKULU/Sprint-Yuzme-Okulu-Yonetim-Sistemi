@@ -21,6 +21,34 @@ function IconBase({ children, ...props }: IconProps & { children: ReactNode }) {
 }
 
 export const Icons = {
+  building: (props: IconProps) => (
+    <IconBase {...props}>
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1M10 21v-3h4v3M3 21h18" />
+    </IconBase>
+  ),
+  package: (props: IconProps) => (
+    <IconBase {...props}>
+      <path d="m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5V14" />
+    </IconBase>
+  ),
+  levels: (props: IconProps) => (
+    <IconBase {...props}>
+      <path d="M3 20h18M5 16h4v4H5zM10 11h4v9h-4zM15 5h4v15h-4z" />
+    </IconBase>
+  ),
+  shield: (props: IconProps) => (
+    <IconBase {...props}>
+      <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z" />
+      <path d="m8.5 11.5 2.5 2.5 4.5-5" />
+    </IconBase>
+  ),
+  info: (props: IconProps) => (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 7h.01" />
+    </IconBase>
+  ),
   dashboard: (props: IconProps) => (
     <IconBase {...props}>
       <rect x="3" y="3" width="7" height="7" rx="2" />

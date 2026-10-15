@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icons } from "@/app/components/dashboard-icons";
 import { requireProfile } from "@/lib/auth/profile";
 
 export const dynamic = "force-dynamic";
@@ -7,21 +8,21 @@ type SettingsCard = {
   title: string;
   description: string;
   href: string;
-  icon: string;
+  icon: keyof typeof Icons;
   accent: string;
   status?: string;
   statusTone?: "active" | "neutral" | "warning";
 };
 
 const settingsCards: SettingsCard[] = [
-  { title: "Hazır Mesajlar", description: "WhatsApp ve kayıt bilgilendirme şablonlarını yönetin.", href: "/hazir-mesajlar", icon: "💬", accent: "#0891b2", status: "Aktif", statusTone: "active" },
-  { title: "Seviye Yönetimi", description: "Yüzme seviyelerinin beceri açıklamalarını, sırasını ve aktifliğini yönetin.", href: "/ayarlar/seviyeler", icon: "🏊", accent: "#176de9", status: "Aktif", statusTone: "active" },
+  { title: "Hazır Mesajlar", description: "WhatsApp ve kayıt bilgilendirme şablonlarını yönetin.", href: "/hazir-mesajlar", icon: "message", accent: "#0891b2", status: "Aktif", statusTone: "active" },
+  { title: "Seviye Yönetimi", description: "Yüzme seviyelerinin beceri açıklamalarını, sırasını ve aktifliğini yönetin.", href: "/ayarlar/seviyeler", icon: "levels", accent: "#176de9", status: "Aktif", statusTone: "active" },
   {
     title: "Ön Kayıt Formu",
     description:
       "Form alanlarını gösterin veya gizleyin, zorunlu alanları belirleyin ve kursiyerlerin göreceği form yapısını yönetin.",
     href: "/ayarlar/on-kayit-formu",
-    icon: "📝",
+    icon: "note",
     accent: "#176de9",
     status: "Aktif",
     statusTone: "active",
@@ -31,7 +32,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Kurumun şube, tesis ve iletişim yönetimine ulaşın.",
     href: "/ayarlar/kurum",
-    icon: "🏢",
+    icon: "building",
     accent: "#0f766e",
     status: "Bağlantılı",
     statusTone: "neutral",
@@ -41,7 +42,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Şubelerin, grupların ve saatlerin sistemde ve ön kayıt formunda nasıl görüneceğini yönetin.",
     href: "/subeler",
-    icon: "🏊",
+    icon: "group",
     accent: "#7c3aed",
     status: "Aktif",
     statusTone: "active",
@@ -51,7 +52,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Ders paketlerini, fiyatları ve ön kayıt formunda hangi paketlerin yayınlanacağını yönetin.",
     href: "/paketler",
-    icon: "📦",
+    icon: "package",
     accent: "#d97706",
     status: "Aktif",
     statusTone: "active",
@@ -61,7 +62,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Bildirim tercihlerini, seslerini ve dağıtım yetkilerini yönetin.",
     href: "/ayarlar/bildirimler",
-    icon: "💬",
+    icon: "bell",
     accent: "#0891b2",
     status: "Bağlantılı",
     statusTone: "neutral",
@@ -71,7 +72,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Yönetici, şube yöneticisi, kayıt personeli ve antrenörlerin sistem yetkilerini belirleyin.",
     href: "/kullanicilar-ve-yetkiler",
-    icon: "👥",
+    icon: "users",
     accent: "#be123c",
     status: "Bağlantılı",
     statusTone: "neutral",
@@ -81,7 +82,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Yüzme okulu kuralları, sağlık beyanı, elektronik kabul metinleri ve sürümlerini yönetin.",
     href: "/ayarlar/kurallar",
-    icon: "✅",
+    icon: "shield",
     accent: "#15803d",
     status: "Bağlantılı",
     statusTone: "warning",
@@ -91,7 +92,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Veli belgelerini yönetin; rapor ve öğrenci dosyası çıktılarına ulaşın.",
     href: "/ayarlar/belgeler",
-    icon: "📄",
+    icon: "note",
     accent: "#475569",
     status: "Bağlantılı",
     statusTone: "warning",
@@ -101,7 +102,7 @@ const settingsCards: SettingsCard[] = [
     description:
       "Kayıt, onay, bildirim ve denetim modüllerine tek merkezden ulaşın.",
     href: "/ayarlar/sistem",
-    icon: "⚙️",
+    icon: "settings",
     accent: "#334155",
     status: "Bağlantılı",
     statusTone: "warning",
@@ -111,12 +112,17 @@ const settingsCards: SettingsCard[] = [
     description:
       "Ödeme, vade tarihi, kayıt düzenleme, silme, kasa teslimi ve diğer kritik işlemlerde yönetici onay kurallarını yönetin.",
     href: "/ayarlar/onay-merkezi",
-    icon: "🔐",
+    icon: "approval",
     accent: "#7c3aed",
     status: "Aktif",
     statusTone: "active",
   },
 ];
+
+function SettingsIcon({ name }: { name: keyof typeof Icons }) {
+  const Icon = Icons[name];
+  return <Icon width={24} height={24} />;
+}
 
 export default async function SettingsPage() {
   await requireProfile(["owner", "admin"]);
@@ -155,7 +161,7 @@ export default async function SettingsPage() {
 
         <section className="settingsOverview">
           <article>
-            <div className="overviewIcon blue">⚙</div>
+            <div className="overviewIcon blue"><SettingsIcon name="settings" /></div>
 
             <div>
               <span>Ayar Merkezi</span>
@@ -164,7 +170,7 @@ export default async function SettingsPage() {
           </article>
 
           <article>
-            <div className="overviewIcon green">✓</div>
+            <div className="overviewIcon green"><SettingsIcon name="check" /></div>
 
             <div>
               <span>Ön Kayıt Formu</span>
@@ -173,7 +179,7 @@ export default async function SettingsPage() {
           </article>
 
           <article>
-            <div className="overviewIcon orange">🔒</div>
+            <div className="overviewIcon orange"><SettingsIcon name="shield" /></div>
 
             <div>
               <span>Elektronik Kabul</span>
@@ -182,7 +188,7 @@ export default async function SettingsPage() {
           </article>
 
           <article>
-            <div className="overviewIcon purple">{settingsCards.length}</div>
+            <div className="overviewIcon purple"><SettingsIcon name="dashboard" /></div>
 
             <div>
               <span>Ayar Modülü</span>
@@ -217,7 +223,7 @@ export default async function SettingsPage() {
                     color: item.accent,
                   }}
                 >
-                  {item.icon}
+                  <SettingsIcon name={item.icon} />
                 </div>
 
                 <div className="settingsCardBody">
@@ -239,7 +245,7 @@ export default async function SettingsPage() {
 
                   <div className="settingsCardFooter">
                     <span>Ayarları yönet</span>
-                    <b>→</b>
+                    <Icons.arrow width={18} height={18} />
                   </div>
                 </div>
               </Link>
@@ -248,7 +254,7 @@ export default async function SettingsPage() {
         </section>
 
         <section className="settingsInfo">
-          <div className="settingsInfoIcon">i</div>
+          <div className="settingsInfoIcon"><Icons.info width={18} height={18} /></div>
 
           <div>
             <strong>Merkezi ayar yapısı</strong>
@@ -481,6 +487,10 @@ export default async function SettingsPage() {
             box-shadow .17s ease;
         }
 
+        .settingsCard:focus-visible { outline: 3px solid #176de9; outline-offset: 3px; }
+
+        .settingsCardIcon svg, .overviewIcon svg, .settingsInfoIcon svg { display: block; flex-shrink: 0; }
+
         .settingsCard:hover {
           transform: translateY(-2px);
           border-color: #b9d1f3;
@@ -490,6 +500,9 @@ export default async function SettingsPage() {
         }
 
         .settingsCardIcon {
+          border: 1px solid currentColor;
+          border-color: color-mix(in srgb, currentColor 15%, transparent);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 3px 8px rgba(15,23,42,.04);
           flex: 0 0 auto;
           width: 46px;
           height: 46px;
