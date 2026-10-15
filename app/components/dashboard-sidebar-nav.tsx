@@ -38,6 +38,7 @@ const branches: Record<string, ChildItem[]> = {
   ],
   "/gruplar": [
     { label: "Grup Merkezi", href: "/gruplar" },
+    { label: "Seviye Yönetimi", href: "/ayarlar/seviyeler" },
     { label: "Ders Programı", href: "/ders-programi" },
   ],
   "/ders-programi": [

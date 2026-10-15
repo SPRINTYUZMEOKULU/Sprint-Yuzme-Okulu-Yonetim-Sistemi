@@ -301,6 +301,14 @@ export async function POST(
         100
       ) || null;
 
+    if (swimmingLevel && swimmingLevel !== "Bilmiyorum") {
+      const { data: level, error: levelError } = await supabase.from("swimming_levels")
+        .select("id").eq("organization_id", organization.id)
+        .eq("name", swimmingLevel).eq("is_active", true).maybeSingle();
+      if (levelError) throw levelError;
+      if (!level) return NextResponse.json({ error: "Seviye seçenekleri güncellendi. Formu yenileyip aktif bir seviye seçin." }, { status: 400 });
+    }
+
     let preferredDays =
       clean(
         body.preferredDays,

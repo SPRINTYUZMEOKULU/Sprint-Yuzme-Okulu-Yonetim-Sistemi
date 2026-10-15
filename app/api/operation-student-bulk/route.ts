@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       .from("swimming_levels")
       .select("id,name,is_active")
       .eq("organization_id", organizationId)
-      .ilike("name", level)
+      .eq("name", level)
       .limit(1)
       .maybeSingle();
 
@@ -72,44 +72,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: levelLookupError.message }, { status: 500 });
     }
 
-    let canonicalLevel = levelRow;
-    if (canonicalLevel && canonicalLevel.is_active === false) {
-      const { data: reactivatedLevel, error: reactivateLevelError } = await supabase
-        .from("swimming_levels")
-        .update({ is_active: true, updated_at: new Date().toISOString() })
-        .eq("id", canonicalLevel.id)
-        .eq("organization_id", organizationId)
-        .select("id,name,is_active")
-        .single();
-
-      if (reactivateLevelError || !reactivatedLevel) {
-        return NextResponse.json(
-          { error: reactivateLevelError?.message || "Seviye kaydı aktifleştirilemedi." },
-          { status: 500 },
-        );
-      }
-      canonicalLevel = reactivatedLevel;
-    }
-
-    if (!canonicalLevel) {
-      const { data: createdLevel, error: createLevelError } = await supabase
-        .from("swimming_levels")
-        .insert({
-          organization_id: organizationId,
-          name: level,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
-        .select("id,name,is_active")
-        .single();
-
-      if (createLevelError || !createdLevel) {
-        return NextResponse.json(
-          { error: createLevelError?.message || "Seviye kaydı oluşturulamadı." },
-          { status: 500 },
-        );
-      }
-      canonicalLevel = createdLevel;
+    const canonicalLevel = levelRow;
+    if (!canonicalLevel || !canonicalLevel.is_active) {
+      return NextResponse.json({ error: "Aktif bir seviye seçin. Seviye Yönetimi ekranını kullanın." }, { status: 400 });
     }
 
     const { data: currentMemberships, error: membershipLookupError } = await supabase

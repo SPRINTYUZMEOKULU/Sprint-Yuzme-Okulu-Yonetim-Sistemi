@@ -14,6 +14,7 @@ type SettingsCard = {
 };
 
 const settingsCards: SettingsCard[] = [
+  { title: "Seviye Yönetimi", description: "Yüzme seviyelerinin beceri açıklamalarını, sırasını ve aktifliğini yönetin.", href: "/ayarlar/seviyeler", icon: "🏊", accent: "#176de9", status: "Aktif", statusTone: "active" },
   {
     title: "Ön Kayıt Formu",
     description:
