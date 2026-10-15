@@ -107,6 +107,8 @@ export default function PreRegistrationForm() {
   const [groupId, setGroupId] =
     useState("");
 
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+
   useEffect(() => {
     fetch(
       "/api/public-registration-options",
@@ -202,6 +204,12 @@ export default function PreRegistrationForm() {
         groupId
     );
 
+  useEffect(() => {
+    setSelectedDays(Array.from(new Set(options.schedules.filter((s) => s.group_id === groupId).map((s) => s.weekday))));
+  }, [groupId, options.schedules]);
+
+  const chosenSchedules = selectedSchedules.filter((s) => selectedDays.includes(s.weekday));
+
   const selectedLevel =
     selectedGroup?.level_id
       ? options.levels.find(
@@ -253,6 +261,11 @@ export default function PreRegistrationForm() {
   ) {
     event.preventDefault();
 
+    if (selectedSchedules.length && selectedDays.length < Math.min(2, new Set(selectedSchedules.map((s) => s.weekday)).size)) {
+      setStatus("error");
+      setMessage("Lütfen en az iki ders günü seçin.");
+      return;
+    }
     setStatus("sending");
     setMessage("");
 
@@ -1207,34 +1220,17 @@ export default function PreRegistrationForm() {
               </small>
             </div>
 
+            <p>Katılacağınız ders günlerini işaretleyin. Üç günlük gruplarda iki veya üç gün seçebilirsiniz.</p>
             <div className="selectedSchedule">
-              {selectedSchedules.map(
-                (schedule) => (
-                  <span
-                    key={
-                      schedule.id
-                    }
-                  >
-                    <b>
-                      {
-                        days[
-                          schedule.weekday
-                        ]
-                      }
-                    </b>
-
-                    {schedule.start_time.slice(
-                      0,
-                      5
-                    )}
-                    –
-                    {schedule.end_time.slice(
-                      0,
-                      5
-                    )}
-                  </span>
-                )
-              )}
+              {selectedSchedules.map((schedule) => (
+                <label key={schedule.id} style={{display: "flex", alignItems: "center", gap: 8, padding: 12, border: "1px solid #b9d4ff", borderRadius: 12, background: "white", cursor: "pointer"}}>
+                  <input type="checkbox" checked={selectedDays.includes(schedule.weekday)}
+                    onChange={(event) => setSelectedDays((current) => event.target.checked
+                      ? [...current, schedule.weekday] : current.filter((day) => day !== schedule.weekday))} />
+                  <b>{days[schedule.weekday]}</b>
+                  {schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}
+                </label>
+              ))}
             </div>
 
             <div className="selectedMeta">
@@ -1280,7 +1276,7 @@ export default function PreRegistrationForm() {
             <input
               type="hidden"
               name="preferredDays"
-              value={selectedSchedules
+              value={chosenSchedules
                 .map(
                   (schedule) =>
                     days[
@@ -1293,17 +1289,7 @@ export default function PreRegistrationForm() {
             <input
               type="hidden"
               name="preferredTime"
-              value={
-                selectedSchedules[0]
-                  ? `${selectedSchedules[0].start_time.slice(
-                      0,
-                      5
-                    )} - ${selectedSchedules[0].end_time.slice(
-                      0,
-                      5
-                    )}`
-                  : ""
-              }
+              value={chosenSchedules.map((s) => `${days[s.weekday]} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`).join(" / ")}
             />
           </div>
         ) : null}

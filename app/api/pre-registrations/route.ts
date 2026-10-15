@@ -301,13 +301,13 @@ export async function POST(
         100
       ) || null;
 
-    const preferredDays =
+    let preferredDays =
       clean(
         body.preferredDays,
         150
       ) || null;
 
-    const preferredTime =
+    let preferredTime =
       clean(
         body.preferredTime,
         150
@@ -737,6 +737,26 @@ export async function POST(
       }
 
       group = data;
+
+      const { data: schedules, error: scheduleError } = await supabase
+        .from("lesson_schedules")
+        .select("weekday,start_time,end_time")
+        .eq("organization_id", organization.id)
+        .eq("group_id", groupId)
+        .eq("is_active", true)
+        .order("weekday");
+      if (scheduleError) throw scheduleError;
+      const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+      const requested = Array.from(new Set((preferredDays || "").split(/\s*[-,]\s*/).filter(Boolean)));
+      const available = new Set((schedules || []).map((s) => dayNames[s.weekday]));
+      if (available.size && (requested.length < Math.min(2, available.size) || requested.some((day) => !available.has(day)))) {
+        return NextResponse.json({ error: "Lütfen grubun programından en az iki geçerli ders günü seçin." }, { status: 400 });
+      }
+      if (available.size) {
+        const selected = (schedules || []).filter((s) => requested.includes(dayNames[s.weekday]));
+        preferredDays = Array.from(new Set(selected.map((s) => dayNames[s.weekday]))).join(" - ");
+        preferredTime = selected.map((s) => `${dayNames[s.weekday]} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`).join(" / ");
+      }
     }
 
     let coursePackage:

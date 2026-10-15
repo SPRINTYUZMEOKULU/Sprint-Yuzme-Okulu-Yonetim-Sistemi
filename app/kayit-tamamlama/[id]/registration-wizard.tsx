@@ -829,6 +829,11 @@ export default function RegistrationWizard({
    * ----------------------------------------------------------
    */
 
+  const requestedWeekdays = Object.entries(dayNames)
+    .filter(([, name]) => (student.preferred_days || "").split(/\s*[-,]\s*/).includes(name))
+    .map(([day]) => Number(day))
+    .filter((day) => initialGroup?.schedules?.some((schedule) => schedule.weekday === day));
+
   const initialWeekdays =
     draftWeekdays.length
       ? draftWeekdays
@@ -842,7 +847,9 @@ export default function RegistrationWizard({
         ? activeEnrollment
             .lesson_weekdays
 
-        : initialGroup
+        : requestedWeekdays.length
+          ? requestedWeekdays
+          : initialGroup
             ?.schedules
             ?.map(
               (item) =>
