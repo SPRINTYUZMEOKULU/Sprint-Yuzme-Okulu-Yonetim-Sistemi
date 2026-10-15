@@ -235,9 +235,8 @@ export default async function GroupsPage({
 
     supabase
       .from("swimming_levels")
-      .select("id,name")
+      .select("id,name,description,is_active")
       .eq("organization_id", organizationId)
-      .eq("is_active", true)
       .order("sort_order"),
 
     supabase
@@ -303,7 +302,8 @@ export default async function GroupsPage({
     studentsResult.error;
 
   const branches = branchesResult.data || [];
-  const levels = levelsResult.data || [];
+  const allLevels = levelsResult.data || [];
+  const levels = allLevels.filter((level) => level.is_active);
   const groups = (groupsResult.data || []) as GroupItem[];
   const schedules = (schedulesResult.data || []) as ScheduleItem[];
   const coaches = coachesResult.data || [];
@@ -324,7 +324,7 @@ export default async function GroupsPage({
   );
 
   const levelMap = new Map(
-    levels.map((level) => [level.id, level.name])
+    allLevels.map((level) => [level.id, level.name])
   );
 
   const coachMap = new Map(
@@ -792,7 +792,7 @@ export default async function GroupsPage({
                     group={group}
                     schedules={scheduleMap.get(group.id) || []}
                     branches={branches}
-                    levels={levels}
+                    levels={allLevels.filter((level) => level.is_active || level.id === group.level_id)}
                     coaches={coaches}
                   />
 
@@ -999,6 +999,7 @@ export default async function GroupsPage({
 
             <label>
               Seviye
+              <small>Seviye Yönetimi’ndeki aktif seçenekler</small>
               <select name="level_id" defaultValue="">
                 <option value="">Tüm seviyeler</option>
                 {levels.map((level) => (
@@ -1007,6 +1008,7 @@ export default async function GroupsPage({
                   </option>
                 ))}
               </select>
+              <Link href="/ayarlar/seviyeler" target="_blank" rel="noopener noreferrer" style={{fontSize: 12, color: "#1768ce"}}>Seviyeleri Yönet ↗</Link>
             </label>
 
             <label>

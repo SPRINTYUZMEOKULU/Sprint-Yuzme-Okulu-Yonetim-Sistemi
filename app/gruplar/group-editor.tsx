@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updateGroupMulti } from "./update-group-multi";
@@ -8,7 +9,7 @@ type OptionItem = { id: string; name: string };
 type CoachItem = { id: string; full_name: string | null };
 type ScheduleItem = { id: string; weekday: number; start_time: string; end_time: string };
 type GroupItem = { id: string; branch_id: string; level_id: string | null; name: string; capacity: number; course_type: string; description: string | null; primary_coach_id: string | null; public_registration: boolean };
-type Props = { group: GroupItem; schedules: ScheduleItem[]; branches: OptionItem[]; levels: OptionItem[]; coaches: CoachItem[] };
+type Props = { group: GroupItem; schedules: ScheduleItem[]; branches: OptionItem[]; levels: (OptionItem & { description?: string | null; is_active?: boolean })[]; coaches: CoachItem[] };
 
 const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 const courseTypes = ["Çocuk Yüzme Kursu", "Yetişkin Yüzme Kursu", "Özel Ders", "Takım / Performans"];
@@ -67,7 +68,7 @@ export default function GroupEditor({ group, schedules, branches, levels, coache
 
           <div className="editorGrid">
             <label>Şube<select name="branch_id" defaultValue={group.branch_id} required>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-            <label>Seviye<select name="level_id" defaultValue={group.level_id || ""}><option value="">Tüm seviyeler</option>{levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+            <label>Seviye<select name="level_id" defaultValue={group.level_id || ""}><option value="">Tüm seviyeler</option>{levels.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_active === false ? " (pasif · mevcut atama)" : ""}</option>)}</select><small>Aktif seviyeler ortak yönetim listesinden gelir.</small><Link href="/ayarlar/seviyeler" target="_blank" rel="noopener noreferrer" style={{fontSize: 12, color: "#1768ce"}}>Seviyeleri Yönet ↗</Link></label>
             <label>Ana eğitmen<select name="primary_coach_id" defaultValue={group.primary_coach_id || ""}><option value="">Eğitmen seçilmedi</option>{coaches.map((c) => <option key={c.id} value={c.id}>{c.full_name || "İsimsiz eğitmen"}</option>)}</select></label>
             <label>Kontenjan<input type="number" name="capacity" min="1" max="50" defaultValue={group.capacity} required /></label>
             <label>Varsayılan başlangıç saati<input type="time" name="start_time" defaultValue={defaultStart} required /></label>

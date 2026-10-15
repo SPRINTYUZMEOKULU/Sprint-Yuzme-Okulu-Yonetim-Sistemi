@@ -1,5 +1,6 @@
 "use server";
 
+import { validateGroupLevel } from "@/lib/levels/validate-group-level";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -139,6 +140,8 @@ export async function createGroup(formData: FormData) {
 
   if (branchError) throw branchError;
   if (!branch) throw new Error("Seçilen şube bulunamadı veya aktif değil.");
+
+  await validateGroupLevel(supabase, organizationId, levelId);
 
   const createdGroupIds: string[] = [];
 
@@ -420,12 +423,13 @@ export async function updateGroup(formData: FormData) {
 
   const { data: existingGroup } = await supabase
     .from("training_groups")
-    .select("id")
+    .select("id,level_id")
     .eq("id", groupId)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
   if (!existingGroup) throw new Error("Düzenlenecek grup bulunamadı.");
+  await validateGroupLevel(supabase, organizationId, levelId, existingGroup.level_id);
 
   if (coachId) {
     const { data: coach } = await supabase
