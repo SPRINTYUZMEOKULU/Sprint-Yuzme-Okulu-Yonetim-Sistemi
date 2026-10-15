@@ -1220,15 +1220,19 @@ export default function PreRegistrationForm() {
               </small>
             </div>
 
-            <p>Katılacağınız ders günlerini işaretleyin. Üç günlük gruplarda iki veya üç gün seçebilirsiniz.</p>
+            <div className="scheduleChoiceHeading">
+              <div><b>Ders günlerinizi seçin</b><p>Programınıza uygun iki veya üç günü işaretleyin.</p></div>
+              <span>{selectedDays.length} gün seçildi</span>
+            </div>
             <div className="selectedSchedule">
               {selectedSchedules.map((schedule) => (
-                <label key={schedule.id} style={{display: "flex", alignItems: "center", gap: 8, padding: 12, border: "1px solid #b9d4ff", borderRadius: 12, background: "white", cursor: "pointer"}}>
+                <label key={schedule.id} className={`scheduleChoice${selectedDays.includes(schedule.weekday) ? " isSelected" : ""}`}>
                   <input type="checkbox" checked={selectedDays.includes(schedule.weekday)}
                     onChange={(event) => setSelectedDays((current) => event.target.checked
                       ? [...current, schedule.weekday] : current.filter((day) => day !== schedule.weekday))} />
-                  <b>{days[schedule.weekday]}</b>
-                  {schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}
+                  <span className="scheduleChoiceCopy"><b>{days[schedule.weekday]}</b>
+                    <time>{schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}</time>
+                  </span>
                 </label>
               ))}
             </div>

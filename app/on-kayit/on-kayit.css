@@ -1296,3 +1296,90 @@ input[type="checkbox"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Responsive day choices: keep every time range together on small screens. */
+.selectedGroupCard .scheduleChoiceHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #dce8f8;
+  padding-top: 16px;
+}
+.scheduleChoiceHeading b { color: #173456; font-size: 14px; }
+.selectedGroupCard .scheduleChoiceHeading p { margin-top: 4px; font-size: 12px; }
+.scheduleChoiceHeading > span {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border-radius: 20px;
+  background: #e7f0ff;
+  color: #155cc0;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.selectedGroupCard .selectedSchedule {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.selectedSchedule .scheduleChoice {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 78px;
+  padding: 14px 12px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid #d8e2ef;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.selectedSchedule .scheduleChoice.isSelected {
+  background: #edf5ff;
+  border-color: #4288ec;
+  box-shadow: inset 0 0 0 1px #4288ec;
+}
+.selectedSchedule .scheduleChoice:focus-within { outline: 3px solid #9ec8ff; outline-offset: 3px; }
+.selectedSchedule .scheduleChoice input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 20px;
+  accent-color: #1769e8;
+}
+.selectedSchedule .scheduleChoiceCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: auto;
+  min-width: 0;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.scheduleChoiceCopy b { font-size: 14px; color: #173456; }
+.scheduleChoiceCopy time { font-size: 13px; color: #5c708e; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 680px) {
+  .selectedGroupCard .selectedSchedule { grid-template-columns: 1fr; gap: 8px; }
+  .selectedSchedule .scheduleChoice { min-height: 62px; padding: 12px 14px; }
+  .selectedSchedule .scheduleChoiceCopy { flex: 1; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+  .scheduleChoiceCopy b { font-size: 14px; }
+  .scheduleChoiceCopy time { font-size: 13px; }
+  .selectedGroupCard .scheduleChoiceHeading { align-items: flex-start; }
+}
+@media (max-width: 360px) {
+  .selectedGroupCard .scheduleChoiceHeading { flex-wrap: wrap; }
+  .selectedSchedule .scheduleChoiceCopy { flex-direction: column; align-items: flex-start; }
+}
+
+.preRegPage .selectedGroupCard { animation: none; border: 1px solid #bed5f4 !important; box-shadow: 0 8px 24px rgba(23, 67, 120, .07); }
+.selectedSchedule .scheduleChoiceCopy { box-shadow: none !important; }
