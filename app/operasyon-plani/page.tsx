@@ -762,7 +762,7 @@ export default async function OperasyonPlaniPage({
       .select("schedule_id,mode,lane_label")
       .eq("organization_id", organizationId),
 
-    supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
+    supabase.from("swimming_levels").select("id,name").eq("organization_id", organizationId).eq("is_active", true).order("sort_order").order("name"),
   ]);
 
   const criticalError =
