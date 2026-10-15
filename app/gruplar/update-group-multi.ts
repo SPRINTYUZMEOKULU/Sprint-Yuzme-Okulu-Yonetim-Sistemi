@@ -1,5 +1,6 @@
 "use server";
 
+import { validateGroupLevel } from "@/lib/levels/validate-group-level";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -93,13 +94,14 @@ export async function updateGroupMulti(formData: FormData) {
 
   const { data: existing, error: existingError } = await supabase
     .from("training_groups")
-    .select("id,course_type")
+    .select("id,course_type,level_id")
     .eq("id", groupId)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
   if (existingError) throw existingError;
   if (!existing) throw new Error("Düzenlenecek grup bulunamadı.");
+  await validateGroupLevel(supabase, organizationId, levelId, courseTypes.length === 1 ? existing.level_id : null);
   if (!courseTypes.includes(existing.course_type)) {
     throw new Error("Mevcut grup programı kaldırılamaz; grup geçmişini korumak için seçili bırakılmalıdır.");
   }
