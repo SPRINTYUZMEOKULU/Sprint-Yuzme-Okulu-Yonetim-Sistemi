@@ -1380,3 +1380,6 @@ input[type="checkbox"] {
   .selectedGroupCard .scheduleChoiceHeading { flex-wrap: wrap; }
   .selectedSchedule .scheduleChoiceCopy { flex-direction: column; align-items: flex-start; }
 }
+
+.preRegPage .selectedGroupCard { animation: none; border: 1px solid #bed5f4 !important; box-shadow: 0 8px 24px rgba(23, 67, 120, .07); }
+.selectedSchedule .scheduleChoiceCopy { box-shadow: none !important; }
