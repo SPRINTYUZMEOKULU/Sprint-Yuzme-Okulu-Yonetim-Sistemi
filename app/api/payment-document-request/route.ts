@@ -36,6 +36,8 @@ export async function POST(request: Request) {
     payment_method: "bank_transfer",
     expected_amount: expectedAmount,
     status: "waiting_customer",
+    document_provider: "nettefatura",
+    document_type: "pending_classification",
     created_by: user.id,
   }).select("public_token,expires_at").single();
   if (error || !row) return NextResponse.json({ message: "Güvenli ödeme bağlantısı oluşturulamadı." }, { status: 500 });

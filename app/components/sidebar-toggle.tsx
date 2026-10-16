@@ -62,7 +62,14 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
     { label: "Günlük Kasa", href: "/kasa" },
     { label: "Ödeme Merkezi", href: "/odemeler" },
   ],
+  "/fatura-merkezi": [
+    { label: "Fatura Merkezi", href: "/fatura-merkezi" },
+    { label: "Kesilen Faturalar", href: "/fatura-merkezi?tab=issued" },
+    { label: "VakıfBank Excel Yükle", href: "/fatura-merkezi/banka" },
+    { label: "Güvenli Ödeme Talepleri", href: "/odeme-bilgileri/belgeler" },
+  ],
   "/odemeler": [
+    { label: "Fatura Merkezi", href: "/fatura-merkezi" },
     { label: "Ödeme Merkezi", href: "/odemeler" },
     { label: "Günlük Kasa", href: "/kasa" },
     { label: "Paketler", href: "/paketler" },
