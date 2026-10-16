@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
+import { UUID, validIdentity } from "@/lib/payments/document-rules";
 import { revalidatePath } from "next/cache";
 
 function admin() {
@@ -15,9 +16,10 @@ function clean(v: FormDataEntryValue | null, max = 300) {
 }
 
 export async function saveCustomerDocumentInfo(token: string, formData: FormData) {
+  if (!UUID.test(token)) return { ok: false, message: "Bağlantı geçersiz." };
   const supabase = admin();
-  const { data: request } = await supabase.from("payment_document_requests").select("id,expires_at,status").eq("public_token", token).maybeSingle();
-  if (!request || new Date(request.expires_at).getTime() < Date.now() || request.status === "cancelled") return { ok: false, message: "Bu bağlantı geçersiz veya süresi dolmuş." };
+  const { data: request } = await supabase.from("payment_document_requests").select("id,expires_at,status,updated_at").eq("public_token", token).maybeSingle();
+  if (!request || new Date(request.expires_at).getTime() < Date.now() || !["waiting_customer", "customer_completed"].includes(request.status)) return { ok: false, message: "Bu bağlantı geçersiz veya süresi dolmuş." };
 
   const recipientType = clean(formData.get("recipient_type"), 20);
   const recipientName = clean(formData.get("recipient_name"), 200);
@@ -33,9 +35,11 @@ export async function saveCustomerDocumentInfo(token: string, formData: FormData
   if (recipientType === "company" && taxIdentityNumber.length !== 10) return { ok: false, message: "Vergi No 10 haneli olmalıdır." };
   if (recipientType === "company" && !taxOffice) return { ok: false, message: "Kurumsal belgede vergi dairesi zorunludur." };
 
+  if (!validIdentity(taxIdentityNumber, recipientType === "company")) return { ok: false, message: "Geçerli bir kimlik veya vergi numarası giriniz." };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "E-posta adresini kontrol ediniz." };
   const now = new Date().toISOString();
-  const { error } = await supabase.from("payment_document_requests").update({ recipient_type: recipientType, recipient_name: recipientName, tax_identity_number: taxIdentityNumber, tax_office: taxOffice || null, address, email: email || null, phone: phone || null, customer_consent_at: now, customer_completed_at: now, status: "waiting_payment", updated_at: now }).eq("id", request.id);
-  if (error) return { ok: false, message: "Bilgiler kaydedilemedi. Lütfen tekrar deneyiniz." };
+  const { data: saved, error } = await supabase.from("payment_document_requests").update({ recipient_type: recipientType, recipient_name: recipientName, tax_identity_number: taxIdentityNumber, tax_office: taxOffice || null, address, email: email || null, phone: phone || null, customer_consent_at: now, customer_completed_at: now, status: "waiting_payment", updated_at: now }).eq("id", request.id).eq("status", request.status).eq("updated_at", request.updated_at).gt("expires_at", now).select("id").maybeSingle();
+  if (error || !saved) return { ok: false, message: "Bilgiler kaydedilemedi. Lütfen tekrar deneyiniz." };
   revalidatePath(`/odeme-belge/${token}`);
   return { ok: true, message: "Bilgileriniz kaydedildi. Ödeme bilgilerine geçebilirsiniz." };
 }

@@ -30,7 +30,7 @@ export default function PWARegister() {
   const [message, setMessage] = useState("");
   const [dismissed, setDismissed] = useState(true);
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-  const hidePromptOnThisRoute = pathname === "/login" || pathname === "/on-kayit" || pathname?.startsWith("/auth/");
+  const hidePromptOnThisRoute = pathname?.startsWith("/odeme-belge/") || pathname === "/login" || pathname === "/on-kayit" || pathname?.startsWith("/auth/");
   const supported = useMemo(() => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window, []);
 
   const saveSubscription = useCallback(async (subscription: PushSubscription) => {
