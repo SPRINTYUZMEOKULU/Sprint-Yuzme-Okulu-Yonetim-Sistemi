@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type CalendarItem = {
   id: string;
@@ -11,6 +11,9 @@ type CalendarItem = {
   startTime?: string | null;
   endTime?: string | null;
   reminderAt?: string | null;
+  cancellationCount?: number;
+  cancellationStatus?: string | null;
+  messageStatus?: string | null;
 };
 
 type CalendarDay = {
@@ -67,11 +70,13 @@ export default function DashboardSmartCalendar() {
   const [reminderTime, setReminderTime] = useState("09:00");
   const [message, setMessage] = useState("");
 
+  const loadVersion=useRef(0);
   async function load(targetMonth = month) {
+    const version=++loadVersion.current;
     try {
       const response = await fetch(`/api/dashboard/calendar?month=${targetMonth}`, { cache: "no-store" });
       const payload = await response.json();
-      if (response.ok && payload.ok) setData(payload);
+      if (version===loadVersion.current && response.ok && payload.ok) setData(payload);
     } catch (error) {
       console.error("SprintOS takvim:", error);
     }
@@ -80,7 +85,10 @@ export default function DashboardSmartCalendar() {
   useEffect(() => {
     void load(month);
     const timer = window.setInterval(() => void load(month), 60000);
-    return () => window.clearInterval(timer);
+    const refresh=()=>{if(document.visibilityState==="visible") void load(month);};
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",refresh);
+    return () => {++loadVersion.current;window.clearInterval(timer);window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
   }, [month]);
 
   const [year, monthNumber] = month.split("-").map(Number);
@@ -204,15 +212,17 @@ export default function DashboardSmartCalendar() {
 
       <div className="selectedCalendarDay">
         <div className="selectedCalendarHead">
-          <div><small className="calendarAgendaLabel">GÜNÜN PROGRAMI</small><strong>{new Intl.DateTimeFormat("tr-TR", { day:"2-digit", month:"long", year:"numeric", weekday:"long" }).format(new Date(`${selectedDate}T12:00:00+03:00`))}</strong><span className="calendarAgendaSummary">{selected?.lessons.length || 0} ders · {selectedItems.length} etkinlik / not</span></div>
+          <div><small className="calendarAgendaLabel">GÜNÜN PROGRAMI</small><strong>{new Intl.DateTimeFormat("tr-TR", { day:"2-digit", month:"long", year:"numeric", weekday:"long" }).format(new Date(`${selectedDate}T12:00:00+03:00`))}</strong><span className="calendarAgendaSummary">{slots.length} seans · {selected?.lessons.filter(lesson=>lesson.cancellationCount).length || 0} grupta iptal · {selectedItems.length} etkinlik / not</span></div>
           <button className="calendarAddNote" type="button" aria-expanded={openForm} onClick={() => setOpenForm((value) => !value)}>+ Not / Hatırlatma</button>
         </div>
         {slots.length > 0 && <div className="calendarAgendaSlots">
           {slots.map((slot) => <section className="calendarAgendaSlot" key={JSON.stringify([slot.branch, slot.start, slot.end])}>
             <div className="calendarSlotTime"><strong>{slot.start || "Saat yok"}</strong>{slot.end && <span>{slot.end}</span>}</div>
             <div className="calendarSlotDetails"><strong>{slot.branch}</strong><div className="calendarSlotGroups">
-              {slot.lessons.map((lesson) => <span key={lesson.id} title={lesson.title} aria-label={lesson.title}>{lessonLabel(lesson)}</span>)}
-            </div></div>
+              {slot.lessons.map((lesson) => <span className={lesson.cancellationCount ? "isCancelled" : ""} key={lesson.id} title={lesson.title} aria-label={lesson.title}>{lessonLabel(lesson)}{lesson.cancellationCount ? " · İptal işlendi" : ""}</span>)}
+            </div>
+              {slot.lessons.some(lesson=>lesson.cancellationStatus) && <div className="calendarCancellationDetails">{slot.lessons.filter(lesson=>lesson.cancellationStatus).map(lesson=><div key={lesson.id}><strong>{lessonLabel(lesson)} · {lesson.cancellationStatus}</strong><span>{lesson.messageStatus}</span></div>)}</div>}
+            </div>
           </section>)}
         </div>}
         {selectedItems.length ? (
@@ -270,6 +280,7 @@ export default function DashboardSmartCalendar() {
         .calendarSlotDetails{min-width:0}.calendarSlotDetails>strong{display:block;color:#203653;font-size:13px;line-height:1.45;overflow-wrap:anywhere}.calendarSlotGroups{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.calendarSlotGroups>span{padding:5px 9px;border:1px solid #dfebfa;border-radius:8px;background:#f6f9ff;color:#416083;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
         @media(max-width:640px){.dashboardContent .smartCalendar{padding:16px}.dashboardContent .calendarDay{min-height:44px}.dashboardContent .calendarWeekHead{margin-top:14px}.dashboardContent .calendarLegend{gap:5px;font-size:9px}.dashboardContent .calendarLegend span{padding:5px 7px}.calendarAgendaSlot{grid-template-columns:62px minmax(0,1fr);gap:10px;padding:12px}.dashboardContent .selectedCalendarHead{flex-direction:row;align-items:center;flex-wrap:wrap}.dashboardContent .selectedCalendarHead .calendarAddNote{min-height:38px;font-size:11px;padding:0 10px}}
 
+        .calendarSlotGroups>span.isCancelled{border-color:#ddd6fe;background:#f5f3ff;color:#7137ad}.calendarCancellationDetails{display:grid;gap:8px;margin-top:12px;padding:12px;border:1px solid #e4daf5;border-radius:12px;background:#faf7ff}.calendarCancellationDetails strong{display:block;color:#68418a;font-size:11px;line-height:1.5}.calendarCancellationDetails span{display:block;color:#776385;font-size:10px;line-height:1.6;margin-top:3px;overflow-wrap:anywhere}
         .smartCalendar{margin:0 0 14px;border:1px solid #dfe7f1;border-radius:20px;background:#fff;box-shadow:0 9px 26px rgba(15,23,42,.035);padding:17px 18px}
         .smartCalendarTop{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.smartCalendarTop>div:first-child>span{display:block;color:#6f829e;font-size:10px;font-weight:900;letter-spacing:1.45px}.smartCalendarTop h3{margin:4px 0 2px;color:#10213e;font-size:20px}.smartCalendarTop p{margin:0;color:#8292a7;font-size:10px}
         .smartCalendarActions{display:flex;gap:7px;align-items:center}.smartCalendarActions button,.selectedCalendarHead button,.calendarFormActions button{border:1px solid #dce6f2;background:#f8fbff;color:#31506f;border-radius:10px;min-height:34px;padding:0 10px;font:inherit;font-size:10px;font-weight:900;cursor:pointer}.smartCalendarActions button.add,.calendarFormActions button.save{background:#176de9;color:#fff;border-color:#176de9}

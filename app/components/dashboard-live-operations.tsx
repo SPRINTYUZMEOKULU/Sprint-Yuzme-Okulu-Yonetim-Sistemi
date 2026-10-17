@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Icons } from "@/app/components/dashboard-icons";
+import { cancellationMessageLabel } from "@/lib/dashboard/cancellation-summary";
 import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
 type PastSlot = {date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string};
@@ -14,7 +15,7 @@ type PastSlot = {date:string;branchId:string;branchName:string;time:string;missi
   cancellationMessagesAvailable?: boolean;
   sessions: Array<{
     cancelled?: boolean;
-    cancellation?: {studentIds:string[];plannedStudentIds:string[];reservedStudentIds:string[];sentStudentIds:string[];preparedStudentIds:string[];reasons:string[]};
+    cancellation?: {studentIds:string[];plannedStudentIds:string[];reservedStudentIds:string[];sentStudentIds:string[];preparedStudentIds:string[];openedStudentIds?:string[];reasons:string[]};
     id: string;
     branchId: string | null;
     branchName: string;
@@ -198,7 +199,7 @@ function OperationPanel() {
   const todayAttendanceUrl = `/yoklama?date=${encodeURIComponent(data.date)}`;
 
   const summaryCards = [
-    { label: "Bugünkü Ders", value: data.summary.todayLessons, note: "Planlanan seans", href: "/ders-programi", tone: "blue", icon: Icons.calendar },
+    { label: "Bugünkü Ders", value: data.sessions.filter(session=>!session.cancelled).length, note: data.sessions.some(session=>session.cancelled) ? `${data.sessions.filter(session=>session.cancelled).length} seans iptal edildi` : "Planlanan seans", href: "/ders-programi", tone: "blue", icon: Icons.calendar },
     { label: "Yoklama Bekleyen", value: data.summary.pendingAttendance, note: data.summary.pendingAttendance ? "İşlem bekliyor" : "Tamamlandı", href: pendingAttendanceUrl, tone: data.summary.pendingAttendance ? "orange" : "green", icon: Icons.check },
     { label: "Doğum Günü", value: data.summary.birthdays, note: data.summary.birthdays ? "Kutlama bekliyor" : "Bugün yok", href: "#sprint-birthdays", tone: data.summary.birthdays ? "purple" : "calm", icon: Icons.cake },
     { label: "Yapılacak İşlem", value: actionCount, note: actionCount ? "Önceliklerinizi kontrol edin" : "Her şey yolunda", href: "/uyarilar", tone: actionCount ? "red" : "green", icon: Icons.bell },
@@ -242,7 +243,7 @@ function OperationPanel() {
               {data.sessions.map((session) => {
                 const params = new URLSearchParams({ date: data.date, time: session.startTime });
                 if (session.branchId) params.set("branchId", session.branchId);
-                const status = session.cancelled ? "Ders iptal edildi" : session.studentCount === 0 ? "Öğrenci yok"
+                const status = session.cancelled ? "İptal edildi · Yoklama gerekmiyor" : session.studentCount === 0 ? "Öğrenci yok"
                   : session.attendanceComplete ? "Yoklama kaydedildi"
                   : session.missingCount > 0 ? (session.attendanceCount > 0 ? `Kısmen kaydedildi · ${session.missingCount} eksik` : "Yoklama bekliyor")
                   : "Kayıt yenileme gerekiyor";
@@ -271,7 +272,7 @@ function OperationPanel() {
                         <strong>{session.cancelled ? "Ders iptal edildi" : `${session.cancellation!.studentIds.length} kursiyer için iptal işlendi`}</strong>
                         {session.cancellation!.plannedStudentIds.length > 0 && <span>Toplu telafi planlandı · {session.cancellation!.plannedStudentIds.length} kursiyer</span>}
                         {session.cancellation!.reservedStudentIds.length > 0 && <span>Telafi hakkı saklı · {session.cancellation!.reservedStudentIds.length} kursiyer · Tarih bekleniyor</span>}
-                        <span>{data.cancellationMessagesAvailable === false ? "Mesaj durumu yüklenemedi" : `Mesaj: ${session.cancellation!.sentStudentIds.length} kişiye gönderildi olarak kayıtlı · ${session.cancellation!.preparedStudentIds.length} kişiye hazır`}</span>
+                        <span>{data.cancellationMessagesAvailable === false ? "Mesaj durumu yüklenemedi" : cancellationMessageLabel(session.cancellation!)}</span>
                         {session.cancellation!.reasons.length > 0 && <small>{session.cancellation!.reasons.join(" · ")}</small>}
                       </div>}
                       {session.blockedCount > 0 && <small className="lessonBlocked">{session.blockedCount} öğrencinin ders hakkı bitmiş</small>}

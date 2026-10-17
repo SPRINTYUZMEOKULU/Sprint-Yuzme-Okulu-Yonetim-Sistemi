@@ -26,6 +26,7 @@ function from(table) {
     select: () => q,
     eq: (key, value) => { rows = rows.filter(r => r[key] === value); return q; },
     in: (key, values) => { rows = rows.filter(r => values.includes(r[key])); return q; },
+    contains: (key,value) => { rows=rows.filter(r=>Object.entries(value).every(([k,v])=>r[key]?.[k]===v));return q; },
     neq: (key, value) => { rows = rows.filter(r => r[key] !== value); return q; },
     lt: () => q, range: () => q, gte: () => q, lte: () => q, is: () => q, not: () => q, like: () => q, order: () => q, limit: () => q,
     then: (resolve, reject) => Promise.resolve({ data: rows, error: null, count: rows.length }).then(resolve, reject),
@@ -75,6 +76,11 @@ test('cancelled shared session shows compensation and message counts and no pend
  try {
   const {GET}=load('app/api/dashboard/live/route.ts');const {body}=await GET();
   assert.equal(body.summary.pendingAttendance,0);assert.equal(body.sessions.length,1);assert.equal(body.sessions[0].cancelled,true);assert.equal(body.sessions[0].missingCount,0);assert.equal(body.sessions[0].attendanceCount,0);
+  const calendar=await load('app/api/dashboard/calendar/route.ts').GET({nextUrl:new URL('https://example.test/api/dashboard/calendar?month=2026-10')});
+  const lessons=calendar.body.days.find(day=>day.date==='2026-10-11').lessons;
+  assert.ok(lessons.every(lesson=>lesson.cancellationCount===1));
+  assert.match(lessons.find(lesson=>lesson.id==='child-s').messageStatus,/İptal mesajı gönderildi/);
+  assert.match(lessons.find(lesson=>lesson.id==='adult-s').messageStatus,/Mesaj hazır/);
   assert.equal(body.sessions[0].cancellation.plannedStudentIds.length,2);assert.equal(body.sessions[0].cancellation.sentStudentIds.length,1);assert.equal(body.sessions[0].cancellation.preparedStudentIds.length,1);
  } finally {delete tables.student_activity_logs;delete tables.message_logs;}
 });

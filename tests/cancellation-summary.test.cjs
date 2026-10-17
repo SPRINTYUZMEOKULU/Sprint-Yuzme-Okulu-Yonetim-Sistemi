@@ -19,3 +19,14 @@ test('partial cancellation leaves the other group and unaffected students awaiti
  const c=cancellationSummary('s','2026-10-14',[op('a')],[]);
  const [slot]=summarizeSessionSlots([group('child',['a','b'],c),group('adult',['c'])]);assert.equal(slot.cancelled,false);assert.equal(slot.missingCount,2);
 });
+
+test('legacy emoji-cleaned capture is shown as opened, not confirmed sent',()=>{
+ const {reconcileCancellationMessages,cancellationMessageLabel}=load('lib/dashboard/cancellation-summary.ts');
+ const draft={...msg('a','prepared'),message_body:'🏊 İptal dersi: 17.10.2026'};
+ const capture={student_id:'a',message_body:'İptal dersi: 17.10.2026',metadata:{source:'global_whatsapp_capture',source_path:'/ders-operasyonlari',delivery_confirmation:'whatsapp_opened'}};
+ const rows=reconcileCancellationMessages([draft],[capture]);const c=cancellationSummary('s','2026-10-14',[op('a')],rows);
+ assert.deepEqual(c.openedStudentIds,['a']);assert.deepEqual(c.sentStudentIds,[]);assert.deepEqual(c.preparedStudentIds,[]);assert.match(cancellationMessageLabel(c),/Gönderim onayı bekleniyor/);
+ assert.equal(reconcileCancellationMessages([draft],[{...capture,student_id:'b'}])[0],draft);
+ assert.equal(reconcileCancellationMessages([draft],[{...capture,message_body:'Başka ders'}])[0],draft);
+ const confirmed=cancellationSummary('s','2026-10-14',[op('a')],[...rows,msg('a','sent')]);assert.deepEqual(confirmed.openedStudentIds,[]);assert.deepEqual(confirmed.sentStudentIds,['a']);
+});
