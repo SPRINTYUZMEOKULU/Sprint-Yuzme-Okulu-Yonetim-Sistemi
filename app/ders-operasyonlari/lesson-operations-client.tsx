@@ -1,6 +1,6 @@
 "use client";
 
-import { participationDays } from "@/lib/lesson-operations/participation";
+import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyLessonCancellation, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
@@ -112,7 +112,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       if (!enrollment) continue;
       const plan = participation.plans.find(p => p.student_id === member.student_id && p.enrollment_id === enrollment.id && p.group_id === member.group_id);
       const sessions = schedules.filter(s => s.group_id === member.group_id);
-      if (sessions.some(s => Number(s.weekday) === day) && participationDays(plan?.selected_weekdays, enrollment.lesson_weekdays, sessions.map(s => s.weekday)).includes(day)) (members[member.group_id] ||= []).push({id: member.student_id, name: participation.students.find(s => s.id === member.student_id)?.name || "İsmi bulunamayan kursiyer"});
+      if (sessions.some(s => participationWeekday(s.weekday) === day) && participationDays(plan?.selected_weekdays, enrollment.lesson_weekdays, sessions.map(s => s.weekday)).includes(day)) (members[member.group_id] ||= []).push({id: member.student_id, name: participation.students.find(s => s.id === member.student_id)?.name || "İsmi bulunamayan kursiyer"});
     }
     for (const list of Object.values(members)) list.sort((a,b) => a.name.localeCompare(b.name, "tr"));
     return members;
@@ -146,14 +146,14 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   }
 
   function sourceFor(id: string) {
-    return schedules.find((s) => s.group_id === id && s.id === (multiple ? sourceSchedules[id] : scheduleId) && Number(s.weekday) === dateWeekday)
-      || (multiple ? schedules.filter((s) => s.group_id === id && Number(s.weekday) === dateWeekday).length === 1
-        ? schedules.find((s) => s.group_id === id && Number(s.weekday) === dateWeekday) : undefined : undefined);
+    return schedules.find((s) => s.group_id === id && s.id === (multiple ? sourceSchedules[id] : scheduleId) && participationWeekday(s.weekday) === dateWeekday)
+      || (multiple ? schedules.filter((s) => s.group_id === id && participationWeekday(s.weekday) === dateWeekday).length === 1
+        ? schedules.find((s) => s.group_id === id && participationWeekday(s.weekday) === dateWeekday) : undefined : undefined);
   }
 
   function scheduleText(schedule?: Schedule | null) {
     if (!schedule) return "—";
-    return `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} · ${String(schedule.start_time || "").slice(0, 5)}-${String(schedule.end_time || "").slice(0, 5)}`;
+    return `${DAY_NAMES[participationWeekday(schedule.weekday)] || "Ders"} · ${String(schedule.start_time || "").slice(0, 5)}-${String(schedule.end_time || "").slice(0, 5)}`;
   }
 
   function compatibleTarget(sourceId: string, targetId: string | null) {
@@ -172,7 +172,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     if (mode === "custom" && selectedIds.some(id => {
       const target = customTargets[id];
       const day = target?.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && compatibleTarget(id, s.group_id) && Number(s.weekday) === day);
+      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
     })) {
       setResult("Her grup için iptal tarihinden sonraki telafi tarihini ve o güne uygun seansı seçin.");
       return;
@@ -337,7 +337,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               <span>İptal Edilen Seans</span>
               <select value={scheduleId} disabled={!groupId} onChange={(event) => setScheduleId(event.target.value)}>
                 <option value="">Seans seçin</option>
-                {groupSchedules.filter(s => !cancelledDate || Number(s.weekday) === dateWeekday).map((schedule) => (
+                {groupSchedules.filter(s => !cancelledDate || participationWeekday(s.weekday) === dateWeekday).map((schedule) => (
                   <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>
                 ))}
               </select>
@@ -355,7 +355,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               <span>{groups.find((g) => g.id === id)?.name}</span>
               <select disabled={submitting || !cancelledDate} value={sourceFor(id)?.id || ""} onChange={(event) => setSourceSchedules((prev) => ({...prev, [id]: event.target.value}))}>
                 <option value="">Tarihe uygun seans seçin</option>
-                {schedules.filter((s) => s.group_id === id && Number(s.weekday) === dateWeekday).map((s) => <option key={s.id} value={s.id}>{scheduleText(s)}</option>)}
+                {schedules.filter((s) => s.group_id === id && participationWeekday(s.weekday) === dateWeekday).map((s) => <option key={s.id} value={s.id}>{scheduleText(s)}</option>)}
               </select>
             </label>)}
           </div>}
@@ -425,7 +425,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             {selectedIds.map(id => {
               const target = customTargets[id] || {date:"", scheduleId:""};
               const day = target.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-              const options = schedules.filter(s => compatibleTarget(id, s.group_id) && Number(s.weekday) === day);
+              const options = schedules.filter(s => compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
               return <fieldset key={id} className="customTarget">
                 <legend>{groups.find(g => g.id === id)?.name}</legend>
                 <div className="fieldGrid customFields">
