@@ -156,6 +156,13 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     return `${DAY_NAMES[Number(schedule.weekday)] || "Ders"} · ${String(schedule.start_time || "").slice(0, 5)}-${String(schedule.end_time || "").slice(0, 5)}`;
   }
 
+  function compatibleTarget(sourceId: string, targetId: string | null) {
+    const source = groups.find(g => g.id === sourceId);
+    const target = groups.find(g => g.id === targetId);
+    const adult = (value?: string | null) => /yetişkin|yetiskin|adult|master/i.test(value || "");
+    return Boolean(source && target && source.branch_id === target.branch_id && adult(source.course_type) === adult(target.course_type));
+  }
+
   async function submitOperation() {
     if (!selectedIds.length || !cancelledDate || !reason.trim() || selectedIds.some((id) => !sourceFor(id))) {
       setResult("Grup, tarih ve gerekçe seçin; her grup için iptal tarihinin gününe uygun seansı seçin.");
@@ -165,7 +172,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     if (mode === "custom" && selectedIds.some(id => {
       const target = customTargets[id];
       const day = target?.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && s.group_id === id && Number(s.weekday) === day);
+      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && compatibleTarget(id, s.group_id) && Number(s.weekday) === day);
     })) {
       setResult("Her grup için iptal tarihinden sonraki telafi tarihini ve o güne uygun seansı seçin.");
       return;
@@ -405,7 +412,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             </button>
             <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
               <strong>Farklı tarih / seans planla</strong>
-              <span>Her seçili grup için ayrı tarih ve uygun seans belirleyin.</span>
+              <span>Her grup için tarih seçin; aynı havuzdaki uygun çocuk veya yetişkin grubunun seansına telafi planlayın.</span>
             </button>
             <button type="button" className={mode === "reserve" ? "active" : ""} onClick={() => setMode("reserve")}>
               <strong>Hakkı saklı tut, sonra planla</strong>
@@ -418,17 +425,17 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             {selectedIds.map(id => {
               const target = customTargets[id] || {date:"", scheduleId:""};
               const day = target.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-              const options = schedules.filter(s => s.group_id === id && Number(s.weekday) === day);
+              const options = schedules.filter(s => compatibleTarget(id, s.group_id) && Number(s.weekday) === day);
               return <fieldset key={id} className="customTarget">
                 <legend>{groups.find(g => g.id === id)?.name}</legend>
                 <div className="fieldGrid customFields">
                   <label><span>Telafi Tarihi</span><input type="date" value={target.date} disabled={submitting} onChange={event => setCustomTargets(prev => ({...prev,[id]:{date:event.target.value,scheduleId:""}}))} /></label>
-                  <label><span>Telafi Seansı</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
+                  <label><span>Telafi Grubu / Seansı</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
                     <option value="">Seans seçin</option>
-                    {options.map(schedule => <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>)}
+                    {options.map(schedule => <option key={schedule.id} value={schedule.id}>{groups.find(g => g.id === schedule.group_id)?.name} · {scheduleText(schedule)}</option>)}
                   </select></label>
                 </div>
-                {target.date && !options.length && <p role="status">Bu grubun seçilen tarihte aktif seansı yok. Programdaki uygun bir günü seçin.</p>}
+                {target.date && !options.length && <p role="status">Seçilen tarihte aynı havuzda uygun aktif seans bulunamadı. Havuzun grup programını kontrol edin.</p>}
               </fieldset>;
             })}
           </div>}

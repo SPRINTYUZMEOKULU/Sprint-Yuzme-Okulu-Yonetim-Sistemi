@@ -238,17 +238,25 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       if (!planMap.has(row.student_id)) planMap.set(row.student_id, row);
     }
 
-    const customSchedule = input.customScheduleId
-      ? groupSchedules.find((row: any) => row.id === input.customScheduleId)
-      : null;
-
-    if (input.compensationMode === "custom" && !customSchedule) {
-      return { ok: false as const, message: "Seçilen telafi seansı bu gruba ait değil.", preparedMessages };
-    }
-
+    let customSchedule: any = null;
     if (input.compensationMode === "custom") {
+      const targetResult = await supabase.from("lesson_schedules")
+        .select("id,group_id,branch_id,weekday,start_time,end_time,is_active")
+        .eq("organization_id", organizationId).eq("id", input.customScheduleId!).eq("is_active", true).maybeSingle();
+      if (targetResult.error || !targetResult.data) {
+        return { ok: false as const, message: "Seçilen telafi seansı bulunamadı veya aktif değil.", preparedMessages };
+      }
+      customSchedule = targetResult.data;
+      const targetGroupResult = await supabase.from("training_groups")
+        .select("id,branch_id,course_type,is_active").eq("organization_id", organizationId)
+        .eq("id", customSchedule.group_id).eq("is_active", true).maybeSingle();
+      const targetGroup = targetGroupResult.data;
+      if (targetGroupResult.error || !targetGroup || targetGroup.branch_id !== group.branch_id
+        || isAdultCourse(targetGroup.course_type) !== isAdultCourse(group.course_type)) {
+        return { ok: false as const, message: "Telafi için aynı havuzdaki uygun çocuk veya yetişkin grubunu seçin.", preparedMessages };
+      }
       const targetDay = new Date(`${input.customDate}T12:00:00Z`).getUTCDay() || 7;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== Number(customSchedule?.weekday)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== Number(customSchedule.weekday)) {
         return { ok: false as const, message: "Telafi tarihi iptal tarihinden sonra ve seçilen seansın gününe uygun olmalıdır.", preparedMessages };
       }
     }
@@ -310,7 +318,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
             student_id: student.id,
             enrollment_id: enrollment.id,
             source_request_id: null,
-            target_group_id: input.groupId,
+            target_group_id: customSchedule?.group_id || input.groupId,
             target_schedule_id: targetScheduleId,
             lesson_date: compensationDate,
             status: "planned",
@@ -412,6 +420,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
             source_schedule_id: input.scheduleId,
             cancelled_date: input.cancelledDate,
             reason: input.reason.trim(),
+            target_group_id: customSchedule?.group_id || input.groupId,
             compensation_mode: input.compensationMode,
             compensation_date: compensationDate,
             old_normal_end_date: oldNormalEndDate,
