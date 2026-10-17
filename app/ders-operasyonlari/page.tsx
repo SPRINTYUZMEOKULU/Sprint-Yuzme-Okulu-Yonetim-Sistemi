@@ -45,7 +45,7 @@ export default async function LessonOperationsPage({
     return <main className="operationPage"><section className="operationCard">Organizasyon bilgisi bulunamadı.</section></main>;
   }
 
-  const [branchesResult, groupsResult, schedulesResult, membershipsResult, selectedStudentsResult, activeStudentsResult, enrollmentsResult] = await Promise.all([
+  const [branchesResult, groupsResult, schedulesResult, membershipsResult, selectedStudentsResult, activeStudentsResult, enrollmentsResult, plansResult] = await Promise.all([
     supabase
       .from("branches")
       .select("id,name")
@@ -86,13 +86,16 @@ export default async function LessonOperationsPage({
       .eq("is_active", true),
     supabase
       .from("student_enrollments")
-      .select("student_id,group_id,start_date,start_confirmation_required,actual_started_at")
+      .select("id,student_id,group_id,start_date,start_confirmation_required,actual_started_at,lesson_weekdays,created_at")
       .eq("organization_id", organizationId)
       .eq("status", "active"),
+    supabase.from("student_attendance_plans")
+      .select("student_id,enrollment_id,group_id,selected_weekdays")
+      .eq("organization_id", organizationId).eq("is_active", true),
   ]);
 
   const loadError = branchesResult.error || groupsResult.error || schedulesResult.error
-    || membershipsResult.error || selectedStudentsResult.error || activeStudentsResult.error || enrollmentsResult.error;
+    || membershipsResult.error || selectedStudentsResult.error || activeStudentsResult.error || enrollmentsResult.error || plansResult.error;
   if (loadError) {
     return <main className="operationPage"><section className="operationCard">Operasyon verileri yüklenemedi: {loadError.message}</section></main>;
   }
@@ -177,6 +180,11 @@ export default async function LessonOperationsPage({
           groups={groupsResult.data || []}
           schedules={activeSchedules}
           memberCounts={memberCounts}
+          participation={{
+            memberships: (membershipsResult.data || []).filter(row => activeStudentIds.has(row.student_id) && (!requestedStudentIds.length || requestedStudentIds.includes(row.student_id))),
+            enrollments: enrollmentsResult.data || [],
+            plans: plansResult.data || [],
+          }}
         />
         {initialBranchId && initialGroupId ? (
           <OperationSelectionHydrator branchId={initialBranchId} groupId={initialGroupId} />

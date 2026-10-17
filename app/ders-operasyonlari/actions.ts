@@ -1,5 +1,6 @@
 "use server";
 
+import { participationDays } from "@/lib/lesson-operations/participation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireProfile } from "@/lib/auth/profile";
@@ -204,7 +205,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         .in("id", membershipStudentIds),
       supabase
         .from("student_enrollments")
-        .select("id,student_id,group_id,planned_end_date,status,created_at,start_date,start_confirmation_required,actual_started_at")
+        .select("id,student_id,group_id,planned_end_date,lesson_weekdays,status,created_at,start_date,start_confirmation_required,actual_started_at")
         .eq("organization_id", organizationId)
         .eq("group_id", input.groupId)
         .eq("status", "active")
@@ -253,16 +254,14 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     for (const student of studentsResult.data || []) {
       if (student.is_deleted) continue;
       const enrollment = enrollmentMap.get(student.id);
-      const plan = planMap.get(student.id);
+      const plan = (plansResult.data || []).find((row: any) => row.student_id === student.id && row.enrollment_id === enrollment?.id);
 
       if (!enrollment) {
         skipped += 1;
         continue;
       }
 
-      const selectedWeekdays = Array.isArray(plan?.selected_weekdays)
-        ? plan.selected_weekdays.map((day: unknown) => Number(day)).filter((day: number) => day >= 1 && day <= 7)
-        : groupSchedules.map((row: any) => Number(row.weekday)).filter((day: number) => day >= 1 && day <= 7);
+      const selectedWeekdays = participationDays(plan?.selected_weekdays, enrollment.lesson_weekdays, groupSchedules.map((row: any) => row.weekday));
 
       if (sourceWeekday && selectedWeekdays.length && !selectedWeekdays.includes(sourceWeekday)) {
         skipped += 1;
