@@ -3,6 +3,7 @@ function setup(row={id:'m',status:'prepared',metadata:{source_schedule_id:'s',ca
  const writes=[],filters=[];let changes=null;
  const client={from(){const q={select(){return q},eq(k,v){filters.push([k,v]);return q},in(){return q},order(){return q},limit(){return q},maybeSingle(){return q},update(v){changes=v;writes.push(v);return q},then(resolve){return Promise.resolve({data:changes?(failure?[]:[{id:'m'}]):row,error:null}).then(resolve)}};return q}};
  const mod={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync('app/ders-operasyonlari/actions.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(name=>{
+ if(name==='@/lib/lesson-operations/participation'){const m={exports:{}};new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/lesson-operations/participation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(m,m.exports);return m.exports;}
  if(name==='next/cache')return {revalidatePath(){}};if(name==='next/headers')return {cookies(){}};
  if(name==='@/lib/auth/profile')return {requireProfile:async()=>({organization_id:'org',id:'admin'})};
  if(name==='@/lib/supabase/server')return {createClient:async()=>client};throw Error(name);
