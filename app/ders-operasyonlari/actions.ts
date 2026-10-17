@@ -1,6 +1,6 @@
 "use server";
 
-import { participationDays } from "@/lib/lesson-operations/participation";
+import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireProfile } from "@/lib/auth/profile";
@@ -175,7 +175,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       return { ok: false as const, message: "Seçilen grup veya ders seansı bulunamadı.", preparedMessages };
     }
 
-    const sourceWeekday = Number(sourceSchedule.weekday || 0);
+    const sourceWeekday = participationWeekday(sourceSchedule.weekday);
     const cancelledDay = new Date(`${input.cancelledDate}T12:00:00Z`).getUTCDay() || 7;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.cancelledDate) || !sourceSchedule.is_active || cancelledDay !== sourceWeekday) {
       return { ok: false as const, message: "İptal tarihi seçilen seansın gününe uygun değil.", preparedMessages };
@@ -256,7 +256,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         return { ok: false as const, message: "Telafi için aynı havuzdaki uygun çocuk veya yetişkin grubunu seçin.", preparedMessages };
       }
       const targetDay = new Date(`${input.customDate}T12:00:00Z`).getUTCDay() || 7;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== Number(customSchedule.weekday)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== participationWeekday(customSchedule.weekday)) {
         return { ok: false as const, message: "Telafi tarihi iptal tarihinden sonra ve seçilen seansın gününe uygun olmalıdır.", preparedMessages };
       }
     }
@@ -300,7 +300,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         }
 
         compensationDate = next.date;
-        targetScheduleId = groupSchedules.find((row: any) => Number(row.weekday) === next.weekday)?.id || null;
+        targetScheduleId = groupSchedules.find((row: any) => participationWeekday(row.weekday) === next.weekday)?.id || null;
         newCompensationEndDate = compensationDate;
       }
 
@@ -527,12 +527,12 @@ export async function startingCancellationMessages(input: {
   for (const enrollment of enrollments.data || []) {
     const student = students.data?.find((s) => s.id === enrollment.student_id);
     const group = groups.data?.find((g) => g.id === enrollment.group_id);
-    const groupSessions = (schedules.data || []).filter((s) => s.group_id === enrollment.group_id && Number(s.weekday) === weekday);
+    const groupSessions = (schedules.data || []).filter((s) => s.group_id === enrollment.group_id && participationWeekday(s.weekday) === weekday);
     const days = enrollment.lesson_weekdays;
     if (!student || !group || !groupSessions.length || student.is_deleted || !student.is_active
       || student.status === "passive" || seen.has(student.id)
       || (selectedIds.length && !selectedIds.includes(student.id))
-      || (Array.isArray(days) && days.length && !days.map(Number).includes(weekday))) continue;
+      || (Array.isArray(days) && days.length && !participationDays(null, days, []).includes(weekday))) continue;
     seen.add(student.id);
     const adult = isAdultCourse(group.course_type);
     const recipient = adult ? cleanPhone(student.phone) || cleanPhone(student.guardian_phone) || null
