@@ -30,3 +30,5 @@ test('pending manual start is excluded from attendance even with planned compens
  e.actual_started_at='2026-10-14T12:00:00Z';
  assert.deepEqual(attendanceRoster(p,'g','s','2026-10-14',3).students.map(s=>s.id),['a']);
 });
+
+test('cross-group Sunday compensation appears only in its target session without Sunday membership',()=>{const p={students:[{id:'a',status:'active'}],memberships:[{student_id:'a',group_id:'saturday'}],enrollments:[{id:'e',student_id:'a',group_id:'saturday',status:'active',lesson_weekdays:[6]}],compensationLessons:[{student_id:'a',target_group_id:'sunday',target_schedule_id:'sun19',lesson_date:'2026-10-18',status:'planned'}]};const roster=attendanceRoster(p,'sunday','sun19','2026-10-18',7);assert.deepEqual(roster.students.map(s=>s.id),['a']);assert.equal(roster.compensationIds.has('a'),true);assert.deepEqual(attendanceRoster(p,'sunday','sun20','2026-10-18',7).students,[]);assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-25',7).students,[]);assert.deepEqual(attendanceRoster(p,'saturday','sun19','2026-10-18',7).students,[]);});
