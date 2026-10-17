@@ -147,6 +147,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "student_not_resolved" });
   }
 
+  if(sourcePath === "/ders-operasyonlari") {
+    // Opening a prepared cancellation is an interaction, not delivery confirmation.
+    const {data:prepared,error}=await supabase.from("message_logs").select("id,message_body,metadata,status")
+      .eq("organization_id",organizationId).eq("student_id",studentId)
+      .eq("template_key","lesson_cancellation_compensation").eq("channel","whatsapp").order("prepared_at",{ascending:false}).limit(100);
+    const normalize=(value:string)=>value.replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ]/g,"");
+    const original=(prepared||[]).find(row=>normalize(row.message_body)===normalize(message));
+    if(!error && original) {
+      if(original.status!=="prepared") return NextResponse.json({ok:true,duplicate:true,studentId});
+      const {error:updateError}=await supabase.from("message_logs").update({metadata:{...original.metadata,delivery_confirmation:"whatsapp_opened",opened_at:new Date().toISOString()}})
+        .eq("organization_id",organizationId).eq("id",original.id).eq("status","prepared");
+      return NextResponse.json({ok:!updateError,studentId,type:"lesson_cancellation_compensation"},{status:updateError?500:200});
+    }
+  }
+
   const sentAt = new Date().toISOString();
   const recentCutoff = new Date(Date.now() - 20_000).toISOString();
 

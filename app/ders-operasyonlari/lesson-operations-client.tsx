@@ -2,7 +2,7 @@
 
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyLessonCancellation, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
+import { applyLessonCancellation, recordCancellationMessageOpened, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
 type Branch = { id: string; name: string };
 type Group = { id: string; name: string; branch_id: string | null; course_type?: string | null };
@@ -240,6 +240,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       "noopener,noreferrer"
     );
 
+    void recordCancellationMessageOpened({studentId:current.studentId,message:current.message});
     setOpenedStudentIds((currentIds) =>
       currentIds.includes(current.studentId) ? currentIds : [...currentIds, current.studentId]
     );

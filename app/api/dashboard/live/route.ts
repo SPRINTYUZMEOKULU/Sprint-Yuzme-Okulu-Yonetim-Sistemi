@@ -1,4 +1,4 @@
-import { cancellationSummary } from "@/lib/dashboard/cancellation-summary";
+import { cancellationSummary, reconcileCancellationMessages } from "@/lib/dashboard/cancellation-summary";
 import { partitionAttendance } from "@/lib/dashboard/attendance-followup";
 import { pastAttendance, historyStart, ATTENDANCE_HISTORY_DAYS } from "@/lib/dashboard/past-attendance";
 import { summarizeSessionSlots } from "@/lib/dashboard/session-summary";
@@ -101,8 +101,18 @@ export async function GET() {
   }
   const [cancellationsResult,cancellationMessagesResult]=await Promise.all([
     readCancellationData("student_activity_logs","id,student_id,source_id,old_value,new_value,performed_at","old_value->>cancelled_lesson_date","activity_type","lesson_cancellation_compensation"),
-    readCancellationData("message_logs","id,student_id,status,metadata","metadata->>cancelled_date","template_key","lesson_cancellation_compensation")
+    readCancellationData("message_logs","id,student_id,status,metadata,message_body","metadata->>cancelled_date","template_key","lesson_cancellation_compensation")
   ]);
+  const capturedMessages: any[] = [];
+  for(let offset=0; ; offset+=1000) {
+    const result=await supabase.from("message_logs").select("id,student_id,message_body,metadata")
+      .eq("organization_id",profile.organization_id).contains("metadata",{source:"global_whatsapp_capture",source_path:"/ders-operasyonlari",delivery_confirmation:"whatsapp_opened"})
+      .gte("prepared_at",`${pastStart}T00:00:00+03:00`).order("id").range(offset,offset+999);
+    if(result.error) break;
+    capturedMessages.push(...(result.data||[]));
+    if((result.data||[]).length<1000) break;
+  }
+  const cancellationMessages = reconcileCancellationMessages(cancellationMessagesResult.data, capturedMessages);
   const historyAvailable = !cancellationsResult.error && !historySchedules.error && !historyRecords.error && !historyClosures.error && !historyFollowups.error;
 
   const rosterError = cancellationsResult.error || branchesResult.error || groupsResult.error || schedulesResult.error || membershipsResult.error || compensationResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error;
@@ -147,7 +157,7 @@ export async function GET() {
       return !recorded.has(student.id) && !roster.compensationIds.has(student.id)
         && Math.max(0, Number(enrollment?.total_lessons || 0) - Number(enrollment?.used_lessons || 0)) <= 0;
     }).length;
-    const cancellation = cancellationSummary(schedule.id,today.iso,cancellationsResult.data,cancellationMessagesResult.data);
+    const cancellation = cancellationSummary(schedule.id,today.iso,cancellationsResult.data,cancellationMessages);
     const missingCount = roster.students.filter(student=>!cancellation.studentIds.includes(student.id) && !recorded.has(student.id) && (roster.compensationIds.has(student.id) || Number(roster.enrollmentByStudent.get(student.id)?.total_lessons||0)>Number(roster.enrollmentByStudent.get(student.id)?.used_lessons||0))).length;
     const attendanceComplete = attendanceCount > 0 && missingCount === 0;
     const records = attendance.filter((row) => recorded.has(row.student_id)

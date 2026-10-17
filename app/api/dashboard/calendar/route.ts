@@ -1,3 +1,4 @@
+import { cancellationSummary, cancellationMessageLabel, reconcileCancellationMessages } from "@/lib/dashboard/cancellation-summary";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
@@ -90,6 +91,22 @@ export async function GET(request: NextRequest) {
       await supabase.from("calendar_events").update({ reminder_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", row.id).eq("organization_id", organizationId);
     }
 
+    async function readMonth(table: string, columns: string, dateColumn: string, filterColumn: string, filterValue: string) {
+      const rows: any[] = [];
+      for(let offset=0; ; offset+=1000) {
+        const result=await supabase.from(table).select(columns).eq("organization_id",organizationId).eq(filterColumn,filterValue)
+          .gte(dateColumn,bounds!.start).lte(dateColumn,dateColumn==="prepared_at" ? `${bounds!.end}T23:59:59.999+03:00` : bounds!.end).order("id").range(offset,offset+999);
+        if(result.error) return {data:[],error:result.error};
+        rows.push(...(result.data||[]));
+        if((result.data||[]).length<1000) return {data:rows,error:null};
+      }
+    }
+    const [operations,messages,captures]=await Promise.all([
+      readMonth("student_activity_logs","id,student_id,source_id,old_value,new_value,performed_at","old_value->>cancelled_lesson_date","activity_type","lesson_cancellation_compensation"),
+      readMonth("message_logs","id,student_id,status,metadata,message_body","metadata->>cancelled_date","template_key","lesson_cancellation_compensation"),
+      readMonth("message_logs","id,student_id,metadata,message_body","prepared_at","metadata->>source_path","/ders-operasyonlari"),
+    ]);
+    const cancellationMessages=reconcileCancellationMessages(messages.data,captures.data);
     const branches = branchesResult.data || [];
     const groups = groupsResult.data || [];
     const schedules = filterEffectivelyActiveSchedules(schedulesResult.data || [], branches, groups);
@@ -100,10 +117,15 @@ export async function GET(request: NextRequest) {
 
     for (let day=1; day<=daysInMonth; day++) {
       const date = `${bounds.year}-${String(bounds.month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-      const lessons = schedules.filter((s:any)=>isScheduleOnDate(Number(s.weekday), date)).map((s:any)=>({
+      const lessons = schedules.filter((s:any)=>isScheduleOnDate(Number(s.weekday), date)).map((s:any)=>{
+        const cancellation=cancellationSummary(s.id,date,operations.data,cancellationMessages);
+        return ({
         id:s.id, type:"lesson", title:groupMap.get(s.group_id || "") || "Ders", branchName:branchMap.get(s.branch_id || "") || "",
-        startTime:String(s.start_time || "").slice(0,5), endTime:String(s.end_time || "").slice(0,5)
-      }));
+        startTime:String(s.start_time || "").slice(0,5), endTime:String(s.end_time || "").slice(0,5),
+        cancellationCount:cancellation.studentIds.length,
+        cancellationStatus:operations.error ? "İptal durumu yüklenemedi" : cancellation.studentIds.length ? `${cancellation.studentIds.length} kursiyer için iptal işlendi` : null,
+        messageStatus:cancellation.studentIds.length ? cancellationMessageLabel(cancellation,!messages.error&&!captures.error) : null
+      });});
       const events = (eventsResult.data || []).filter((e:any)=>e.event_date===date).map((e:any)=>({
         id:e.id,type:e.event_type,title:e.title,description:e.description,startTime:e.start_time?String(e.start_time).slice(0,5):null,
         endTime:e.end_time?String(e.end_time).slice(0,5):null,reminderAt:e.reminder_at

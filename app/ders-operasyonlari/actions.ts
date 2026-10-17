@@ -580,3 +580,18 @@ export async function confirmCancellationMessageSent(input: {studentId:string;me
   revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath(`/ogrenciler/${input.studentId}`);
   return {ok:true,message:"Mesaj gönderildi olarak kaydedildi."};
 }
+
+export async function recordCancellationMessageOpened(input: {studentId:string;message:string}) {
+  const profile=await requireProfile([...ALLOWED_ROLES]);
+  if(!profile.organization_id||!input.studentId||!input.message?.trim())return {ok:false};
+  const supabase=await createClient();
+  const {data:row,error}=await supabase.from("message_logs").select("id,metadata")
+    .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
+    .eq("template_key","lesson_cancellation_compensation").eq("message_body",input.message).eq("status","prepared")
+    .order("prepared_at",{ascending:false}).limit(1).maybeSingle();
+  if(error||!row)return {ok:false};
+  const result=await supabase.from("message_logs").update({metadata:{...row.metadata,delivery_confirmation:"whatsapp_opened",opened_at:new Date().toISOString()}})
+    .eq("organization_id",profile.organization_id).eq("id",row.id).eq("status","prepared");
+  revalidatePath("/");
+  return {ok:!result.error};
+}
