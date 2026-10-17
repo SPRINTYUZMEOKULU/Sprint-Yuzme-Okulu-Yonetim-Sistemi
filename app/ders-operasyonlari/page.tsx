@@ -80,7 +80,7 @@ export default async function LessonOperationsPage({
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from("students")
-      .select("id,is_deleted")
+      .select("id,first_name,last_name,is_deleted")
       .eq("organization_id", organizationId)
       .eq("status", "active")
       .eq("is_active", true),
@@ -181,6 +181,7 @@ export default async function LessonOperationsPage({
           schedules={activeSchedules}
           memberCounts={memberCounts}
           participation={{
+            students: (activeStudentsResult.data || []).map(s => ({id:s.id, name:[s.first_name,s.last_name].filter(Boolean).join(" ")})),
             memberships: (membershipsResult.data || []).filter(row => activeStudentIds.has(row.student_id) && (!requestedStudentIds.length || requestedStudentIds.includes(row.student_id))),
             enrollments: enrollmentsResult.data || [],
             plans: plansResult.data || [],
