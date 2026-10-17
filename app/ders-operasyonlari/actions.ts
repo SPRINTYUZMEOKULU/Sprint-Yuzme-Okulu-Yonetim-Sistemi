@@ -246,6 +246,13 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       return { ok: false as const, message: "Seçilen telafi seansı bu gruba ait değil.", preparedMessages };
     }
 
+    if (input.compensationMode === "custom") {
+      const targetDay = new Date(`${input.customDate}T12:00:00Z`).getUTCDay() || 7;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== Number(customSchedule?.weekday)) {
+        return { ok: false as const, message: "Telafi tarihi iptal tarihinden sonra ve seçilen seansın gününe uygun olmalıdır.", preparedMessages };
+      }
+    }
+
     const now = new Date().toISOString();
     let processed = 0;
     let skipped = 0;

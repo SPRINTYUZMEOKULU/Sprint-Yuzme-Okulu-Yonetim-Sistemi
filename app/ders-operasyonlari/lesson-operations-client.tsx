@@ -21,7 +21,7 @@ type Props = {
   groups: Group[];
   schedules: Schedule[];
   memberCounts: Record<string, number>;
-  participation: { memberships: {student_id: string; group_id: string}[]; enrollments: any[]; plans: any[] };
+  participation: { students: {id: string; name: string}[]; memberships: {student_id: string; group_id: string}[]; enrollments: any[]; plans: any[] };
 };
 
 type Mode = "append_end" | "custom" | "reserve";
@@ -64,8 +64,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [reason, setReason] = useState("Havuz / tesis kaynaklı kapanış");
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<Mode>("append_end");
-  const [customDate, setCustomDate] = useState("");
-  const [customScheduleId, setCustomScheduleId] = useState("");
+  const [customTargets, setCustomTargets] = useState<Record<string, {date: string; scheduleId: string}>>({});
   const [prepareMessages, setPrepareMessages] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
@@ -100,9 +99,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const selectedSchedule = groupSchedules.find((schedule) => schedule.id === scheduleId) || null;
   const selectedIds = groupIds.length ? groupIds : groupId ? [groupId] : [];
   const multiple = selectedIds.length > 1;
-  const memberCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    if (!cancelledDate) return counts;
+  const participatingStudents = useMemo(() => {
+    const members: Record<string, {id: string; name: string}[]> = {};
+    if (!cancelledDate) return members;
     const day = new Date(`${cancelledDate}T12:00:00Z`).getUTCDay() || 7;
     const seen = new Set<string>();
     for (const member of participation.memberships) {
@@ -113,10 +112,12 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       if (!enrollment) continue;
       const plan = participation.plans.find(p => p.student_id === member.student_id && p.enrollment_id === enrollment.id && p.group_id === member.group_id);
       const sessions = schedules.filter(s => s.group_id === member.group_id);
-      if (sessions.some(s => Number(s.weekday) === day) && participationDays(plan?.selected_weekdays, enrollment.lesson_weekdays, sessions.map(s => s.weekday)).includes(day)) counts[member.group_id] = (counts[member.group_id] || 0) + 1;
+      if (sessions.some(s => Number(s.weekday) === day) && participationDays(plan?.selected_weekdays, enrollment.lesson_weekdays, sessions.map(s => s.weekday)).includes(day)) (members[member.group_id] ||= []).push({id: member.student_id, name: participation.students.find(s => s.id === member.student_id)?.name || "İsmi bulunamayan kursiyer"});
     }
-    return counts;
+    for (const list of Object.values(members)) list.sort((a,b) => a.name.localeCompare(b.name, "tr"));
+    return members;
   }, [cancelledDate, participation, schedules]);
+  const memberCounts = Object.fromEntries(Object.entries(participatingStudents).map(([id,list]) => [id,list.length]));
   const memberCount = selectedIds.reduce((sum, id) => sum + (memberCounts[id] || 0), 0);
   const dateWeekday = cancelledDate ? (new Date(`${cancelledDate}T12:00:00Z`).getUTCDay() || 7) : 0;
   const startingGroupKey = [...selectedIds].sort().join(",");
@@ -161,8 +162,12 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       return;
     }
 
-    if (mode === "custom" && (multiple || !customDate || !customScheduleId)) {
-      setResult("Farklı tarih / seans telafisi için tek grup seçin ve telafi tarihi ile seansını belirtin.");
+    if (mode === "custom" && selectedIds.some(id => {
+      const target = customTargets[id];
+      const day = target?.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
+      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && s.group_id === id && Number(s.weekday) === day);
+    })) {
+      setResult("Her grup için iptal tarihinden sonraki telafi tarihini ve o güne uygun seansı seçin.");
       return;
     }
 
@@ -193,8 +198,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           scheduleId: sourceFor(id)!.id,
           cancelledDate, reason, description,
           compensationMode: mode,
-          customDate: mode === "custom" ? customDate : null,
-          customScheduleId: mode === "custom" ? customScheduleId : null,
+          customDate: mode === "custom" ? customTargets[id].date : null,
+          customScheduleId: mode === "custom" ? customTargets[id].scheduleId : null,
           prepareMessages,
         });
         results.push(`${groups.find((g) => g.id === id)?.name}: ${response.message}`);
@@ -284,7 +289,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   setGroupId(event.target.value);
                   setGroupIds(event.target.value ? [event.target.value] : []);
                   setScheduleId("");
-                  setCustomScheduleId("");
+                  setCustomTargets({});
                 }}
               >
                 <option value="">Grup seçin</option>
@@ -300,17 +305,23 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   setGroupIds(selectedIds.length === ids.length ? [] : ids);
                   setGroupId(selectedIds.length === ids.length ? "" : ids[0] || "");
                   setScheduleId(""); setSourceSchedules({});
-                  if (ids.length > 1 && mode === "custom") setMode("append_end");
+
                 }}>Tüm grupları seç / kaldır</button>
                 {branchId && visibleGroups.map((group) => (
-                  <label key={group.id} className="groupChoice">
+                  <div key={group.id}>
+                  <label className="groupChoice">
                     <input aria-label={group.name} type="checkbox" disabled={submitting} checked={selectedIds.includes(group.id)} onChange={(event) => {
                       const ids = event.target.checked ? [...selectedIds, group.id] : selectedIds.filter((id) => id !== group.id);
-                      setGroupIds(ids); setGroupId(ids[0] || ""); setScheduleId(""); setCustomScheduleId("");
-                      if (ids.length > 1 && mode === "custom") setMode("append_end");
+                      setGroupIds(ids); setGroupId(ids[0] || ""); setScheduleId(""); setCustomTargets({});
+
                     }} />
-                    <span>{group.name}<small>{cancelledDate ? `${memberCounts[group.id] || 0} seçilen gün katılacak kursiyer` : "Önce iptal tarihini seçin"}</small></span>
+                    <span>{group.name}</span>
                   </label>
+                  <details className="participantDetails" key={`${group.id}:${cancelledDate}`}>
+                    <summary>{cancelledDate ? `${memberCounts[group.id] || 0} seçilen gün katılacak kursiyer` : "Önce iptal tarihini seçin"}<span> Listeyi aç / kapat</span></summary>
+                    {(participatingStudents[group.id] || []).length ? <ol>{participatingStudents[group.id].map(student => <li key={student.id}>{student.name}</li>)}</ol> : <p>{cancelledDate ? "Seçilen gün katılacak kursiyer bulunmuyor." : "Kursiyerleri görmek için iptal tarihini seçin."}</p>}
+                  </details>
+                  </div>
                 ))}
               </div>
             </div>
@@ -392,9 +403,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               <strong>✓ Kayıt sonuna otomatik ekle</strong>
               <span>Varsayılan. Öğrencinin mevcut telafili bitişinden sonraki ilk gerçek ders günü bulunur; aynı programda telafi oluşturulur.</span>
             </button>
-            <button type="button" disabled={multiple} className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+            <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
               <strong>Farklı tarih / seans planla</strong>
-              <span>Tek grup seçiliyken aynı grup içindeki başka uygun seansa telafi planla.</span>
+              <span>Her seçili grup için ayrı tarih ve uygun seans belirleyin.</span>
             </button>
             <button type="button" className={mode === "reserve" ? "active" : ""} onClick={() => setMode("reserve")}>
               <strong>Hakkı saklı tut, sonra planla</strong>
@@ -402,23 +413,25 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             </button>
           </div>
 
-          {mode === "custom" && (
-            <div className="fieldGrid customFields">
-              <label>
-                <span>Telafi Tarihi</span>
-                <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} />
-              </label>
-              <label>
-                <span>Telafi Seansı</span>
-                <select value={customScheduleId} onChange={(event) => setCustomScheduleId(event.target.value)}>
-                  <option value="">Seans seçin</option>
-                  {groupSchedules.map((schedule) => (
-                    <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
+          {mode === "custom" && <div className="customTargets">
+            {!selectedIds.length && <p>Telafi planlamak için önce grup seçin.</p>}
+            {selectedIds.map(id => {
+              const target = customTargets[id] || {date:"", scheduleId:""};
+              const day = target.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
+              const options = schedules.filter(s => s.group_id === id && Number(s.weekday) === day);
+              return <fieldset key={id} className="customTarget">
+                <legend>{groups.find(g => g.id === id)?.name}</legend>
+                <div className="fieldGrid customFields">
+                  <label><span>Telafi Tarihi</span><input type="date" value={target.date} disabled={submitting} onChange={event => setCustomTargets(prev => ({...prev,[id]:{date:event.target.value,scheduleId:""}}))} /></label>
+                  <label><span>Telafi Seansı</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
+                    <option value="">Seans seçin</option>
+                    {options.map(schedule => <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>)}
+                  </select></label>
+                </div>
+                {target.date && !options.length && <p role="status">Bu grubun seçilen tarihte aktif seansı yok. Programdaki uygun bir günü seçin.</p>}
+              </fieldset>;
+            })}
+          </div>}
 
           <label className="checkRow">
             <input type="checkbox" checked={prepareMessages} onChange={(event) => setPrepareMessages(event.target.checked)} />
@@ -488,6 +501,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       )}
 
       <style jsx>{`
+        .participantDetails{margin:0 4px 10px;padding:10px 12px;border:1px solid #cfdae7;border-top:0;border-radius:0 0 11px 11px;background:#fff;color:#17345c}.participantDetails summary{cursor:pointer;font-size:13px;font-weight:700;line-height:1.5}.participantDetails summary span{display:block;font-size:11px;color:#1268d6}.participantDetails ol{margin:10px 0 0;padding-left:25px;max-height:240px;overflow:auto}.participantDetails li{padding:5px;overflow-wrap:anywhere}.participantDetails p,.customTarget p{font-size:12px;line-height:1.5}.customTargets{display:grid;gap:12px;margin-top:14px}.customTarget{min-width:0;margin:0;padding:12px;border:1px solid #cfdae7;border-radius:12px}.customTarget legend{font-size:13px;font-weight:700;max-width:100%;overflow-wrap:anywhere}
+
         .startingWarning{padding:16px;margin-bottom:18px;border:1px solid #edbd62;border-radius:14px;background:#fff8e8;color:#704811}.startingWarning p{font-size:13px;line-height:1.5}.startingPerson{display:grid;gap:5px;padding:10px 0;border-top:1px solid #eddbb6}.startingPerson span,.startingWarning small{font-size:12px}.startingWarning button,.startingPerson a{display:block;padding:11px;border:0;border-radius:10px;background:#1268d6;color:#fff;text-decoration:none;font-weight:700;margin:8px 0}.startingWarning small{display:block}.lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{box-sizing:border-box;min-width:0;max-width:100%;width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.groupField{display:grid;gap:6px}.groupField>span{font-size:12px;font-weight:800;color:#526980}.groupChoices{display:grid;gap:8px}.fieldGrid .groupChoice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #cfdae7;border-radius:11px;background:#f6faff}.groupChoice input{width:20px;min-height:20px;height:20px;flex-shrink:0}.groupChoice small{display:block;color:#526980;margin-top:4px}.sourcePreview label{display:grid;gap:6px}.sourcePreview select{width:100%;min-height:44px;border:1px solid #cfdae7;border-radius:11px;background:#fff}.modeCards button:disabled{opacity:.5;cursor:not-allowed}.resultBox{white-space:pre-line;margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
       `}</style>
     </div>
