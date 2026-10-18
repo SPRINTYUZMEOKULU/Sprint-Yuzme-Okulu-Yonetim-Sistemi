@@ -821,6 +821,10 @@ export default async function HomePage() {
           )}
         </nav>
 
+        <a href="/auth/signout" className="homeMenuSignout">
+          <Icons.logout /> Güvenli Çıkış
+        </a>
+
         <div className="proUser">
           <div className="avatar">
             {(
