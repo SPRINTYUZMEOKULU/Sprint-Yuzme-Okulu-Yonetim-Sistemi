@@ -29,6 +29,7 @@ async function renderHome(failedTable) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   new Function('module', 'exports', 'require', code)(m, m.exports, (name) => {
+    if (name === '@/lib/students/start-status') { const h = {exports: {}}; new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/students/start-status.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(h,h.exports); return h.exports; }
     if (name === '@/lib/auth/profile') return { requireProfile: async () => ({ id: 'owner', organization_id: 'org-1', role: 'owner', full_name: '' }) };
     if (name === '@/lib/supabase/server') return { createClient: async () => ({ from }) };
     if (name === 'next/navigation') return { redirect: () => { throw new Error('Unexpected redirect'); } };

@@ -1,5 +1,7 @@
 "use client";
 
+import { startsAfterToday } from "@/lib/students/start-status";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import EnrollmentStartControl from "./enrollment-start-control";
@@ -198,15 +200,6 @@ function istanbulToday() {
   }).format(new Date());
 }
 
-function startsAfterToday(student: StudentListItem, today: string) {
-  if (student.status !== "active") return false;
-  if (student.start_confirmation_required && !student.actual_started_at) return true;
-  if (!student.start_date) return false;
-  const start = student.start_date.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
-  if (Number.isNaN(Date.parse(start + "T12:00:00Z"))) return false;
-  return start > today;
-}
 
 function shortTime(value?: string | null) {
   return value ? value.slice(0, 5) : "";
