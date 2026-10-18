@@ -93,3 +93,25 @@
 .dashboardContent .branchList small { font-size: 10px; padding: 6px 9px; }
 .dashboardContent .branchDot { width: 10px; height: 10px; box-shadow: 0 0 0 4px #f1f5fb; }
 @media(max-width:640px) { .dashboardContent .dashCardHeader h2 { font-size: 18px; } }
+
+
+/* Loading feedback also applies before the live panel has data. */
+.dashboardContent .liveOpsFeedback { padding: 18px; margin: 14px 0; border: 1px solid #dce5f1; border-radius: 16px; background: #fff; color: #334b69; }
+.dashboardContent .liveOpsFeedback strong { display: block; font-size: 14px; }
+.dashboardContent .liveOpsFeedback p { margin: 7px 0; font-size: 12px; line-height: 1.5; color: #63758c; }
+.dashboardContent .liveOpsFeedback button { min-height: 44px; padding: 0 15px; margin-top: 7px; border: 1px solid #cbdcf3; border-radius: 10px; background: #edf4ff; color: #165cba; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.dashboardContent .liveOpsFeedback button:disabled { opacity: .6; cursor: wait; }
+.dashboardContent .liveOpsFeedback button:focus-visible, .dashboardContent .proStat:focus-visible { outline: 3px solid #176de9; outline-offset: 3px; }
+.proTopbar > div:first-of-type { min-width: 0; }
+@media (max-width: 360px) {
+  .dashboardContent .homeFavoriteHead { flex-wrap: wrap; }
+  .dashboardContent .favoriteMini { grid-template-columns: 26px minmax(0,1fr) !important; padding: 10px !important; }
+  .dashboardContent .favoriteMini i { width: 26px; height: 30px; }
+  .dashboardContent .favoriteMini > b { display: none; }
+}
+
+.proSidebar .homeMenuSignout { display: none; }
+@media (max-width: 820px) {
+  .proSidebar .homeMenuSignout { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 14px; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,.12); color: #fca5a5; font-size: 13px; font-weight: 700; }
+  .proSidebar .homeMenuSignout svg { width: 18px; height: 18px; }
+}

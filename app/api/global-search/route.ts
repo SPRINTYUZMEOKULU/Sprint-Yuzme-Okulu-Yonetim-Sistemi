@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/profile";
+import { searchOrFilter, searchPattern } from "@/lib/search/case-insensitive";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +42,12 @@ export async function GET(request: NextRequest) {
      * =========================================================
      */
 
-    const safeQuery = query
+    const safeQuery = query.normalize("NFC").slice(0, 100)
       .replace(/[%_,()]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+
+    if (safeQuery.length < 2) return NextResponse.json({ results: [] });
 
     const words = safeQuery
       .split(" ")
@@ -72,18 +75,10 @@ export async function GET(request: NextRequest) {
       `)
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
-      .or(
-        [
-          `first_name.ilike.%${searchValue}%`,
-          `last_name.ilike.%${searchValue}%`,
-          `student_number.ilike.%${searchValue}%`,
-          `phone.ilike.%${searchValue}%`,
-          `guardian_phone.ilike.%${searchValue}%`,
-          `guardian_name.ilike.%${searchValue}%`,
-          `email.ilike.%${searchValue}%`,
-          `guardian_email.ilike.%${searchValue}%`,
-        ].join(",")
-      )
+      .or(searchOrFilter([
+        "first_name", "last_name", "student_number", "phone", "guardian_phone",
+        "guardian_name", "email", "guardian_email",
+      ], searchValue))
       .order("created_at", {
         ascending: false,
       })
@@ -126,8 +121,8 @@ export async function GET(request: NextRequest) {
         `)
         .eq("organization_id", organizationId)
         .eq("is_deleted", false)
-        .ilike("first_name", `%${firstWord}%`)
-        .ilike("last_name", `%${lastWords}%`)
+        .filter("first_name", "match", searchPattern(firstWord))
+        .filter("last_name", "match", searchPattern(lastWords))
         .limit(10);
 
       if (!error && data) {
@@ -390,3 +385,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

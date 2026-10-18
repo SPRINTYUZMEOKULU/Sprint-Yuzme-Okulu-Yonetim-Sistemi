@@ -16,9 +16,9 @@ export default function DashboardHomeCleanup() {
       );
       if (!heading) return;
 
-      const section = heading.closest<HTMLElement>("section") ||
+      const section = heading.closest<HTMLElement>(".quickCard") ||
         heading.closest<HTMLElement>(".quickSection") ||
-        heading.parentElement?.parentElement || null;
+        null;
 
       if (section) {
         section.dataset.dashboardDuplicateQuickAccess = "hidden";
@@ -35,3 +35,4 @@ export default function DashboardHomeCleanup() {
 
   return null;
 }
+

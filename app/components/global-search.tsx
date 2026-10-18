@@ -260,7 +260,9 @@ export default function GlobalSearch() {
               setOpen(true);
             }
           }}
-          placeholder="Öğrenci, veli, telefon veya öğrenci numarası ara..."
+          placeholder="Öğrenci veya veli ara"
+          aria-label="Öğrenci, veli, telefon veya öğrenci numarası ara"
+          title="Ad, telefon veya öğrenci numarasıyla arayın"
           autoComplete="off"
           style={{
             flex: 1,
@@ -1105,3 +1107,4 @@ function ActionButton({
     </button>
   );
 }
+

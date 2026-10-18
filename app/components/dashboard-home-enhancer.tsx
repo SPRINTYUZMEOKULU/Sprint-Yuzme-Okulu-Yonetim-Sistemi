@@ -99,7 +99,7 @@ export default function DashboardHomeEnhancer() {
           border: 1px solid #dce5f1;
           border-radius: 22px;
           background: linear-gradient(145deg,#fff,#f7faff);
-          box-shadow: 0 12px 32px rgba(23,48,83,.07);
+          box-shadow: 0 4px 16px rgba(23,48,83,.04);
         }
         .homeFavoriteHead {
           display: flex;
@@ -265,17 +265,18 @@ export default function DashboardHomeEnhancer() {
 
         @media (max-width: 520px) {
           .dashboardContent { padding-top: 18px !important; }
-          .heroRow h1 { font-size: 24px !important; line-height: 1.08; }
+          .heroRow h1 { font-size: 24px !important; line-height: 1.2; overflow-wrap: anywhere; }
           .heroRow > div > p:last-child { font-size: 11px !important; }
           .homeFavoriteHead { margin-bottom: 14px; gap: 8px; }
           .homeFavoriteHead > div > strong { font-size: 15px; }
           .favoritePrimary { min-height: 42px !important; padding: 0 11px !important; }
           .favoritePrimary span { font-size: 11px; }
           .homeFavoriteGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-          .favoriteMini { min-height: 100px !important; grid-template-columns: minmax(0,1fr) 14px; gap: 8px !important; }
-          .favoriteMini i { grid-column: 1; width: 40px; height: 40px; }
-          .favoriteMini > span { grid-column: 1; grid-row: 2; }
-          .favoriteMini > b { grid-column: 2; grid-row: 1 / 3; }
+          .favoriteMini { min-height: 72px !important; grid-template-columns: 32px minmax(0,1fr) 10px; gap: 8px !important; }
+          .favoriteMini i { grid-column: 1; width: 32px; height: 32px; border-radius: 10px; }
+          .favoriteMini i svg { width: 18px; height: 18px; }
+          .favoriteMini > span { grid-column: 2; grid-row: 1; font-size: 11px; }
+          .favoriteMini > b { grid-column: 3; grid-row: 1; font-size: 18px; }
           .homeFavoriteWrap { padding: 14px; }
 
           .proStats {
@@ -284,7 +285,7 @@ export default function DashboardHomeEnhancer() {
             margin-bottom: 14px !important;
           }
           .proStat {
-            min-height: 112px !important;
+            min-height: 98px !important;
             padding: 13px !important;
             display: grid !important;
             grid-template-columns: 38px minmax(0,1fr);
@@ -322,3 +323,4 @@ export default function DashboardHomeEnhancer() {
     </>
   );
 }
+
