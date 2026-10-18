@@ -104,9 +104,10 @@ function formatDayLabel(dateKey: string) {
 export default async function CashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; durum?: string }>;
 }) {
-  const { date } = await searchParams;
+  const { date, durum } = await searchParams;
+  const pendingOnly = durum === "handoff_pending";
   const todayKey = getIstanbulTodayKey();
   const selectedDateKey = normalizeSelectedDate(date, todayKey);
   const selectedDayLabel = formatDayLabel(selectedDateKey);
@@ -168,17 +169,16 @@ export default async function CashPage({
 
   const { startIso, endIso } = getIstanbulDayBounds(selectedDateKey);
 
+  let paymentsQuery = supabase.from("student_payments").select("*")
+    .eq("organization_id", organizationId);
+  if (pendingOnly) {
+    paymentsQuery = paymentsQuery.eq("cash_handover_status", "handoff_pending");
+  } else {
+    paymentsQuery = paymentsQuery.gte("received_at", startIso).lt("received_at", endIso);
+  }
+
   const [paymentsResult, studentsResult, profilesResult] = await Promise.all([
-    supabase
-      .from("student_payments")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .gte("received_at", startIso)
-      .lt("received_at", endIso)
-      .order("received_at", {
-        ascending: false,
-        nullsFirst: false,
-      }),
+    paymentsQuery.order("received_at", { ascending: false, nullsFirst: false }),
 
     supabase
       .from("students")
@@ -267,16 +267,16 @@ export default async function CashPage({
           <p>SPRİNTOS · FİNANS VE KASA</p>
           <h1>Günlük Kasa</h1>
           <span>
-            {isToday ? "Bugün" : selectedDayLabel} alınan ödemeleri, ödeme
-            yöntemlerini, personeldeki nakdi ve ana kasa teslim durumunu tek
-            ekrandan yönetin.
+            {pendingOnly
+              ? "Tüm tarihlerde teslim onayı bekleyen işlemleri görüntüleyin."
+              : `${isToday ? "Bugün" : selectedDayLabel} alınan ödemeleri, ödeme yöntemlerini, personeldeki nakdi ve ana kasa teslim durumunu tek ekrandan yönetin.`}
           </span>
         </div>
       </header>
 
       <FinanceQuickNav />
 
-      <section className="cashDateNavigator" aria-label="Kasa tarihi">
+      {!pendingOnly ? <section className="cashDateNavigator" aria-label="Kasa tarihi">
         <Link href={`/kasa?date=${previousDateKey}`} className="cashDateArrow">
           ← Önceki Gün
         </Link>
@@ -295,15 +295,20 @@ export default async function CashPage({
             Sonraki Gün →
           </span>
         )}
-      </section>
+      </section> : <section className="cashDateNavigator" aria-label="Kasa kapsamı">
+        <div className="cashDateCurrent"><small>TÜM TARİHLER</small><strong>Teslim Onayı Bekleyen İşlemler</strong></div>
+        <Link href="/kasa" className="cashDateArrow">Günlük Kasaya Dön</Link>
+      </section>}
 
-      {!isToday ? (
+      {!pendingOnly && !isToday ? (
         <div className="cashTodayShortcut">
           <Link href="/kasa">Bugünün Kasasına Dön</Link>
         </div>
       ) : null}
 
       <KasaClient
+        key={pendingOnly ? "pending" : selectedDateKey}
+        pendingOnly={pendingOnly}
         rows={rows}
         currentProfileId={profile.id}
         dayLabel={selectedDayLabel}
@@ -406,3 +411,4 @@ export default async function CashPage({
     </main>
   );
 }
+
