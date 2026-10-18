@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function getAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,7 +23,8 @@ function getAdminClient() {
   });
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const delayed = request.nextUrl.searchParams.get("delay") === "15";
   try {
     /*
      * 1. İstek yapan kullanıcıyı normal Supabase oturumundan doğrula.
@@ -171,87 +173,102 @@ export async function POST() {
     const payload = JSON.stringify({
       title: "SprintOS Test Bildirimi",
       body:
-        "Telefon bildirim sistemi başarıyla çalışıyor. 🏊‍♂️",
+        delayed ? "SprintOS arka plan bildirim testi. Bu bildirim uygulama kapalıyken de sunucudan gönderilir." : "Telefon bildirim sistemi başarıyla çalışıyor.",
       targetPath: "/",
       tag: `sprintos-test-${Date.now()}`,
       requireInteraction: false,
     });
 
-    let sent = 0;
-    let failed = 0;
+    const deliver = async () => {
+      let sent = 0;
+      let failed = 0;
 
-    const results: Array<{
-      subscriptionId: string;
-      deviceName: string | null;
-      ok: boolean;
-      statusCode?: number;
-    }> = [];
+      const results: Array<{
+        subscriptionId: string;
+        deviceName: string | null;
+        ok: boolean;
+        statusCode?: number;
+      }> = [];
 
-    /*
-     * 7. Kullanıcının tüm aktif cihazlarına gönder.
-     */
-    for (const subscription of subscriptions) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: subscription.endpoint,
-            keys: {
-              p256dh: subscription.p256dh,
-              auth: subscription.auth_key,
+      /*
+       * 7. Kullanıcının tüm aktif cihazlarına gönder.
+       */
+      await Promise.all(subscriptions.map(async (subscription) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth_key,
+              },
             },
-          },
-          payload
-        );
+            payload,
+            { TTL: 300, urgency: "high", timeout: 10000 }
+          );
 
-        sent += 1;
+          sent += 1;
 
-        results.push({
-          subscriptionId: subscription.id,
-          deviceName:
-            subscription.device_name ?? null,
-          ok: true,
-        });
-      } catch (error: unknown) {
-        failed += 1;
+          results.push({
+            subscriptionId: subscription.id,
+            deviceName:
+              subscription.device_name ?? null,
+            ok: true,
+          });
+        } catch (error: unknown) {
+          failed += 1;
 
-        const pushError = error as {
-          statusCode?: number;
-          message?: string;
-        };
+          const pushError = error as {
+            statusCode?: number;
+            message?: string;
+          };
 
-        console.error(
-          "SprintOS push send:",
-          pushError
-        );
+          console.error(
+            "SprintOS push send:",
+            pushError
+          );
 
-        results.push({
-          subscriptionId: subscription.id,
-          deviceName:
-            subscription.device_name ?? null,
-          ok: false,
-          statusCode: pushError.statusCode,
-        });
+          results.push({
+            subscriptionId: subscription.id,
+            deviceName:
+              subscription.device_name ?? null,
+            ok: false,
+            statusCode: pushError.statusCode,
+          });
 
-        /*
-         * 404 / 410:
-         * Browser push subscription artık geçersiz.
-         * Silmek yerine pasif yapıyoruz.
-         */
-        if (
-          pushError.statusCode === 404 ||
-          pushError.statusCode === 410
-        ) {
-          await admin
-            .from("push_subscriptions")
-            .update({
-              is_active: false,
-              updated_at:
-                new Date().toISOString(),
-            })
-            .eq("id", subscription.id);
+          /*
+           * 404 / 410:
+           * Browser push subscription artık geçersiz.
+           * Silmek yerine pasif yapıyoruz.
+           */
+          if (
+            pushError.statusCode === 404 ||
+            pushError.statusCode === 410
+          ) {
+            await admin
+              .from("push_subscriptions")
+              .update({
+                is_active: false,
+                updated_at:
+                  new Date().toISOString(),
+              })
+              .eq("id", subscription.id);
+          }
         }
-      }
+      }));
+
+      return { sent, failed, devices: results };
+    };
+
+    if (delayed) {
+      after(async () => {
+        await new Promise(resolve => setTimeout(resolve, 15000));
+        const result = await deliver();
+        console.info("SprintOS background push test:", { sent: result.sent, failed: result.failed });
+      });
+      return NextResponse.json({ ok: true, scheduled: true, delaySeconds: 15, message: "Test 15 saniye sonra sunucudan gönderilecek. Şimdi SprintOS'u kapatıp ekranı kilitleyebilirsiniz." }, { status: 202 });
     }
+    const { sent, failed, devices } = await deliver();
 
     /*
      * 8. Test sonucunu döndür.
@@ -264,7 +281,7 @@ export async function POST() {
           : "Bildirim gönderilemedi.",
       sent,
       failed,
-      devices: results,
+      devices,
     });
   } catch (error) {
     console.error(

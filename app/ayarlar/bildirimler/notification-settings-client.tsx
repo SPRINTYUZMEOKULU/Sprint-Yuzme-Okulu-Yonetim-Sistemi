@@ -33,12 +33,33 @@ export default function NotificationSettingsClient() {
 
   const [state, setState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [needsInstall, setNeedsInstall] = useState(false);
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 
   const supported = useMemo(() => {
     if (typeof window === "undefined") return false;
     return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   }, []);
+
+  useEffect(() => {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    setNeedsInstall(ios && !standalone);
+  }, []);
+
+  async function testBackgroundPush() {
+    setTesting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/push/test?delay=15", { method: "POST", credentials: "same-origin" });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) throw new Error(result?.error || "Test başlatılamadı.");
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Test başlatılamadı.");
+    } finally { setTesting(false); }
+  }
 
   async function refreshState() {
     if (!supported) {
@@ -189,6 +210,14 @@ export default function NotificationSettingsClient() {
           Normal kullanımda bildirimleri açık tutmanızı öneririz. Yeni ön kayıt, ödeme, kasa, onay ve önemli SprintOS olayları bu cihazda bildirim olarak gösterilir.
         </p>
 
+        <div className="notificationWarning">
+          <strong>Uygulama kapalıyken bildirim</strong>
+          <p>{needsInstall ? "iPhone’da Safari paylaş menüsünden Ana Ekrana Ekle’yi seçin. Ardından SprintOS simgesinden açıp bu bölümden bildirim izni verin." : "Sunucu push bildirimleri uygulama kapalıyken de alınabilir. iPhone Ayarlar > Bildirimler > SprintOS bölümünde Bildirimlere İzin Ver, Kilit Ekranı ve Sesler açık olmalıdır. Odak modu bildirimleri sessize alabilir."}</p>
+          <p>Testi başlattıktan sonra uygulamayı kapatıp ekranı kilitleyin. Test 15 saniye sonra sunucudan gönderilir.</p>
+        </div>
+
+        {state === "unsupported" && !needsInstall ? <div className="notificationWarning">Bu tarayıcıda telefon push bildirimleri desteklenmiyor. Desteklenen bir tarayıcı veya ana ekrana eklenen SprintOS ile tekrar deneyin.</div> : null}
+
         {state === "blocked" ? (
           <div className="notificationWarning">Bu cihazda bildirim izni tarayıcı/telefon ayarlarından engellenmiş. Önce cihaz ayarlarından SprintOS bildirimlerine izin verin.</div>
         ) : null}
@@ -202,6 +231,7 @@ export default function NotificationSettingsClient() {
             <button type="button" className="notificationPrimary" onClick={enableNotifications} disabled={isWorking || state === "blocked" || state === "unsupported"}>Bildirimleri Aç</button>
           )}
           <button type="button" className="notificationSecondary" onClick={refreshState} disabled={isWorking}>Durumu Yenile</button>
+          <button type="button" className="notificationSecondary" onClick={testBackgroundPush} disabled={!isOn || testing || isWorking || needsInstall}>{testing ? "Test hazırlanıyor…" : "Kapalı uygulama testi · 15 sn"}</button>
         </div>
       </div>
 
