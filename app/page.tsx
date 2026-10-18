@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countStartedStudents } from "@/lib/students/start-status";
 import { redirect } from "next/navigation";
 
 import {
@@ -398,6 +399,25 @@ async function activeBranches(organizationId: string | null) {
   }
 }
 
+async function startedStudentCount(organizationId: string | null) {
+  if (!organizationId) return null;
+  try {
+    const supabase = await createClient();
+    const [students, enrollments, plans] = await Promise.all([
+      supabase.from("students").select("id,status").eq("organization_id", organizationId).eq("status", "active").eq("is_deleted", false),
+      supabase.from("student_enrollments").select("student_id,start_date,start_confirmation_required,actual_started_at")
+        .eq("organization_id", organizationId).eq("status", "active").order("created_at", {ascending: false}),
+      supabase.from("student_attendance_plans").select("student_id,start_date")
+        .eq("organization_id", organizationId).eq("is_active", true).order("created_at", {ascending: false}),
+    ]);
+    if (students.error || enrollments.error || plans.error) return null;
+    const today = new Intl.DateTimeFormat("en-CA", {timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit"}).format(new Date());
+    return countStartedStudents(students.data ?? [], enrollments.data ?? [], plans.data ?? [], today);
+  } catch {
+    return null;
+  }
+}
+
 export default async function HomePage() {
   const profile = await requireProfile();
 
@@ -435,11 +455,7 @@ export default async function HomePage() {
     pendingCash,
     branches,
   ] = await Promise.all([
-    safeCount(
-      "students",
-      profile.organization_id,
-      [["status", "active"]]
-    ),
+    startedStudentCount(profile.organization_id),
 
     safeCount(
       "students",
