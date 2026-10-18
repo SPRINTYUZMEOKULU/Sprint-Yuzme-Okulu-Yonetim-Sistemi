@@ -180,7 +180,7 @@ export default function LiveNotificationCenter() {
       </div>
       <div className="liveNotificationActions">
           <button type="button" className="open" disabled={navigating || closing} onClick={go}>
-            {navigating ? "İşlem açılıyor…" : <>İşlemi aç <span aria-hidden="true">↗</span></>}
+            {navigating ? "İşlem açılıyor…" : <>İşlemi aç <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></>}
           </button>
           <button type="button" className="dismiss" disabled={navigating || closing} onClick={close}>
             {closing ? "Kapatılıyor…" : "Kapat"}
