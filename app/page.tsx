@@ -29,7 +29,7 @@ type MenuItem = {
 
 type StatItem = {
   label: string;
-  value: number | string;
+  value: number | string | null;
   note: string;
   icon: keyof typeof Icons;
   tone: string;
@@ -43,7 +43,7 @@ type QuickItem = {
   icon: keyof typeof Icons;
   roles: UserRole[];
   moduleKey: string;
-  badge?: number;
+  badge?: number | null;
 };
 
 const allRoles: UserRole[] = [
@@ -340,9 +340,11 @@ async function getAllowedModules(profileId: string, role: UserRole) {
 
 async function safeCount(
   table: string,
+  organizationId: string | null,
   filters?: Array<[string, string]>
 ) {
   try {
+    if (!organizationId) return null;
     const supabase = await createClient();
 
     let query = supabase
@@ -350,7 +352,9 @@ async function safeCount(
       .select("id", {
         count: "exact",
         head: true,
-      });
+      }).eq("organization_id", organizationId);
+
+    if (table === "students") query = query.eq("is_deleted", false);
 
     for (const [key, value] of filters || []) {
       query = query.eq(key, value);
@@ -367,17 +371,30 @@ async function safeCount(
         error
       );
 
-      return 0;
+      return null;
     }
 
-    return count || 0;
+    return count;
   } catch (error) {
     console.error(
       `${table} sayaç işlemi başarısız:`,
       error
     );
 
-    return 0;
+    return null;
+  }
+}
+
+async function activeBranches(organizationId: string | null) {
+  if (!organizationId) return null;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("branches").select("id,name")
+      .eq("organization_id", organizationId).eq("is_active", true).order("name");
+    if (error) return null;
+    return data;
+  } catch {
+    return null;
   }
 }
 
@@ -416,37 +433,45 @@ export default async function HomePage() {
     openAlerts,
     pendingApprovals,
     pendingCash,
+    branches,
   ] = await Promise.all([
     safeCount(
       "students",
+      profile.organization_id,
       [["status", "active"]]
     ),
 
     safeCount(
       "students",
+      profile.organization_id,
       [["status", "pre_registration"]]
     ),
 
     safeCount(
       "alerts",
+      profile.organization_id,
       [["status", "open"]]
     ),
 
     safeCount(
       "approval_requests",
+      profile.organization_id,
       [["status", "pending"]]
     ),
 
     safeCount(
-      "payments",
-      [["cash_status", "handoff_pending"]]
+      "student_payments",
+      profile.organization_id,
+      [["cash_handover_status", "handoff_pending"]]
     ),
+    canAccessModule("branches") ? activeBranches(profile.organization_id) : Promise.resolve(null),
   ]);
 
   const today =
     new Intl.DateTimeFormat(
       "tr-TR",
       {
+        timeZone: "Europe/Istanbul",
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -454,13 +479,7 @@ export default async function HomePage() {
       }
     ).format(new Date());
 
-  const firstName = (
-    profile.full_name ||
-    profile.email ||
-    "SprintOS Kullanıcısı"
-  )
-    .trim()
-    .split(" ")[0];
+  const firstName = profile.full_name?.trim().split(/\s+/)[0];
 
   /*
    * =========================================================
@@ -488,7 +507,7 @@ export default async function HomePage() {
       moduleKey: "preregistration",
     },
     {
-      label: "Açık Uyarı",
+      label: "Bekleyen Uyarı",
       value: openAlerts,
       note: "İşlem gerektiriyor",
       icon: "bell",
@@ -497,7 +516,7 @@ export default async function HomePage() {
       moduleKey: "dashboard",
     },
     {
-      label: "Kasa Onayı",
+      label: "Teslim Onayı Bekleyen",
       value: pendingCash,
       note: "Teslim onayı bekliyor",
       icon: "wallet",
@@ -510,8 +529,8 @@ export default async function HomePage() {
   const coachStats: StatItem[] = [
     {
       label: "Bugünkü Dersim",
-      value: 0,
-      note: "Planlanan ders",
+      value: null,
+      note: "Ders programını açın",
       icon: "calendar",
       tone: "blue",
       href: "/ders-programi",
@@ -519,8 +538,8 @@ export default async function HomePage() {
     },
     {
       label: "Bu Ay Girdiğim Ders",
-      value: 0,
-      note: "Onaylı ders",
+      value: null,
+      note: "Yoklama kayıtlarını açın",
       icon: "check",
       tone: "green",
       href: "/yoklama",
@@ -528,8 +547,8 @@ export default async function HomePage() {
     },
     {
       label: "Yoklama Bekleyen",
-      value: 0,
-      note: "Tamamlanacak",
+      value: null,
+      note: "Yoklamayı kontrol edin",
       icon: "clock",
       tone: "orange",
       href: "/yoklama",
@@ -691,57 +710,6 @@ export default async function HomePage() {
 
   return (
     <main className="proShell">
-      {/* MOBİL GÜVENLİ ÇIKIŞ - SADECE TELEFON/TABLETTE GÖRÜNÜR */}
-      <a
-        href="/auth/signout"
-        className="mobileSecureLogout"
-        title="Güvenli Çıkış"
-        aria-label="Güvenli Çıkış"
-      >
-        <Icons.logout />
-        <span>Çıkış</span>
-      </a>
-
-      <style>{`
-        .mobileSecureLogout {
-          display: none;
-        }
-
-        @media (max-width: 768px) {
-          .mobileSecureLogout {
-            position: fixed;
-            top: 14px;
-            right: 12px;
-            z-index: 999999;
-
-            width: 46px;
-            height: 46px;
-            padding: 0;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            border-radius: 14px;
-            border: 2px solid rgba(255,255,255,0.95);
-
-            background: #dc2626;
-            color: #ffffff;
-            text-decoration: none;
-
-            box-shadow: 0 10px 28px rgba(220,38,38,0.32);
-          }
-
-          .mobileSecureLogout svg {
-            width: 21px;
-            height: 21px;
-          }
-
-          .mobileSecureLogout span {
-            display: none;
-          }
-        }
-      `}</style>
       {/* =====================================================
           SOL MENÜ
       ===================================================== */}
@@ -825,7 +793,7 @@ export default async function HomePage() {
 
                           {item.href ===
                             "/uyarilar" &&
-                          openAlerts >
+                          (openAlerts ?? 0) >
                             0 ? (
                             <b>
                               {
@@ -836,7 +804,7 @@ export default async function HomePage() {
 
                           {item.href ===
                             "/onay-merkezi" &&
-                          pendingApprovals >
+                          (pendingApprovals ?? 0) >
                             0 ? (
                             <b>
                               {
@@ -920,8 +888,8 @@ export default async function HomePage() {
             >
               <Icons.bell />
 
-              {openAlerts > 0 ||
-              pendingApprovals >
+              {(openAlerts ?? 0) > 0 ||
+              (pendingApprovals ?? 0) >
                 0 ? (
                 <i />
               ) : null}
@@ -945,8 +913,7 @@ export default async function HomePage() {
               </p>
 
               <h1>
-                Hoş geldiniz,{" "}
-                {firstName}
+                {firstName ? `Hoş geldiniz, ${firstName}` : "Yönetim Merkezi"}
               </h1>
 
               <p>
@@ -1019,6 +986,7 @@ export default async function HomePage() {
                     key={
                       stat.label
                     }
+                    title={stat.value === null ? "Bu bilgi alınamadı. İlgili modülden kontrol edin." : undefined}
                     style={{
                       textDecoration:
                         "none",
@@ -1039,13 +1007,13 @@ export default async function HomePage() {
 
                       <strong>
                         {
-                          stat.value
+                          stat.value ?? "—"
                         }
                       </strong>
 
                       <small>
                         {
-                          stat.note
+                          stat.value === null ? "Bilgi alınamadı · Kontrol edin" : stat.note
                         }
                       </small>
                     </div>
@@ -1131,7 +1099,7 @@ export default async function HomePage() {
               </div>
 
               <div className="alertList">
-                {openAlerts > 0 ? (
+                {(openAlerts ?? 0) > 0 ? (
                   <div className="alertItem urgent">
                     <span>
                       <Icons.bell />
@@ -1156,19 +1124,18 @@ export default async function HomePage() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="alertItem success">
+                  <div className={`alertItem ${openAlerts === null ? "warning" : "success"}`}>
                     <span>
                       <Icons.check />
                     </span>
 
                     <div>
                       <strong>
-                        Her şey yolunda
+                        {openAlerts === null ? "Uyarılar kontrol edilemedi" : "Açık uyarı yok"}
                       </strong>
 
                       <small>
-                        Şu anda açık
-                        uyarı bulunmuyor.
+                        {openAlerts === null ? "Uyarılar sayfasından kontrol edin." : "Şu anda açık uyarı bulunmuyor."}
                       </small>
                     </div>
                   </div>
@@ -1176,7 +1143,7 @@ export default async function HomePage() {
 
                 {isManager &&
                 canAccessModule("permissions") &&
-                pendingApprovals >
+                (pendingApprovals ?? 0) >
                   0 ? (
                   <div className="alertItem warning">
                     <span>
@@ -1205,7 +1172,7 @@ export default async function HomePage() {
                 ) : null}
 
                 {canAccessModule("finance") &&
-                pendingCash >
+                (pendingCash ?? 0) >
                 0 ? (
                   <div className="alertItem warning">
                     <span>
@@ -1366,38 +1333,14 @@ export default async function HomePage() {
               </div>
 
               <div className="branchList">
-                {[
-                  "Lara Life City",
-                  "Konyaaltı Öğretmenevi",
-                  "Meltem Yüzme Havuzu",
-                  "Süleyman Erol Olimpik",
-                ].map(
-                  (
-                    name,
-                    index
-                  ) => (
-                    <div
-                      key={
-                        name
-                      }
-                    >
-                      <span
-                        className={`branchDot b${
-                          index +
-                          1
-                        }`}
-                      />
-
-                      <strong>
-                        {name}
-                      </strong>
-
-                      <small>
-                        Aktif
-                      </small>
-                    </div>
-                  )
-                )}
+                {branches?.map((branch, index) => (
+                  <div key={branch.id}>
+                    <span className={`branchDot b${index % 4 + 1}`} />
+                    <strong>{branch.name}</strong>
+                    <small>Aktif</small>
+                  </div>
+                ))}
+                {branches === null ? <p>Şube bilgileri alınamadı. Şubeler ekranından kontrol edin.</p> : branches.length === 0 ? <p>Aktif şube bulunmuyor.</p> : null}
               </div>
             </article>
             ) : null}
@@ -1407,3 +1350,4 @@ export default async function HomePage() {
     </main>
   );
 }
+

@@ -59,7 +59,7 @@ export async function GET() {
     supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
     supabase.from("students").select("id,first_name,last_name,birth_date,phone,guardian_phone,guardian_name,branch_id,status").eq("organization_id", profile.organization_id).eq("is_deleted", false),
     supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pending"),
-    supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("cash_status", "handoff_pending"),
+    supabase.from("student_payments").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("cash_handover_status", "handoff_pending"),
     supabase.from("alerts").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "open"),
     supabase.from("students").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pre_registration"),
     supabase.from("birthday_celebrations").select("id,student_id,celebration_year,status,sent_at,sent_by").eq("organization_id", profile.organization_id).eq("celebration_year", Number(today.iso.slice(0, 4))).eq("status", "sent"),
@@ -290,3 +290,4 @@ export async function GET() {
     },
   });
 }
+

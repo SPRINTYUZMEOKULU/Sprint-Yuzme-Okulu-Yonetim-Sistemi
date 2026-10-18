@@ -65,6 +65,8 @@ function OperationPanel() {
   const [openedSession, setOpenedSession] = useState<string | null>(null);
   const [openingSession, setOpeningSession] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [celebrationBusy, setCelebrationBusy] = useState<string | null>(null);
 
   const [historyBusy, setHistoryBusy] = useState<string | null>(null);
@@ -74,32 +76,51 @@ function OperationPanel() {
 
   useEffect(() => {
     let active = true;
+    let controller: AbortController | null = null;
 
     async function load() {
       const version = ++loadVersion.current;
+      controller?.abort();
+      const request = new AbortController();
+      controller = request;
+      const timeout = window.setTimeout(() => request.abort(), 15000);
       try {
-        const response = await fetch("/api/dashboard/live", { cache: "no-store" });
+        const response = await fetch("/api/dashboard/live", { cache: "no-store", signal: request.signal });
         const result = (await response.json()) as LiveData;
-        if (active && version === loadVersion.current && response.ok && result.ok) setData(result);
+        if (!response.ok || !result.ok) throw new Error("Operasyon verileri alınamadı");
+        if (active && version === loadVersion.current) {
+          setData(result);
+          setLoadError(false);
+        }
       } catch (error) {
-        console.error("SprintOS canlı operasyon:", error);
+        if (active && version === loadVersion.current) {
+          console.error("SprintOS canlı operasyon:", error);
+          setLoadError(true);
+        }
       } finally {
-        if (active) setLoading(false);
+        window.clearTimeout(timeout);
+        if (active && version === loadVersion.current) setLoading(false);
       }
     }
 
-    load();
+    void load();
     const refresh = () => { if (document.visibilityState === "visible") void load(); };
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 30000);
     return () => {
       active = false;
+      controller?.abort();
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [retryVersion]);
+
+  function retryLoad() {
+    setLoading(true);
+    setRetryVersion((version) => version + 1);
+  }
 
   useEffect(() => {
     if (!data?.date) return;
@@ -185,11 +206,17 @@ function OperationPanel() {
     }).format(date);
   }
 
-  if (loading) {
-    return <section className="liveOpsShell"><div className="liveOpsLoading">Günlük operasyon verileri hazırlanıyor…</div></section>;
+  if (!data) {
+    return (
+      <section className="liveOpsShell" aria-label="Günlük operasyon" aria-busy={loading}>
+        <div className="liveOpsFeedback" role="status" aria-live="polite">
+          <strong>{loading ? "Günlük operasyon yükleniyor…" : "Günlük operasyon verileri alınamadı"}</strong>
+          <p>{loading ? "Dersler ve bekleyen işlemler kontrol ediliyor." : "Bağlantıyı kontrol edip yeniden deneyin."}</p>
+          {!loading ? <button type="button" onClick={retryLoad}>Tekrar dene</button> : null}
+        </div>
+      </section>
+    );
   }
-
-  if (!data) return null;
 
   const pendingSession = data.sessions.find(session => session.missingCount > 0);
   const attendanceParams = new URLSearchParams({ date: data.date });
@@ -207,6 +234,13 @@ function OperationPanel() {
 
   return (
     <section className="liveOpsShell">
+      {loadError ? (
+        <div className="liveOpsFeedback" role="status" aria-live="polite">
+          <strong>Veriler güncellenemedi</strong>
+          <p>Son alınan bilgiler gösteriliyor. İşlem yapmadan önce güncelleyin.</p>
+          <button type="button" onClick={retryLoad} disabled={loading}>{loading ? "Güncelleniyor…" : "Tekrar dene"}</button>
+        </div>
+      ) : null}
       <div className="liveOpsHeadline">
         <div>
           <span>CANLI OPERASYON</span>
@@ -464,3 +498,4 @@ export default function DashboardLiveOperations() {
   if (pathname !== "/" || !host) return null;
   return createPortal(<OperationPanel />, host);
 }
+
