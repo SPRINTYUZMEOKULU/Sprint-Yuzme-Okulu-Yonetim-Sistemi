@@ -46,6 +46,7 @@ type Props = {
   currentProfileId: string;
   dayLabel: string;
   isToday: boolean;
+  pendingOnly?: boolean;
 };
 
 type FilterKey =
@@ -140,6 +141,7 @@ export default function KasaClient({
   rows,
   dayLabel,
   isToday,
+  pendingOnly = false,
 }: Props) {
   const router = useRouter();
 
@@ -152,7 +154,7 @@ export default function KasaClient({
     useState("");
 
   const [filter, setFilter] =
-    useState<FilterKey>("all");
+    useState<FilterKey>(pendingOnly ? "handoff_pending" : "all");
 
   const [
     actionMessage,
@@ -393,7 +395,7 @@ export default function KasaClient({
           }
         >
           <span>
-            {isToday
+            {pendingOnly ? "Bekleyen İşlemler Toplamı" : isToday
               ? "Bugün Toplam Tahsilat"
               : `${dayLabel} Toplam Tahsilat`}
           </span>
@@ -555,10 +557,10 @@ export default function KasaClient({
       <section className="cashCard">
         <div className="cashCardHeader">
           <div>
-            <p>GÜNLÜK HAREKET</p>
+            <p>{pendingOnly ? "BEKLEYEN İŞLEMLER" : "GÜNLÜK HAREKET"}</p>
 
             <h2>
-              {isToday
+              {pendingOnly ? "Teslim Onayı Bekleyen İşlemler" : isToday
                 ? "Bugün Alınan Ödemeler"
                 : `${dayLabel} Alınan Ödemeler`}
             </h2>
@@ -957,3 +959,4 @@ export default function KasaClient({
     </>
   );
 }
+

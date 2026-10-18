@@ -1199,7 +1199,7 @@ export default async function HomePage() {
                       </small>
                     </div>
 
-                    <Link href="/kasa">
+                    <Link href="/kasa?durum=handoff_pending">
                       Aç
                     </Link>
                   </div>
