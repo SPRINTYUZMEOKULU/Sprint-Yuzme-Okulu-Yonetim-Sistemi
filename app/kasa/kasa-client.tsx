@@ -81,6 +81,7 @@ function dateTime(value?: string | null) {
   }
 
   return new Intl.DateTimeFormat("tr-TR", {
+    timeZone: "Europe/Istanbul",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
