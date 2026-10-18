@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +14,7 @@ export type PassiveCenterStudent={
 
 type Props={students:PassiveCenterStudent[];canApprove:boolean};
 const REASONS=["Kursa devam etmeyecek","Kayıt süresi sona erdi","Kursiyer / veli talebi","Şube veya şehir değişikliği","Sağlık / kişisel neden","Çift kayıt / mükerrer kayıt","Diğer"];
-function fmtDate(v?:string|null){if(!v)return"—";const d=new Date(v);return Number.isNaN(d.getTime())?v:new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"}).format(d)}
+function fmtDate(v?:string|null){if(!v)return"—";const d=new Date(v);return Number.isNaN(d.getTime())?v:formatDisplayDate(d)}
 function norm(v?:string|null){return String(v||"").toLocaleLowerCase("tr-TR")}
 
 export default function PassiveCenterClient({students,canApprove}:Props){

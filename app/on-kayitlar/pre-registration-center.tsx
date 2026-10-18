@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -82,10 +83,7 @@ type ListFilter = "all" | "today" | "health";
 function fmtDate(value: string | null | undefined) {
   if (!value) return "—";
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+    return formatDisplayDateTime(new Date(value));
   } catch {
     return value;
   }
@@ -94,9 +92,7 @@ function fmtDate(value: string | null | undefined) {
 function fmtBirthDate(value: string | null | undefined) {
   if (!value) return "Belirtilmedi";
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      dateStyle: "medium",
-    }).format(new Date(`${value}T12:00:00`));
+    return formatDisplayDate(new Date(`${value}T12:00:00`));
   } catch {
     return value;
   }

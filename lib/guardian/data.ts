@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -201,7 +202,7 @@ export function weekdayLabel(value: number) {
 
 export function formatDate(value?: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${value}T12:00:00`));
+  return formatDisplayDate(new Date(`${value}T12:00:00`));
 }
 
 export function formatMoney(value?: number | string | null) {

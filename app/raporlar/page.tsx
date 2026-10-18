@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import { readSettings } from "@/lib/settings/server";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import Link from "next/link";
@@ -124,7 +125,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const received = (p: Payment) => !p.cancelled_at && ["received", "paid", "completed"].includes(String(p.payment_status).toLowerCase());
   const paymentDate = (p: Payment) => p.received_at ? new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Istanbul"}).format(new Date(p.received_at)) : "";
   const inPeriod = (p: Payment) => Boolean(paymentDate(p) && paymentDate(p) >= from && paymentDate(p) <= to);
-  const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat("tr-TR", {timeZone:"Europe/Istanbul"}).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value)) : "—";
+  const dateLabel = (value?: string | null) => value ? formatDisplayDate(value) : "—";
   const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
   const branchId = requestedBranch !== "all" && branches.some((b) => b.id === requestedBranch) ? requestedBranch : "all";
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));

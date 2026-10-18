@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -18,7 +19,7 @@ type Item = {
 function fmt(value?: string | null) {
   if (!value) return "—";
   const d = new Date(`${value}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? value : new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+  return Number.isNaN(d.getTime()) ? value : formatDisplayDate(d);
 }
 
 export default function RenewalDecisionCenter() {

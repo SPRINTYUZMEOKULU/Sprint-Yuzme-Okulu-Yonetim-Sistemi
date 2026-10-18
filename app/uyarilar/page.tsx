@@ -1,3 +1,4 @@
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ function formatAlertDate(value: unknown) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   try {
-    return new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(date);
+    return formatDisplayDateTime(date);
   } catch {
     return null;
   }

@@ -1,4 +1,6 @@
 "use client";
+import { formatDatesInText } from "@/lib/dates/display";
+
 import { unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -159,8 +161,8 @@ export default function LiveNotificationCenter() {
     >
       <div className="liveNotificationIcon" aria-hidden="true">🔔</div>
       <div className="liveNotificationCopy">
-        <strong>{current.title}</strong>
-        <p>{current.body}</p>
+        <strong>{formatDatesInText(current.title)}</strong>
+        <p>{formatDatesInText(current.body)}</p>
         <div className="liveNotificationActions">
           <button type="button" className="open" disabled={navigating || closing} onClick={go}>
             {navigating ? "İşleme gidiliyor…" : "İşleme Git"}

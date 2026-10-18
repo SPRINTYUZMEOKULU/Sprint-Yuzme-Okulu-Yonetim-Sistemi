@@ -1,3 +1,4 @@
+import { formatDatesInText } from "@/lib/dates/display";
 import { randomUUID } from "node:crypto";
 import "server-only";
 
@@ -260,8 +261,8 @@ function buildPushPayload(input: {
   severity: string;
 }) {
   return JSON.stringify({
-    title: input.title,
-    body: input.body,
+    title: formatDatesInText(input.title),
+    body: formatDatesInText(input.body),
     targetPath: input.targetPath || "/bildirimler",
     tag: `sprintos-${input.notificationId}`,
     notificationId: input.notificationId,

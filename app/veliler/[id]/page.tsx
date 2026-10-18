@@ -1,3 +1,4 @@
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -28,7 +29,7 @@ function adminClient() {
 
 function date(v?: string | null) {
   return v
-    ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(v))
+    ? formatDisplayDateTime(new Date(v))
     : "—";
 }
 

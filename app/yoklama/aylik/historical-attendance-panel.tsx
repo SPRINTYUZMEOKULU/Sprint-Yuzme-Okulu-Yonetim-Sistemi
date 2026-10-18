@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import { useEffect, useMemo, useState } from "react";
 
 type Status = "present" | "absent" | "excused";
@@ -19,7 +20,7 @@ const STATUS_LABEL:Record<Status,string>={present:"Geldi",absent:"Gelmedi",excus
 const todayTR=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 const fullName=(student?:Student|null)=>student?`${student.first_name||""} ${student.last_name||""}`.trim()||"Kursiyer":"Kursiyer";
 const tm=(value?:string|null)=>value?.slice(0,5)||"—";
-const trDate=(value:string)=>new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",weekday:"short"}).format(new Date(`${value}T12:00:00`));
+const trDate=(value:string)=>formatDisplayDate(new Date(`${value}T12:00:00`));
 const norm=(value:string)=>value.toLocaleLowerCase("tr-TR");
 const keyOf=(studentId:string,date:string,groupId:string,scheduleId:string)=>`${studentId}:${date}:${groupId}:${scheduleId}`;
 
@@ -84,7 +85,7 @@ export default function HistoricalAttendancePanel({month}:{month:string}){
         {lessonDate&&<div className="haiRoster"><div className="haiRosterTitle"><strong>{groupMap.get(groupId)?.name||"Grup"}</strong><span>{trDate(lessonDate)} · {groupStudents.length} öğrenci</span></div>{groupStudents.map(s=><div className="haiStudentRow" key={s.id}><div><b>{fullName(s)}</b><small>{s.student_number||"Numara yok"}</small></div><StatusButtons status={statusFor(s.id,lessonDate)} changed={Boolean(edits[keyOf(s.id,lessonDate,groupId,scheduleId)])} onStatus={st=>setStatus(s.id,lessonDate,st)} onClear={()=>clearEdit(s.id,lessonDate)}/></div>)}</div>}
       </div>}
       <div className="haiSave"><div><b>{Object.keys(edits).length}</b><span>değişiklik onaya hazır</span></div><button type="button" disabled={busy||!Object.keys(edits).length} onClick={submit}>{busy?"İşleniyor…":"Yönetici Onayına Gönder"}</button></div>
-      {!!data.pendingRequests.length&&<div className="haiPending"><div className="haiPendingHead"><div><span>ONAY BEKLEYENLER</span><h3>{data.canApprove?"Yönetici karar ekranı":"Gönderdiğiniz talepler"}</h3></div><b>{data.pendingRequests.length}</b></div>{data.pendingRequests.map(req=>{const count=req.new_values?.records?.length||0;return <div className="haiPendingRow" key={req.id}><div><strong>{req.reason||"Geçmiş yoklama aktarımı"}</strong><small>{req.requested_by_name||"Personel"} · {req.created_at?new Intl.DateTimeFormat("tr-TR",{dateStyle:"short",timeStyle:"short"}).format(new Date(req.created_at)):""}</small></div>{data.canApprove?<div className="haiDecision"><button type="button" className="reject" disabled={busy} onClick={()=>decide(req.id,"reject")}>Reddet</button><button type="button" className="approve" disabled={busy} onClick={()=>decide(req.id,"approve")}>Onayla · {count}</button></div>:<span className="haiWaiting">Yönetici onayı bekliyor</span>}</div>})}</div>}
+      {!!data.pendingRequests.length&&<div className="haiPending"><div className="haiPendingHead"><div><span>ONAY BEKLEYENLER</span><h3>{data.canApprove?"Yönetici karar ekranı":"Gönderdiğiniz talepler"}</h3></div><b>{data.pendingRequests.length}</b></div>{data.pendingRequests.map(req=>{const count=req.new_values?.records?.length||0;return <div className="haiPendingRow" key={req.id}><div><strong>{req.reason||"Geçmiş yoklama aktarımı"}</strong><small>{req.requested_by_name||"Personel"} · {req.created_at?formatDisplayDateTime(new Date(req.created_at)):""}</small></div>{data.canApprove?<div className="haiDecision"><button type="button" className="reject" disabled={busy} onClick={()=>decide(req.id,"reject")}>Reddet</button><button type="button" className="approve" disabled={busy} onClick={()=>decide(req.id,"approve")}>Onayla · {count}</button></div>:<span className="haiWaiting">Yönetici onayı bekliyor</span>}</div>})}</div>}
     </>:null}
     {message&&<div className="haiMessage">{message}</div>}
   </section>

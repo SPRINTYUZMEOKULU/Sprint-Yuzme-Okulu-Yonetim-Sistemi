@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 
@@ -2006,18 +2007,9 @@ export default async function OperasyonPlaniPage({
             >
               {planScope === "hafta"
                 ? "Tüm aktif seans planı"
-                : new Intl.DateTimeFormat(
-                    "tr-TR",
-                    {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    }
-                  ).format(
-                    new Date(
+                : formatDisplayDate(new Date(
                       `${selectedDate}T12:00:00+03:00`
-                    )
-                  )}
+                    ))}
             </strong>
           </div>
 

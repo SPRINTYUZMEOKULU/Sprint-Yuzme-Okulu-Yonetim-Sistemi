@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { startsAfterToday } from "@/lib/students/start-status";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -353,7 +354,7 @@ function printStudentCard(student: StudentListItem) {
 
   popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${escapePrintText(fullName)} - Kursiyer Bilgi Kartı</title><style>
     @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#10233f;background:#fff}.sheet{width:100%;max-width:186mm;margin:0 auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #1268d6;padding-bottom:14px}.brand{font-size:22px;font-weight:900;color:#1268d6}.sub{font-size:11px;letter-spacing:.12em;color:#64748b;margin-top:4px}.status{border:1px solid #d7e5f7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.name{font-size:28px;margin:22px 0 5px}.number{color:#64748b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.box{border:1px solid #dce5ef;border-radius:10px;padding:11px 12px;min-height:62px}.box span{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:#7b8ca3;text-transform:uppercase;margin-bottom:6px}.box strong{font-size:13px;line-height:1.35}.wide{grid-column:1/-1}.rights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.rights .box{text-align:center}.rights strong{font-size:20px}.foot{margin-top:22px;padding-top:10px;border-top:1px solid #dce5ef;display:flex;justify-content:space-between;font-size:10px;color:#64748b}.sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:44px}.sign div{border-top:1px solid #94a3b8;padding-top:7px;text-align:center;font-size:10px;color:#64748b}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sheet{max-width:none}}
-  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${new Date().toLocaleString("tr-TR")}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
+  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Hak</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${formatDisplayDateTime(new Date())}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
   popup.document.close();
 }
 
@@ -366,11 +367,7 @@ function formatDate(value?: string | null) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 function ageFromBirthDate(value?: string | null) {
@@ -895,12 +892,7 @@ function noteReminderLabel(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return formatDisplayDateTime(date);
 }
 
 function noteReminderDue(value?: string | null) {
@@ -2541,7 +2533,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 </tr></thead>
 <tbody>${body}</tbody>
 </table>
-<div class="foot">${escape(new Date().toLocaleString("tr-TR"))} · SprintOS üzerinden oluşturulmuştur.</div>
+<div class="foot">${escape(formatDisplayDateTime(new Date()))} · SprintOS üzerinden oluşturulmuştur.</div>
 </body>
 </html>`;
 
@@ -3561,11 +3553,11 @@ thead{display:table-header-group}tr{break-inside:avoid}
                       >
                         <div>
                           <strong>{note.note_type === "management" ? "Yönetici Notu" : note.note_type === "coach" ? "Antrenör Notu" : note.note_type === "registration" ? "Kayıt Notu" : note.note_type === "payment" ? "Ödeme Notu" : "Genel Not"}</strong>
-                          <small>{note.created_at ? new Date(note.created_at).toLocaleString("tr-TR") : ""}</small>
+                          <small>{note.created_at ? formatDisplayDateTime(new Date(note.created_at)) : ""}</small>
                         </div>
                         <div className="noteAuthor">Yazan: <strong>{note.author?.name || "Kullanıcı bilgisi bulunamadı"}</strong><span>{note.author?.role === "owner" ? "Sahip" : note.author?.role === "admin" ? "Yönetici" : note.author?.role === "coach" ? "Antrenör" : note.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"}</span></div>
                         <p>{note.body}</p>
-                        {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>Tamamlayan: {note.completion.author?.name || "Kullanıcı bilgisi bulunamadı"} · {note.completion.author?.role === "owner" ? "Sahip" : note.completion.author?.role === "admin" ? "Yönetici" : note.completion.author?.role === "coach" ? "Antrenör" : note.completion.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.completion.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.completion.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"} · {new Date(note.completion.completed_at).toLocaleString("tr-TR")}</small></div>}
+                        {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>Tamamlayan: {note.completion.author?.name || "Kullanıcı bilgisi bulunamadı"} · {note.completion.author?.role === "owner" ? "Sahip" : note.completion.author?.role === "admin" ? "Yönetici" : note.completion.author?.role === "coach" ? "Antrenör" : note.completion.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.completion.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.completion.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"} · {formatDisplayDateTime(new Date(note.completion.completed_at))}</small></div>}
                         {note.reminder_at && !note.completion && !note.reminder_completed && (
                           <div className="noteReminderLine">
                             ⏰ {noteReminderDue(note.reminder_at) ? "Hatırlatma zamanı geldi" : `Hatırlatma: ${noteReminderLabel(note.reminder_at)}`}
@@ -3711,7 +3703,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                   <strong>Seçilen tarihte aktarılacak ders hakkı</strong>
                   {selectedStudents.length === 1 ? (
                     <p>
-                      <b>{selectedStudents[0].normal_remaining_lessons ?? selectedStudents[0].remaining_lessons ?? 0} ders</b> mevcut kalan hak görünüyor. Aktarım başlangıcı <b>{effectiveDate ? new Date(effectiveDate + "T12:00:00").toLocaleDateString("tr-TR") : "—"}</b>. Yeni program ders sayısı alanını boş bırakırsanız bu hak aynen taşınır; farklı bir sayı girerseniz yönetici tercihi olarak o sayı esas alınır.
+                      <b>{selectedStudents[0].normal_remaining_lessons ?? selectedStudents[0].remaining_lessons ?? 0} ders</b> mevcut kalan hak görünüyor. Aktarım başlangıcı <b>{effectiveDate ? formatDisplayDate(new Date(effectiveDate + "T12:00:00")) : "—"}</b>. Yeni program ders sayısı alanını boş bırakırsanız bu hak aynen taşınır; farklı bir sayı girerseniz yönetici tercihi olarak o sayı esas alınır.
                     </p>
                   ) : (
                     <div>

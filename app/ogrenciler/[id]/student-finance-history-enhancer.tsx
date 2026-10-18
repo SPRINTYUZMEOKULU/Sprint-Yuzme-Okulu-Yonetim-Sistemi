@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect } from "react";
 
 function money(value: unknown) {
@@ -16,11 +17,7 @@ function dateText(value?: string | null) {
   const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
   return Number.isNaN(date.getTime())
     ? String(value)
-    : new Intl.DateTimeFormat("tr-TR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(date);
+    : formatDisplayDate(date);
 }
 
 function escapeHtml(value: unknown) {

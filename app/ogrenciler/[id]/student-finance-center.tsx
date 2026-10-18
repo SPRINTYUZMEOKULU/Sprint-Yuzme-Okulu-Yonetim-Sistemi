@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -540,7 +541,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
                         <b>{money(row.amount)} · {methodLabels[row.method] || row.method}</b>
                         <span>{row.packageName || "Kurs paketi"}</span>
                         <span>{dateText(row.periodStartDate)} - {dateText(row.periodEndDate)} tarihleri arasındaki paketin ücreti ödendi.</span>
-                        <small>{row.receivedAt ? new Date(row.receivedAt).toLocaleString("tr-TR") : "—"}</small>
+                        <small>{row.receivedAt ? formatDisplayDateTime(new Date(row.receivedAt)) : "—"}</small>
                       </div>
                       <button className="sfcMini" type="button" onClick={() => openPaymentReceivedMessage(row)}>WhatsApp · Ödeme Alındı</button>
                     </article>

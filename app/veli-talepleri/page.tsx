@@ -1,3 +1,4 @@
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import { getGuardianContext } from "@/lib/guardian/data";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -13,7 +14,7 @@ export const dynamic="force-dynamic";
 const statusLabels:Record<string,string>={new:"Yeni",reviewing:"İnceleniyor",approval_pending:"Yönetici Onayı",answered:"Yanıtlandı",resolved:"Çözüldü",rejected:"Reddedildi",archived:"Arşivlendi"};
 const categoryLabels:Record<string,string>={group_schedule:"Grup / Saat",branch:"Şube Değişikliği",lesson:"Ders / Telafi",payment:"Ödeme / Vade",coach:"Eğitmen Görüşü",health:"Sağlık / Özel Durum",document:"Belge Talebi",feedback:"Öneri / Memnuniyet",complaint:"Şikâyet",other:"Diğer"};
 function adminClient(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL,k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error("Supabase bağlantısı yok.");return createAdminClient(u,k,{auth:{persistSession:false,autoRefreshToken:false}})}
-function fmt(v:string){return new Intl.DateTimeFormat("tr-TR",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Istanbul"}).format(new Date(v))}
+function fmt(v:string){return formatDisplayDateTime(new Date(v))}
 
 export default async function GuardianRequestsPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
  const profile=await requireProfile(["owner","admin","branch_manager","registration_staff","accounting","coach","guardian"]);const query=await searchParams;const guardian=profile.role==="guardian";

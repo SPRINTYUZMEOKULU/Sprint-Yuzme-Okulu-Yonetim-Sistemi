@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useRef, useState } from "react";
 
 type CalendarItem = {
@@ -188,7 +189,7 @@ export default function DashboardSmartCalendar() {
               type="button"
               className={`calendarDay${active ? " active" : ""}${isToday ? " today" : ""}`}
               aria-pressed={active}
-              aria-label={`${day.date}: ${day.lessons.length} ders, ${day.events.length} not veya etkinlik, ${day.birthdays.length} doğum günü, ${day.holidays.length} tatil`}
+              aria-label={`${formatDisplayDate(day.date)}: ${day.lessons.length} ders, ${day.events.length} not veya etkinlik, ${day.birthdays.length} doğum günü, ${day.holidays.length} tatil`}
               onClick={() => setSelectedDate(day.date)}
             >
               <b>{Number(day.date.slice(-2))}</b>
@@ -212,7 +213,7 @@ export default function DashboardSmartCalendar() {
 
       <div className="selectedCalendarDay">
         <div className="selectedCalendarHead">
-          <div><small className="calendarAgendaLabel">GÜNÜN PROGRAMI</small><strong>{new Intl.DateTimeFormat("tr-TR", { day:"2-digit", month:"long", year:"numeric", weekday:"long" }).format(new Date(`${selectedDate}T12:00:00+03:00`))}</strong><span className="calendarAgendaSummary">{slots.length} seans · {selected?.lessons.filter(lesson=>lesson.cancellationCount).length || 0} grupta iptal · {selectedItems.length} etkinlik / not</span></div>
+          <div><small className="calendarAgendaLabel">GÜNÜN PROGRAMI</small><strong>{formatDisplayDate(new Date(`${selectedDate}T12:00:00+03:00`))}</strong><span className="calendarAgendaSummary">{slots.length} seans · {selected?.lessons.filter(lesson=>lesson.cancellationCount).length || 0} grupta iptal · {selectedItems.length} etkinlik / not</span></div>
           <button className="calendarAddNote" type="button" aria-expanded={openForm} onClick={() => setOpenForm((value) => !value)}>+ Not / Hatırlatma</button>
         </div>
         {slots.length > 0 && <div className="calendarAgendaSlots">

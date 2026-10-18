@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime, formatDatesInText } from "@/lib/dates/display";
 import Link from "next/link";
 import {
   useMemo,
@@ -218,13 +219,7 @@ function severityClass(severity?: string | null) {
 
 function formatDate(value: string) {
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
+    return formatDisplayDateTime(new Date(value));
   } catch {
     return value;
   }
@@ -683,11 +678,11 @@ export default function BildirimMerkeziClient({
                       </div>
 
                       <h3>
-                        {notification.title}
+                        {formatDatesInText(notification.title)}
                       </h3>
 
                       <p>
-                        {content}
+                        {formatDatesInText(content)}
                       </p>
 
                       <div className="notification-actions">

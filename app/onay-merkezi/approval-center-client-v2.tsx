@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -86,11 +87,7 @@ const STATUS_OPTIONS: Array<{ key: StatusFilter; label: string }> = [
 function formatDate(value?: string | null) {
   if (!value) return "—";
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      dateStyle: "short",
-      timeStyle: "short",
-      timeZone: "Europe/Istanbul",
-    }).format(new Date(value));
+    return formatDisplayDateTime(new Date(value));
   } catch {
     return value;
   }

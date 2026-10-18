@@ -1,10 +1,11 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import type { CenterItem, RenewalHistory } from "./renewal-status-center-client";
 
 type Props={items:CenterItem[];history:RenewalHistory[]};
-function fmt(v?:string|null){if(!v)return"—";const d=new Date(v.length===10?`${v}T12:00:00+03:00`:v);return Number.isNaN(d.getTime())?v:new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"}).format(d)}
+function fmt(v?:string|null){if(!v)return"—";const d=new Date(v.length===10?`${v}T12:00:00+03:00`:v);return Number.isNaN(d.getTime())?v:formatDisplayDate(d)}
 
 export default function DecisionCompletionSummary({items,history}:Props){
   const waiting=items.filter(x=>x.category==="action");

@@ -1,4 +1,6 @@
 "use client";
+import { formatDisplayDate } from "@/lib/dates/display";
+
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -211,7 +213,7 @@ export default function QuickAttendanceClient(p:Props){
      const r=await persistGroup(g);
      if(!r.ok){setMessage(r.message);return}
      setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
-     setMessage(`✓ ${date} · ${time}: ${g.group.name||"Seans"}. ${r.message}`);
+     setMessage(`✓ ${formatDisplayDate(date)} · ${time}: ${g.group.name||"Seans"}. ${r.message}`);
    })
  }
  function saveAll(){
@@ -228,24 +230,24 @@ export default function QuickAttendanceClient(p:Props){
        setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
      }
      if(!incompleteGroups.length)try{localStorage.removeItem(draftKey)}catch{}
-     setMessage(`✓ ${date} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
+     setMessage(`✓ ${formatDisplayDate(date)} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
    })
  }
 
  return <main className="qaRoot">
    <section className="qaTop">
-     <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {date}</h1>{syncMessage&&<small role="status">{syncMessage}</small>}</div>
+     <div><small>HIZLI YOKLAMA</small><h1>{DAYS[day]} · {formatDisplayDate(date)}</h1>{syncMessage&&<small role="status">{syncMessage}</small>}</div>
      <div className="qaSelectors">
        <input autoComplete="off" type="date" disabled={pending} value={date} onChange={e=>changeDate(e.target.value)} aria-label="Yoklama tarihi"/>
        <select key={`branch:${date}:${branchId}`} autoComplete="off" aria-label="Şube / Havuz" disabled={pending} value={branchId} onChange={e=>setBranchId(e.target.value)}>{!p.branches.length&&<option value="">Atanmış şube yok</option>}{p.branches.map(b=><option key={b.id} value={b.id}>{b.short_name||b.name}</option>)}</select>
        <select key={`time:${date}:${branchId}:${time}`} autoComplete="off" aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t} value={t}>{t} · {timeSummaries[t]}</option>):<option>Ders yok</option>}</select>
      </div>
-     {date!==today()&&<p className="qaDateNotice">{date>today()?"İleri tarih seçili":"Geçmiş tarih seçili"}: {date}. Gösterilen yoklama yalnızca bu tarihe aittir. <button type="button" disabled={pending} onClick={()=>changeDate(today())}>Bugüne dön</button></p>}
+     {date!==today()&&<p className="qaDateNotice">{date>today()?"İleri tarih seçili":"Geçmiş tarih seçili"}: {formatDisplayDate(date)}. Gösterilen yoklama yalnızca bu tarihe aittir. <button type="button" disabled={pending} onClick={()=>changeDate(today())}>Bugüne dön</button></p>}
      <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>statuses[key]).length} sunucuda kayıtlı</span></div>
    </section>
 
    {ready&&Object.keys(legacyDraft).length>0&&<div className="qaMessage">Bu cihazda önceki sürümden {Object.keys(legacyDraft).length} kaydedilmemiş seçim bulundu. Seçimleri kontrol edip kaydedebilirsiniz. <button onClick={()=>{setStatuses(v=>({...v,...legacyDraft}));setLegacyDraft({});setMessage("Önceki taslak getirildi. Tarihi ve seçimleri kontrol edip Kaydet'e basın.")}}>Eski Taslağı Getir</button></div>}
-   <AttendanceReminderPanel key={draftKey} students={p.students} context={`${date} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
+   <AttendanceReminderPanel key={draftKey} students={p.students} context={`${formatDisplayDate(date)} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
    {!ready?<div className="qaLoading">{message||"Yoklama hazırlanıyor…"}{message&&<button onClick={()=>setLoadAttempt(v=>v+1)}>Tekrar Yükle</button>}</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>

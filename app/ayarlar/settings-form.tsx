@@ -1,4 +1,5 @@
 "use client";
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import { useActionState } from "react";
 import { Icons } from "@/app/components/dashboard-icons";
 import { settingDefinitions, type SettingSection, type SettingValues } from "@/lib/settings/schema";
@@ -14,6 +15,6 @@ export default function SettingsForm({ section, values, revision, updatedAt }: {
       {field.help ? <small>{field.help}</small> : null}
     </label>)}</div>
     {state.message ? <p role="status" className={state.ok ? "centralSuccess" : "centralError"}>{state.message}</p> : null}
-    <footer className="centralSave"><span>{(state.savedAt || updatedAt) ? `Son kayıt: ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(state.savedAt || updatedAt!))}` : "Kurum varsayılanları kullanılıyor."}<small>Değişiklikler geçmiş kayıtların içeriğini değiştirmez.</small></span><button type="submit" disabled={pending}><Icons.check width={18} height={18} />{pending ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}</button></footer>
+    <footer className="centralSave"><span>{(state.savedAt || updatedAt) ? `Son kayıt: ${formatDisplayDateTime(new Date(state.savedAt || updatedAt!))}` : "Kurum varsayılanları kullanılıyor."}<small>Değişiklikler geçmiş kayıtların içeriğini değiştirmez.</small></span><button type="submit" disabled={pending}><Icons.check width={18} height={18} />{pending ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}</button></footer>
   </form>;
 }

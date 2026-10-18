@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { clearAttendance, getAttendanceForDate, saveAttendance } from "./actions";
@@ -26,7 +27,7 @@ function weekday(value:string){const day=new Date(`${value}T12:00:00`).getDay();
 function scheduleWeekday(value?:number|null){const day=Number(value);return day===0?7:day}
 function enrollmentHasDay(enrollment:Enrollment|undefined,uiDay:number){const days=Array.isArray(enrollment?.lesson_weekdays)?enrollment!.lesson_weekdays!.map(Number):[];if(!days.length)return true;const postgresDay=uiDay===7?0:uiDay;return days.includes(postgresDay)}
 function shift(value:string,amount:number){const date=new Date(`${value}T12:00:00`);date.setDate(date.getDate()+amount);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`}
-function trDate(value?:string|null){if(!value)return"—";return new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${value}T12:00:00`))}
+function trDate(value?:string|null){if(!value)return"—";return formatDisplayDate(new Date(`${value}T12:00:00`))}
 function tm(value?:string|null){return value?.slice(0,5)||"—"}
 function norm(value?:string|null){return(value||"").toLocaleLowerCase("tr-TR")}
 function adult(group:Group){const value=norm(`${group.name||""} ${group.course_type||""}`);return value.includes("yetişkin")||value.includes("yetiskin")||value.includes("adult")||value.includes("master")}

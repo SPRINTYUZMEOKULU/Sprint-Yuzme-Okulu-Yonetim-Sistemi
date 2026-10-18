@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -10,7 +11,7 @@ type Reminder={id:string;title:string;description:string|null;priority:string;st
 
 type Props={students:Student[];context?:string;draftKey?:string;showCompleted?:boolean};
 
-function fmt(value?:string|null){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"}).format(d)}
+function fmt(value?:string|null){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:formatDisplayDate(d)}
 function nameOf(s:Student){return`${s.first_name||""} ${s.last_name||""}`.trim()||"Kursiyer"}
 
 export default function AttendanceReminderPanel({students,context,draftKey,showCompleted=false}:Props){

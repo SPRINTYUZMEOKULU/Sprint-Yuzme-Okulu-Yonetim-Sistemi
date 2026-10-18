@@ -12,6 +12,7 @@ async function renderScope(searchParams) {
   let props;
   new Function('module','exports','require',code)(m,m.exports,name=>{
     if(name==='@supabase/supabase-js')return {createClient:()=>client};
+    if(name==='@/lib/dates/display'){const helper={exports:{}};new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/dates/display.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(helper,helper.exports);return helper.exports;}
     if(name==='@/lib/auth/profile')return {requireProfile:async()=>({id:'owner',organization_id:'org'})};
     if(name==='next/link')return {__esModule:true,default:({children,...p})=>React.createElement('a',p,children)};
     if(name==='./kasa-client')return {__esModule:true,default:p=>{props=p;return null}};
