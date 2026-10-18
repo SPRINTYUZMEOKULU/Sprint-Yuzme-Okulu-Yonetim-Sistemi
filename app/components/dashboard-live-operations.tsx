@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -344,7 +345,7 @@ function OperationPanel() {
                 </summary>
                 <div className="pastAttendanceList">
                   {(data.pastAttendance || []).map(item => <article className="pastAttendanceCard" key={`${item.date}:${item.branchId}:${item.time}`}>
-                    <div className="pastSlotHead"><span className="pastSlotDate"><Icons.calendar />{new Intl.DateTimeFormat("tr-TR",{day:"numeric",month:"long",year:"numeric"}).format(new Date(`${item.date}T12:00:00`))}</span><span className="pastSlotTime"><Icons.clock />{item.time}</span></div>
+                    <div className="pastSlotHead"><span className="pastSlotDate"><Icons.calendar />{formatDisplayDate(new Date(`${item.date}T12:00:00`))}</span><span className="pastSlotTime"><Icons.clock />{item.time}</span></div>
                     <strong className="pastSlotBranch">{item.branchName}</strong>
                     <span className="pastSlotMissing">{item.missingCount} öğrencinin yoklaması eksik</span>
                     <div className="pastSlotActions">
@@ -357,7 +358,7 @@ function OperationPanel() {
                 </div>
                 <p className="pastHistoryHelp">“Tamamlandı” takip işlemini kapatır; “Kaldır” uyarıyı listeden çıkarır. Yoklama girmek için “Yoklamaya Git”i kullanın.</p>
               </details>
-              {Boolean(data.closedPastAttendance?.length) && <details className="pastClosedDetails"><summary>Kapatılan işlemler <span>{data.closedPastAttendance?.length}</span></summary><div className="pastClosedList">{data.closedPastAttendance?.map(item => <div className="pastClosedRow" key={`${item.date}:${item.branchId}:${item.time}`}><div><strong>{new Intl.DateTimeFormat("tr-TR",{day:"numeric",month:"short"}).format(new Date(`${item.date}T12:00:00`))} · {item.time}</strong><span>{item.branchName}</span><small className={item.status === "completed" ? "completed" : "removed"}>{item.status === "completed" ? "Takip tamamlandı" : "Listeden kaldırıldı"}</small></div>{data.canManagePastAttendance && <button type="button" disabled={historyBusy !== null} onClick={() => updateHistory(item,"open")}>Geri Al</button>}</div>)}</div></details>}
+              {Boolean(data.closedPastAttendance?.length) && <details className="pastClosedDetails"><summary>Kapatılan işlemler <span>{data.closedPastAttendance?.length}</span></summary><div className="pastClosedList">{data.closedPastAttendance?.map(item => <div className="pastClosedRow" key={`${item.date}:${item.branchId}:${item.time}`}><div><strong>{formatDisplayDate(new Date(`${item.date}T12:00:00`))} · {item.time}</strong><span>{item.branchName}</span><small className={item.status === "completed" ? "completed" : "removed"}>{item.status === "completed" ? "Takip tamamlandı" : "Listeden kaldırıldı"}</small></div>{data.canManagePastAttendance && <button type="button" disabled={historyBusy !== null} onClick={() => updateHistory(item,"open")}>Geri Al</button>}</div>)}</div></details>}
             </section>}
             {historyMessage && <p className="pastHistoryMessage" role="status">{historyMessage}</p>}
             {data.historyAvailable === false && <p role="status">Geçmiş yoklama kontrolü yüklenemedi. Bugünkü yoklamalar günceldir.</p>}

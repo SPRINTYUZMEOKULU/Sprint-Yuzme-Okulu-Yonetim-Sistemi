@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PasswordField from "./password-field";
@@ -140,14 +141,7 @@ function formatPhone(value?: string | null) {
 function formatDate(value?: string | null) {
   if (!value) return "Henüz kayıt yok";
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatDisplayDateTime(new Date(value));
 }
 
 function initials(name?: string | null) {

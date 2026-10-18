@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -19,11 +20,7 @@ function formatDate(value?: string | null) {
   if (!value) return null;
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 export default function LegacyTransferControls({

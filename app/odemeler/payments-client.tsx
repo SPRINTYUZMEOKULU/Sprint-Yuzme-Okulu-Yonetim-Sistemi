@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -205,24 +206,14 @@ function formatDate(value?: string | null) {
   const date = dateValue(value);
   if (!date) return "—";
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 function formatDateTime(value?: string | null) {
   const date = dateValue(value);
   if (!date) return "—";
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return formatDisplayDateTime(date);
 }
 
 function startOfToday() {

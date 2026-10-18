@@ -1,4 +1,6 @@
 "use client";
+import { formatDisplayDate } from "@/lib/dates/display";
+
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -79,7 +81,7 @@ export default function AttendanceAutomationCenter(){
         <div><div style={{fontSize:11,fontWeight:900,color:"#b91c1c",letterSpacing:".08em"}}>YOKLAMA KONTROLÜ</div><h2 style={{margin:"5px 0 3px",fontSize:20,color:"#7f1d1d"}}>⚠️ Alınmayan Yoklamalar</h2><p style={{margin:0,color:"#64748b",fontSize:13}}>Ders başlangıcından 15 dakika geçtiği halde yoklama kaydı oluşmayan seanslar.</p></div>
         <strong style={{padding:"9px 12px",borderRadius:999,background:"#fee2e2",color:"#991b1b"}}>{reportItems.length} seans</strong>
       </div>
-      <div style={{display:"grid",gap:8,marginTop:14}}>{reportItems.slice(0,8).map(item=><a key={`${item.date}-${item.scheduleId}`} href={`/yoklama?groupId=${encodeURIComponent(item.groupId)}&scheduleId=${encodeURIComponent(item.scheduleId)}`} style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",padding:"11px 12px",border:"1px solid #fee2e2",borderRadius:12,background:"#fff",textDecoration:"none",color:"#10213a"}}><span><strong>{item.groupName}</strong><small style={{display:"block",marginTop:3,color:"#64748b"}}>{item.date} · {item.startTime}{item.endTime?` - ${item.endTime}`:""}</small></span><b style={{color:"#b91c1c"}}>Yoklamaya Git →</b></a>)}</div>
+      <div style={{display:"grid",gap:8,marginTop:14}}>{reportItems.slice(0,8).map(item=><a key={`${item.date}-${item.scheduleId}`} href={`/yoklama?groupId=${encodeURIComponent(item.groupId)}&scheduleId=${encodeURIComponent(item.scheduleId)}`} style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",padding:"11px 12px",border:"1px solid #fee2e2",borderRadius:12,background:"#fff",textDecoration:"none",color:"#10213a"}}><span><strong>{item.groupName}</strong><small style={{display:"block",marginTop:3,color:"#64748b"}}>{formatDisplayDate(item.date)} · {item.startTime}{item.endTime?` - ${item.endTime}`:""}</small></span><b style={{color:"#b91c1c"}}>Yoklamaya Git →</b></a>)}</div>
       {reportItems.length>8?<div style={{marginTop:10,fontSize:12,color:"#64748b"}}>+ {reportItems.length-8} başka eksik yoklama daha var.</div>:null}
     </section>,portalTarget
   );

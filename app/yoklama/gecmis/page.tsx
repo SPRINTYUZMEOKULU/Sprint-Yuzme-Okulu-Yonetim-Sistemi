@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,7 @@ type StudentInfo={name:string;number:string;phone:string;guardianName:string;gua
 type GroupInfo={id:string;branch_id:string|null;name:string|null;course_type:string|null};
 type ScheduleInfo={id:string;group_id:string|null;branch_id:string|null;start_time:string|null;end_time:string|null};
 
-const tr=(v:string)=>new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${v}T12:00:00`));
+const tr=(v:string)=>formatDisplayDate(new Date(`${v}T12:00:00`));
 const statusLabel=(status?:string|null)=>status==="present"?"Katıldı":status==="absent"?"Katılmadı":status==="excused"?"İzinli":status==="compensation"?"Telafi":"Belirsiz";
 const timeLabel=(v?:string|null)=>v?.slice(0,5)||"";
 const phoneDigits=(v?:string|null)=>String(v||"").replace(/\D/g,"");

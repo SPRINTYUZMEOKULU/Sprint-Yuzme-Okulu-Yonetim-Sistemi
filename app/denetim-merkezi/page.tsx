@@ -1,3 +1,4 @@
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
@@ -70,11 +71,7 @@ function formatValue(value: unknown) {
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("tr-TR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Istanbul",
-  }).format(new Date(value));
+  return formatDisplayDateTime(new Date(value));
 }
 
 export default async function AuditCenter({

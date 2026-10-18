@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createStudentPayment } from "../../odemeler/actions";
@@ -64,11 +65,7 @@ const money = (value: number) =>
   }).format(Number(value || 0));
 const dateTime = (value?: string | null) =>
   value
-    ? new Intl.DateTimeFormat("tr-TR", {
-        dateStyle: "medium",
-        timeStyle: "short",
-        timeZone: "Europe/Istanbul",
-      }).format(new Date(value))
+    ? formatDisplayDateTime(new Date(value))
     : "—";
 const today = () => new Date().toISOString().slice(0, 10);
 function addMonth(value: string, index: number) {
@@ -410,7 +407,7 @@ export default function StudentPaymentCenter() {
                           <option value="">Genel paket ödemesi</option>
                           {pendingInstallments.map((row) => (
                             <option key={row.id} value={row.id}>
-                              {row.sequence_no}. Taksit · {row.due_date} · Kalan{" "}
+                              {row.sequence_no}. Taksit · {formatDisplayDate(row.due_date)} · Kalan{" "}
                               {money(
                                 Number(row.amount) - Number(row.paid_amount),
                               )}

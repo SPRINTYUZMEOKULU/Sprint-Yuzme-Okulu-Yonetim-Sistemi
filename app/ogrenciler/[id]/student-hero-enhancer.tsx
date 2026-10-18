@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import { useEffect } from "react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -27,11 +28,7 @@ function formatRegistrationDate(value?: string | null) {
   if (!value) return "";
 
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Istanbul",
-    }).format(new Date(value));
+    return formatDisplayDateTime(new Date(value));
   } catch {
     return "";
   }

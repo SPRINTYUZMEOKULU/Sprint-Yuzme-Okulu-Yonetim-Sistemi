@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
@@ -93,12 +94,7 @@ function getIstanbulDayBounds(dateKey: string) {
 function formatDayLabel(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(Date.UTC(year, month - 1, day, 12, 0, 0)));
+  return formatDisplayDate(new Date(Date.UTC(year, month - 1, day, 12, 0, 0)));
 }
 
 export default async function CashPage({

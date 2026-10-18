@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -10,7 +11,7 @@ import "../session-attendance-nav.css";
 import "./historical-attendance-panel.css";
 
 export const dynamic="force-dynamic";
-const tr=(v:string)=>new Intl.DateTimeFormat("tr-TR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(`${v}T12:00:00`));
+const tr=(v:string)=>formatDisplayDate(new Date(`${v}T12:00:00`));
 const trTime=(v?:string|null)=>v?.slice(0,5)||"—";
 const monthLabel=(v:string)=>new Intl.DateTimeFormat("tr-TR",{month:"long",year:"numeric"}).format(new Date(`${v}-01T12:00:00`));
 const statusLabel=(status?:string|null)=>status==="present"?"Katıldı":status==="absent"?"Katılmadı":status==="excused"?"İzinli":status==="compensation"?"Telafi":"Belirsiz";

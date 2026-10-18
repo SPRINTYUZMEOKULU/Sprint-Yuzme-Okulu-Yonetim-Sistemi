@@ -1,4 +1,6 @@
 "use client";
+import { formatDisplayDate } from "@/lib/dates/display";
+
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -337,7 +339,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
         <section className="ppPanel">
           <div className="ppPanelHead">
             <div><p>BUGÜN</p><h2>Antrenör, havuz ve ders planı</h2></div>
-            <span>{data.date}</span>
+            <span>{formatDisplayDate(data.date)}</span>
           </div>
 
           {data.today.length ? (

@@ -1,3 +1,4 @@
+import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -34,13 +35,7 @@ function getAdminClient() {
 
 function formatDate(value: string) {
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
+    return formatDisplayDateTime(new Date(value));
   } catch {
     return value;
   }
@@ -269,12 +264,12 @@ export default async function BildirimlerPage() {
     (item) => !item.is_read
   ).length;
 
-  const todayKey = new Date().toLocaleDateString("tr-TR");
+  const todayKey = formatDisplayDate(new Date());
 
   const todayCount = notifications.filter((item) => {
     try {
       return (
-        new Date(item.created_at).toLocaleDateString("tr-TR") ===
+        formatDisplayDate(new Date(item.created_at)) ===
         todayKey
       );
     } catch {

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -15,7 +16,7 @@ const EMPTY_COUNTS:Counts={total:0,finance:0,student:0,enrollment:0,lesson:0,att
 const CATEGORY_OPTIONS:Array<{key:CategoryFilter;label:string;icon:string}>=[{key:"all",label:"Tümü",icon:"🗂️"},{key:"finance",label:"Finans & Kasa",icon:"💳"},{key:"student",label:"Öğrenci",icon:"👤"},{key:"enrollment",label:"Kayıt / Paket",icon:"📋"},{key:"lesson",label:"Ders / Telafi",icon:"🏊"},{key:"attendance",label:"Yoklama",icon:"✅"},{key:"staff",label:"Personel",icon:"👥"},{key:"system",label:"Sistem",icon:"⚙️"}];
 const STATUS_OPTIONS:Array<{key:StatusFilter;label:string}>=[{key:"pending",label:"Bekleyen"},{key:"approved",label:"Onaylanan"},{key:"rejected",label:"Reddedilen"},{key:"cancelled",label:"İptal Edilen"},{key:"all",label:"Tüm Geçmiş"}];
 
-function formatDate(value?:string|null){if(!value)return"—";try{return new Intl.DateTimeFormat("tr-TR",{dateStyle:"short",timeStyle:"short",timeZone:"Europe/Istanbul"}).format(new Date(value))}catch{return value}}
+function formatDate(value?:string|null){if(!value)return"—";try{return formatDisplayDateTime(new Date(value))}catch{return value}}
 function formatValue(value:unknown):string{if(value===null||value===undefined||value==="")return"—";if(typeof value==="boolean")return value?"Evet":"Hayır";if(typeof value==="number")return new Intl.NumberFormat("tr-TR").format(value);if(Array.isArray(value))return value.map(formatValue).join(", ");if(typeof value==="object"){try{return JSON.stringify(value)}catch{return"—"}}return String(value)}
 function prettifyKey(key:string){const labels:Record<string,string>={payment_due_date:"Ödeme Vadesi",start_date:"Kayıt Başlangıç Tarihi",amount:"Tutar",payment_method:"Ödeme Yöntemi",description:"Açıklama",payment_status:"Ödeme Durumu",cancellation_reason:"İptal Gerekçesi",cash_handover_status:"Kasa Teslim Durumu",status:"Durum",lesson_count:"Ders Sayısı",branch_id:"Şube",group_id:"Grup",month:"Ay",mode:"Giriş Yöntemi",records:"Yoklama Satırları"};return labels[key]||key.replaceAll("_"," ").replace(/\b\w/g,c=>c.toLocaleUpperCase("tr-TR"))}
 function getStudentName(request:ApprovalRequest){const full=`${request.student?.first_name??""} ${request.student?.last_name??""}`.trim();return full||"İlgili Kayıt"}

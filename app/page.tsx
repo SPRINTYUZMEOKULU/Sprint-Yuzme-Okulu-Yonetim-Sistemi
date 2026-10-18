@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { countStartedStudents } from "@/lib/students/start-status";
 import { redirect } from "next/navigation";
@@ -484,16 +485,7 @@ export default async function HomePage() {
   ]);
 
   const today =
-    new Intl.DateTimeFormat(
-      "tr-TR",
-      {
-        timeZone: "Europe/Istanbul",
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }
-    ).format(new Date());
+    formatDisplayDate(new Date());
 
   const firstName = profile.full_name?.trim().split(/\s+/)[0];
 

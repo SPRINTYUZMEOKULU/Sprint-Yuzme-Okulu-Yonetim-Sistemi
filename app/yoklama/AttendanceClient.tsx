@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import {
   useEffect,
@@ -242,16 +243,7 @@ function formatDate(value?: string | null) {
   if (!value) return "—";
 
   try {
-    return new Intl.DateTimeFormat(
-      "tr-TR",
-      {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }
-    ).format(
-      new Date(`${value}T12:00:00`)
-    );
+    return formatDisplayDate(new Date(`${value}T12:00:00`));
   } catch {
     return value;
   }
@@ -259,15 +251,7 @@ function formatDate(value?: string | null) {
 
 function shortDate(value: string) {
   try {
-    return new Intl.DateTimeFormat(
-      "tr-TR",
-      {
-        day: "2-digit",
-        month: "2-digit",
-      }
-    ).format(
-      new Date(`${value}T12:00:00`)
-    );
+    return formatDisplayDate(new Date(`${value}T12:00:00`));
   } catch {
     return value;
   }

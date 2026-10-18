@@ -1,4 +1,6 @@
 "use client";
+import { formatDisplayDate } from "@/lib/dates/display";
+
 
 import { useMemo, useState } from "react";
 import { closeFacility, startFacility } from "./tesis-sezon-actions";
@@ -16,7 +18,7 @@ export default function TesisSezonYonetimi({branches,groups,pauses=[]}:{branches
  async function submit(fd:FormData){setPending(true);setResult("");try{const r=mode==="close"?await closeFacility(fd):await startFacility(fd);setResult(`İşlem tamamlandı. ${r.affected} kursiyerin ders planı güncellendi.`);}catch(e:any){setResult(e?.message||"İşlem tamamlanamadı.");}finally{setPending(false)}}
  return <section className="facilityOps">
   <div className="facilityOpsHead"><div><span>TESİS & SEZON YÖNETİMİ</span><h2>Havuz kapanışlarını ve yeniden başlangıçları tek yerden yönetin</h2><p>Kapanışta kalan ders hakları dondurulur. START verildiğinde haklar gerçek ders günlerine göre yeniden planlanır.</p></div><div className="facilityStatus">DERS HAKKI KORUMALI</div></div>
-  {pauses.length>0&&<div className="pauseList">{pauses.map(p=><div className="pauseCard" key={p.id}><b>● KAPALI · START BEKLİYOR</b><span>{branches.find(b=>b.id===p.branch_id)?.name||"Tesis"}</span><small>Kapanış: {p.closure_date}{p.estimated_open_date?` · Tahmini açılış: ${p.estimated_open_date}`:""}{typeof p.affected==="number"?` · ${p.affected} kursiyer`:""}</small></div>)}</div>}
+  {pauses.length>0&&<div className="pauseList">{pauses.map(p=><div className="pauseCard" key={p.id}><b>● KAPALI · START BEKLİYOR</b><span>{branches.find(b=>b.id===p.branch_id)?.name||"Tesis"}</span><small>Kapanış: {formatDisplayDate(p.closure_date)}{p.estimated_open_date?` · Tahmini açılış: ${formatDisplayDate(p.estimated_open_date)}`:""}{typeof p.affected==="number"?` · ${p.affected} kursiyer`:""}</small></div>)}</div>}
   <div className="facilityModes"><button type="button" className={mode==="close"?"active danger":""} onClick={()=>setMode("close")}>● Tesis / Sezonu Kapat</button><button type="button" className={mode==="start"?"active start":""} onClick={()=>setMode("start")}>▶ START Ver</button><button type="button" className={mode==="transfer"?"active transfer":""} onClick={()=>setMode("transfer")}>↗ Aktar + START Ver</button></div>
   <form action={submit} className="facilityForm">
    <label>{mode==="transfer"?"Kaynak havuz / şube":"Havuz / şube"}<select name="branch_id" required value={source} onChange={e=>setSource(e.target.value)}><option value="">Seçiniz</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>

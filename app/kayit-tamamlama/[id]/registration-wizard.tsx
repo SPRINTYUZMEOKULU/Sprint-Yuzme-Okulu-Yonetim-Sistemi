@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import {
   useMemo,
@@ -312,13 +313,7 @@ function formatDate(
     return "—";
   }
 
-  return new Intl.DateTimeFormat(
-    "tr-TR",
-    {
-      dateStyle:
-        "long",
-    }
-  ).format(date);
+  return formatDisplayDate(date);
 }
 
 function formatNumericDate(value?: string | null) {
@@ -327,11 +322,7 @@ function formatNumericDate(value?: string | null) {
   const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "—";
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 function formatDateTime(
@@ -352,16 +343,7 @@ function formatDateTime(
     return "—";
   }
 
-  return new Intl.DateTimeFormat(
-    "tr-TR",
-    {
-      dateStyle:
-        "medium",
-
-      timeStyle:
-        "short",
-    }
-  ).format(date);
+  return formatDisplayDateTime(date);
 }
 
 function money(

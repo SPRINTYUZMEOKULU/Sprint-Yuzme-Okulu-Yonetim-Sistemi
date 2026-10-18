@@ -1,3 +1,4 @@
+import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -16,7 +17,7 @@ type FilterKey="today"|"tomorrow"|"week"|"all";
 function trToday(){const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const get=(type:string)=>parts.find(p=>p.type===type)?.value||"";return `${get("year")}-${get("month")}-${get("day")}`;}
 function addDays(date:string,days:number){const d=new Date(`${date}T12:00:00+03:00`);d.setDate(d.getDate()+days);return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);}
 function isoWeekday(date:string){const n=new Date(`${date}T12:00:00+03:00`).getDay();return n===0?7:n;}
-function formatDate(date:string){return new Intl.DateTimeFormat("tr-TR",{timeZone:"Europe/Istanbul",day:"2-digit",month:"long",weekday:"long"}).format(new Date(`${date}T12:00:00+03:00`));}
+function formatDate(date:string){return formatDisplayDate(new Date(`${date}T12:00:00+03:00`));}
 
 export default async function StartingStudentsPage({searchParams}:{searchParams?:Promise<Record<string,string|string[]|undefined>>}){
   const params=searchParams?await searchParams:{};

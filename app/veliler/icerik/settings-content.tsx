@@ -1,3 +1,4 @@
+import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
@@ -17,7 +18,7 @@ function adminClient() {
 
 function date(value?: string | null) {
   return value
-    ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(value))
+    ? formatDisplayDateTime(new Date(value))
     : "—";
 }
 

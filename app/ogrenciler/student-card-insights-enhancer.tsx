@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/dates/display";
 import { useEffect } from "react";
 
 const money=(value:number)=>new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:0}).format(Number(value||0));
@@ -84,7 +85,7 @@ export default function StudentCardInsightsEnhancer(){
                 target.textContent=`Ödeme bekleniyor · ${money(f.remaining)} kalan`;
                 target.classList.add("paymentDue");
               }
-              target.title=f?.dueDate?`Vade: ${new Date(`${f.dueDate}T12:00:00`).toLocaleDateString("tr-TR")}`:"";
+              target.title=f?.dueDate?`Vade: ${formatDisplayDate(new Date(`${f.dueDate}T12:00:00`))}`:"";
             }
 
             const old=card.querySelector(".sciAbsenceAlert"); old?.remove();

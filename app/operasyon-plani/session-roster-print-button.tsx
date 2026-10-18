@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 type PrintStudent = {
   id: string;
   name: string;
@@ -34,11 +35,7 @@ function escapeHtml(value: unknown) {
 function formatDate(value: string) {
   const parsed = new Date(`${value}T12:00:00+03:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(parsed);
+  return formatDisplayDate(parsed);
 }
 
 export default function SessionRosterPrintButton({
@@ -158,7 +155,7 @@ td.note{height:30px}
 
   <div class="foot">
     <span>SprintOS üzerinden oluşturulmuştur.</span>
-    <span>${escapeHtml(new Date().toLocaleString("tr-TR"))}</span>
+    <span>${escapeHtml(formatDisplayDateTime(new Date()))}</span>
   </div>
 </main>
 <script>window.onload=()=>{window.print();}</script>
