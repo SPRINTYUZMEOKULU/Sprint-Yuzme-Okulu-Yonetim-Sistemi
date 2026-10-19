@@ -345,6 +345,53 @@ async function updatePushStatus(notificationId: string, sent: boolean) {
   if (error) console.error("SprintOS push status update:", error);
 }
 
+/** Deliver an existing scheduled note without creating a second notification. */
+export async function deliverScheduledNotePush(input: {
+  organizationId: string;
+  notificationId: string;
+  profileId: string;
+  studentId: string | null;
+  title: string;
+  body: string;
+  targetPath: string | null;
+}) {
+  const routes = await resolveRecipients({
+    organizationId: input.organizationId, title: input.title,
+    category: "students", studentId: input.studentId,
+    recipientProfileIds: [input.profileId], push: true,
+  });
+  if (!routes.some(route => route.profileId === input.profileId && route.pushEnabled)) return { sent: 0, failed: 0 };
+  if (!configureWebPush()) throw new Error("Zamanlı push için sunucu yapılandırması eksik.");
+  const admin = getAdminClient();
+  // Conditional update is the claim: concurrent cron runs cannot both send it.
+  const { data: claimed, error } = await admin.from("system_notifications")
+    .update({ push_requested: true, push_required: true })
+    .eq("organization_id", input.organizationId).eq("id", input.notificationId)
+    .eq("is_read", false).eq("push_requested", false).eq("push_sent", false)
+    .select("id").maybeSingle();
+  if (error) throw new Error("Zamanlı bildirim gönderim kilidi alınamadı.");
+  if (!claimed) return { sent: 0, failed: 0 };
+  try {
+    const result = await sendPushToProfile({
+      organizationId: input.organizationId, profileId: input.profileId,
+      notificationId: input.notificationId, title: input.title, body: input.body,
+      category: "students", severity: "warning", targetPath: input.targetPath,
+    });
+    if (result.sent > 0) await updatePushStatus(input.notificationId, true);
+    else {
+      // Retry on the next tick if no device accepted the push; keep the same tag.
+      const reset = await admin.from("system_notifications").update({ push_requested: false })
+        .eq("organization_id", input.organizationId).eq("id", input.notificationId).eq("push_sent", false);
+      if (reset.error) throw new Error("Zamanlı bildirim yeniden denemeye alınamadı.");
+    }
+    return result;
+  } catch (error) {
+    await admin.from("system_notifications").update({ push_requested: false })
+      .eq("organization_id", input.organizationId).eq("id", input.notificationId).eq("push_sent", false);
+    throw error;
+  }
+}
+
 export async function createNotification(input: CreateNotificationInput): Promise<CreateNotificationResult> {
   const admin = getAdminClient();
   if (!input.organizationId) throw new Error("organizationId zorunludur.");

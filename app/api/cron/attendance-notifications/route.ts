@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { authorizedCron } from "@/lib/notifications/cron-auth";
 import { runAttendanceBackground } from "@/lib/notifications/attendance-background";
+import { dispatchDueNoteReminders } from "@/lib/notifications/scheduled-notes";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
 export async function GET(request:Request){
@@ -18,7 +19,13 @@ export async function GET(request:Request){
   const part=(t:string)=>clock.find(p=>p.type===t)?.value||'';
   const date=`${part('year')}-${part('month')}-${part('day')}`,minutes=Number(part('hour'))*60+Number(part('minute'));
   const results=[];
-  for(const org of new Set((profiles||[]).map(p=>p.organization_id).filter(Boolean))){results.push(await runAttendanceBackground(client,org,date,minutes));}
-  return NextResponse.json({ok:true,date,organizations:results.length,created:results.reduce((n,r)=>n+r.created,0),resolved:results.reduce((n,r)=>n+r.resolved,0),pushSent:results.reduce((n,r)=>n+r.pushSent,0),pushFailed:results.reduce((n,r)=>n+r.pushFailed,0)});
+  const notes=[];
+  for(const org of new Set((profiles||[]).map(p=>p.organization_id).filter(Boolean))){
+   results.push(await runAttendanceBackground(client,org,date,minutes));
+   notes.push(await dispatchDueNoteReminders(client,org));
+  }
+  const summary={ok:true,date,organizations:results.length,created:results.reduce((n,r)=>n+r.created,0),resolved:results.reduce((n,r)=>n+r.resolved,0),pushSent:results.reduce((n,r)=>n+r.pushSent,0),pushFailed:results.reduce((n,r)=>n+r.pushFailed,0),notePushSent:notes.reduce((n,r)=>n+r.sent,0),notePushFailed:notes.reduce((n,r)=>n+r.failed,0)};
+  console.info("SprintOS server notification tick:",summary);
+  return NextResponse.json(summary);
  }catch(error){console.error('SprintOS background attendance failed:',error instanceof Error?error.message:'unknown');return NextResponse.json({ok:false,error:"Arka plan yoklama kontrolü tamamlanamadı."},{status:500});}
 }

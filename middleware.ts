@@ -57,6 +57,13 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // This exact server endpoint validates the strong CRON_SECRET bearer itself.
+  // Vercel cron requests have no interactive Supabase session.
+  if (pathname === "/api/cron/attendance-notifications") {
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
+
   const isPublicApi =
     pathname.startsWith("/api/auth/phone-password") ||
     pathname.startsWith("/api/auth/support-request") ||
