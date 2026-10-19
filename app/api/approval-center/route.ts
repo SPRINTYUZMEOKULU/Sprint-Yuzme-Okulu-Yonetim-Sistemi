@@ -1,3 +1,4 @@
+import { publishEventNotification } from "@/lib/notifications/publish-event";
 import {
   NextRequest,
   NextResponse,
@@ -612,7 +613,7 @@ export async function POST(request: NextRequest) {
           reviewNote ? ` Not: ${reviewNote}` : ""
         }`;
 
-        await supabase.from("system_notifications").insert({
+        await publishEventNotification({
           organization_id: organizationId,
           recipient_user_id:
             requestType === "registration_custom_lesson_count"
@@ -623,7 +624,8 @@ export async function POST(request: NextRequest) {
               ? approvalRequest.requested_by ?? null
               : null,
           category: "approvals",
-          event_key: "registration_custom_lesson_count_rejected",
+          include_requester: approvalRequest.requested_by,
+          event_key: requestType === "registration_custom_lesson_count" ? "registration_custom_lesson_count_rejected" : "approval_rejected",
           notification_type: "approval_rejected",
           title: rejectionTitle,
           message: rejectionMessage,
@@ -640,8 +642,8 @@ export async function POST(request: NextRequest) {
               ? `/kayit-tamamlama/${studentId}?approval=rejected`
               : "/onay-merkezi",
           is_read: false,
-          push_requested: requestType === "registration_custom_lesson_count",
-          push_required: requestType === "registration_custom_lesson_count",
+          push_requested: true,
+          push_required: true,
           metadata: {
             request_type: requestType,
             request_id: id,
@@ -1047,9 +1049,7 @@ export async function POST(request: NextRequest) {
         ? `${approvedLessonCount || "Standart dışı"} derslik kayıt talebiniz ${actorName} tarafından onaylandı. Kesin kayıt işlemine devam edebilirsiniz.`
         : `${actorName} tarafından onaylandı ve uygulandı.`;
 
-      const { error: notificationError } = await supabase
-        .from("system_notifications")
-        .insert({
+      const { error: notificationError } = await publishEventNotification({
           organization_id: organizationId,
           recipient_user_id: isRegistrationLessonApproval
             ? approvalRequest.requested_by ?? null
@@ -1058,6 +1058,7 @@ export async function POST(request: NextRequest) {
             ? approvalRequest.requested_by ?? null
             : null,
           category: "approvals",
+          include_requester: approvalRequest.requested_by,
           event_key: isRegistrationLessonApproval
             ? "registration_custom_lesson_count_approved"
             : "approval_approved",
@@ -1077,8 +1078,8 @@ export async function POST(request: NextRequest) {
               ? `/kayit-tamamlama/${studentId}?approval=approved`
               : "/onay-merkezi",
           is_read: false,
-          push_requested: isRegistrationLessonApproval,
-          push_required: isRegistrationLessonApproval,
+          push_requested: true,
+          push_required: true,
           metadata: {
             request_type: requestType,
             request_id: id,
@@ -1238,6 +1239,14 @@ export async function POST(request: NextRequest) {
             );
           }
         }
+
+        await publishEventNotification({
+          organization_id: organizationId, category: "approvals", notification_type: "student_status_rejected",
+          include_requester: statusRequest.requested_by, title: "Öğrenci durum talebi reddedildi",
+          body: `${actorName} tarafından reddedildi.`, severity: "warning", student_id: studentId,
+          source_type: "student_status", source_id: id, target_path: "/onay-merkezi?status=rejected", push_requested: true,
+          created_by: actorId,
+        });
 
         return NextResponse.json({
           ok: true,
@@ -1412,12 +1421,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { error: notificationError } = await supabase
-        .from("system_notifications")
-        .insert({
+      const { error: notificationError } = await publishEventNotification({
           organization_id: organizationId,
           recipient_profile_id: null,
           notification_type: "student_status_approved",
+          include_requester: statusRequest.requested_by,
           title:
             targetStatus === "passive"
               ? "Öğrenci pasife alındı"
@@ -1571,6 +1579,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      await publishEventNotification({
+        organization_id: organizationId, category: "approvals", notification_type: "lesson_adjustment_rejected",
+        include_requester: lessonRequest.requested_by, title: "Ders / telafi talebi reddedildi",
+        body: `${actorName} tarafından reddedildi.`, severity: "warning", student_id: lessonRequest.student_id,
+        source_type: "lesson_adjustment", source_id: id, target_path: "/onay-merkezi?status=rejected", push_requested: true,
+        created_by: actorId,
+      });
+
       return NextResponse.json({
         ok: true,
         action: "rejected",
@@ -1690,10 +1706,11 @@ export async function POST(request: NextRequest) {
           approved_at: new Date().toISOString(),
         }),
 
-        supabase.from("system_notifications").insert({
+        publishEventNotification({
           organization_id: organizationId,
           recipient_profile_id: null,
           notification_type: "compensation_approved",
+          include_requester: lessonRequest.requested_by,
           title: "Telafi dersi onaylandı",
           body: `${lessonCount} adet telafi dersi ${actorName} tarafından onaylandı.`,
           priority: "normal",
@@ -1864,11 +1881,12 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         recipient_profile_id: null,
         notification_type: "bulk_compensation_approved",
+        include_requester: lessonRequest.requested_by,
         title: "Toplu telafi dersi eklendi",
         body:
           `${lessonCount} telafi dersi grup öğrencisine tanımlandı. ` +
           `Onaylayan: ${actorName}`,
-        priority: "normal",
+        priority: "normal" as const,
         student_id: studentId,
         source_type: "lesson_adjustment",
         source_id: id,
@@ -1884,10 +1902,6 @@ export async function POST(request: NextRequest) {
         supabase
           .from("student_contact_logs")
           .insert(contactRows),
-
-        supabase
-          .from("system_notifications")
-          .insert(notificationRows),
 
         supabase
           .from("approval_history")
@@ -1933,6 +1947,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      await publishEventNotification(notificationRows);
 
       return NextResponse.json({
         ok: true,

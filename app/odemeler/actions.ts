@@ -1,5 +1,6 @@
 "use server";
 
+import { publishEventNotification } from "@/lib/notifications/publish-event";
 import { revalidatePath } from "next/cache";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
@@ -165,20 +166,15 @@ async function addSystemNotification(
     metadata?: Record<string, unknown>;
   },
 ) {
-  const { error } = await supabase.from("system_notifications").insert({
-    organization_id: input.organizationId,
-    recipient_user_id: null,
-    category: input.category,
-    event_key: input.eventKey,
-    title: input.title,
-    message: input.message,
-    severity: input.severity || "info",
-    entity_type: input.entityType || null,
-    entity_id: input.entityId || null,
-    is_read: false,
-    push_requested: Boolean(input.pushRequested),
-    metadata: input.metadata || {},
-    created_by: input.createdBy || null,
+  const studentId = typeof input.metadata?.student_id === "string" ? input.metadata.student_id : null;
+  const { error } = await publishEventNotification({
+    organization_id: input.organizationId, created_by: input.createdBy,
+    category: input.eventKey.startsWith("cash_") ? "cash" : input.category,
+    event_key: input.eventKey, notification_type: input.eventKey,
+    title: input.title, body: input.message, severity: input.severity,
+    student_id: studentId, entity_type: input.entityType, entity_id: input.entityId,
+    target_path: input.category === "approval" ? "/onay-merkezi" : input.eventKey === "cash_handover_requested" ? "/kasa?durum=handoff_pending" : studentId ? `/ogrenciler/${studentId}?payment=history` : "/odemeler",
+    push_requested: Boolean(input.pushRequested), metadata: input.metadata,
   });
 
   /*
@@ -531,7 +527,7 @@ export async function createStudentPayment(
       severity: "success",
       entityType: "student_payment",
       entityId: payment.id,
-      pushRequested: false,
+      pushRequested: true,
       metadata: {
         student_id: studentId,
         enrollment_id: enrollmentId,
@@ -626,6 +622,10 @@ export async function requestCashHandover(
         ok: false,
         message: "Bu ödeme zaten ana kasaya teslim edilmiş.",
       };
+    }
+
+    if (payment.cash_handover_status === "handoff_pending") {
+      return { ok: true, paymentId, message: "Bu ödeme için kasa teslim onayı zaten bekleniyor." };
     }
 
     const now = new Date().toISOString();
@@ -736,6 +736,10 @@ export async function approveCashHandover(
         ok: false,
         message: "İptal edilmiş ödeme onaylanamaz.",
       };
+    }
+
+    if (payment.cash_handover_status === "main_cash_confirmed") {
+      return { ok: true, paymentId, message: "Bu ödeme zaten ana kasaya teslim edilmiş." };
     }
 
     const now = new Date().toISOString();

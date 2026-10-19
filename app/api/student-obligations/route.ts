@@ -1,3 +1,4 @@
+import { publishEventNotification } from "@/lib/notifications/publish-event";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
         new_value: { obligation_id: obligation.id, due_date: dueDate, amount: obligationAmount },
         performed_at: new Date().toISOString(),
       }),
-      supabase.from("system_notifications").insert({
+      publishEventNotification({
         organization_id: organizationId,
         category: "finance",
         event_key: "student_obligation_created",
@@ -221,7 +222,7 @@ export async function PATCH(request: NextRequest) {
         new_value: { obligation_id: obligationId, payment_id: payment.id, paid_amount: paidAmount, status: nextStatus },
         performed_at: now,
       }),
-      supabase.from("system_notifications").insert({
+      publishEventNotification({
         organization_id: organizationId,
         category: "finance",
         event_key: "financial_obligation_payment",
