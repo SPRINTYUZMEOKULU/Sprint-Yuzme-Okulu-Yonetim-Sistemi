@@ -148,7 +148,7 @@ function formatSchedulePlan(schedules: ScheduleItem[]) {
   return Array.from(byTime.entries())
     .map(([timeText, weekdays]) => {
       const dayText = [...weekdays]
-        .sort((a, b) => a - b)
+        .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
         .map((weekday) => dayNames[weekday] || "")
         .filter(Boolean)
         .join(" • ");
@@ -559,7 +559,7 @@ export default async function GroupsPage({
     const sessionDays = Array.from(
       new Set(session.schedules.map((item) => item.weekday))
     )
-      .sort((a, b) => a - b)
+      .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
       .map((weekday) => dayNames[weekday] || "")
       .filter(Boolean);
     const sessionScheduleText = formatSchedulePlan(session.schedules);
@@ -711,7 +711,7 @@ export default async function GroupsPage({
                         bucket.students.values()
                       ).sort((a, b) => a.name.localeCompare(b.name, "tr"));
                       const bucketDays = Array.from(bucket.weekdays)
-                        .sort((a, b) => a - b)
+                        .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
                         .map((weekday) => dayNames[weekday] || "")
                         .filter(Boolean);
 
