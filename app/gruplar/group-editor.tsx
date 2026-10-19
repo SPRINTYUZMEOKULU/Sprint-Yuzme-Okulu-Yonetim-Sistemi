@@ -76,7 +76,7 @@ export default function GroupEditor({ group, schedules, branches, levels, coache
             <label className="editorWide">Açıklama<textarea name="description" rows={3} defaultValue={group.description || ""} /></label>
           </div>
 
-          <fieldset className="editorWeekdays"><legend>Ders günleri</legend>{dayNames.map((day, i) => <label key={day}><input type="checkbox" name="weekdays" value={i} defaultChecked={initialWeekdays.has(i)} onChange={(event) => toggleWeekday(i, event.target.checked)} /><span>{day}</span></label>)}</fieldset>
+          <fieldset className="editorWeekdays"><legend>Ders günleri</legend>{[1, 2, 3, 4, 5, 6, 0].map((i) => <label key={i}><input type="checkbox" name="weekdays" value={i} defaultChecked={initialWeekdays.has(i)} onChange={(event) => toggleWeekday(i, event.target.checked)} /><span>{dayNames[i]}</span></label>)}</fieldset>
 
           <label className="dayTimeToggle">
             <input type="checkbox" name="use_day_times" checked={useDayTimes} onChange={(event) => setUseDayTimes(event.target.checked)} />
@@ -86,7 +86,8 @@ export default function GroupEditor({ group, schedules, branches, levels, coache
           {useDayTimes ? (
             <div className="dayScheduleEditor">
               <div className="dayScheduleHead"><strong>Gün bazlı ders saatleri</strong><span>Seçili her gün için başlangıç ve bitiş saatini belirleyin.</span></div>
-              {dayNames.map((day, weekday) => {
+              {[1, 2, 3, 4, 5, 6, 0].map((weekday) => {
+                const day = dayNames[weekday];
                 if (!selectedWeekdays.has(weekday)) return null;
                 const schedule = scheduleByDay.get(weekday);
                 return (
