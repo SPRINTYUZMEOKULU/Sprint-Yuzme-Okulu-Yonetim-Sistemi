@@ -51,3 +51,29 @@ function guardianManagementHarness({conflict=false,recordError=false}={}){
 }
 test('Guardian settings synchronize login phone and portal access without changing the password',async()=>{const {actions,writes}=guardianManagementHarness();await assert.rejects(actions.updateGuardian(form({guardian_id:'parent',full_name:'New',phone:'05553334444'})),e=>e.url.includes('saved='));assert.deepEqual(writes.map(row=>row.table),['auth','profiles','guardians']);assert.equal(writes[0].value.phone,'+905553334444');assert.equal(writes[1].value.phone,writes[0].value.phone);assert.equal(writes[2].value.phone,writes[0].value.phone);assert.equal(writes[1].value.is_active,false);assert.equal(writes[2].value.login_enabled,false);assert.ok(writes.every(row=>!('password'in row.value)));});
 test('Phone conflict stops updates; a record failure restores the original profile and login phone',async()=>{const conflict=guardianManagementHarness({conflict:true});await assert.rejects(conflict.actions.updateGuardian(form({guardian_id:'parent',full_name:'New',phone:'05553334444'})),e=>e.url.includes('error='));assert.equal(conflict.writes.length,1);const failed=guardianManagementHarness({recordError:true});await assert.rejects(failed.actions.updateGuardian(form({guardian_id:'parent',full_name:'New',phone:'05553334444'})),e=>e.url.includes('error='));assert.equal(failed.writes.at(-1).value.phone,'+905550000000');assert.equal(failed.writes.at(-2).value.phone,'+905550000000');});
+const finance=load('lib/guardian/payment-summary.ts');
+test('Received payments reduce only their own package balance; cancellations and old packages do not',()=>{
+ const result=finance.guardianPaymentSummary({id:'current'},{price:6000},[{enrollment_id:'current',payment_status:'received',amount:4000},{enrollment_id:'old',payment_status:'received',amount:9000},{enrollment_id:'current',payment_status:'cancelled',amount:2000}]);
+ assert.deepEqual(result,{paid:4000,price:6000,debt:2000});assert.equal(finance.guardianPaymentSummary({id:'current'},{price:6000},[],{status:'cancelled',total_amount:9000}).price,6000);
+});
+test('Reminders use the earliest unpaid installment, partial remaining amount and actual Turkey calendar date',()=>{
+ const rows=[{due_date:'2026-10-21',amount:3000,paid_amount:0,status:'pending'},{due_date:'2026-10-19',amount:2000,paid_amount:500,status:'partial'},{due_date:'2026-10-01',amount:1000,paid_amount:0,status:'cancelled'},{due_date:'2026-10-02',amount:1000,paid_amount:1000,status:'paid'}];
+ const reminder=finance.guardianPaymentReminder({id:'e',payment_due_date:'2026-11-01'},4500,rows,{status:'active'},'2026-10-20');assert.equal(reminder.dueDate,'2026-10-19');assert.equal(reminder.amount,1500);assert.equal(reminder.state,'overdue');
+ assert.equal(finance.guardianPaymentReminder({id:'e',payment_due_date:'2026-10-20'},6000,[],null,'2026-10-20').state,'today');assert.equal(finance.guardianPaymentReminder({id:'e',payment_due_date:'2026-10-21'},6000,[],null,'2026-10-20').state,'upcoming');
+});
+test('A settled balance or missing enrollment has no reminder, and an unknown due date is never invented',()=>{
+ assert.equal(finance.guardianPaymentReminder({id:'e'},0,[],null),null);assert.equal(finance.guardianPaymentReminder(null,6000,[],null),null);assert.equal(finance.guardianPaymentReminder({id:'e'},NaN,[],null),null);
+ const unknown=finance.guardianPaymentReminder({id:'e',start_date:'2026-10-01'},6000,[],null);assert.equal(unknown.dueDate,null);assert.equal(unknown.state,'unscheduled');
+ const cancelled=finance.guardianPaymentReminder({id:'e',payment_due_date:'2026-11-01'},6000,[{due_date:'2026-01-01',amount:6000}],{status:'cancelled'},'2026-10-20');assert.equal(cancelled.dueDate,'2026-11-01');assert.equal(cancelled.state,'upcoming');
+});
+test('Payment reminder preview displays actual date and partial debt without creating a notification',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');const Link=({children,...props})=>React.createElement('a',props,children);
+ const component=load('app/veli-paneli/payment-reminder.tsx',{'next/link':{default:Link}}).default;
+ const props={accountId:'parent',enrollmentId:'e',childId:'child',previewGuardian:'parent',reminder:{dueDate:'2026-10-19',amount:1500,debt:4500,state:'overdue',day:'2026-10-20'}};
+ const html=renderToStaticMarkup(React.createElement(component,props));assert.ok(html.includes('19.10.2026'));assert.ok(html.includes('Ödeme vadeniz geçti'));assert.ok(html.includes('Toplam kalan borç'));assert.ok(html.includes('/veli-odemeler?child=child&amp;previewGuardian=parent'));assert.ok(!html.includes('guardianPaymentToast'));assert.equal(renderToStaticMarkup(React.createElement(component,{...props,reminder:null})), '');
+});
+test('Management shortcuts navigate directly to the announcement and rule editors',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');const Link=({children,...props})=>React.createElement('a',props,children);
+ const component=load('app/veliler/portal-data-map.tsx',{'next/link':{default:Link}}).default;const html=renderToStaticMarkup(React.createElement(component));assert.ok(html.includes('href="/veliler/icerik#duyurular"'));assert.ok(html.includes('href="/veliler/icerik#kurallar"'));
+ const source=fs.readFileSync('app/veliler/icerik/settings-content.tsx','utf8');assert.ok(source.includes('id="duyurular"'));assert.ok(source.includes('id="kurallar"'));
+});

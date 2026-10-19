@@ -4,7 +4,8 @@ import {
   formatMoney,
 } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
-import { guardianPaymentSummary } from "@/lib/guardian/payment-summary";
+import PaymentReminder from "@/app/veli-paneli/payment-reminder";
+import { guardianPaymentReminder, isReceivedPayment, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import "@/app/veli-paneli/veli.css";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -30,6 +31,7 @@ export default async function Page({
         <p className="guardianSectionLead">
           Paket ücreti, alınan ödemeler ve kalan ödeme bilgisi.
         </p>
+      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianPaymentReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan)} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
         <section className="guardianStats">
           <article className="guardianStat">
             <span>Paket</span>
@@ -105,9 +107,9 @@ export default async function Page({
                   </td>
                   <td>
                     <StatusPill
-                      tone={["recorded", "paid", "completed"].includes(p.payment_status) ? "green" : "red"}
+                      tone={isReceivedPayment(p.payment_status) ? "green" : "red"}
                     >
-                      {["recorded", "paid", "completed"].includes(p.payment_status)
+                      {isReceivedPayment(p.payment_status)
                         ? "Alındı"
                         : "İptal/İade"}
                     </StatusPill>
