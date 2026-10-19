@@ -117,6 +117,7 @@ export default function PermissionUiGuard() {
   const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname?.startsWith("/odeme-belge/")) return;
     let cancelled = false;
     let observer: MutationObserver | null = null;
 

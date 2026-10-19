@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
+  "/odeme-belge",
   "/login",
   "/on-kayit",
   "/auth/signout",
