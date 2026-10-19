@@ -1,8 +1,7 @@
-import { requireProfile } from "@/lib/auth/profile";
+import {loadGuardianPage} from "@/lib/guardian/page-context";
 import {
   formatDate,
   formatMoney,
-  getGuardianContext,
 } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
 import { guardianPaymentSummary } from "@/lib/guardian/payment-summary";
@@ -11,19 +10,17 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string }>;
+  searchParams: Promise<{ child?: string; previewGuardian?:string }>;
 }) {
-  const profile = await requireProfile(["guardian"]);
-  const { child } = await searchParams;
-  const data = await getGuardianContext(profile.id, child);
-  if(!data.selected) return <main className="guardianShell"><GuardianHeader name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues}/><div className="guardianContent"><EmptyGuardian title="Bağlı kursiyer bulunamadı" text="Hesabınıza aktif kursiyer bağlandığında ödeme bilgileri burada görüntülenir."/></div></main>;
+  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query);
+  if(!data.selected) return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues}/><div className="guardianContent"><EmptyGuardian title="Bağlı kursiyer bulunamadı" text="Hesabınıza aktif kursiyer bağlandığında ödeme bilgileri burada görüntülenir."/></div></main>;
   const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme"));
   const planResult = {data:data.paymentPlan};
   const installments = data.paymentInstallments;
   const {paid, price, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   return (
     <main className="guardianShell">
-      <GuardianHeader
+      <GuardianHeader previewGuardian={previewGuardian}
         name={profile.full_name || "Değerli Velimiz"}
         issues={data.issues} students={data.students}
         selectedId={data.selected?.id}

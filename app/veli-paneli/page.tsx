@@ -1,21 +1,19 @@
+import {loadGuardianPage} from "@/lib/guardian/page-context";
 import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl } from "@/lib/guardian/presentation";
 import { guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import Link from "next/link";
-import { requireProfile } from "@/lib/auth/profile";
-import { formatDate, formatMoney, getGuardianContext, weekdayLabel } from "@/lib/guardian/data";
+import { formatDate, formatMoney, weekdayLabel } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, GuardianIcon, StatusPill } from "./guardian-ui";
 import "./veli.css";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function GuardianPortal({ searchParams }: { searchParams: Promise<{ child?: string }> }) {
-  const profile = await requireProfile(["guardian"]);
-  const { child } = await searchParams;
-  const data = await getGuardianContext(profile.id, child);
+export default async function GuardianPortal({ searchParams }: { searchParams: Promise<{ child?: string; previewGuardian?:string }> }) {
+  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query);
 
   if (!data.selected) {
-    return <main className="guardianShell"><GuardianHeader name={profile.full_name || "Değerli Velimiz"} students={[]} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
+    return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={[]} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
@@ -25,9 +23,10 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const {rate:attendanceRate,absenceStreak,latestAbsence}=attendanceSummary(currentAttendance);
   const {paid: paidTotal, price: packagePrice, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   const selectedId = data.selected.id;
+  const previewQuery=previewGuardian?`&previewGuardian=${encodeURIComponent(previewGuardian)}`:"";
 
   return <main className="guardianShell">
-    <GuardianHeader name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={selectedId} />
+    <GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={selectedId} />
     <div className="guardianContent">
       <section className="guardianHero">
         <div className="guardianHeroMain"><small>ÖĞRENCİ PANELİ · GÜNCEL VERİ</small><h1>{data.selected.first_name} {data.selected.last_name}</h1><p>{data.branch?.name || "Şube belirlenmedi"} · {data.group?.name || "Grup belirlenmedi"}</p><div className="guardianHeroMeta"><span><i/> Panel açıldığında güncel kayıtlar gösterilir</span></div></div>
@@ -38,7 +37,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
       {latestAbsence ? <section className="guardianAttendanceAlert" style={{margin:"0 0 16px",padding:"15px 17px",border:"1px solid #f3c9c9",borderRadius:16,background:"#fff7f7",color:"#7f1d1d"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
           <div><small style={{display:"block",fontWeight:900,letterSpacing:".08em",color:"#b42318"}}>DEVAMSIZLIK BİLDİRİMİ</small><strong style={{display:"block",marginTop:4,fontSize:16}}>{absenceStreak >= 2 ? `${absenceStreak} ders üst üste katılım sağlanmadı` : "Son derse katılım sağlanmadı"}</strong><span style={{display:"block",marginTop:4,fontSize:12,color:"#8b4a4a"}}>{formatDate(latestAbsence.lesson_date)} tarihli yoklama kaydı. Yoklama güncellendiğinde bu bilgi otomatik yenilenir.</span></div>
-          <Link href={`/veli-devam?child=${selectedId}`} style={{padding:"8px 11px",border:"1px solid #efb4b4",borderRadius:10,background:"#fff",color:"#9f1d1d",fontWeight:900,textDecoration:"none",fontSize:12}}>Yoklama Detayı</Link>
+          <Link href={`/veli-devam?child=${selectedId}${previewQuery}`} style={{padding:"8px 11px",border:"1px solid #efb4b4",borderRadius:10,background:"#fff",color:"#9f1d1d",fontWeight:900,textDecoration:"none",fontSize:12}}>Yoklama Detayı</Link>
         </div>
       </section> : null}
 
@@ -51,7 +50,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
 
       <section className="guardianGrid">
         <article className="guardianCard">
-          <div className="guardianCardHeader"><div><small className="guardianCardEyebrow">KURS DURUMU</small><h2>Kurs Bilgileri</h2></div><Link href={`/veli-devam?child=${selectedId}`}>Takvimi aç</Link></div>
+          <div className="guardianCardHeader"><div><small className="guardianCardEyebrow">KURS DURUMU</small><h2>Kurs Bilgileri</h2></div><Link href={`/veli-devam?child=${selectedId}${previewQuery}`}>Takvimi aç</Link></div>
           <div className="infoList">
             <div className="infoRow"><span>Şube</span><strong>{data.branch?.name || "—"}</strong></div>
             <div className="infoRow"><span>Grup</span><strong>{data.group?.name || "—"}</strong></div>
@@ -64,19 +63,19 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         </article>
 
         <article className="guardianCard">
-          <div className="guardianCardHeader"><div><small className="guardianCardEyebrow">DEVAM TAKİBİ</small><h2>Son Yoklamalar</h2></div><Link href={`/veli-devam?child=${selectedId}`}>Tümünü gör</Link></div>
+          <div className="guardianCardHeader"><div><small className="guardianCardEyebrow">DEVAM TAKİBİ</small><h2>Son Yoklamalar</h2></div><Link href={`/veli-devam?child=${selectedId}${previewQuery}`}>Tümünü gör</Link></div>
           <div className="timeline">{data.attendance.slice(0,5).map((item: any) => <div className="timelineItem" key={item.id}><time>{formatDate(item.lesson_date)}</time><strong>{item.coach_note || "Ders kaydı"}</strong><StatusPill tone={attendancePresentation(item.status).tone}>{attendancePresentation(item.status).label}</StatusPill></div>)}</div>
           {!data.attendance.length ? <p className="guardianSectionLead">Henüz yoklama kaydı bulunmuyor.</p> : null}
         </article>
       </section>
 
       <section className="guardianActions">
-        <Link className="guardianAction" href={`/veli-gelisim?child=${selectedId}`}><span><GuardianIcon name="progress"/></span><div><strong>Gelişim Notları</strong><small>Antrenör değerlendirmeleri</small></div></Link>
-        <Link className="guardianAction" href={`/veli-mesajlar?child=${selectedId}`}><span><GuardianIcon name="message"/></span><div><strong>Mesaj Merkezi</strong><small>Bilgilendirme ve mesajlar</small></div></Link>
-        <Link className="guardianAction" href={`/veli-belgeler?child=${selectedId}`}><span><GuardianIcon name="document"/></span><div><strong>Kurallar & Belgeler</strong><small>Kurs belgeleri ve onaylar</small></div></Link>
+        <Link className="guardianAction" href={`/veli-gelisim?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="progress"/></span><div><strong>Gelişim Notları</strong><small>Antrenör değerlendirmeleri</small></div></Link>
+        <Link className="guardianAction" href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="message"/></span><div><strong>Mesaj Merkezi</strong><small>Bilgilendirme ve mesajlar</small></div></Link>
+        <Link className="guardianAction" href={`/veli-belgeler?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="document"/></span><div><strong>Kurallar & Belgeler</strong><small>Kurs belgeleri ve onaylar</small></div></Link>
         {safePortalUrl(data.branch?.location_url) ? <a className="guardianAction" href={safePortalUrl(data.branch.location_url)!} target="_blank" rel="noreferrer"><span><GuardianIcon name="location"/></span><div><strong>Havuz Konumu</strong><small>Haritada görüntüle</small></div></a> : null}
-        <Link className="guardianAction" href={`/veli-odemeler?child=${selectedId}`}><span><GuardianIcon name="wallet"/></span><div><strong>Ödeme Geçmişi</strong><small>Ödeme ve borç durumu</small></div></Link>
-        <Link className="guardianAction" href={`/veli-duyurular?child=${selectedId}`}><span><GuardianIcon name="bell"/></span><div><strong>Duyurular</strong><small>Güncel kurs bilgilendirmeleri</small></div></Link>
+        <Link className="guardianAction" href={`/veli-odemeler?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="wallet"/></span><div><strong>Ödeme Geçmişi</strong><small>Ödeme ve borç durumu</small></div></Link>
+        <Link className="guardianAction" href={`/veli-duyurular?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="bell"/></span><div><strong>Duyurular</strong><small>Güncel kurs bilgilendirmeleri</small></div></Link>
       </section>
       <p className="guardianFooterNote">Bilgiler SprintOS yönetim panelindeki güncel kayıtlarla senkronize gösterilir. Grup, yoklama, ödeme ve bitiş tarihi değişiklikleri yetkili yönetici tarafından güncellendiğinde, ilgili ekranı açtığınızda veya uygulamaya geri döndüğünüzde yenilenir.</p>
     </div>
