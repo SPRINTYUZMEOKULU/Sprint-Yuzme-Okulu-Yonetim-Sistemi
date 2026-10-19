@@ -1,5 +1,6 @@
 "use server";
 
+import {notifySharedNote} from "@/lib/guardian/note-sharing";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -146,6 +147,9 @@ export async function addStudentNote(
     );
   }
 
+  if(formData.get("is_guardian_visible")==="on" && createdNote?.id){
+    try{await notifySharedNote(profile.organization_id,studentId,createdNote.id,body,profile.id);}catch{goError(studentId,"Not kaydedildi; veli bildirimi oluşturulamadı. Alıcı bağlantılarını kontrol edin.");}
+  }
   const reminderAt = reminderIso(getText(formData.get("reminder_at"), 30));
 
   if (reminderAt && createdNote?.id) {
@@ -1539,14 +1543,17 @@ export async function updateStudentNote(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data:updatedNote, error } = await supabase
     .from("student_notes")
     .update({ body })
     .eq("organization_id", profile.organization_id)
     .eq("student_id", studentId)
-    .eq("id", noteId);
+    .eq("id", noteId).select("id,is_guardian_visible").single();
 
   if (error) goError(studentId, error.message);
+  if(updatedNote?.is_guardian_visible)await notifySharedNote(profile.organization_id,studentId,noteId,body,profile.id);
+  revalidatePath("/veli-mesajlar");
+  revalidatePath("/veli-gelisim");
   revalidatePath(`/ogrenciler/${studentId}`);
   goSaved(studentId, "note-updated");
 }

@@ -1,3 +1,4 @@
+import CommunicationSummary from "./communication-summary";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { studentLessonRights } from "@/lib/students/lesson-rights";
 import Link from "next/link";
@@ -1465,6 +1466,7 @@ export default async function StudentFile({
             </div>
           </div>
 
+          <CommunicationSummary studentId={student.id} organizationId={profile.organization_id!}/>
           <form action={addStudentNote} className="noteForm">
             <input type="hidden" name="student_id" value={student.id} />
 
@@ -1495,7 +1497,7 @@ export default async function StudentFile({
 
             <label className="checkbox">
               <input type="checkbox" name="is_guardian_visible" /> Veli
-              panelinde göster
+              panelinde paylaş ve bildirim oluştur
             </label>
 
             <PendingSubmitButton
@@ -1510,7 +1512,7 @@ export default async function StudentFile({
             {notes.map((note: any) => (
               <article key={note.id} className="managedNote">
                 <div>
-                  <strong>{String(note.note_type).toUpperCase()}</strong>
+                  <strong>{String(note.note_type).toUpperCase()}</strong><small style={{display:"block",marginTop:6,color:note.is_guardian_visible?"#087443":"#66758a"}}>{note.is_guardian_visible?"Alıcı: bağlı portal velileri · Mesajlar ekranında görünür":"Kurum içi · Yalnızca yetkili personel görür"}</small>
 
                   <p>{note.body}</p>
                 </div>

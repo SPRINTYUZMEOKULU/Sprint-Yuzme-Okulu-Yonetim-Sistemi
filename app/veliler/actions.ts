@@ -1,5 +1,6 @@
 "use server";
 
+import { responseState, requestStatusLabels } from "@/lib/guardian/request-state";
 import { linkGuardianStudentCanonical, unlinkGuardianStudentCanonical } from "./[id]/actions";
 import { portalCredentialContact, savePortalCredential } from "./portal-credential-actions";
 import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
@@ -14,6 +15,9 @@ import { createNotification } from "@/lib/notifications/create-notification";
 const managementRoles = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 const staffRoles = ["owner", "admin", "branch_manager", "registration_staff", "accounting", "coach"] as const;
 
+async function deliverRequestNotification(input:Parameters<typeof createNotification>[0]){
+ try{return await createNotification(input);}catch(error){console.error("Veli görüşme bildirimi kaydedilemedi",error);return {ok:false};}
+}
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -144,12 +148,15 @@ export async function createGuardianRequest(formData: FormData) {
   const context = await getGuardianContext(profile.id, studentId);
   if (!context.students.some(student => student.id === studentId)) back(requestPath, "error", "Bu öğrenci için talep oluşturma yetkiniz yok.");
 
+  const sourceNoteId = text(formData,"source_note_id",100) || null;
+  if(sourceNoteId){const {data:note}=await adminClient().from("student_notes").select("id").eq("organization_id",organizationId).eq("student_id",studentId).eq("id",sourceNoteId).eq("is_guardian_visible",true).maybeSingle();if(!note)back(requestPath,"error","Paylaşılan not bulunamadı.");}
   const requestNumber = `VTL-${new Date().getFullYear()}-${Date.now().toString().slice(-7)}`;
   const { data: created, error } = await adminClient().from("guardian_requests").insert({
     organization_id: organizationId,
     guardian_id: profile.id,
     student_id: studentId,
     request_number: requestNumber,
+    source_note_id: sourceNoteId,
     category: text(formData, "category", 50) || "other",
     subject,
     description,
@@ -158,7 +165,7 @@ export async function createGuardianRequest(formData: FormData) {
   }).select("id").single();
   if (error) back(requestPath, "error", error.message);
 
-  await createNotification({
+  const delivery=await deliverRequestNotification({
     organizationId,
     category: "students",
     eventKey: "guardian_request_created",
@@ -174,8 +181,8 @@ export async function createGuardianRequest(formData: FormData) {
     push: true,
   });
 
-  revalidatePath("/veli-talepleri");
-  back(requestPath, "saved", `Talebiniz oluşturuldu. Talep numarası: ${requestNumber}`);
+  revalidateGuardianConnection(profile.id,studentId);
+  back(requestPath, "saved", `Talebiniz oluşturuldu. Talep numarası: ${requestNumber}${delivery.ok?"":" · Yönetim bildirimi oluşturulamadı; talep kaydınız korunuyor."}`);
 }
 
 export async function manageGuardianRequest(formData: FormData) {
@@ -184,25 +191,34 @@ export async function manageGuardianRequest(formData: FormData) {
   const requestId = text(formData, "request_id", 100);
   if (!organizationId || !requestId) back("/veli-talepleri", "error", "Talep bulunamadı.");
 
-  const supabase = await createClient();
-  const status = text(formData, "status", 30) || "reviewing";
-  const guardianResponse = text(formData, "guardian_response", 4000) || null;
+  const supabase = adminClient();
+  const {data:previous,error:readError}=await supabase.from("guardian_requests").select("*").eq("organization_id",organizationId).eq("id",requestId).maybeSingle();
+  if(readError||!previous)back("/veli-talepleri","error","Talep bulunamadı.");
+  const requestedStatus = text(formData, "status", 30) || "reviewing";
+  if(!requestStatusLabels[requestedStatus])back("/veli-talepleri","error","Geçersiz talep durumu.");
+  const assignedTo=text(formData,"assigned_to",100)||null;
+  if(assignedTo){const {data:assignee}=await supabase.from("profiles").select("id").eq("organization_id",organizationId).eq("id",assignedTo).eq("is_active",true).in("role",[...staffRoles]).maybeSingle();if(!assignee)back("/veli-talepleri","error","Atanacak personel bulunamadı.");}
+  const guardianResponse = text(formData, "guardian_response", 4000) || previous.guardian_response || null;
+  if(formData.get("expected_updated_at") && text(formData,"expected_updated_at",100)!==previous.updated_at)back("/veli-talepleri","error","Görüşmeye yeni yanıt geldi. Güncel kaydı açıp tekrar deneyin.");
+  const state=responseState(requestedStatus,guardianResponse,previous.guardian_response);
+  const status=state.status;
   const { data: requestRow, error } = await supabase.from("guardian_requests").update({
     status,
     priority: text(formData, "priority", 20) || "normal",
-    assigned_to: text(formData, "assigned_to", 100) || null,
+    assigned_to: assignedTo,
     internal_note: text(formData, "internal_note", 4000) || null,
     guardian_response: guardianResponse,
-    responded_by: guardianResponse ? profile.id : null,
-    responded_at: guardianResponse ? new Date().toISOString() : null,
+    responded_by: state.changed ? profile.id : previous.responded_by,
+    responded_at: state.changed ? new Date().toISOString() : previous.responded_at,
     resolved_at: status === "resolved" ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
-  }).eq("organization_id", organizationId).eq("id", requestId)
+  }).eq("organization_id", organizationId).eq("id", requestId).eq("updated_at",previous.updated_at)
     .select("guardian_id,student_id,request_number").single();
   if (error) back("/veli-talepleri", "error", error.message);
 
-  if (guardianResponse && requestRow?.guardian_id) {
-    await createNotification({
+  let notificationOk=true;
+  if (state.changed && guardianResponse && requestRow?.guardian_id) {
+    const delivery=await deliverRequestNotification({
       organizationId,
       category: "students",
       eventKey: "guardian_request_answered",
@@ -214,12 +230,30 @@ export async function manageGuardianRequest(formData: FormData) {
       studentId: requestRow.student_id,
       sourceType: "guardian_request",
       sourceId: requestId,
-      targetPath: `/veli-talepleri?request=${requestId}`,
+      targetPath: `/veli-talepleri?child=${requestRow.student_id || ""}&request=${requestId}#talep-${requestId}`,
       recipientProfileIds: [requestRow.guardian_id],
       push: true,
     });
+    notificationOk=delivery.ok;
   }
 
+  if(requestRow?.student_id)revalidateGuardianConnection(requestRow.guardian_id,requestRow.student_id);
   revalidatePath("/veli-talepleri");
-  back("/veli-talepleri", "saved", "Talep güncellendi.");
+  back("/veli-talepleri", "saved", notificationOk?"Talep ve görüşme geçmişi güncellendi.":"Yanıt kaydedildi; veli bildirimi oluşturulamadı.");
+}
+
+export async function replyGuardianRequest(formData:FormData){
+ const profile=await requireProfile(["guardian"]),org=profile.organization_id;
+ const id=text(formData,"request_id",100),body=text(formData,"body",4000);
+ const db=adminClient();
+ const {data:row}=await db.from("guardian_requests").select("id,student_id,request_number").eq("organization_id",org).eq("guardian_id",profile.id).eq("id",id).maybeSingle();
+ const path=`/veli-talepleri?child=${row?.student_id||""}&request=${id}`;
+ if(!org||!row||!body)back(path,"error","Talep ve yanıt bilgisi eksik.");
+ const context=await getGuardianContext(profile.id,row.student_id);
+ if(!context.students.some(s=>s.id===row.student_id))back(path,"error","Bu kursiyere erişiminiz yok.");
+ const {data:replyId,error}=await db.rpc("reply_guardian_request",{p_request:id,p_org:org,p_author:profile.id,p_body:body});
+ if(error)back(path,"error","Yanıt kaydedilemedi. Talep arşivlenmiş veya erişiminiz değişmiş olabilir.");
+ const delivery=await deliverRequestNotification({organizationId:org,category:"students",eventKey:"guardian_request_reply",title:`Veliden yeni yanıt · ${row.request_number}`,body,studentId:row.student_id,sourceType:"guardian_request_reply",sourceId:replyId,targetPath:`/veli-talepleri?request=${id}#talep-${id}`,createdBy:profile.id,push:true});
+ revalidateGuardianConnection(profile.id,row.student_id);
+ back(path,"saved",delivery.ok?"Yanıtınız yönetime iletildi.":"Yanıt kaydedildi; yönetim bildirimi oluşturulamadı.");
 }

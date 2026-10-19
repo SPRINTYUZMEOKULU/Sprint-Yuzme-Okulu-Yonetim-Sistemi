@@ -132,7 +132,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   const [enrollmentsRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
     admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }),
     allRows("attendance_records",query=>query.order("lesson_date",{ascending:false}).order("id")),
-    admin.from("student_notes").select("id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("note_type", "coach").eq("is_guardian_visible", true).order("created_at", { ascending: false }).limit(30),
+    admin.from("student_notes").select("id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("is_guardian_visible", true).order("created_at", { ascending: false }).limit(30),
     Promise.resolve({data:[],error:null}),
     allRows("student_payments",query=>query.order("received_at",{ascending:false}).order("id")),
     admin.from("guardian_messages").select("*").eq("organization_id", profile.organization_id).eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
@@ -211,12 +211,12 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     coach,
     schedules,
     attendance: attendanceRes.data || [],
-    progress,
+    progress: progress.filter((note:any)=>note.note_type==="coach"),
     announcements: visibleAnnouncements,
     payments: paymentsRes.data || [],
     paymentPlan: planResult.data || null,
     paymentInstallments: installmentsResult.data || [],
-    messages: messagesRes.data || [],
+    messages: [...(messagesRes.data || []),...progress.map((note:any)=>({id:note.id,kind:'note',title:note.note_type==='coach'?'Eğitmen notu':'Yönetim notu',body:note.body,created_at:note.created_at,channel:'Öğrenci dosyası',student_id:selected.id}))].sort((a:any,b:any)=>String(b.created_at).localeCompare(String(a.created_at))),
     documents: documentsRes.data || [],
     consents: consentsRes.data || []
   };

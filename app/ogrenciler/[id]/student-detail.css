@@ -1306,3 +1306,4 @@
 .studentFilePage[data-active-file-tab="registration"] .metricGrid[data-file-panel="registration"] {
   display: grid !important;
 }
+.studentCommunicationSummary{padding:16px;border:1px solid #dce7f4;border-radius:14px;background:#f6f9fe;margin-bottom:20px}.studentCommunicationSummary>strong{font-size:15px;color:#173e66}.studentCommunicationSummary p{font-size:12px;line-height:1.7;color:#637a93}.studentCommunicationSummary a{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #dfe8f2;text-decoration:none;color:#155eab;font-size:12px}.studentCommunicationSummary b{color:#187852}

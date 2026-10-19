@@ -1,5 +1,7 @@
 "use client";
 
+import {useState} from "react";
+import GuardianNotifications from "./guardian-notifications";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,7 +33,7 @@ const navItems: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/veli-mesajlar", label: "Mesajlar", icon: "message" },
   { href: "/veli-duyurular", label: "Duyurular", icon: "bell" },
   { href: "/veli-belgeler", label: "Kurallar ve Belgeler", icon: "document" },
-  { href: "/veli-talepleri", label: "Talep Oluştur", icon: "request" },
+  { href: "/veli-talepleri", label: "Talepler ve Yanıtlar", icon: "request" },
 ];
 
 function portalHref(href: string, selectedId?: string) {
@@ -40,6 +42,7 @@ function portalHref(href: string, selectedId?: string) {
 
 export function GuardianHeader({ name, students, selectedId, issues = [], previewGuardian }: { name: string; students: GuardianStudent[]; selectedId?: string; issues?: string[]; previewGuardian?:string }) {
   const pathname = usePathname();
+  const [menuOpen,setMenuOpen]=useState(false);
   const href=(path:string,child?:string)=>{const params=new URLSearchParams();if(child)params.set("child",child);if(previewGuardian)params.set("previewGuardian",previewGuardian);return path+(params.size?`?${params}`:"");};
   return <>
     <GuardianAutoRefresh />
@@ -50,6 +53,7 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
         <span><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
       </Link>
       <div className="guardianTopRight">
+        {!previewGuardian?<GuardianNotifications/>:null}
         <span className="guardianWelcome">Hoş geldiniz, <b>{name}</b></span>
         <span className="guardianLive"><i/> Veli / Kursiyer</span>
         <Link prefetch={false} className="guardianLogout" href={previewGuardian?`/veliler/${previewGuardian}`:"/auth/signout"} aria-label={previewGuardian?"Yönetici dosyasına dön":"Çıkış yap"}><GuardianIcon name="logout" size={17}/><span>{previewGuardian?"Yöneticiye Dön":"Çıkış"}</span></Link>
@@ -58,8 +62,9 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
     <div className="guardianNavWrap">
       <div className="guardianBreadcrumb">{pathname !== "/veli-paneli" ? <Link href={href("/veli-paneli",selectedId)} aria-label="Seçili kursiyerin genel bakışına dön">← Genel Bakışa Dön</Link> : <span>Veli / Kursiyer Portalı</span>}<span>{students.find(student=>student.id===selectedId)?.first_name} {students.find(student=>student.id===selectedId)?.last_name}</span></div>
       {issues.length ? <div className="guardianDataNotice" role="alert">{issues.map(issue=><p key={issue}>{issue}</p>)}</div> : null}
-      <nav className="guardianNav" aria-label="Portal menüsü">
-        {navItems.map((item) => <Link prefetch={false} key={item.href} aria-current={pathname === item.href ? "page" : undefined} href={href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
+      <button type="button" className="guardianMenuToggle" aria-expanded={menuOpen} aria-controls="guardian-navigation" onClick={()=>setMenuOpen(!menuOpen)}><span><GuardianIcon name={navItems.find(i=>i.href===pathname)?.icon||'home'}/>{navItems.find(i=>i.href===pathname)?.label||'Portal Menüsü'}</span><span>{menuOpen?'Kapat':'Tüm Menü'}</span></button>
+      <nav id="guardian-navigation" className={`guardianNav ${menuOpen?'isOpen':''}`} aria-label="Portal menüsü">
+        {navItems.map((item) => <Link prefetch={false} key={item.href} onClick={()=>setMenuOpen(false)} aria-current={pathname === item.href ? "page" : undefined} href={href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
       </nav>
       {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} aria-current={student.id === selectedId ? "true" : undefined} className={student.id === selectedId ? "active" : ""} href={href(pathname, student.id)}>{student.first_name} {student.last_name}</Link>)}</div> : null}
     </div>
