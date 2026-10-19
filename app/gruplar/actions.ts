@@ -43,8 +43,8 @@ function createAutomaticGroupName({
   startTime: string;
   courseType: string;
 }) {
-  const dayText = weekdays
-    .sort((a, b) => a - b)
+  const dayText = [...weekdays]
+    .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
     .map((weekday) => DAY_SHORT_NAMES[weekday] || "")
     .filter(Boolean)
     .join("-");
@@ -99,7 +99,7 @@ export async function createGroup(formData: FormData) {
             Number.isInteger(weekday) && weekday >= 0 && weekday <= 6
         )
     )
-  ).sort((a, b) => a - b);
+  ).sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
 
   const startTime = toTime(formData.get("start_time"));
   const endTime = toTime(formData.get("end_time"));
@@ -405,7 +405,7 @@ export async function updateGroup(formData: FormData) {
             Number.isInteger(weekday) && weekday >= 0 && weekday <= 6
         )
     )
-  ).sort((a, b) => a - b);
+  ).sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b));
 
   const publicRegistration = formData.get("public_registration") === "on";
 
