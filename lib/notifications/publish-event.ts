@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { createNotification, type CreateNotificationInput, type NotificationCategory } from "./create-notification";
+import { createNotification, type CreateNotificationInput, type CreateNotificationResult, type NotificationCategory } from "./create-notification";
 
 type EventRow = {
   organization_id: string;
@@ -32,7 +32,8 @@ const categories = new Set(["preregistration","students","attendance","finance",
 /** Authenticated server callers publish after a successful business operation. */
 export async function publishEventNotification(input: EventRow | EventRow[], send = createNotification) {
   let rows = Array.isArray(input) ? input : [input];
-  if (!rows.length) return { error: null };
+  const results: CreateNotificationResult[] = [];
+  if (!rows.length) return { error: null, results };
   if (rows.length > 1 && rows.every(row => row.notification_type === "bulk_compensation_approved" && row.organization_id === rows[0].organization_id && row.source_id === rows[0].source_id)) {
     const first = rows[0];
     rows = [{ ...first, student_id: null, target_path: "/onay-merkezi?status=approved",
@@ -65,12 +66,13 @@ export async function publishEventNotification(input: EventRow | EventRow[], sen
         push: row.push_requested ?? row.push_required ?? true,
         metadata: row.metadata || {}, createdBy: row.created_by,
       });
+      results.push(result);
       if (!result.ok) throw new Error(result.message);
     }
-    return { error: null };
+    return { error: null, results };
   } catch (error) {
     // Notification transport must not turn a saved payment/approval into a failure.
     console.error("SprintOS event notification failed:", error instanceof Error ? error.message : "unknown");
-    return { error: { message: "İşlem kaydedildi ancak bildirimi gönderilemedi." } };
+    return { error: { message: "İşlem kaydedildi ancak bildirimi gönderilemedi." }, results };
   }
 }
