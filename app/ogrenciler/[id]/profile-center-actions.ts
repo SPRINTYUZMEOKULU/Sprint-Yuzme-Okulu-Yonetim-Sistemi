@@ -1,4 +1,5 @@
 "use server";
+import { portalCredentialContact, savePortalCredential } from "@/app/veliler/portal-credential-actions";
 
 import { revalidatePath } from "next/cache";
 import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
@@ -197,7 +198,8 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
   const email = clean(payload.email, 200).toLowerCase();
   const phone = normalizePhone(payload.phone);
   const relationship = clean(payload.relationship, 50) || "Veli";
-  const temporaryPassword = clean(payload.temporaryPassword, 100);
+  const temporaryPassword = String(payload.temporaryPassword || "");
+  if(temporaryPassword && (temporaryPassword.length<8 || temporaryPassword.length>100 || /[\r\n`]/.test(temporaryPassword) || temporaryPassword!==temporaryPassword.trim())) return {ok:false as const,message:"Şifre 8–100 karakter olmalı; başında/sonunda boşluk, satır sonu veya ters tırnak içermemelidir."};
 
   if (!fullName) return { ok: false as const, message: "Veli adı soyadı zorunludur." };
   if (!email && !phone) return { ok: false as const, message: "Veli için telefon veya e-posta zorunludur." };
@@ -304,8 +306,12 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     performed_at: new Date().toISOString(),
   });
 
+  const contact = createdAuthUser ? await portalCredentialContact({accountId:guardianId}) : null;
+  const credential = createdAuthUser && contact?.ok ? {...contact,password:temporaryPassword} : temporaryPassword ? await savePortalCredential({accountId:guardianId},temporaryPassword) : null;
+  if (credential && !credential.ok) return credential;
   revalidateGuardianConnection(guardianId, studentId);
   return {
+    credential: credential?.ok ? credential : undefined,
     ok: true as const,
     message: createdAuthUser ? "Veli portal hesabı oluşturuldu ve öğrenciye bağlandı." : "Mevcut veli hesabı öğrenciye bağlandı.",
     guardianPortal: await guardianPortalState(studentId, organizationId),
@@ -334,50 +340,8 @@ export async function setGuardianPortalActive(studentIdValue: string, active: bo
   return { ok: true as const, message: active ? "Veli portal erişimi aktif edildi." : "Veli portal erişimi pasife alındı." };
 }
 
-export async function resetGuardianPortalPassword(
-  studentIdValue: string,
-  passwordValue: string,
-) {
-  const profile = await requireProfile([...guardianManageRoles]);
-  const organizationId = profile.organization_id;
-  const studentId = clean(studentIdValue, 100);
-  const password = clean(passwordValue, 100);
-
-  if (!organizationId || !studentId) {
-    return { ok: false as const, message: "Öğrenci bulunamadı." };
-  }
-
-  if (password.length < 8) {
-    return { ok: false as const, message: "Yeni şifre en az 8 karakter olmalıdır." };
-  }
-
-  const state = await guardianPortalState(studentId, organizationId);
-  if (!state?.guardianId) {
-    return { ok: false as const, message: "Bağlı veli hesabı bulunamadı." };
-  }
-
-  const admin = adminClient();
-  const { error } = await admin.auth.admin.updateUserById(state.guardianId, {
-    password,
-  });
-
-  if (error) {
-    return { ok: false as const, message: `Veli şifresi değiştirilemedi: ${error.message}` };
-  }
-
-  await admin.from("student_activity_logs").insert({
-    organization_id: organizationId,
-    student_id: studentId,
-    activity_type: "guardian_portal_password_reset",
-    title: "Veli portal şifresi yenilendi",
-    description: `${state.fullName || "Bağlı veli"} için yeni geçici şifre tanımlandı.`,
-    source_type: "guardian_profile",
-    source_id: state.guardianId,
-    performed_at: new Date().toISOString(),
-  });
-
-  revalidatePath(`/ogrenciler/${studentId}`);
-  return { ok: true as const, message: "Yeni veli giriş şifresi başarıyla tanımlandı." };
+export async function resetGuardianPortalPassword(studentId: string, password: string) {
+  return savePortalCredential({studentId},password);
 }
 
 export async function unlinkGuardianPortal(studentIdValue: string) {

@@ -4,8 +4,8 @@ import {
   formatMoney,
   getGuardianContext,
 } from "@/lib/guardian/data";
-import { GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
-import { createClient } from "@/lib/supabase/server";
+import { EmptyGuardian, GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
+import { guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import "@/app/veli-paneli/veli.css";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -16,32 +16,16 @@ export default async function Page({
   const profile = await requireProfile(["guardian"]);
   const { child } = await searchParams;
   const data = await getGuardianContext(profile.id, child);
-  const supabase = await createClient();
-  const planResult = data.enrollment?.id
-    ? await supabase
-        .from("student_payment_plans")
-        .select("id,total_amount,status,note")
-        .eq("enrollment_id", data.enrollment.id)
-        .maybeSingle()
-    : { data: null };
-  const installmentsResult = planResult.data?.id
-    ? await supabase
-        .from("student_payment_installments")
-        .select("id,sequence_no,due_date,amount,paid_amount,status")
-        .eq("plan_id", planResult.data.id)
-        .order("sequence_no")
-    : { data: [] };
-  const installments = installmentsResult.data || [];
-  const paid = data.payments
-    .filter((p: any) => p.payment_status === "recorded")
-    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const price = Number(data.coursePackage?.price || 0);
-  const debt = Math.max(0, price - paid);
+  if(!data.selected) return <main className="guardianShell"><GuardianHeader name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues}/><div className="guardianContent"><EmptyGuardian title="Bağlı kursiyer bulunamadı" text="Hesabınıza aktif kursiyer bağlandığında ödeme bilgileri burada görüntülenir."/></div></main>;
+  const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme"));
+  const planResult = {data:data.paymentPlan};
+  const installments = data.paymentInstallments;
+  const {paid, price, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   return (
     <main className="guardianShell">
       <GuardianHeader
         name={profile.full_name || "Değerli Velimiz"}
-        students={data.students}
+        issues={data.issues} students={data.students}
         selectedId={data.selected?.id}
       />
       <div className="guardianContent">
@@ -56,15 +40,15 @@ export default async function Page({
           </article>
           <article className="guardianStat">
             <span>Paket Ücreti</span>
-            <strong>{formatMoney(price)}</strong>
+            <strong>{financeReady?formatMoney(price):"Bilgi alınamadı"}</strong>
           </article>
           <article className="guardianStat">
-            <span>Ödenen</span>
-            <strong>{formatMoney(paid)}</strong>
+            <span>Bu pakette ödenen</span>
+            <strong>{financeReady?formatMoney(paid):"Bilgi alınamadı"}</strong>
           </article>
           <article className="guardianStat">
             <span>Kalan</span>
-            <strong>{formatMoney(debt)}</strong>
+            <strong>{financeReady?formatMoney(debt):"Bilgi alınamadı"}</strong>
           </article>
         </section>
         {planResult.data ? (
@@ -99,7 +83,7 @@ export default async function Page({
           </section>
         ) : null}
         <section className="guardianCard" style={{ marginTop: 18 }}>
-          <table className="guardianTable">
+          <h2>Ödeme Geçmişi</h2><p className="guardianSectionLead">Tüm kayıt dönemlerindeki tahsilatlar. Üstteki bakiye mevcut pakete aittir.</p><table className="guardianTable">
             <thead>
               <tr>
                 <th>Tarih</th>
@@ -118,15 +102,15 @@ export default async function Page({
                       ? "Nakit"
                       : p.payment_method === "card"
                         ? "Kart"
-                        : p.payment_method === "transfer"
+                        : ["transfer","bank_transfer","eft"].includes(p.payment_method)
                           ? "Havale/EFT"
                           : "Diğer"}
                   </td>
                   <td>
                     <StatusPill
-                      tone={p.payment_status === "recorded" ? "green" : "red"}
+                      tone={["recorded", "paid", "completed"].includes(p.payment_status) ? "green" : "red"}
                     >
-                      {p.payment_status === "recorded"
+                      {["recorded", "paid", "completed"].includes(p.payment_status)
                         ? "Alındı"
                         : "İptal/İade"}
                     </StatusPill>

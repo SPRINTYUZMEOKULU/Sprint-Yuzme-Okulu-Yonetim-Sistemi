@@ -1,5 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { GuardianStudent } from "@/lib/guardian/data";
 import GuardianAutoRefresh from "./guardian-auto-refresh";
 
@@ -35,7 +38,8 @@ function portalHref(href: string, selectedId?: string) {
   return selectedId ? `${href}?child=${encodeURIComponent(selectedId)}` : href;
 }
 
-export function GuardianHeader({ name, students, selectedId }: { name: string; students: GuardianStudent[]; selectedId?: string }) {
+export function GuardianHeader({ name, students, selectedId, issues = [] }: { name: string; students: GuardianStudent[]; selectedId?: string; issues?: string[] }) {
+  const pathname = usePathname();
   return <>
     <GuardianAutoRefresh />
     <header className="guardianTop">
@@ -45,15 +49,17 @@ export function GuardianHeader({ name, students, selectedId }: { name: string; s
       </Link>
       <div className="guardianTopRight">
         <span className="guardianWelcome">Hoş geldiniz, <b>{name}</b></span>
-        <span className="guardianLive"><i/> Canlı</span>
+        <span className="guardianLive"><i/> Veli / Kursiyer</span>
         <Link prefetch={false} className="guardianLogout" href="/auth/signout"><GuardianIcon name="logout" size={17}/><span>Çıkış</span></Link>
       </div>
     </header>
     <div className="guardianNavWrap">
+      <div className="guardianBreadcrumb">{pathname !== "/veli-paneli" ? <Link href={portalHref("/veli-paneli",selectedId)} aria-label="Seçili kursiyerin genel bakışına dön">← Genel Bakışa Dön</Link> : <span>Veli / Kursiyer Portalı</span>}<span>{students.find(student=>student.id===selectedId)?.first_name} {students.find(student=>student.id===selectedId)?.last_name}</span></div>
+      {issues.length ? <div className="guardianDataNotice" role="alert">{issues.map(issue=><p key={issue}>{issue}</p>)}</div> : null}
       <nav className="guardianNav" aria-label="Portal menüsü">
-        {navItems.map((item) => <Link prefetch={false} key={item.href} href={portalHref(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
+        {navItems.map((item) => <Link prefetch={false} key={item.href} aria-current={pathname === item.href ? "page" : undefined} href={portalHref(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
       </nav>
-      {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} className={student.id === selectedId ? "active" : ""} href={portalHref("/veli-paneli", student.id)}>{student.first_name}</Link>)}</div> : null}
+      {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} aria-current={student.id === selectedId ? "true" : undefined} className={student.id === selectedId ? "active" : ""} href={portalHref(pathname, student.id)}>{student.first_name} {student.last_name}</Link>)}</div> : null}
     </div>
   </>;
 }

@@ -4,5 +4,5 @@ export function revalidateGuardianConnection(profileId: string, studentId: strin
   for (const path of ["/veliler", `/veliler/${profileId}`, "/ogrenciler",
     `/ogrenciler/${studentId}`, "/veliler/ogrenciden-olustur",
     "/ogrenciler/pasif-merkezi", "/veli-paneli", "/veli-talepleri",
-    "/devam", "/veli-gelisim", "/veli-mesajlar"]) revalidatePath(path);
+    "/veli-devam", "/veli-odemeler", "/veli-duyurular", "/veli-belgeler", "/devam", "/veli-gelisim", "/veli-mesajlar"]) revalidatePath(path);
 }

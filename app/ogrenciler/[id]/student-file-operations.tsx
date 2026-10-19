@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
+import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
 import { useRouter } from "next/navigation";
 
 import { prepareGuardianAccountBatch, type GuardianBulkResult } from "../../veliler/ogrenciden-olustur/bulk-account-actions";
@@ -179,21 +181,6 @@ export default function StudentFileOperations({
   const [portalAccess, setPortalAccess] = useState<GuardianBulkResult | null>(null);
   const portalLock = useRef(false);
 
-  function portalWhatsAppUrl(access: GuardianBulkResult) {
-    const body = [
-      "*SPRİNT YÜZME OKULU*",
-      `Merhaba ${access.fullName},`,
-      "SprintOS Veli / Kursiyer Portalı giriş bilgileriniz hazırdır.",
-      `Kursiyer: ${access.studentNames.join(", ")}`,
-      `Giriş adresi: ${window.location.origin}/login`,
-      `Kullanıcı adı (telefon): ${access.phone}`,
-      access.email ? `E-posta: ${access.email}` : "",
-      `Geçici şifre: ${access.password}`,
-      "Giriş ekranında Veli Girişi bölümünü seçin. Giriş yaptıktan sonra şifrenizi değiştirmenizi öneririz.",
-      "Bilgilendirme Hattı: 0551 896 83 19",
-    ].filter(Boolean).join("\n\n");
-    return `https://wa.me/${access.phone.replace(/\D/g, "")}?text=${encodeURIComponent(body)}`;
-  }
 
   async function preparePortalAccess() {
     if (portalLock.current || portalAccess) return;
@@ -202,12 +189,13 @@ export default function StudentFileOperations({
     setPortalStatus("Hesap ve öğrenci bağlantısı hazırlanıyor…");
     try {
       const [access] = await prepareGuardianAccountBatch([student.id]);
-      if (!access?.ok || !access.password) {
+      if (!access?.ok || !access.accountId) {
         setPortalStatus(access?.message || "Kayıtlı veli / kursiyer adı ve cep telefonu eksik veya geçersiz. Bilgileri Düzenle bölümünden kontrol edin.");
         return;
       }
+      if(access.password && access.revision && access.accountId) rememberPortalCredential({...access,password:access.password,revision:access.revision,accountId:access.accountId});
       setPortalAccess(access);
-      setPortalStatus("Giriş bilgileri hazır. WhatsApp mesajını açıp gönderin.");
+      setPortalStatus("Hesap bağlantısı hazır. Aşağıdaki şifre ve paylaşım alanını kullanın.");
       router.refresh();
     } catch {
       setPortalStatus("Giriş bilgileri hazırlanamadı. Bağlantınızı ve işlem yetkinizi kontrol edin.");
@@ -650,24 +638,18 @@ export default function StudentFileOperations({
               </div>
               <div className="portalNotice">
                 <FileIcon name="key" />
-                <div><strong>Geçici şifre hakkında</strong><p>Hesap yoksa oluşturulur ve kursiyere bağlanır. Mevcut hesabın şifresi yenilenir; aynı hesaba bağlı diğer kursiyerlerde de yeni şifre geçerli olur.</p></div>
+                <div><strong>Geçici şifre hakkında</strong><p>Hesap yoksa oluşturulur ve kursiyere bağlanır. Mevcut hesap bağlanır ve şifresi korunur. Şifre değiştirme yalnızca Yeni Şifreyi Kaydet işlemiyle yapılır.</p></div>
               </div>
               {portalAccess && (
-                <div className="portalReady"><strong>Giriş bilgileri hazır</strong><p>WhatsApp mesajını açıp gönderimi tamamlayın. Mesajı yeniden açmak şifreyi tekrar değiştirmez.</p></div>
+                <PortalCredentialManager accountId={portalAccess.accountId}/>
               )}
               {portalStatus && <div className="portalStatus" role="status" aria-live="polite">{portalStatus}</div>}
             </div>
             <footer className="portalFooter">
-              {portalAccess ? (
-                <a className="portalAction portalWhatsapp" href={portalWhatsAppUrl(portalAccess)} target="_blank" rel="noopener noreferrer">
-                  <span className="portalActionIcon"><FileIcon name="message" /></span>
-                  <span className="portalActionText"><b>WhatsApp Mesajını Aç</b><small>Hazır giriş bilgilerini paylaşın</small></span>
-                  <span aria-hidden="true">↗</span>
-                </a>
-              ) : (
+              {portalAccess ? <small>Şifre ve paylaşım işlemleri yukarıdaki ortak giriş bilgileri alanındadır.</small> : (
                 <button className="portalAction" type="button" disabled={portalBusy} aria-busy={portalBusy} onClick={preparePortalAccess}>
                   <span className={portalBusy ? "portalActionIcon portalSpinner" : "portalActionIcon"}>{portalBusy ? null : <FileIcon name="key" />}</span>
-                  <span className="portalActionText"><b>{portalBusy ? "Bilgiler Hazırlanıyor…" : "Giriş Bilgilerini Hazırla"}</b><small>{portalBusy ? "Lütfen bekleyin" : "Hesap ve geçici şifre oluştur"}</small></span>
+                  <span className="portalActionText"><b>{portalBusy ? "Bilgiler Hazırlanıyor…" : "Giriş Bilgilerini Hazırla"}</b><small>{portalBusy ? "Lütfen bekleyin" : "Mevcut şifreyi koruyarak hesabı bağla"}</small></span>
                   <span aria-hidden="true">→</span>
                 </button>
               )}

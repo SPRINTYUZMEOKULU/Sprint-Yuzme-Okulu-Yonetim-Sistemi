@@ -1,3 +1,4 @@
+import PortalDataMap from "../portal-data-map";
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -70,12 +71,14 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const linkedIdSet = new Set(linkedIds);
   const visibleError = friendlyError(query.error);
 
-  const [progressRes, messagesRes, announcementRes] = await Promise.all([
+  const [progressRes, messagesRes, announcementRes, consentsRes, documentsRes] = await Promise.all([
     linkedIds.length
       ? admin.from("student_notes").select("id,student_id,body,target,is_guardian_visible,created_at,author_id,note_type").eq("organization_id", org).eq("note_type", "coach").in("student_id", linkedIds).order("created_at", { ascending: false }).limit(60)
       : Promise.resolve({ data: [] as any[], error: null }),
     admin.from("guardian_messages").select("id,student_id,title,body,message_type,channel,sent_at,read_at,created_at").eq("organization_id", org).eq("guardian_id", id).order("created_at", { ascending: false }).limit(60),
     admin.from("announcements").select("id,title,body,audience,is_published,published_at,created_at").eq("organization_id", org).eq("is_published", true).order("published_at", { ascending: false }).limit(10),
+    admin.from("guardian_consents").select("id,student_id,document_id,document_version,accepted_at").eq("organization_id",org).eq("guardian_id",id).order("accepted_at",{ascending:false}),
+    admin.from("guardian_documents").select("id,title,version,is_active").eq("organization_id",org),
   ]);
 
   const progress = progressRes.data || [];
@@ -181,6 +184,8 @@ export default async function GuardianFile({ params, searchParams }: { params: P
           </section>
         </div>
 
+        <PortalDataMap/>
+        <section className="guardianPanel" style={{marginTop:16}}><div className="guardianEyebrow">BELGE ONAY GEÇMİŞİ</div><h2>Velinin onayladığı belgeler</h2>{(consentsRes.data || []).map((consent:any)=>{const doc=(documentsRes.data || []).find((doc:any)=>doc.id===consent.document_id);return <article className="guardianRequest" key={consent.id}><strong>{doc?.title || "Belge"} · Sürüm {consent.document_version}</strong><p>{childName(consent.student_id)} · {date(consent.accepted_at)}</p><small>{doc?.version===consent.document_version?"Güncel sürüm onaylı":"Önceki sürüm onayı"}</small></article>;})}{!consentsRes.data?.length?<p>Henüz belge onayı bulunmuyor.</p>:null}</section>
         <section className="guardianPanel" style={{ marginTop: 16 }}>
           <div className="guardianCardHead">
             <div><div className="guardianEyebrow">VELİ PORTAL YÖNETİMİ</div><h2>Portal içerik özeti</h2></div>

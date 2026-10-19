@@ -166,6 +166,8 @@ export async function sendGuardianPortalMessage(formData: FormData) {
   const messageType = text(formData, "message_type", 40) || "information";
   if (!profile.organization_id || !authProfileId || !title || !body) back(authProfileId, "error", "Mesaj başlığı ve içeriği zorunludur.");
 
+  const {data:recipient}=await adminClient().from("profiles").select("id").eq("organization_id",profile.organization_id).eq("role","guardian").eq("id",authProfileId).maybeSingle();
+  if(!recipient)back(authProfileId,"error","Bu kuruma ait veli hesabı bulunamadı.");
   if (studentId) {
     const verified = await verifyLinkedStudent(authProfileId, studentId, profile.organization_id);
     if (!verified.ok) back(authProfileId, "error", verified.message);

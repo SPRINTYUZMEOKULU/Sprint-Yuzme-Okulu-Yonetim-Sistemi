@@ -1,3 +1,4 @@
+import PortalDataMap from "../portal-data-map";
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -59,7 +60,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           </div>
           <div className="guardianHeroActions">
             <Link href="/veliler">Veli Merkezine Dön</Link>
-            <Link className="primary" href="/veli-paneli">Veli Portalını Aç</Link>
+            <Link className="primary" href="/veliler/ogrenciden-olustur">Portal Hesaplarını Yönet</Link>
           </div>
         </header>
 
@@ -75,6 +76,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           <article className="guardianStat"><span>Otomatik Alanlar</span><strong>3</strong><small style={{display:"block",marginTop:4,color:"#7a899e"}}>Program · Yoklama · Ödeme</small></article>
         </section>
 
+        <PortalDataMap/>
         <section className="guardianPanel" style={{ marginBottom: 16 }}>
           <div className="guardianEyebrow">PORTAL SENKRONİZASYONU</div>
           <h2>Hangi alan nereden yönetiliyor?</h2>
