@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { createNotification, type NotificationCategory } from "@/lib/notifications/create-notification";
+import type { NotificationCategory } from "@/lib/notifications/create-notification";
+import { publishEventNotification } from "@/lib/notifications/publish-event";
 
 export const dynamic = "force-dynamic";
 
@@ -79,19 +80,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Seçilen kullanıcı aktif değil veya bu organizasyona ait değil." }, { status: 404 });
     }
 
-    const result = await createNotification({
-      organizationId: actor.organization_id,
-      recipientProfileIds: [profileId],
+    const published = await publishEventNotification({
+      organization_id: actor.organization_id,
+      recipient_profile_id: profileId,
       title: "SprintOS Bildirim Testi",
       body: `${String(target.full_name || "Kullanıcı")} için ${category} kategorisinde gerçek dağıtım testi oluşturuldu.`,
       category,
-      eventKey: "notification-routing-test",
-      notificationType: "notification-routing-test",
+      event_key: "notification-routing-test",
+      notification_type: "notification-routing-test",
       severity: "info",
       priority: "normal",
-      targetPath: "/bildirimler",
-      push,
-      createdBy: actor.id,
+      target_path: "/bildirimler",
+      push_requested: push,
+      created_by: actor.id,
       metadata: {
         isRoutingTest: true,
         testedProfileId: profileId,
@@ -99,6 +100,8 @@ export async function POST(request: Request) {
         testedCategory: category,
       },
     });
+    const result = published.results[0];
+    if (!result) throw new Error(published.error?.message || "Test bildirimi oluşturulamadı.");
 
     return NextResponse.json({
       ...result,
