@@ -19,6 +19,7 @@ const labels: Record<string, string> = {
   "/yoklama": "Yoklama",
   "/paketler": "Paketler",
   "/odemeler": "Ödemeler",
+  "/fatura-merkezi": "Fatura Merkezi",
   "/kasa": "Günlük Kasa",
   "/hazir-mesajlar": "Mesaj Merkezi",
   "/bildirimler": "Bildirimler",

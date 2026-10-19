@@ -18,6 +18,7 @@ function Icon({ name }: { name: IconName }) {
 const items: Array<{ label: string; href: string; icon: IconName }> = [
   { label: "Ana Sayfa", href: "/", icon: "home" },
   { label: "Ödeme Merkezi", href: "/odemeler", icon: "card" },
+  { label: "Fatura Merkezi", href: "/fatura-merkezi", icon: "shield" },
   { label: "Öğrenciler", href: "/ogrenciler", icon: "users" },
   { label: "Yoklama", href: "/yoklama", icon: "check" },
   { label: "Onay Merkezi", href: "/onay-merkezi", icon: "shield" },
@@ -32,7 +33,7 @@ export default function FinanceQuickNav() {
         return <Link key={item.href} href={item.href} className={`financeQuickLink${active ? " active" : ""}`}><span className="financeQuickIcon"><Icon name={item.icon}/></span><span>{item.label}</span></Link>;
       })}
       <style jsx global>{`
-        .financeQuickNav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:4px 0 20px;padding:12px;border:1px solid #d9e5f3;border-radius:22px;background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(15,42,76,.055)}
+        .financeQuickNav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:4px 0 20px;padding:12px;border:1px solid #d9e5f3;border-radius:22px;background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(15,42,76,.055)}
         .financeQuickNav .financeQuickLink{box-sizing:border-box;min-width:0;min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border:1px solid #dbe6f2;border-radius:16px;background:#fff;color:#173b63!important;font-size:13px;font-weight:850;line-height:1.2;text-align:center;text-decoration:none!important;box-shadow:0 4px 14px rgba(15,42,76,.035);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,background .15s ease,color .15s ease}
         .financeQuickNav .financeQuickLink:visited{color:#173b63!important}
         .financeQuickNav .financeQuickLink:hover{border-color:#bfd4ef;box-shadow:0 9px 22px rgba(15,42,76,.075);transform:translateY(-1px)}

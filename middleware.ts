@@ -19,6 +19,8 @@ const ROUTE_MODULES: Array<{ path: string; moduleKey: string }> = [
   { path: "/operasyon-plani", moduleKey: "operations" },
   { path: "/yoklama", moduleKey: "attendance" },
   { path: "/odemeler", moduleKey: "finance" },
+  { path: "/fatura-merkezi", moduleKey: "finance" },
+  { path: "/odeme-bilgileri", moduleKey: "finance" },
   { path: "/kasa", moduleKey: "finance" },
   { path: "/raporlar", moduleKey: "reports" },
   { path: "/kullanicilar-ve-yetkiler", moduleKey: "permissions" },
@@ -103,7 +105,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.some((path) => pathMatches(pathname, path));
+  const isPublicPath = PUBLIC_PATHS.some((path) => pathMatches(pathname, path)) || /^\/odeme-belge\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(pathname);
 
   if (!user && !isPublicPath) {
     const loginUrl = request.nextUrl.clone();
