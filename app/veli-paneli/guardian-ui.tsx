@@ -30,7 +30,7 @@ const navItems: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/veli-odemeler", label: "Ödemeler", icon: "wallet" },
   { href: "/veli-mesajlar", label: "Mesajlar", icon: "message" },
   { href: "/veli-duyurular", label: "Duyurular", icon: "bell" },
-  { href: "/veli-belgeler", label: "Belgeler", icon: "document" },
+  { href: "/veli-belgeler", label: "Kurallar ve Belgeler", icon: "document" },
   { href: "/veli-talepleri", label: "Talep Oluştur", icon: "request" },
 ];
 

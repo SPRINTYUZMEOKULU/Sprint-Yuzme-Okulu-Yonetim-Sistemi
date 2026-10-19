@@ -107,6 +107,8 @@ export default async function GuardianFile({ params, searchParams }: { params: P
           </div>
           <div className="guardianHeroActions">
             <Link className="primary" href={`/veli-paneli?previewGuardian=${id}`}><GuardianIcon name="file"/>Velinin Ekranını Gör</Link>
+            <Link href="/veliler/icerik#duyurular">Duyuruları Yönet</Link>
+            <Link href="/veliler/icerik#kurallar">Kuralları Yönet</Link>
             <Link href="/veliler"><GuardianIcon name="users"/>Velilere Dön</Link>
             <Link className="primary" href={`/veli-talepleri?guardian=${id}`}><GuardianIcon name="message"/>Talepleri Aç</Link>
           </div>

@@ -1,6 +1,7 @@
 import {loadGuardianPage} from "@/lib/guardian/page-context";
 import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl } from "@/lib/guardian/presentation";
-import { guardianPaymentSummary } from "@/lib/guardian/payment-summary";
+import PaymentReminder from "@/app/veli-paneli/payment-reminder";
+import { guardianPaymentReminder, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import Link from "next/link";
 import { formatDate, formatMoney, weekdayLabel } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, GuardianIcon, StatusPill } from "./guardian-ui";
@@ -41,6 +42,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         </div>
       </section> : null}
 
+      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianPaymentReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan)} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
       <section className="guardianStats">
         <article className="guardianStat"><span>Mevcut Seviye</span><strong>{data.selected.swimming_level || "Belirlenmedi"}</strong></article>
         <article className="guardianStat"><span>Planlanan Bitiş</span><strong>{formatDate(data.enrollment?.planned_end_date)}</strong></article>

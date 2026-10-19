@@ -64,6 +64,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           </div>
         </header>
 
+        {announcementsRes.error || documentsRes.error ? <div className="guardianNotice error" role="alert">Portal içerikleri yüklenemedi. Lütfen yeniden deneyin; mevcut kayıtlar gösterilemiyor.</div> : null}
         {query.saved ? <div className="guardianNotice">{query.saved}</div> : null}
         {query.error ? <div className="guardianNotice error">{query.error}</div> : null}
 
@@ -89,7 +90,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
         </section>
 
         <div className="guardianDetailGrid" style={embedded?{gridTemplateColumns:"1fr"}:undefined}>
-          <section className="guardianPanel" style={embedded?{display:"none"}:undefined}>
+          <section id="duyurular" className="guardianPanel" style={{scrollMarginTop:120,...(embedded?{display:"none"}:{})}}>
             <div className="guardianEyebrow">DUYURU YAYINLA</div>
             <h2>Veli portalı duyurusu</h2>
             {canPublishAnnouncements ? <form action={createAnnouncement} className="guardianForm">{embedded ? <input type="hidden" name="settings_return" value="belgeler"/> : null}
@@ -101,7 +102,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
             </form> : <div className="guardianNotice">Duyuru yayınlama yetkisi yönetici veya şube yöneticisindedir.</div>}
           </section>
 
-          <section className="guardianPanel">
+          <section id="kurallar" className="guardianPanel" style={{scrollMarginTop:120}}>
             <div className="guardianEyebrow">BELGE / KURAL YAYINLA</div>
             <h2>Kurallar & belgeler</h2>
             {canManageDocuments ? <form action={createGuardianDocument} className="guardianForm">{embedded ? <input type="hidden" name="settings_return" value="belgeler"/> : null}
