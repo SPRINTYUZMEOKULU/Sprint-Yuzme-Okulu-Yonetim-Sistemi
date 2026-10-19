@@ -1,6 +1,9 @@
 "use server";
 
 import { linkGuardianStudentCanonical, unlinkGuardianStudentCanonical } from "./[id]/actions";
+import { portalCredentialContact, savePortalCredential } from "./portal-credential-actions";
+import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
+import { getGuardianContext } from "@/lib/guardian/data";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -23,12 +26,9 @@ function text(formData: FormData, key: string, max = 3000) {
 }
 
 function back(path: string, key: "saved" | "error", message: string): never {
-  redirect(`${path}?${key}=${encodeURIComponent(message)}`);
+  redirect(`${path}${path.includes("?")?"&":"?"}${key}=${encodeURIComponent(message)}`);
 }
 
-function temporaryPassword() {
-  return `Sp-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}-A9!`;
-}
 
 function normalizePhone(value: unknown) {
   let digits = String(value || "").replace(/\D/g, "");
@@ -86,114 +86,40 @@ async function ensureGuardianProfile(admin: ReturnType<typeof adminClient>, guar
   return { ok: true as const };
 }
 
-export async function prepareGuardianPortalAccess(guardianProfileId: string) {
-  const actor = await requireProfile([...managementRoles]);
-  const organizationId = actor.organization_id;
-  if (!organizationId || !guardianProfileId) return { ok: false as const, message: "Veli hesabı bulunamadı." };
-
-  const admin = adminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("id,full_name,phone,email,is_active")
-    .eq("organization_id", organizationId)
-    .eq("role", "guardian")
-    .eq("id", guardianProfileId)
-    .maybeSingle();
-
-  if (profileError || !profile) return { ok: false as const, message: profileError?.message || "Veli profili bulunamadı." };
-  const phone = normalizePhone(profile.phone);
-  if (!phone) return { ok: false as const, message: "Geçerli veli telefonu bulunamadı. Önce veli telefonunu düzeltin." };
-
-  const { data: authResult, error: authError } = await admin.auth.admin.getUserById(guardianProfileId);
-  if (authError || !authResult.user) return { ok: false as const, message: "Veli kimlik hesabı bulunamadı." };
-
-  const password = temporaryPassword();
-  const { error: authUpdateError } = await admin.auth.admin.updateUserById(guardianProfileId, {
-    phone,
-    phone_confirm: true,
-    password,
-    user_metadata: {
-      ...(authResult.user.user_metadata || {}),
-      full_name: profile.full_name || "Veli",
-      role: "guardian",
-      organization_id: organizationId,
-    },
-  });
-  if (authUpdateError) return { ok: false as const, message: `Şifre hazırlanamadı: ${authUpdateError.message}` };
-
-  let { data: guardianRow } = await admin
-    .from("guardians")
-    .select("id,auth_user_id")
-    .eq("organization_id", organizationId)
-    .eq("auth_user_id", guardianProfileId)
-    .limit(1)
-    .maybeSingle();
-
-  if (!guardianRow) {
-    const { data: inserted, error: insertError } = await admin.from("guardians").insert({
-      organization_id: organizationId,
-      auth_user_id: guardianProfileId,
-      full_name: profile.full_name || "Veli",
-      phone,
-      email: profile.email || null,
-      relationship: "Veli",
-      login_enabled: true,
-      is_active: true,
-      first_login_required: true,
-      portal_created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).select("id,auth_user_id").single();
-    if (insertError || !inserted) return { ok: false as const, message: `Portal ana kaydı oluşturulamadı: ${insertError?.message || "Bilinmeyen hata"}` };
-    guardianRow = inserted;
-  } else {
-    const { error: guardianUpdateError } = await admin.from("guardians").update({
-      full_name: profile.full_name || "Veli",
-      phone,
-      email: profile.email || null,
-      login_enabled: true,
-      is_active: true,
-      first_login_required: true,
-      updated_at: new Date().toISOString(),
-    }).eq("id", guardianRow.id).eq("organization_id", organizationId);
-    if (guardianUpdateError) return { ok: false as const, message: guardianUpdateError.message };
-  }
-
-  const { error: profileActivationError } = await admin.from("profiles").update({ is_active: true, phone, updated_at: new Date().toISOString() }).eq("id", guardianProfileId).eq("organization_id", organizationId).eq("role", "guardian");
-  if (profileActivationError) return { ok: false as const, message: "Şifre hazırlandı ancak portal hesabı etkinleştirilemedi. Lütfen tekrar deneyin." };
-  revalidatePath("/veli-paneli");
-
-  revalidatePath("/veliler");
-  revalidatePath(`/veliler/${guardianProfileId}`);
-
-  return {
-    ok: true as const,
-    message: "Portal hesabı hazırlandı. Geçici şifre WhatsApp gönderimine hazır.",
-    guardianId: guardianRow.id,
-    fullName: profile.full_name || "Değerli Velimiz",
-    phone,
-    email: profile.email || "",
-    password,
-  };
+export async function prepareGuardianPortalAccess(guardianProfileId: string, password?: string) {
+  return password === undefined
+    ? portalCredentialContact({accountId:guardianProfileId})
+    : savePortalCredential({accountId:guardianProfileId},password);
 }
 
 export async function updateGuardian(formData: FormData) {
-  const profile = await requireProfile([...managementRoles]);
-  const guardianId = text(formData, "guardian_id", 100);
-  const path = `/veliler/${guardianId}`;
-  if (!profile.organization_id || !guardianId) back("/veliler", "error", "Veli bulunamadı.");
-
-  const admin = adminClient();
-  const { error } = await admin.from("profiles").update({
-    full_name: text(formData, "full_name", 200) || null,
-    phone: text(formData, "phone", 40) || null,
-    is_active: formData.get("is_active") === "on",
-    updated_at: new Date().toISOString(),
-  }).eq("organization_id", profile.organization_id).eq("id", guardianId).eq("role", "guardian");
-
-  if (error) back(path, "error", error.message);
-  revalidatePath("/veliler");
-  revalidatePath(path);
-  back(path, "saved", "Veli bilgileri kaydedildi.");
+  const actor=await requireProfile([...managementRoles]);const org=actor.organization_id;
+  const guardianId=text(formData,"guardian_id",100),path=`/veliler/${guardianId}`;
+  if(!org||!guardianId)back("/veliler","error","Veli bulunamadı.");
+  const fullName=text(formData,"full_name",200),rawPhone=text(formData,"phone",40),phone=rawPhone?normalizePhone(rawPhone):null;
+  if(!fullName || (rawPhone&&!phone))back(path,"error","Ad soyad ve geçerli bir cep telefonu girin.");
+  const active=formData.get("is_active")==="on",db=adminClient();
+  const [{data:current},{data:record},{data:auth,error:authError}]=await Promise.all([
+    db.from("profiles").select("id,full_name,phone,is_active").eq("organization_id",org).eq("id",guardianId).eq("role","guardian").maybeSingle(),
+    db.from("guardians").select("id,full_name,phone,is_active,login_enabled").eq("organization_id",org).eq("auth_user_id",guardianId).maybeSingle(),
+    db.auth.admin.getUserById(guardianId),
+  ]);
+  if(!current||!record||authError||!auth.user)back(path,"error","Portal hesabının bağlantıları eksik. Önce hesap kaydını kontrol edin.");
+  if(!phone && (current.phone||auth.user.phone))back(path,"error","Girişte kullanılan telefon silinemez. Yeni telefon numarasını girin.");
+  const oldAuthPhone=normalizePhone(auth.user.phone),phoneChanged=Boolean(phone&&phone!==oldAuthPhone);
+  if(phoneChanged){const {error}=await db.auth.admin.updateUserById(guardianId,{phone:phone!,phone_confirm:true});if(error)back(path,"error","Telefon giriş hesabına kaydedilemedi. Numara başka hesapta kullanılıyor olabilir.");}
+  const stamp=new Date().toISOString();
+  const {error:profileError}=await db.from("profiles").update({full_name:fullName,phone,is_active:active,updated_at:stamp}).eq("organization_id",org).eq("id",guardianId).eq("role","guardian");
+  const recordResult=profileError?{error:profileError}:await db.from("guardians").update({full_name:fullName,phone,is_active:active,login_enabled:active,updated_at:stamp}).eq("organization_id",org).eq("id",record.id);
+  if(recordResult.error){
+    const profileRollback=await db.from("profiles").update({full_name:current.full_name,phone:current.phone,is_active:current.is_active,updated_at:stamp}).eq("organization_id",org).eq("id",guardianId).eq("role","guardian");
+    const authRollback=phoneChanged?await db.auth.admin.updateUserById(guardianId,{phone:auth.user.phone||"",phone_confirm:true}):{error:null};
+    back(path,"error",profileRollback.error||authRollback.error?"Kayıt tamamlanamadı; telefon eşleştirmesi kontrol edilmelidir.":"Kayıt tamamlanamadı. Önceki bilgiler korundu; tekrar deneyin.");
+  }
+  const {data:links}=await db.from("guardian_students").select("student_id").eq("guardian_id",record.id);
+  for(const link of links||[])revalidateGuardianConnection(guardianId,link.student_id);
+  revalidatePath("/veliler");revalidatePath(path);
+  back(path,"saved","Veli bilgileri, giriş telefonu ve portal erişimi birlikte güncellendi.");
 }
 
 export async function linkGuardianStudent(formData: FormData) {
@@ -211,16 +137,15 @@ export async function createGuardianRequest(formData: FormData) {
   const organizationId = profile.organization_id;
   const studentId = text(formData, "student_id", 100);
   const subject = text(formData, "subject", 200);
+  const requestPath = `/veli-talepleri${studentId?`?child=${encodeURIComponent(studentId)}`:""}`;
   const description = text(formData, "description", 4000);
-  if (!organizationId || !studentId || !subject || !description) back("/veli-talepleri", "error", "Öğrenci, konu ve açıklama zorunludur.");
+  if (!organizationId || !studentId || !subject || !description) back(requestPath, "error", "Öğrenci, konu ve açıklama zorunludur.");
 
-  const supabase = await createClient();
-  const { data: guardianRow } = await supabase.from("guardians").select("id").eq("auth_user_id", profile.id).eq("organization_id", organizationId).maybeSingle();
-  const { data: link } = guardianRow?.id ? await supabase.from("guardian_students").select("student_id").eq("guardian_id", guardianRow.id).eq("student_id", studentId).maybeSingle() : { data: null } as any;
-  if (!link) back("/veli-talepleri", "error", "Bu öğrenci için talep oluşturma yetkiniz yok.");
+  const context = await getGuardianContext(profile.id, studentId);
+  if (!context.students.some(student => student.id === studentId)) back(requestPath, "error", "Bu öğrenci için talep oluşturma yetkiniz yok.");
 
   const requestNumber = `VTL-${new Date().getFullYear()}-${Date.now().toString().slice(-7)}`;
-  const { data: created, error } = await supabase.from("guardian_requests").insert({
+  const { data: created, error } = await adminClient().from("guardian_requests").insert({
     organization_id: organizationId,
     guardian_id: profile.id,
     student_id: studentId,
@@ -231,7 +156,7 @@ export async function createGuardianRequest(formData: FormData) {
     priority: text(formData, "priority", 20) || "normal",
     status: "new",
   }).select("id").single();
-  if (error) back("/veli-talepleri", "error", error.message);
+  if (error) back(requestPath, "error", error.message);
 
   await createNotification({
     organizationId,
@@ -250,7 +175,7 @@ export async function createGuardianRequest(formData: FormData) {
   });
 
   revalidatePath("/veli-talepleri");
-  back("/veli-talepleri", "saved", `Talebiniz oluşturuldu. Talep numarası: ${requestNumber}`);
+  back(requestPath, "saved", `Talebiniz oluşturuldu. Talep numarası: ${requestNumber}`);
 }
 
 export async function manageGuardianRequest(formData: FormData) {

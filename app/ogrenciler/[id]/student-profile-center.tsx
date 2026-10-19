@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
+import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
 import { useRouter } from "next/navigation";
 import {
   createOrLinkGuardianPortal,
   getStudentProfileForCenter,
-  resetGuardianPortalPassword,
   saveStudentProfileFromCenter,
   setGuardianPortalActive,
   unlinkGuardianPortal,
@@ -69,7 +70,6 @@ export default function StudentProfileCenter() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
-  const [portalPassword, setPortalPassword] = useState("");
   const [message, setMessage] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [portal, setPortal] = useState<GuardianPortal>(null);
@@ -135,7 +135,6 @@ export default function StudentProfileCenter() {
       generalNote: student.general_note || "",
     });
     setPortal((response as any).guardianPortal || null);
-    setPortalPassword("");
     setPortalForm({
       fullName: student.guardian_name || "",
       email: student.guardian_email || "",
@@ -173,6 +172,7 @@ export default function StudentProfileCenter() {
     const response = await createOrLinkGuardianPortal({ studentId: id, ...portalForm });
     setMessage(response.message);
     if (response.ok) {
+      if(response.credential) rememberPortalCredential(response.credential);
       setPortal((response as any).guardianPortal || null);
       setPortalForm((current) => ({ ...current, temporaryPassword: "" }));
       router.refresh();
@@ -208,16 +208,6 @@ export default function StudentProfileCenter() {
     setPortalBusy(false);
   }
 
-  async function resetPortalPassword() {
-    const id = activeStudentId();
-    if (!id || !portal || portalBusy || portalPassword.length < 8) return;
-    setPortalBusy(true);
-    setMessage("");
-    const response = await resetGuardianPortalPassword(id, portalPassword);
-    setMessage(response.message);
-    if (response.ok) setPortalPassword("");
-    setPortalBusy(false);
-  }
 
   if (!open) return null;
 
@@ -280,13 +270,8 @@ export default function StudentProfileCenter() {
                     <button type="button" className="portalToggle" disabled={portalBusy} onClick={togglePortal}>{portal.isActive ? "Portal Erişimini Pasife Al" : "Portal Erişimini Aktif Et"}</button>
                     <button type="button" className="portalUnlink" disabled={portalBusy} onClick={unlinkPortal}>Kursiyer Bağlantısını Kaldır</button>
                   </div>
-                  <div className="portalPasswordPanel">
-                    <div><strong>Giriş şifresini yenile</strong><small>En az 8 karakterlik yeni bir geçici şifre belirleyin.</small></div>
-                    <div className="portalPasswordControls">
-                      <input type="password" autoComplete="new-password" value={portalPassword} onChange={(event) => setPortalPassword(event.target.value)} placeholder="Yeni geçici şifre" />
-                      <button type="button" disabled={portalBusy || portalPassword.length < 8} onClick={resetPortalPassword}>{portalBusy ? "İşleniyor…" : "Şifreyi Yenile"}</button>
-                    </div>
-                  </div>
+                  <PortalCredentialManager accountId={portal.guardianId}/>
+
                 </div>
               ) : (
                 <>
@@ -296,7 +281,7 @@ export default function StudentProfileCenter() {
                     <label><span>Yakınlık</span><input value={portalForm.relationship} onChange={(e) => setPortalForm({ ...portalForm, relationship: e.target.value })} placeholder={adultCourse ? "Yakını, kendisi..." : "Anne, Baba, Vasi..."} /></label>
                     <label><span>Portal E-postası</span><input type="email" value={portalForm.email} onChange={(e) => setPortalForm({ ...portalForm, email: e.target.value })} /></label>
                     <label><span>Portal Telefonu</span><input value={portalForm.phone} onChange={(e) => setPortalForm({ ...portalForm, phone: e.target.value })} /></label>
-                    <label className="full"><span>Geçici Şifre</span><input type="password" value={portalForm.temporaryPassword} onChange={(e) => setPortalForm({ ...portalForm, temporaryPassword: e.target.value })} placeholder="Yeni hesap oluşturulacaksa en az 8 karakter" /></label>
+                    <label className="full"><span>Geçici Şifre</span><input type="password" value={portalForm.temporaryPassword} onChange={(e) => setPortalForm({ ...portalForm, temporaryPassword: e.target.value })} placeholder="En az 8 karakter; mevcut hesaba bağlanırsa da bu şifre kaydedilir" /></label>
                   </div>
                   <button type="button" className="portalCreate" disabled={portalBusy} onClick={createOrLinkPortal}>{portalBusy ? "İşleniyor…" : adultCourse ? "Portal Hesabı Oluştur / Bağla" : "Veli Hesabı Oluştur / Bağla"}</button>
                 </>

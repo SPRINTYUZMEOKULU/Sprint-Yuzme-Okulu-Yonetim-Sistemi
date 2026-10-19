@@ -1,3 +1,4 @@
+import { visibleSchedules } from "./presentation";
 import { formatDisplayDate } from "@/lib/dates/display";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -15,6 +16,7 @@ export type GuardianStudent = {
 
 export type GuardianContext = {
   students: GuardianStudent[];
+  issues: string[];
   selected: GuardianStudent | null;
   enrollment: any | null;
   group: any | null;
@@ -26,14 +28,17 @@ export type GuardianContext = {
   progress: any[];
   announcements: any[];
   payments: any[];
+  paymentPlan: any | null;
+  paymentInstallments: any[];
   messages: any[];
   documents: any[];
   consents: any[];
 };
 
-function emptyContext(students: GuardianStudent[] = []): GuardianContext {
+function emptyContext(students: GuardianStudent[] = [], issue?:string): GuardianContext {
   return {
     students,
+    issues: issue?[issue]:[],
     selected: null,
     enrollment: null,
     group: null,
@@ -45,6 +50,8 @@ function emptyContext(students: GuardianStudent[] = []): GuardianContext {
     progress: [],
     announcements: [],
     payments: [],
+    paymentPlan: null,
+    paymentInstallments: [],
     messages: [],
     documents: [],
     consents: [],
@@ -66,9 +73,9 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
   await supabase.rpc("sync_scheduled_used_lessons");
   const admin = getAdminClient();
 
-  if (!admin) return emptyContext();
+  if (!admin) return emptyContext([],"Portal bağlantısı şu anda kullanılamıyor.");
 
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("id,organization_id,role,is_active")
     .eq("id", userId)
@@ -76,27 +83,30 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     .eq("is_active", true)
     .maybeSingle();
 
+  if(profileError)return emptyContext([],"Portal hesabı doğrulanamadı.");
   if (!profile?.organization_id) return emptyContext();
 
-  const { data: guardian } = await admin
+  const { data: guardian, error: guardianError } = await admin
     .from("guardians")
     .select("id,login_enabled,is_active")
     .eq("organization_id", profile.organization_id)
     .eq("auth_user_id", userId)
     .maybeSingle();
 
+  if(guardianError)return emptyContext([],"Portal bağlantısı doğrulanamadı.");
   if (!guardian?.id || guardian.is_active === false || guardian.login_enabled === false) return emptyContext();
 
-  const { data: links } = await admin
+  const { data: links, error: linksError } = await admin
     .from("guardian_students")
     .select("student_id")
     .eq("guardian_id", guardian.id)
     .eq("portal_access", true);
 
+  if(linksError)return emptyContext([],"Kursiyer bağlantıları yüklenemedi.");
   const ids = (links || []).map((item: any) => item.student_id).filter(Boolean);
   if (!ids.length) return emptyContext();
 
-  const { data: students } = await admin
+  const { data: students, error: studentsError } = await admin
     .from("students")
     .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id,is_deleted")
     .eq("organization_id", profile.organization_id)
@@ -105,22 +115,38 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     .eq("is_deleted", false)
     .order("first_name");
 
+  if(studentsError)return emptyContext([],"Kursiyer bilgileri yüklenemedi.");
   const studentList = (students || []) as GuardianStudent[];
   const selected = studentList.find((student) => student.id === selectedId) || studentList[0] || null;
   if (!selected) return emptyContext(studentList);
 
-  const [enrollmentRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
-    admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    admin.from("attendance_records").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("lesson_date", { ascending: false }).limit(40),
+  const issues: string[] = [];
+  async function allRows(table:string, configure:(query:any)=>any) {
+    const rows:any[]=[];
+    for(let offset=0;;offset+=500){
+      const result=await configure(admin!.from(table).select("*").eq("organization_id",profile!.organization_id).eq("student_id",selected!.id)).range(offset,offset+499);
+      if(result.error)return {data:[],error:result.error};
+      rows.push(...(result.data || []));if((result.data || []).length<500)return {data:rows,error:null};
+    }
+  }
+  const [enrollmentsRes, attendanceRes, progressRes, announcementRes, paymentsRes, messagesRes, documentsRes, consentsRes] = await Promise.all([
+    admin.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", selected.id).order("created_at", { ascending: false }),
+    allRows("attendance_records",query=>query.order("lesson_date",{ascending:false}).order("id")),
     admin.from("student_notes").select("id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("note_type", "coach").eq("is_guardian_visible", true).order("created_at", { ascending: false }).limit(30),
-    admin.from("announcements").select("*").eq("organization_id", profile.organization_id).eq("is_published", true).order("published_at", { ascending: false }).limit(20),
-    admin.from("payments").select("*").eq("student_id", selected.id).order("received_at", { ascending: false }).limit(30),
-    admin.from("guardian_messages").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
+    Promise.resolve({data:[],error:null}),
+    allRows("student_payments",query=>query.order("received_at",{ascending:false}).order("id")),
+    admin.from("guardian_messages").select("*").eq("organization_id", profile.organization_id).eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("created_at", { ascending: false }).limit(40),
     admin.from("guardian_documents").select("*").eq("organization_id", profile.organization_id).eq("is_active", true).order("sort_order").order("created_at", { ascending: false }),
-    admin.from("guardian_consents").select("*").eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("accepted_at", { ascending: false })
+    admin.from("guardian_consents").select("*").eq("organization_id", profile.organization_id).eq("guardian_id", userId).or(`student_id.eq.${selected.id},student_id.is.null`).order("accepted_at", { ascending: false })
   ]);
 
-  const enrollment = enrollmentRes.data || null;
+  for(const [label,result] of [["Kayıt",enrollmentsRes],["Yoklama",attendanceRes],["Gelişim",progressRes],["Duyuru",announcementRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes]] as const) if(result.error)issues.push(`${label} bilgileri yüklenemedi. Lütfen daha sonra tekrar deneyin.`);
+  const enrollmentRows=enrollmentsRes.data || [];
+  const enrollment = enrollmentRows.find((row:any)=>row.status==='active') || enrollmentRows[0] || null;
+  const planResult = enrollment?.id ? await admin.from("student_payment_plans").select("id,total_amount,status,note").eq("organization_id", profile.organization_id).eq("student_id", selected.id).eq("enrollment_id", enrollment.id).maybeSingle() : {data:null,error:null};
+  const installmentsResult = planResult.data?.id ? await admin.from("student_payment_installments").select("id,sequence_no,due_date,amount,paid_amount,status").eq("plan_id", planResult.data.id).order("sequence_no") : {data:[],error:null};
+
+  if(planResult.error || installmentsResult.error)issues.push("Ödeme planı yüklenemedi. Lütfen daha sonra tekrar deneyin.");
   if(enrollment){
     const context=await loadLessonRightsContext(admin,profile.organization_id,[selected.id]);
     enrollment.lesson_rights=rightsForEnrollment(context,enrollment);
@@ -144,27 +170,24 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     const { data } = await admin.from("course_packages").select("*").eq("organization_id", profile.organization_id).eq("id", enrollment.package_id).maybeSingle();
     coursePackage = data || null;
   }
-  const { data: directCoachAssignment } = await admin
-    .from("lesson_student_assignments")
-    .select("coach_id")
-    .eq("organization_id", profile.organization_id)
-    .eq("student_id", selected.id)
-    .eq("is_active", true)
-    .not("coach_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-
-  const resolvedCoachId = directCoachAssignment?.coach_id || group?.primary_coach_id || null;
-  if (resolvedCoachId) {
-    const { data } = await admin.from("profiles").select("id,full_name").eq("organization_id", profile.organization_id).eq("id", resolvedCoachId).maybeSingle();
-    coach = data || null;
-  }
-  if (group?.id) {
-    const { data } = await admin.from("lesson_schedules").select("*").eq("organization_id", profile.organization_id).eq("group_id", group.id).eq("is_active", true).order("weekday").order("start_time");
-    schedules = data || [];
+  const {data:assignments,error:assignmentError}=await admin.from("lesson_student_assignments").select("coach_id,schedule_id,group_id").eq("organization_id",profile.organization_id).eq("student_id",selected.id).eq("is_active",true);
+  if(assignmentError)issues.push("Eğitmen atamaları yüklenemedi.");
+  const currentAssignments=(assignments || []).filter((row:any)=>row.group_id===group?.id);
+  const coachIds=[...new Set(currentAssignments.map((row:any)=>row.coach_id).filter(Boolean))];
+  if(!coachIds.length && group?.primary_coach_id)coachIds.push(group.primary_coach_id);
+  if(coachIds.length){const {data}=await admin.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",coachIds);coach=data?.length?{full_name:data.map((row:any)=>row.full_name).join(", ")}:null;}
+  if(group?.id){
+    const {data,error}=await admin.from("lesson_schedules").select("*").eq("organization_id",profile.organization_id).eq("group_id",group.id).eq("is_active",true);
+    if(error)issues.push("Ders programı yüklenemedi.");
+    schedules=visibleSchedules(data || [],enrollment,currentAssignments);
   }
 
-  const visibleAnnouncements = (announcementRes.data || []).filter((a: any) => {
+  const scopes=["and(group_id.is.null,branch_id.is.null)"];
+  if(branchId)scopes.push(`and(group_id.is.null,branch_id.eq.${branchId})`);
+  if(group?.id)scopes.push(`group_id.eq.${group.id}`);
+  const scopedAnnouncementRes=await admin.from("announcements").select("*").eq("organization_id",profile.organization_id).eq("is_published",true).or(scopes.join(",")).order("published_at",{ascending:false}).limit(200);
+  if(scopedAnnouncementRes.error)issues.push("Duyurular yüklenemedi.");
+  const visibleAnnouncements = (scopedAnnouncementRes.data || []).filter((a: any) => {
     if (a.group_id) return Boolean(group?.id) && a.group_id === group.id;
     if (a.branch_id) return Boolean(branchId) && a.branch_id === branchId;
     return true;
@@ -179,6 +202,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
 
   return {
     students: studentList,
+    issues,
     selected,
     enrollment,
     group,
@@ -190,6 +214,8 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
     progress,
     announcements: visibleAnnouncements,
     payments: paymentsRes.data || [],
+    paymentPlan: planResult.data || null,
+    paymentInstallments: installmentsResult.data || [],
     messages: messagesRes.data || [],
     documents: documentsRes.data || [],
     consents: consentsRes.data || []
@@ -197,7 +223,7 @@ export async function getGuardianContext(userId: string, selectedId?: string): P
 }
 
 export function weekdayLabel(value: number) {
-  return ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"][value] || "";
+  return ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"][value === 7 ? 0 : value] || "";
 }
 
 export function formatDate(value?: string | null) {

@@ -1,4 +1,5 @@
 "use server";
+import { savePortalCredential } from "@/app/veliler/portal-credential-actions";
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
@@ -77,37 +78,8 @@ export async function getGuardianPhoneContact(studentIdValue: string) {
   return { ok: true as const, guardian: resolved.guardian };
 }
 
-export async function setGuardianPortalPasswordAndGetContact(studentIdValue: string, passwordValue: string) {
-  const profile = await requireProfile([...roles]);
-  const organizationId = profile.organization_id;
-  const studentId = String(studentIdValue || "").trim();
-  const password = String(passwordValue || "");
-
-  if (!organizationId || !studentId) return { ok: false as const, message: "Öğrenci bulunamadı." };
-  if (password.length < 8) return { ok: false as const, message: "Portal şifresi en az 8 karakter olmalıdır." };
-
-  const resolved = await resolveGuardian(studentId, organizationId);
-  if (!resolved.ok) return resolved;
-
-  const { error } = await resolved.admin.auth.admin.updateUserById(resolved.authUserId, { password });
-  if (error) return { ok: false as const, message: `Portal şifresi kaydedilemedi: ${error.message}` };
-
-  try {
-    await resolved.admin.from("student_activity_logs").insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      activity_type: "guardian_portal_password_set",
-      title: "Portal giriş şifresi tanımlandı",
-      description: `${resolved.guardian.fullName} için portal giriş şifresi yönetici tarafından güncellendi.`,
-      source_type: "guardian_portal",
-      source_id: resolved.authUserId,
-      performed_at: new Date().toISOString(),
-    });
-  } catch {}
-
-  return {
-    ok: true as const,
-    message: "Portal şifresi kaydedildi. WhatsApp giriş mesajı hazırlanabilir.",
-    guardian: resolved.guardian,
-  };
+export async function setGuardianPortalPasswordAndGetContact(studentId: string, password: string) {
+ const result=await savePortalCredential({studentId},password);
+ if(!result.ok)return result;
+ return {...result,guardian:{fullName:result.fullName,phone:result.phone,email:result.email}};
 }

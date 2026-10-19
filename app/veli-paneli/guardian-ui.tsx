@@ -1,5 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { GuardianStudent } from "@/lib/guardian/data";
 import GuardianAutoRefresh from "./guardian-auto-refresh";
 
@@ -35,25 +38,30 @@ function portalHref(href: string, selectedId?: string) {
   return selectedId ? `${href}?child=${encodeURIComponent(selectedId)}` : href;
 }
 
-export function GuardianHeader({ name, students, selectedId }: { name: string; students: GuardianStudent[]; selectedId?: string }) {
+export function GuardianHeader({ name, students, selectedId, issues = [], previewGuardian }: { name: string; students: GuardianStudent[]; selectedId?: string; issues?: string[]; previewGuardian?:string }) {
+  const pathname = usePathname();
+  const href=(path:string,child?:string)=>{const params=new URLSearchParams();if(child)params.set("child",child);if(previewGuardian)params.set("previewGuardian",previewGuardian);return path+(params.size?`?${params}`:"");};
   return <>
     <GuardianAutoRefresh />
+    {previewGuardian?<div className="guardianPreviewBanner"><strong>Yönetici Önizlemesi · Velinin gördüğü güncel ekran</strong><span>Bu görünümde veli adına onay veya okundu işlemi yapılmaz.</span><Link href={`/veliler/${previewGuardian}`}>Veli Dosyasına Dön</Link><Link href="/veliler/icerik">Portal İçeriklerini Yönet</Link></div>:null}
     <header className="guardianTop">
-      <Link prefetch={false} href={portalHref("/veli-paneli", selectedId)} className="guardianBrand" aria-label="Sprint Yüzme Okulu portal ana sayfası">
+      <Link prefetch={false} href={href("/veli-paneli", selectedId)} className="guardianBrand" aria-label="Sprint Yüzme Okulu portal ana sayfası">
         <span className="guardianBrandMark" style={{background:"#fff",overflow:"hidden",padding:3}}><img src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}} /></span>
         <span><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
       </Link>
       <div className="guardianTopRight">
         <span className="guardianWelcome">Hoş geldiniz, <b>{name}</b></span>
-        <span className="guardianLive"><i/> Canlı</span>
-        <Link prefetch={false} className="guardianLogout" href="/auth/signout"><GuardianIcon name="logout" size={17}/><span>Çıkış</span></Link>
+        <span className="guardianLive"><i/> Veli / Kursiyer</span>
+        <Link prefetch={false} className="guardianLogout" href={previewGuardian?`/veliler/${previewGuardian}`:"/auth/signout"} aria-label={previewGuardian?"Yönetici dosyasına dön":"Çıkış yap"}><GuardianIcon name="logout" size={17}/><span>{previewGuardian?"Yöneticiye Dön":"Çıkış"}</span></Link>
       </div>
     </header>
     <div className="guardianNavWrap">
+      <div className="guardianBreadcrumb">{pathname !== "/veli-paneli" ? <Link href={href("/veli-paneli",selectedId)} aria-label="Seçili kursiyerin genel bakışına dön">← Genel Bakışa Dön</Link> : <span>Veli / Kursiyer Portalı</span>}<span>{students.find(student=>student.id===selectedId)?.first_name} {students.find(student=>student.id===selectedId)?.last_name}</span></div>
+      {issues.length ? <div className="guardianDataNotice" role="alert">{issues.map(issue=><p key={issue}>{issue}</p>)}</div> : null}
       <nav className="guardianNav" aria-label="Portal menüsü">
-        {navItems.map((item) => <Link prefetch={false} key={item.href} href={portalHref(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
+        {navItems.map((item) => <Link prefetch={false} key={item.href} aria-current={pathname === item.href ? "page" : undefined} href={href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
       </nav>
-      {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} className={student.id === selectedId ? "active" : ""} href={portalHref("/veli-paneli", student.id)}>{student.first_name}</Link>)}</div> : null}
+      {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} aria-current={student.id === selectedId ? "true" : undefined} className={student.id === selectedId ? "active" : ""} href={href(pathname, student.id)}>{student.first_name} {student.last_name}</Link>)}</div> : null}
     </div>
   </>;
 }

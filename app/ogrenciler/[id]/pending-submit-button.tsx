@@ -7,10 +7,12 @@ export default function PendingSubmitButton({
   children,
   pendingText = "Kaydediliyor…",
   className,
+  disabled = false,
 }: {
   children: ReactNode;
   pendingText?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
@@ -18,8 +20,8 @@ export default function PendingSubmitButton({
     <button
       className={className}
       type="submit"
-      disabled={pending}
-      aria-disabled={pending}
+      disabled={pending || disabled}
+      aria-disabled={pending || disabled}
       aria-busy={pending}
     >
       {pending ? pendingText : children}

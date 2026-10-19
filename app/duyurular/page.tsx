@@ -1,4 +1,3 @@
-import { formatDisplayDate } from "@/lib/dates/display";
-import Link from "next/link"; import { requireProfile } from "@/lib/auth/profile"; import { createClient } from "@/lib/supabase/server"; import "../veli-paneli/veli.css";
-export const dynamic="force-dynamic";
-export default async function Page(){await requireProfile(["guardian"]);const s=await createClient();const {data}=await s.from("announcements").select("id,title,body,published_at").eq("is_published",true).order("published_at",{ascending:false});return <main className="guardianShell"><header><div><span>VELİ PANELİ</span><h1>Duyurular ve Yazılar</h1></div><Link href="/veli-paneli">Geri</Link></header><section className="guardianGrid" style={{gridTemplateColumns:"1fr"}}><article>{(data||[]).map((a:any)=><div className="notice" key={a.id}><b>{a.title}</b><p>{a.body}</p><small>{a.published_at?formatDisplayDate(new Date(a.published_at)):""}</small></div>)}{!data?.length&&<p className="empty">Henüz yayınlanmış duyuru bulunmuyor.</p>}</article></section></main>}
+import {redirect} from 'next/navigation';
+export const dynamic='force-dynamic';
+export default async function Page({searchParams}:{searchParams:Promise<{child?:string}>}) {const {child}=await searchParams;redirect('/veli-duyurular'+(child?'?child='+encodeURIComponent(child):''));}

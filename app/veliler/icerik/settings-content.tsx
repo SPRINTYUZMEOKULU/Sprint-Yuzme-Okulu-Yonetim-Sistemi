@@ -1,10 +1,11 @@
+import PortalDataMap from "../portal-data-map";
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
 import PendingSubmitButton from "@/app/ogrenciler/[id]/pending-submit-button";
 import { requireProfile } from "@/lib/auth/profile";
-import { createAnnouncement, createGuardianDocument, toggleAnnouncement, toggleGuardianDocument } from "./actions";
+import { createAnnouncement, createGuardianDocument, toggleAnnouncement, toggleGuardianDocument, updateAnnouncement, updateGuardianDocument } from "./actions";
 import "../guardian-management.css";
 
 
@@ -29,8 +30,8 @@ export default async function GuardianContentManagement({ searchParams, embedded
   const admin = adminClient();
 
   const [announcementsRes, documentsRes, guardiansRes, messagesRes, branchesRes, groupsRes] = await Promise.all([
-    admin.from("announcements").select("id,title,body,audience,branch_id,group_id,is_published,published_at,created_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(50),
-    admin.from("guardian_documents").select("id,title,summary,document_type,requires_consent,is_active,version,created_at").eq("organization_id", org).order("sort_order").order("created_at", { ascending: false }).limit(50),
+    admin.from("announcements").select("id,title,body,audience,branch_id,group_id,is_published,published_at,created_at,updated_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(50),
+    admin.from("guardian_documents").select("id,title,summary,body,document_type,requires_consent,is_active,version,created_at").eq("organization_id", org).order("sort_order").order("created_at", { ascending: false }).limit(50),
     admin.from("profiles").select("id").eq("organization_id", org).eq("role", "guardian").eq("is_active", true),
     admin.from("guardian_messages").select("id,read_at").eq("organization_id", org).limit(5000),
     admin.from("branches").select("id,name,is_active").eq("organization_id", org).eq("is_active", true).order("name"),
@@ -59,7 +60,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           </div>
           <div className="guardianHeroActions">
             <Link href="/veliler">Veli Merkezine Dön</Link>
-            <Link className="primary" href="/veli-paneli">Veli Portalını Aç</Link>
+            <Link className="primary" href="/veliler/ogrenciden-olustur">Portal Hesaplarını Yönet</Link>
           </div>
         </header>
 
@@ -75,6 +76,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           <article className="guardianStat"><span>Otomatik Alanlar</span><strong>3</strong><small style={{display:"block",marginTop:4,color:"#7a899e"}}>Program · Yoklama · Ödeme</small></article>
         </section>
 
+        <PortalDataMap/>
         <section className="guardianPanel" style={{ marginBottom: 16 }}>
           <div className="guardianEyebrow">PORTAL SENKRONİZASYONU</div>
           <h2>Hangi alan nereden yönetiliyor?</h2>
@@ -123,6 +125,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
               {announcements.map((a: any) => <article className="guardianRequest" key={a.id}>
                 <div className="guardianRequestHead"><div><small>{date(a.published_at || a.created_at)}</small><h3>{a.title}</h3><div className="guardianRequestMeta"><span>{a.group_id ? `Grup: ${groupMap.get(a.group_id)||"Seçili grup"}` : a.branch_id ? `Şube: ${branchMap.get(a.branch_id)||"Seçili şube"}` : "Tüm aktif veliler"}</span></div></div><span className={"guardianPill " + (a.is_published ? "" : "off")}>{a.is_published ? "Yayında" : "Taslak / Pasif"}</span></div>
                 <p style={{whiteSpace:"pre-wrap"}}>{a.body}</p>
+                {canPublishAnnouncements?<details className="portalContentEditor"><summary>Duyuruyu Düzenle</summary><form action={updateAnnouncement} className="guardianForm">{embedded?<input type="hidden" name="settings_return" value="belgeler"/>:null}<input type="hidden" name="id" value={a.id}/><input type="hidden" name="expected_updated_at" value={a.updated_at||""}/><label>Başlık<input name="title" defaultValue={a.title} required maxLength={180}/></label><label>Metin<textarea name="body" defaultValue={a.body} required rows={5} maxLength={5000}/></label><label>Şube<select name="branch_id" defaultValue={a.branch_id||""}><option value="">Tüm şubeler</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Grup<select name="group_id" defaultValue={a.group_id||""}><option value="">Tüm gruplar</option>{groups.map((group:any)=><option key={group.id} value={group.id}>{branchMap.get(group.branch_id)||"Şube"} · {group.name}</option>)}</select></label><PendingSubmitButton className="guardianButton primary" pendingText="Kaydediliyor…">Duyuru Değişikliklerini Kaydet</PendingSubmitButton></form></details>:null}
                 {canPublishAnnouncements ? <form action={toggleAnnouncement}>{embedded ? <input type="hidden" name="settings_return" value="belgeler"/> : null}<input type="hidden" name="id" value={a.id}/><button className="guardianButton">{a.is_published ? "Portaldan Kaldır" : "Şimdi Yayınla"}</button></form> : null}
               </article>)}
               {!announcements.length ? <div className="guardianEmpty">Henüz duyuru oluşturulmamış.</div> : null}
@@ -135,6 +138,8 @@ export default async function GuardianContentManagement({ searchParams, embedded
               {documents.map((d: any) => <article className="guardianRequest" key={d.id}>
                 <div className="guardianRequestHead"><div><small>{d.document_type} · v{d.version}</small><h3>{d.title}</h3></div><span className={"guardianPill " + (d.is_active ? "" : "off")}>{d.is_active ? "Aktif" : "Pasif"}</span></div>
                 {d.summary ? <p>{d.summary}</p> : null}
+                <details><summary>Belge Metnini Gör</summary><p style={{whiteSpace:"pre-wrap"}}>{d.body}</p></details>
+                {canManageDocuments?<details className="portalContentEditor"><summary>Belgeyi Düzenle · Yeni Sürüm</summary><form action={updateGuardianDocument} className="guardianForm">{embedded?<input type="hidden" name="settings_return" value="belgeler"/>:null}<input type="hidden" name="id" value={d.id}/><input type="hidden" name="expected_version" value={d.version}/><label>Başlık<input name="title" defaultValue={d.title} required maxLength={180}/></label><label>Kısa Açıklama<input name="summary" defaultValue={d.summary||""} maxLength={500}/></label><label>Belge İçeriği<textarea name="body" defaultValue={d.body||""} required rows={6} maxLength={8000}/></label><label><input type="checkbox" name="requires_consent" defaultChecked={d.requires_consent}/> Veli onayı gerektirir</label><p>İçerik değiştiğinde sürüm artar. Önceki veli onayları korunur; yeni sürüm için yeniden onay gerekir.</p><PendingSubmitButton className="guardianButton primary" pendingText="Yeni sürüm kaydediliyor…">Yeni Sürümü Kaydet</PendingSubmitButton></form></details>:null}
                 <div className="guardianRequestMeta"><span>{d.requires_consent ? "Veli onayı gerekli" : "Bilgilendirme"}</span><span>{date(d.created_at)}</span></div>
                 {canManageDocuments ? <form action={toggleGuardianDocument} style={{marginTop:10}}>{embedded ? <input type="hidden" name="settings_return" value="belgeler"/> : null}<input type="hidden" name="id" value={d.id}/><button className="guardianButton">{d.is_active ? "Portaldan Kaldır" : "Portala Yayınla"}</button></form> : null}
               </article>)}
