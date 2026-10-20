@@ -64,7 +64,7 @@ export async function GET() {
     supabase.from("students").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pre_registration"),
     supabase.from("birthday_celebrations").select("id,student_id,celebration_year,status,sent_at,sent_by").eq("organization_id", profile.organization_id).eq("celebration_year", Number(today.iso.slice(0, 4))).eq("status", "sent"),
     supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
-    supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", profile.organization_id).eq("status", "planned").eq("lesson_date", today.iso),
+    supabase.from("student_compensation_lessons").select("student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", profile.organization_id).eq("status", "planned").eq("lesson_date", today.iso),
     supabase.from("alerts").select("id,title,description,status,created_at")
       .eq("organization_id", profile.organization_id).eq("alert_type", "attendance_reminder")
       .like("description", `${today.iso} · %`).order("created_at", { ascending: false }),

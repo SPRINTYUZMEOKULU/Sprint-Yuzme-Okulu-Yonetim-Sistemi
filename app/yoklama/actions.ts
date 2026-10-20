@@ -428,7 +428,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       supabase.from("students").select("id,status").eq("organization_id", organizationId).eq("is_deleted", false).in("id", studentIds),
       supabase.from("student_enrollments").select("id,student_id,group_id,status,lesson_weekdays,start_date,created_at,updated_at,start_confirmation_required,actual_started_at").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("status", "active").in("student_id", studentIds),
       supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("is_active", true).in("student_id", studentIds),
-      supabase.from("student_compensation_lessons").select("student_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("lesson_date", input.lessonDate).eq("status", "planned").in("student_id", studentIds),
+      supabase.from("student_compensation_lessons").select("student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("lesson_date", input.lessonDate).eq("status", "planned").in("student_id", studentIds),
     ]);
     if (rosterStudents.error || rosterEnrollments.error || rosterMemberships.error || rosterCompensations.error) {
       return {ok:false,count:0,message:"Öğrencilerin kayıt günleri doğrulanamadı. Yoklama kaydedilmedi."};
