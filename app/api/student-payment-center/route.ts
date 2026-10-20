@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     const profile = await requireProfile([...ROLES]);
     const organizationId = profile.organization_id;
     const studentId = String(request.nextUrl.searchParams.get("studentId") || "");
+    const requestedEnrollmentId = String(request.nextUrl.searchParams.get("enrollmentId") || "");
 
     if (!organizationId || !studentId) {
       return NextResponse.json(
@@ -56,10 +57,8 @@ export async function GET(request: NextRequest) {
         .select("*")
         .eq("organization_id", organizationId)
         .eq("student_id", studentId)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .in("status", ["active", "scheduled"])
+        .order("created_at", { ascending: false }),
       supabase
         .from("student_payments")
         .select(
@@ -89,7 +88,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const enrollment = enrollmentResult.data;
+    const periods = enrollmentResult.data || [];
+    const enrollment = requestedEnrollmentId
+      ? periods.find((row: any) => row.id === requestedEnrollmentId)
+      : periods.find((row: any) => row.status === "active") || periods[0] || null;
+    if (requestedEnrollmentId && !enrollment) return NextResponse.json({ok:false,error:"Seçilen ödeme dönemi bulunamadı."},{status:404});
     const draftData =
       checklistResult.data?.draft_data && typeof checklistResult.data.draft_data === "object"
         ? (checklistResult.data.draft_data as Record<string, unknown>)
@@ -184,10 +187,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       student: studentResult.data,
+      periods: periods.map((row: any) => ({id:row.id,status:row.status,startDate:row.start_date,plannedEndDate:row.planned_end_date})),
       enrollment: hasFinancePreview
         ? {
             id: enrollment?.id || "",
-            source: enrollment ? "active" : "registration_draft",
+            source: enrollment ? enrollment.status : "registration_draft",
             startDate: enrollment?.start_date || draftStartDate,
             plannedEndDate: enrollment?.planned_end_date || draftPlannedEndDate,
             paymentDueDate:

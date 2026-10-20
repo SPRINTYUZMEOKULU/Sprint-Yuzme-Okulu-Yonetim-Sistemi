@@ -62,7 +62,7 @@ export async function saveStudentPaymentPlan(input: PlanInput) {
       .eq("organization_id", profile.organization_id)
       .eq("id", input.enrollmentId)
       .eq("student_id", input.studentId)
-      .eq("status", "active")
+      .in("status", ["active", "scheduled"])
       .maybeSingle();
     if (!enrollment)
       return { ok: false, message: "Aktif öğrenci kaydı bulunamadı." };

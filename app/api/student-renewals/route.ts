@@ -438,30 +438,15 @@ export async function POST(request: NextRequest) {
     }
     const newEnrollment = insertResult.data;
 
-    /*
-     * Legacy/tekrar kayıt senaryolarında aynı öğrenciye ait birden fazla aktif
-     * enrollment kalmış olabilir. Sadece "en son" kaydı kapatmak yoklama ve
-     * kalan ders ekranlarında eski 0 bakiyeli paketin yeniden seçilmesine yol
-     * açıyordu. Yeni kaydı aktive etmeden önce öğrencinin tüm eski aktif
-     * kayıtlarını tek seferde kapatıyoruz.
-     */
-    const { error: closeError } = await supabase
-      .from("student_enrollments")
-      .update({ status: "completed", updated_at: now })
-      .eq("organization_id", organizationId)
-      .eq("student_id", studentId)
-      .eq("status", "active");
-    if (closeError) {
-      await supabase.from("student_enrollments").delete().eq("id", newEnrollment.id);
-      return fail("close-previous-enrollments", closeError);
+    const { data: finalized, error: finalizeError } = await supabase.rpc("finalize_enrollment_renewal", {
+      p_new_id: newEnrollment.id,
+      p_previous_id: activeEnrollment?.id || null,
+    });
+    if (finalizeError || !finalized?.ok) {
+      await supabase.from("student_enrollments").delete().eq("organization_id", organizationId).eq("id", newEnrollment.id).eq("status", "renewal_pending");
+      return fail("finalize-renewal", finalizeError || "Dönem geçişi hazırlanamadı.", 409);
     }
-
-    const { error: activateError } = await supabase
-      .from("student_enrollments")
-      .update({ status: "active", updated_at: now })
-      .eq("organization_id", organizationId)
-      .eq("id", newEnrollment.id);
-    if (activateError) return fail("activate-new-enrollment", activateError);
+    const scheduled = finalized.status === "scheduled";
 
     if (approvalToConsume?.id) {
       const existingMeta = objectValue(approvalToConsume.metadata);
@@ -549,11 +534,11 @@ export async function POST(request: NextRequest) {
         student_id: studentId,
         previous_enrollment_id: activeEnrollment?.id || null,
         new_enrollment_id: newEnrollment.id,
-        renewal_status: "completed",
+        renewal_status: scheduled ? "scheduled" : "completed",
         note: String(body.note || "").trim().slice(0, 1000) || null,
         created_by: profile.id,
       }),
-      supabase
+      scheduled ? Promise.resolve({ error: null }) : supabase
         .from("students")
         .update({
           status: "active",
@@ -634,7 +619,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: `Kayıt yenilendi. Yeni bitiş tarihi: ${formatDateTR(plannedEndDate)}.`,
+      message: scheduled ? `Sonraki dönem hazırlandı. ${formatDateTR(startDate)} tarihinde otomatik başlayacak. Mevcut ders ve telafi hakları korunuyor.` : `Kayıt yenilendi. Yeni bitiş tarihi: ${formatDateTR(plannedEndDate)}.`,
+      scheduled,
       enrollmentId: newEnrollment.id,
       packageName: selectedPackage.name,
       lessonCount,

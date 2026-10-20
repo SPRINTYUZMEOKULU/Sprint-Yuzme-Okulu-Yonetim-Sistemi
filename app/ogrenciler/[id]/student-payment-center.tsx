@@ -25,6 +25,7 @@ type Installment = {
   status: string;
 };
 type CenterData = {
+  periods?: Array<{id:string;status:string;startDate:string;plannedEndDate:string}>;
   student: {
     id: string;
     first_name?: string | null;
@@ -120,14 +121,15 @@ export default function StudentPaymentCenter() {
     [],
   );
 
-  async function load() {
+  async function load(enrollmentId = data?.enrollment?.id || "") {
     if (!studentId) return;
     setLoading(true);
+    setData(null);
     setMessage("");
     setMessageKind("");
     try {
       const response = await fetch(
-        `/api/student-payment-center?studentId=${encodeURIComponent(studentId)}`,
+        `/api/student-payment-center?studentId=${encodeURIComponent(studentId)}&enrollmentId=${encodeURIComponent(enrollmentId)}`,
         { cache: "no-store" },
       );
       const payload = await response.json();
@@ -138,7 +140,10 @@ export default function StudentPaymentCenter() {
       }
       setData(payload);
       const remaining = Number(payload.enrollment?.remainingPayment || 0);
-      if (remaining > 0) setAmountValue(String(remaining));
+      setAmountValue(remaining > 0 ? String(remaining) : "");
+      setInstallmentId("");
+      setPlanRows([]);
+      setPlanNote("");
       if (payload.installments?.length) {
         setPlanRows(payload.installments);
         setInstallmentCount(payload.installments.length);
@@ -159,7 +164,7 @@ export default function StudentPaymentCenter() {
   async function openCenter(nextTab: Tab = "collect") {
     setTab(nextTab);
     setOpen(true);
-    await load();
+    await load("");
   }
 
   useEffect(() => {
@@ -309,6 +314,15 @@ export default function StudentPaymentCenter() {
           </button>
         </header>
         <div className="studentPaymentBody">
+          {data?.periods && data.periods.length > 1 ? <label>
+            Ödeme yapılacak kayıt dönemi
+            <select aria-label="Ödeme yapılacak kayıt dönemi" value={data.enrollment?.id || ""} disabled={loading || submitting}
+              onChange={event => void load(event.target.value)}>
+              {data.periods.map(period => <option key={period.id} value={period.id}>
+                {period.status === "scheduled" ? "Sonraki dönem" : "Mevcut dönem"} · {formatDisplayDate(period.startDate)} – {formatDisplayDate(period.plannedEndDate)}
+              </option>)}
+            </select>
+          </label> : null}
           {loading ? (
             <div className="paymentLoading">Finans bilgileri hazırlanıyor…</div>
           ) : null}

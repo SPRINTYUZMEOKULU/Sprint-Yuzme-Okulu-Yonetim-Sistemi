@@ -45,6 +45,7 @@ export default async function RenewalOperationsPage(){
   for(const row of (membershipsRes.data||[]) as any[]){if(!memberships.has(row.student_id))memberships.set(row.student_id,row)}
   const enrollments=new Map<string,any>();
   for(const row of (enrollmentsRes.data||[]) as any[]){const current=enrollments.get(row.student_id);if(!current||(row.status==="active"&&current.status!=="active"))enrollments.set(row.student_id,row)}
+  const scheduledIds=new Set((enrollmentsRes.data||[]).filter((row:any)=>row.status==="scheduled").map((row:any)=>row.student_id));
   const balances=new Map(((balanceRes.data||[]) as any[]).map(x=>[x.student_id,Number(x.compensation_lesson_balance||0)]));
   const latestStatusRequest=new Map<string,any>();
   for(const row of (statusRequestsRes.data||[]) as any[]){if(!latestStatusRequest.has(row.student_id))latestStatusRequest.set(row.student_id,row)}
@@ -67,9 +68,9 @@ export default async function RenewalOperationsPage(){
     const endedByRights=student.status==="active"&&total>0&&remaining<=0;
     const endedByDate=student.status==="active"&&compensation<=0&&enrollmentDateEnded(endDate,today);
     const endingSoon=student.status==="active"&&!endedByRights&&!endedByDate&&((total>0&&remaining<=3)||Boolean(endDate&&endDate<=soonDate));
-    const category:CenterItem["category"]=student.status==="passive"?"passive":endedByRights||endedByDate?"action":endingSoon?"soon":"active";
+    const category:CenterItem["category"]=scheduledIds.has(student.id)?"active":student.status==="passive"?"passive":endedByRights||endedByDate?"action":endingSoon?"soon":"active";
     const status:CenterItem["status"]=student.status==="passive"?"passive":"active";
-    const reason=student.status==="passive"?"Pasif öğrenci":endedByRights?"Ders hakkı tamamlandı":endedByDate?"Kayıt dönemi sona erdi":endingSoon?"Kayıt yenilemesi yaklaşıyor":"Aktif kayıt";
+    const reason=scheduledIds.has(student.id)?"Sonraki dönem hazır · Otomatik geçiş bekleniyor":student.status==="passive"?"Pasif öğrenci":endedByRights?"Ders hakkı tamamlandı":endedByDate?"Kayıt dönemi sona erdi":endingSoon?"Kayıt yenilemesi yaklaşıyor":"Aktif kayıt";
     return {
       id:student.id,studentNumber:student.student_number||null,name:`${student.first_name||""} ${student.last_name||""}`.trim()||"Kursiyer",status,
       branchName:student.branch_id?branches.get(student.branch_id)||null:null,groupName:membership?.group_id?groups.get(membership.group_id)||null:null,totalLessons:total,usedLessons:used,remainingLessons:remaining,plannedEndDate:endDate,reason,category,

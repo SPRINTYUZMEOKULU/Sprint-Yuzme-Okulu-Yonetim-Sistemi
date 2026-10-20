@@ -35,7 +35,7 @@ export async function GET() {
         .select("id,student_id,group_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at")
         .eq("organization_id", organizationId)
         .in("student_id", ids)
-        .eq("status", "active")
+        .in("status", ["active", "scheduled"])
         .order("created_at", { ascending: false }),
       supabase
         .from("student_lesson_balance")
@@ -53,7 +53,8 @@ export async function GET() {
     const dataError = enrollmentRes.error || balanceRes.error || requestRes.error;
     if (dataError) throw dataError;
     const latestEnrollment = new Map<string, any>();
-    for (const row of enrollmentRes.data || []) if (!latestEnrollment.has(row.student_id)) latestEnrollment.set(row.student_id, row);
+    const scheduledIds = new Set((enrollmentRes.data || []).filter((row: any) => row.status === "scheduled").map((row: any) => row.student_id));
+    for (const row of enrollmentRes.data || []) if (row.status === "active" && !latestEnrollment.has(row.student_id)) latestEnrollment.set(row.student_id, row);
     const balanceMap = new Map((balanceRes.data || []).map((row: any) => [row.student_id, Number(row.compensation_lesson_balance || 0)]));
     const pendingPassive = new Set((requestRes.data || []).map((row: any) => row.student_id));
 
@@ -62,7 +63,7 @@ export async function GET() {
 
     const items = (students || []).flatMap((student: any) => {
       const enrollment = latestEnrollment.get(student.id);
-      if (!enrollment) return [];
+      if (!enrollment || scheduledIds.has(student.id)) return [];
       const total = Number(enrollment.total_lessons || 0);
       const rights=rightsForEnrollment(rightsContext,enrollment,Number(balanceMap.get(student.id)||0));
       const used=rights.used;

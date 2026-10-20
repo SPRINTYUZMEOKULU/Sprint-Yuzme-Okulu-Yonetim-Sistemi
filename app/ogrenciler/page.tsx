@@ -457,7 +457,8 @@ export default async function StudentsPage() {
     (student) => {
       const enrollment = enrollmentMap.get(student.id) as any;
       const membership = membershipMap.get(student.id) as any;
-      const attendancePlan = attendancePlanMap.get(student.id) as any;
+      const candidatePlan = attendancePlanMap.get(student.id) as any;
+      const attendancePlan = candidatePlan?.enrollment_id === enrollment?.id ? candidatePlan : null;
       const lessonBalance = lessonBalanceMap.get(student.id) as any;
       const paymentSummary = paymentSummaryMap.get(student.id) as any;
       const lastAttendance = lastAttendanceMap.get(student.id) as any;

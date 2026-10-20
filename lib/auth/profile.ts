@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -73,6 +74,13 @@ function resolveEffectiveRole(
   return "admin";
 }
 
+// One indexed, idempotent date check per server render; no browser polling.
+const syncDueRenewals = cache(async () => {
+  const db = await createClient();
+  const { error } = await db.rpc("sync_due_renewals");
+  if (error) throw new Error(`Kayıt dönemi geçişi doğrulanamadı: ${error.message}`);
+});
+
 export async function requireProfile(allowedRoles?: UserRole[]): Promise<CurrentProfile> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -105,6 +113,8 @@ export async function requireProfile(allowedRoles?: UserRole[]): Promise<Current
   ) {
     redirect("/yetkisiz");
   }
+
+  await syncDueRenewals();
 
   return {
     id: String(profile.id),

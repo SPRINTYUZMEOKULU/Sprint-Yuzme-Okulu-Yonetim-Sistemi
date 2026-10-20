@@ -276,7 +276,8 @@ export default async function StudentFile({
 
   const enrollment = enrollmentResult.data;
   const membership = membershipResult.data;
-  const attendancePlan = attendancePlanResult.data;
+  const attendancePlan = attendancePlanResult.data?.enrollment_id === enrollment?.id ? attendancePlanResult.data : null;
+  const nextEnrollment = (enrollmentHistoryResult.data || []).find((row: any) => row.status === "scheduled");
   const lessonBalance = lessonBalanceResult.data;
 
   const notes = notesResult.data ?? [];
@@ -990,6 +991,7 @@ export default async function StudentFile({
             <div>
               <p>KURS ÖZETİ</p>
               <h2>Aktif kayıt</h2>
+            {nextEnrollment ? <p role="status">Sonraki dönem hazır: {fmtDate(nextEnrollment.start_date)} – {fmtDate(nextEnrollment.planned_end_date)}. Başlangıç tarihinde otomatik olarak bu özete alınacak.</p> : null}
             </div>
           </div>
 
@@ -1408,6 +1410,8 @@ export default async function StudentFile({
             const statusLabel =
               item.status === "active"
                 ? "AKTİF"
+                : item.status === "scheduled"
+                  ? "SONRAKİ DÖNEM · OTOMATİK BAŞLAYACAK"
                 : item.status === "completed"
                   ? "TAMAMLANDI"
                   : item.status === "cancelled"

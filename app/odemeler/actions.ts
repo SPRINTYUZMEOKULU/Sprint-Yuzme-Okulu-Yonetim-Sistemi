@@ -344,10 +344,10 @@ export async function createStudentPayment(
       };
     }
 
-    if (enrollment.status !== "active") {
+    if (!["active", "scheduled"].includes(enrollment.status)) {
       return {
         ok: false,
-        message: "Bu ödeme yalnızca aktif kayıt dönemine işlenebilir.",
+        message: "Ödeme yalnızca mevcut veya hazırlanmış sonraki döneme işlenebilir.",
       };
     }
 
@@ -874,10 +874,10 @@ export async function updatePaymentDueDate(
       };
     }
 
-    if (enrollment.status !== "active") {
+    if (!["active", "scheduled"].includes(enrollment.status)) {
       return {
         ok: false,
-        message: "Ödeme vadesi yalnızca aktif kayıt için değiştirilebilir.",
+        message: "Ödeme vadesi yalnızca mevcut veya hazırlanmış sonraki dönem için değiştirilebilir.",
       };
     }
 
