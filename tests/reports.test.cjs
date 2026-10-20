@@ -10,3 +10,42 @@ test('invalid dates and reversed ranges are handled',async()=>{assert.match((awa
 if(process.env.REPORT_PREVIEW)render(fixture()).then(({html})=>fs.writeFileSync('/tmp/sprint-report-preview.html',`<!doctype html><html><head><meta charset="utf-8"><style>${fs.readFileSync('app/raporlar/reports.css','utf8')}</style></head><body>${html}</body></html>`));
 test('manager summary remains compact while detail exports retain all student rows',async()=>{const d=fixture();d.students=Array.from({length:150},(_,i)=>({...d.students[0],id:`s${i}`}));d.student_enrollments=Array.from({length:150},(_,i)=>({...d.student_enrollments[0],id:`e${i}`,student_id:`s${i}`}));const {sheets,html}=await render(d);const summary=sheets.find(s=>s.name==='Yönetici özeti');assert.ok(summary.rows.length<=30);assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows.length,151);assert.match(html,/<details class="reportNotesDetails">/);assert.ok(html.indexOf('Kayıt tarihleri ve ödeme durumu')<html.indexOf('Eksik ve kontrol özeti'));});
 test('renewal and unpaid exports use current Istanbul date, retain partial payments and sequence rows',async()=>{const d=fixture();const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul'}).format(new Date());d.student_enrollments[0].planned_end_date=today;const {sheets,html}=await render(d);assert.equal(sheets.find(s=>s.name==='Bitişi yaklaşanlar').rows[1][2],'Bugün bitiyor');assert.equal(sheets.find(s=>s.name==='Kısmi ödeme yapanlar').rows.length,2);assert.equal(sheets.find(s=>s.name==='Ödeme yapılmayanlar').rows.length,1);assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][0],1);assert.doesNotMatch(html,/active \/ active/);d.student_payments=[];assert.equal((await render(d)).sheets.find(s=>s.name==='Ödeme yapılmayanlar').rows.length,2);});
+test('active, awaiting-start and closed records have disjoint scopes; passive history remains auditable',async()=>{
+ const d=fixture();
+ d.students.push({...d.students[0],id:'passive',status:'passive'});
+ d.student_enrollments.push({...d.student_enrollments[0],id:'ep',student_id:'passive'}, {...d.student_enrollments[0],id:'waiting',start_confirmation_required:true,actual_started_at:null}, {...d.student_enrollments[0],id:'scheduled',status:'scheduled'}, {...d.student_enrollments[0],id:'closed',status:'completed'});
+ const rows=async status=>(await render(d,{status})).sheets.find(s=>s.name==='Kayıt ve ödeme').rows;
+ assert.equal((await rows('active')).length,2);
+ assert.equal((await rows('pending')).length,3);
+ assert.equal((await rows('passive')).length,3);
+ assert.equal((await rows('all')).length,6);
+ const summary=(await render(d)).sheets.find(s=>s.name==='Yönetici özeti');
+ assert.equal(summary.rows.find(r=>r[0]==='Aktif öğrenci')[1],1);
+});
+test('no verified enrollment price means unknown debt, never a current catalog estimate',async()=>{
+ const d=fixture();d.student_payment_plans=[];d.course_packages[0].price=99999;
+ const {sheets}=await render(d);const r=sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];
+ assert.equal(r[6],null);assert.equal(r[7],1000);assert.equal(r[8],null);assert.equal(r[10],'Ücret kontrolü gerekli');
+ assert.equal(sheets.find(s=>s.name==='Ödeme yapılmayanlar').rows.length,1);
+ assert.equal(sheets.find(s=>s.name==='Yönetici özeti').rows.find(r=>r[0]==='Ücreti bilinmeyen kayıt')[1],1);
+});
+test('a later renewal keeps the expiry warning and appears as separate context',async()=>{
+ const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
+ d.student_enrollments.push({...d.student_enrollments[0],id:'renewal',start_date:'2099-01-01',planned_end_date:'2099-01-31',status:'scheduled'});
+ const {sheets}=await render(d,{status:'all'});
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][11],'Yeni kayıt mevcut');
+ assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
+});
+test('passive groups do not inflate current group totals',async()=>{
+ const d=fixture();d.training_groups[0].is_active=false;
+ const {sheets}=await render(d);assert.equal(sheets.find(s=>s.name==='Şubeler').rows.find(r=>r[0]==='Meltem')[2],0);
+});
+test('expired enrollment keeps expiry warning alongside makeup rights',async()=>{
+ const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
+ d.student_compensation_lessons=[{id:'makeup',student_id:'s',enrollment_id:'e',lesson_date:'2099-01-01',status:'planned'}];
+ const {sheets}=await render(d);
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.match(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][11],/telafi hakkı var/);
+ assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
+});
