@@ -1,3 +1,4 @@
+import HistoryPagination from "@/app/veli-paneli/history-pagination";
 import {loadGuardianPage} from "@/lib/guardian/page-context";
 import {
   formatDate,
@@ -11,10 +12,11 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string; previewGuardian?:string }>;
+  searchParams: Promise<{ child?: string; previewGuardian?:string;page?:string }>;
 }) {
-  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query);
+  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"payments");
   if(!data.selected) return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues}/><div className="guardianContent"><EmptyGuardian title="Bağlı kursiyer bulunamadı" text="Hesabınıza aktif kursiyer bağlandığında ödeme bilgileri burada görüntülenir."/></div></main>;
+  const history=data.paymentHistory??data.payments;
   const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme"));
   const planResult = {data:data.paymentPlan};
   const installments = data.paymentPlan?.status==="cancelled"?[]:data.paymentInstallments;
@@ -91,7 +93,7 @@ export default async function Page({
               </tr>
             </thead>
             <tbody>
-              {data.payments.map((p: any) => (
+              {history.map((p: any) => (
                 <tr key={p.id}>
                   <td>{formatDate(p.received_at)}</td>
                   <td>{formatMoney(p.amount)}</td>
@@ -115,7 +117,8 @@ export default async function Page({
               ))}
             </tbody>
           </table>
-          {!data.payments.length ? (
+          <HistoryPagination path="/veli-odemeler" page={data.historyPage||1} hasNext={data.historyHasNext||false} child={data.selected.id} previewGuardian={previewGuardian}/>
+          {!history.length ? (
             <p className="guardianSectionLead">Henüz ödeme kaydı bulunmuyor.</p>
           ) : null}
         </section>

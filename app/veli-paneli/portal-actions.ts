@@ -9,7 +9,7 @@ function value(form:FormData,key:string){return String(form.get(key)||'').trim()
 function back(path:string,child:string,key:'saved'|'error',text:string):never{const params=new URLSearchParams({[key]:text});if(child)params.set('child',child);redirect(`${path}?${params}`);}
 export async function acceptPortalDocument(form:FormData){
  const profile=await requireProfile(['guardian']);const child=value(form,'child');const id=value(form,'document_id');
- const context=await getGuardianContext(profile.id,child);
+ const context=await getGuardianContext(profile.id,child,"documents");
  if(!context.students.some(student=>student.id===child))back('/veli-belgeler',child,'error','Bu kursiyer için belge onaylama yetkiniz yok.');
  if(form.get('accepted')!=='on')back('/veli-belgeler',child,'error','Onay vermek için belgeyi okuyup onay kutusunu işaretleyin.');
  const document=context.documents.find(doc=>doc.id===id);
@@ -23,7 +23,7 @@ export async function acceptPortalDocument(form:FormData){
 }
 export async function markPortalMessageRead(form:FormData){
  const profile=await requireProfile(['guardian']);const child=value(form,'child');const id=value(form,'message_id');
- const context=await getGuardianContext(profile.id,child);
+ const context=await getGuardianContext(profile.id,child,"messages");
  if(!context.students.some(student=>student.id===child)||!context.messages.some(message=>message.id===id&&message.kind!=="note"))back('/veli-mesajlar',child,'error','Bu mesaj için işlem yetkiniz yok.');
  const db=admin();
  const {data,error}=await db.from('guardian_messages').update({read_at:new Date().toISOString()}).eq('organization_id',profile.organization_id).eq('guardian_id',profile.id).eq('id',id).is('read_at',null).select('id');

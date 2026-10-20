@@ -145,7 +145,7 @@ export async function createGuardianRequest(formData: FormData) {
   const description = text(formData, "description", 4000);
   if (!organizationId || !studentId || !subject || !description) back(requestPath, "error", "Öğrenci, konu ve açıklama zorunludur.");
 
-  const context = await getGuardianContext(profile.id, studentId);
+  const context = await getGuardianContext(profile.id, studentId,"access");
   if (!context.students.some(student => student.id === studentId)) back(requestPath, "error", "Bu öğrenci için talep oluşturma yetkiniz yok.");
 
   const sourceNoteId = text(formData,"source_note_id",100) || null;
@@ -249,7 +249,7 @@ export async function replyGuardianRequest(formData:FormData){
  const {data:row}=await db.from("guardian_requests").select("id,student_id,request_number").eq("organization_id",org).eq("guardian_id",profile.id).eq("id",id).maybeSingle();
  const path=`/veli-talepleri?child=${row?.student_id||""}&request=${id}`;
  if(!org||!row||!body)back(path,"error","Talep ve yanıt bilgisi eksik.");
- const context=await getGuardianContext(profile.id,row.student_id);
+ const context=await getGuardianContext(profile.id,row.student_id,"access");
  if(!context.students.some(s=>s.id===row.student_id))back(path,"error","Bu kursiyere erişiminiz yok.");
  const {data:replyId,error}=await db.rpc("reply_guardian_request",{p_request:id,p_org:org,p_author:profile.id,p_body:body});
  if(error)back(path,"error","Yanıt kaydedilemedi. Talep arşivlenmiş veya erişiminiz değişmiş olabilir.");

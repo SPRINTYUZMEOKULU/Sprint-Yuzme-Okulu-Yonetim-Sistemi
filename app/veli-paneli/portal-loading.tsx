@@ -1,0 +1,2 @@
+import './veli.css';
+export default function PortalLoading(){return <main className="guardianShell guardianLoading" aria-busy="true" aria-label="Veli paneli yükleniyor"><div className="guardianContent"><div className="guardianLoadingTop"><span className="guardianLoadingLogo"/><div><strong>SPRİNT Yüzme Okulu</strong><p>Bilgileriniz hazırlanıyor…</p></div></div><div className="guardianLoadingBar"/><section className="guardianLoadingCards" aria-hidden="true"><div/><div/><div/><div/></section><div className="guardianLoadingPanel" aria-hidden="true"/></div></main>;}

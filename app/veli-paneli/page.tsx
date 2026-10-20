@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function GuardianPortal({ searchParams }: { searchParams: Promise<{ child?: string; previewGuardian?:string }> }) {
-  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query);
+  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"overview");
 
   if (!data.selected) {
     return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
@@ -24,9 +24,9 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const {rate:attendanceRate,absenceStreak,latestAbsence}=attendanceSummary(currentAttendance);
   const {paid: paidTotal, price: packagePrice, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   const selectedId = data.selected.id;
-  const unreadMessages=data.messages.filter((m:any)=>m.kind!=="note"&&!m.read_at).length;
+  const unreadMessages=data.unreadMessageCount??data.messages.filter((m:any)=>m.kind!=="note"&&!m.read_at).length;
   const pendingDocuments=data.documents.filter((document:any)=>document.requires_consent&&!currentDocumentConsent(document,data.consents)).length;
-  const openRequests=(data.requests||[]).filter((request:any)=>!["resolved","rejected","archived"].includes(request.status)).length;
+  const openRequests=data.openRequestCount??(data.requests||[]).filter((request:any)=>!["resolved","rejected","archived"].includes(request.status)).length;
   const previewQuery=previewGuardian?`&previewGuardian=${encodeURIComponent(previewGuardian)}`:"";
 
   return <main className="guardianShell">

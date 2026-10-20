@@ -22,7 +22,7 @@ function fmt(v:string){return formatDisplayDateTime(new Date(v))}
 export default async function GuardianRequestsPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
  const profile=await requireProfile(["owner","admin","branch_manager","registration_staff","accounting","coach","guardian"]);const query=await searchParams;const guardian=profile.role==="guardian";
  if(query.previewGuardian)return <GuardianRequestsPreview query={query}/>;
- const context=guardian?await getGuardianContext(profile.id,query.child):null;
+ const context=guardian?await getGuardianContext(profile.id,query.child,"access"):null;
  const db=guardian?await createClient():adminClient();const org=profile.organization_id!;
  const requestQuery=db.from("guardian_requests").select("*").eq("organization_id",org).order("created_at",{ascending:false}).limit(200);
  if(guardian){requestQuery.eq("guardian_id",profile.id);const ids=context!.students.map(s=>s.id);requestQuery.in("student_id",ids.length?ids:["00000000-0000-0000-0000-000000000000"]);}else if(query.guardian)requestQuery.eq("guardian_id",query.guardian);
@@ -45,7 +45,7 @@ export default async function GuardianRequestsPage({searchParams}:{searchParams:
 }
 
 async function GuardianRequestsPreview({query}:{query:Record<string,string|undefined>}){
- const {profile,data,previewGuardian}=await loadGuardianPage(query);
+ const {profile,data,previewGuardian}=await loadGuardianPage(query,"access");
  const {data:requests,error:requestsError}=await adminClient().from("guardian_requests").select("*").eq("organization_id",profile.organization_id).eq("guardian_id",profile.id).order("created_at",{ascending:false}).limit(200);
  const visible=(requests||[]).filter((request:any)=>!request.student_id||data.students.some(student=>student.id===request.student_id)&&(!data.selected||request.student_id===data.selected.id));
  const threads=await loadRequestThreads(visible,profile.organization_id!);
