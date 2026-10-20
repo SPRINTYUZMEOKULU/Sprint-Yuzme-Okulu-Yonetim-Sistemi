@@ -634,7 +634,7 @@ export default function AttendanceClient({
     useMemo(() => {
       return compensationLessons.filter(
         (lesson) =>
-          lesson.status === "planned" &&
+          ["planned", "completed"].includes(lesson.status) &&
           lesson.target_group_id === selectedGroupId &&
           lesson.lesson_date === lessonDate &&
           (!lesson.target_schedule_id ||

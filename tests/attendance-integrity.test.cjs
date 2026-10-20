@@ -32,3 +32,12 @@ test('pending manual start is excluded from attendance even with planned compens
 });
 
 test('cross-group Sunday compensation appears only in its target session without Sunday membership',()=>{const p={students:[{id:'a',status:'active'}],memberships:[{student_id:'a',group_id:'saturday'}],enrollments:[{id:'e',student_id:'a',group_id:'saturday',status:'active',lesson_weekdays:[6]}],compensationLessons:[{student_id:'a',target_group_id:'sunday',target_schedule_id:'sun19',lesson_date:'2026-10-18',status:'planned'}]};const roster=attendanceRoster(p,'sunday','sun19','2026-10-18',7);assert.deepEqual(roster.students.map(s=>s.id),['a']);assert.equal(roster.compensationIds.has('a'),true);assert.deepEqual(attendanceRoster(p,'sunday','sun20','2026-10-18',7).students,[]);assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-25',7).students,[]);assert.deepEqual(attendanceRoster(p,'saturday','sun19','2026-10-18',7).students,[]);});
+
+test('completed Sunday makeup remains visible and editable without becoming a new normal lesson',()=>{
+ const p={students:[{id:'a',status:'active'}],memberships:[],enrollments:[],compensationLessons:[{student_id:'a',enrollment_id:'old-period',target_group_id:'sunday',target_schedule_id:'sun19',lesson_date:'2026-10-18',status:'completed'}]};
+ const roster=attendanceRoster(p,'sunday','sun19','2026-10-18',7);
+ assert.deepEqual(roster.students.map(s=>s.id),['a']);assert.equal(roster.compensationIds.has('a'),true);
+ assert.deepEqual(attendanceRoster(p,'sunday','other','2026-10-18',7).students,[]);
+ assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-25',7).students,[]);
+ p.compensationLessons[0].status='cancelled';assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-18',7).students,[]);
+});
