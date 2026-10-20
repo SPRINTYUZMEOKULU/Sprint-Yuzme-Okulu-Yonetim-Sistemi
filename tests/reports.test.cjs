@@ -29,21 +29,23 @@ test('no verified enrollment price means unknown debt, never a current catalog e
  assert.equal(sheets.find(s=>s.name==='Ödeme yapılmayanlar').rows.length,1);
  assert.equal(sheets.find(s=>s.name==='Yönetici özeti').rows.find(r=>r[0]==='Ücreti bilinmeyen kayıt')[1],1);
 });
-test('a later renewal suppresses expired-record renewal alarm',async()=>{
+test('a later renewal keeps the expiry warning and appears as separate context',async()=>{
  const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
  d.student_enrollments.push({...d.student_enrollments[0],id:'renewal',start_date:'2099-01-01',planned_end_date:'2099-01-31',status:'scheduled'});
  const {sheets}=await render(d,{status:'all'});
- assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Yenilendi');
- assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,1);
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][11],'Yeni kayıt mevcut');
+ assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
 });
 test('passive groups do not inflate current group totals',async()=>{
  const d=fixture();d.training_groups[0].is_active=false;
  const {sheets}=await render(d);assert.equal(sheets.find(s=>s.name==='Şubeler').rows.find(r=>r[0]==='Meltem')[2],0);
 });
-test('expired normal term with makeup rights is not reported as expired enrollment',async()=>{
+test('expired enrollment keeps expiry warning alongside makeup rights',async()=>{
  const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
  d.student_compensation_lessons=[{id:'makeup',student_id:'s',enrollment_id:'e',lesson_date:'2099-01-01',status:'planned'}];
  const {sheets}=await render(d);
- assert.match(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],/telafi hakkı var/);
- assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,1);
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.match(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][11],/telafi hakkı var/);
+ assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
 });
