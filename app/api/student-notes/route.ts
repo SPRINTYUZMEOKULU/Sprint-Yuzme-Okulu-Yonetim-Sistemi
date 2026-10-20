@@ -1,3 +1,5 @@
+import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
+import {revalidatePath} from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
@@ -282,7 +284,10 @@ export async function PATCH(request: NextRequest) {
     created_by: profile.id,
   });
 
-  return NextResponse.json({ ok: true, note: { ...note, reminder_at: reminderAt } });
+  let warning:string|undefined;
+  if(note.is_guardian_visible){try{await notifySharedNote(organizationId,studentId,noteId,body,profile.id);}catch{warning="Not güncellendi; veli bildirimi oluşturulamadı.";}}
+  for(const path of ["/veli-mesajlar","/veli-gelisim","/veli-paneli",`/ogrenciler/${studentId}`])revalidatePath(path);
+  return NextResponse.json({ ok: true, warning, note: { ...note, reminder_at: reminderAt } });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -297,6 +302,9 @@ export async function DELETE(request: NextRequest) {
   }
 
   const supabase = await createClient();
+  if(!(await ensureStudent(supabase,organizationId,studentId)))return NextResponse.json({error:"Öğrenci bulunamadı."},{status:404});
+  const {data:existing}=await supabase.from("student_notes").select("id").eq("organization_id",organizationId).eq("student_id",studentId).eq("id",noteId).maybeSingle();
+  if(!existing)return NextResponse.json({error:"Not bulunamadı."},{status:404});
 
   await supabase
     .from("student_activity_logs")
@@ -326,6 +334,8 @@ export async function DELETE(request: NextRequest) {
     created_by: profile.id,
   });
 
+  await hideSharedNoteNotifications(organizationId,studentId,noteId);
+  for(const path of ["/veli-mesajlar","/veli-gelisim","/veli-paneli",`/ogrenciler/${studentId}`])revalidatePath(path);
   return NextResponse.json({ ok: true });
 }
 

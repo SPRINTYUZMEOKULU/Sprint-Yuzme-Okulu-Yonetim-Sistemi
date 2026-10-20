@@ -20,9 +20,12 @@ test('Saving an internal/status change preserves previous answer and does not se
 test('A stale management form is rejected before any write or notification',async()=>{
  const f=fixture();await assert.rejects(f.mod.manageGuardianRequest(form({request_id:'request',status:'new',guardian_response:'Stale',expected_updated_at:'old-version'})),e=>e.url.includes('error='));assert.equal(f.writes.length,0);assert.equal(f.notifications.length,0);
 });
-test('Guardian notification read and list always filter the current account and organization',async()=>{
- const calls=[];const db={from(){const q={select(){return q;},update(){return q;},eq(k,v){calls.push([k,v]);return q;},order(){return q;},limit:async()=>({data:[],error:null}),then(resolve){return Promise.resolve({error:null}).then(resolve);}};return q;}};
- const api=load('app/api/guardian-notifications/route.ts',{'next/server':{NextResponse:{json:body=>body}},'@/lib/auth/profile':{requireProfile:async roles=>{assert.deepEqual(roles,['guardian']);return {id:'parent',organization_id:'org'};}},'@/lib/supabase/server':{createClient:async()=>db}});
- await api.GET();assert.ok(calls.some(([k,v])=>k==='recipient_user_id'&&v==='parent'));calls.length=0;
- await api.POST({json:async()=>({id:'foreign-notice'})});assert.deepEqual(calls,[['organization_id','org'],['recipient_user_id','parent'],['id','foreign-notice']]);
+test('Guardian notification list filters both account and active student, and refuses missing notice updates',async()=>{
+ const calls=[];let notice={id:'notice',student_id:'child',target_path:'/veli-mesajlar?child=child'};
+ const db={from(){let update=false;const q={select(){return q;},update(){update=true;return q;},eq(k,v){calls.push([k,v]);return q;},like(k,v){calls.push([k,v]);return q;},order(){return q;},limit:async()=>({data:[notice,{id:'foreign',student_id:'other',target_path:'/veli-mesajlar?child=other'}],error:null}),maybeSingle:async()=>({data:update?{id:'notice'}:notice,error:null})};return q;}};
+ const visible=load('lib/guardian/notification-visibility.ts');
+ const api=load('app/api/guardian-notifications/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@supabase/supabase-js':{createClient:()=>db},'@/lib/guardian/access':{guardianStudentAccess:async()=>({studentIds:['child'],error:null})},'@/lib/guardian/notification-visibility':visible,'@/lib/auth/profile':{requireProfile:async roles=>{assert.deepEqual(roles,['guardian']);return {id:'parent',organization_id:'org'};}},'@/lib/supabase/server':{createClient:async()=>db}});
+ const result=await api.GET();assert.equal(result.body.notifications.length,1);assert.ok(calls.some(([k,v])=>k==='recipient_user_id'&&v==='parent'));assert.ok(calls.some(([k,v])=>k==='target_path'&&v==='/veli-%'));calls.length=0;
+ const saved=await api.POST({json:async()=>({id:'notice'})});assert.equal(saved.status,200);assert.ok(calls.every(([k,v])=>k!=='recipient_user_id'||v==='parent'));
+ notice=null;const missing=await api.POST({json:async()=>({id:'missing'})});assert.equal(missing.status,404);
 });

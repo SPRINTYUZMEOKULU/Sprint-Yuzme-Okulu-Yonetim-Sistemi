@@ -1,5 +1,8 @@
 "use server";
 
+import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
+import {guardianStudentAccess} from "@/lib/guardian/access";
+import {createNotification} from "@/lib/notifications/create-notification";
 import { revalidatePath } from "next/cache";
 import { revalidateGuardianConnection } from "@/lib/guardian/revalidate";
 import { redirect } from "next/navigation";
@@ -131,7 +134,7 @@ export async function addGuardianProgressNote(formData: FormData) {
 
   const visible = formData.get("visible_to_guardian") === "on";
   const admin = adminClient();
-  const { error } = await admin.from("student_notes").insert({
+  const { data:createdNote,error } = await admin.from("student_notes").insert({
     organization_id: profile.organization_id,
     student_id: studentId,
     author_id: profile.id,
@@ -139,7 +142,7 @@ export async function addGuardianProgressNote(formData: FormData) {
     body: note,
     target: target || null,
     is_guardian_visible: visible,
-  });
+  }).select("id").single();
   if (error) back(authProfileId, "error", `Gelişim notu kaydedilemedi: ${error.message}`);
 
   await admin.from("student_timeline_events").insert({
@@ -151,6 +154,9 @@ export async function addGuardianProgressNote(formData: FormData) {
     created_by: profile.id,
   });
 
+  if(visible&&createdNote){try{await notifySharedNote(profile.organization_id,studentId,createdNote.id,note,profile.id);}catch{back(authProfileId,"saved","Gelişim notu kaydedildi; veli bildirimi oluşturulamadı.");}}
+  revalidatePath("/veli-mesajlar");
+  revalidatePath("/veli-paneli");
   revalidatePath(`/veliler/${authProfileId}`);
   revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/veli-gelisim");
@@ -173,7 +179,9 @@ export async function sendGuardianPortalMessage(formData: FormData) {
     if (!verified.ok) back(authProfileId, "error", verified.message);
   }
 
-  const { error } = await adminClient().from("guardian_messages").insert({
+  const access=await guardianStudentAccess(adminClient(),authProfileId,profile.organization_id);
+  if(access.error||!access.studentIds.length||(studentId&&!access.studentIds.includes(studentId)))back(authProfileId,"error","Veli için aktif portal ve kursiyer bağlantısı bulunamadı.");
+  const { data:createdMessage,error } = await adminClient().from("guardian_messages").insert({
     organization_id: profile.organization_id,
     guardian_id: authProfileId,
     student_id: studentId || null,
@@ -183,12 +191,15 @@ export async function sendGuardianPortalMessage(formData: FormData) {
     channel: "panel",
     sent_by: profile.id,
     sent_at: new Date().toISOString(),
-  });
+  }).select("id").single();
   if (error) back(authProfileId, "error", `Portal mesajı gönderilemedi: ${error.message}`);
 
+  let notified=false;
+  if(createdMessage){try{const delivery=await createNotification({organizationId:profile.organization_id,category:"students",eventKey:"guardian_portal_message",title,body,studentId:studentId||null,sourceType:"guardian_message",sourceId:createdMessage.id,targetPath:`/veli-mesajlar${studentId?`?child=${studentId}`:""}#mesaj-${createdMessage.id}`,recipientProfileIds:[authProfileId],createdBy:profile.id,push:true});notified=delivery.ok;}catch{console.error("Portal mesajı kaydedildi; bildirim oluşturulamadı.");}}
+  revalidatePath("/veli-paneli");
   revalidatePath(`/veliler/${authProfileId}`);
   revalidatePath("/veli-mesajlar");
-  back(authProfileId, "saved", "Mesaj veli portalına gönderildi.");
+  back(authProfileId, "saved", notified?"Mesaj veli portalına gönderildi ve bildirim oluşturuldu.":"Mesaj veli portalına kaydedildi; bildirim oluşturulamadı.");
 }
 
 export async function toggleGuardianProgressVisibility(formData: FormData) {
@@ -202,12 +213,15 @@ export async function toggleGuardianProgressVisibility(formData: FormData) {
   if (!verified.ok) back(authProfileId, "error", verified.message);
 
   const admin = adminClient();
-  const { data: current } = await admin.from("student_notes").select("id,is_guardian_visible").eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId).eq("note_type", "coach").maybeSingle();
+  const { data: current } = await admin.from("student_notes").select("id,is_guardian_visible,body").eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId).eq("note_type", "coach").maybeSingle();
   if (!current) back(authProfileId, "error", "Gelişim notu bulunamadı.");
   const next = !current.is_guardian_visible;
   const { error } = await admin.from("student_notes").update({ is_guardian_visible: next }).eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId);
   if (error) back(authProfileId, "error", error.message);
 
+  try{if(next)await notifySharedNote(profile.organization_id,studentId,noteId,current.body,profile.id);else await hideSharedNoteNotifications(profile.organization_id,studentId,noteId);}catch{back(authProfileId,"saved","Not görünürlüğü güncellendi; bildirim eşleştirmesi tamamlanamadı.");}
+  revalidatePath("/veli-mesajlar");
+  revalidatePath("/veli-paneli");
   revalidatePath(`/veliler/${authProfileId}`);
   revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/veli-gelisim");

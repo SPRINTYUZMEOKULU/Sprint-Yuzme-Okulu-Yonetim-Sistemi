@@ -1,6 +1,6 @@
 "use server";
 
-import {notifySharedNote} from "@/lib/guardian/note-sharing";
+import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -1674,6 +1674,8 @@ export async function deleteStudentNote(formData: FormData) {
     goError(studentId, error.message);
   }
 
+  await hideSharedNoteNotifications(profile.organization_id,studentId,noteId);
+  revalidatePath("/veli-mesajlar");revalidatePath("/veli-gelisim");revalidatePath("/veli-paneli");
   const { data: reminderLogs } = await supabase
     .from("student_activity_logs")
     .select("id")

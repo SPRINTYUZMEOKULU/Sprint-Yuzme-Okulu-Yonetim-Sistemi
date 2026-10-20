@@ -1,5 +1,5 @@
 import {loadGuardianPage} from "@/lib/guardian/page-context";
-import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl } from "@/lib/guardian/presentation";
+import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl, currentDocumentConsent } from "@/lib/guardian/presentation";
 import PaymentReminder from "@/app/veli-paneli/payment-reminder";
 import { guardianPaymentReminder, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import Link from "next/link";
@@ -14,7 +14,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query);
 
   if (!data.selected) {
-    return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={[]} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
+    return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
@@ -24,6 +24,9 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const {rate:attendanceRate,absenceStreak,latestAbsence}=attendanceSummary(currentAttendance);
   const {paid: paidTotal, price: packagePrice, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   const selectedId = data.selected.id;
+  const unreadMessages=data.messages.filter((m:any)=>m.kind!=="note"&&!m.read_at).length;
+  const pendingDocuments=data.documents.filter((document:any)=>document.requires_consent&&!currentDocumentConsent(document,data.consents)).length;
+  const openRequests=(data.requests||[]).filter((request:any)=>!["resolved","rejected","archived"].includes(request.status)).length;
   const previewQuery=previewGuardian?`&previewGuardian=${encodeURIComponent(previewGuardian)}`:"";
 
   return <main className="guardianShell">
@@ -43,6 +46,11 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
       </section> : null}
 
       <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianPaymentReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan)} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
+      <section className="guardianFollowUps" aria-label="Takip ve bekleyen işlemler">
+        <Link href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><span aria-hidden="true">›</span></Link>
+        <Link href={`/veli-talepleri?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="request"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Talep"))?"Bilgi alınamadı":`${openRequests} açık görüşme`}</strong><small>Talepler ve yönetim yanıtları</small></span><span aria-hidden="true">›</span></Link>
+        <Link href={`/veli-belgeler?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="document"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Belge")||issue.startsWith("Onay"))?"Bilgi alınamadı":pendingDocuments?`${pendingDocuments} belge onay bekliyor`:data.documents.some((document:any)=>document.requires_consent)?"Belge onayları güncel":"Kurallar ve bilgilendirme"}</strong><small>Güncel kurallar ve belgeler</small></span><span aria-hidden="true">›</span></Link>
+      </section>
       <section className="guardianStats">
         <article className="guardianStat"><span>Mevcut Seviye</span><strong>{data.selected.swimming_level || "Belirlenmedi"}</strong></article>
         <article className="guardianStat"><span>Planlanan Bitiş</span><strong>{formatDate(data.enrollment?.planned_end_date)}</strong></article>

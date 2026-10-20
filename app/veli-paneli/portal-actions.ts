@@ -18,15 +18,17 @@ export async function acceptPortalDocument(form:FormData){
  const {data:existing,error:readError}=await db.from('guardian_consents').select('id').eq('organization_id',profile.organization_id).eq('guardian_id',profile.id).eq('student_id',child).eq('document_id',id).eq('document_version',document.version).maybeSingle();
  if(readError)back('/veli-belgeler',child,'error','Belge onayı kontrol edilemedi.');
  if(!existing){const {error}=await db.from('guardian_consents').insert({organization_id:profile.organization_id,guardian_id:profile.id,student_id:child,document_id:id,document_version:document.version});if(error && error.code!=='23505')back('/veli-belgeler',child,'error','Belge onayı kaydedilemedi. Lütfen tekrar deneyin.');}
- for(const path of ['/veli-belgeler',`/veliler/${profile.id}`,'/veliler/icerik'])revalidatePath(path);
+ for(const path of ['/veli-paneli','/veli-belgeler',`/veliler/${profile.id}`,'/veliler/icerik'])revalidatePath(path);
  back('/veli-belgeler',child,'saved','Belge onayınız kaydedildi.');
 }
 export async function markPortalMessageRead(form:FormData){
  const profile=await requireProfile(['guardian']);const child=value(form,'child');const id=value(form,'message_id');
  const context=await getGuardianContext(profile.id,child);
- if(!context.students.some(student=>student.id===child)||!context.messages.some(message=>message.id===id))back('/veli-mesajlar',child,'error','Bu mesaj için işlem yetkiniz yok.');
- const {data,error}=await admin().from('guardian_messages').update({read_at:new Date().toISOString()}).eq('organization_id',profile.organization_id).eq('guardian_id',profile.id).eq('id',id).is('read_at',null).select('id');
+ if(!context.students.some(student=>student.id===child)||!context.messages.some(message=>message.id===id&&message.kind!=="note"))back('/veli-mesajlar',child,'error','Bu mesaj için işlem yetkiniz yok.');
+ const db=admin();
+ const {data,error}=await db.from('guardian_messages').update({read_at:new Date().toISOString()}).eq('organization_id',profile.organization_id).eq('guardian_id',profile.id).eq('id',id).is('read_at',null).select('id');
  if(error)back('/veli-mesajlar',child,'error','Mesaj durumu güncellenemedi.');
- for(const path of ['/veli-mesajlar',`/veliler/${profile.id}`,'/veliler/icerik'])revalidatePath(path);
- back('/veli-mesajlar',child,'saved',data?.length?'Mesaj okundu olarak işaretlendi.':'Mesaj zaten okundu olarak kayıtlı.');
+ const {error:notificationError}=await db.from('system_notifications').update({is_read:true,read_at:new Date().toISOString()}).eq('organization_id',profile.organization_id).eq('recipient_user_id',profile.id).eq('source_type','guardian_message').eq('source_id',id);
+ for(const path of ['/veli-paneli','/veli-mesajlar',`/veliler/${profile.id}`,'/veliler/icerik'])revalidatePath(path);
+ back('/veli-mesajlar',child,'saved',notificationError?'Mesaj okundu olarak kaydedildi; bildirim durumu güncellenemedi.':data?.length?'Mesaj okundu olarak işaretlendi.':'Mesaj zaten okundu olarak kayıtlı.');
 }
