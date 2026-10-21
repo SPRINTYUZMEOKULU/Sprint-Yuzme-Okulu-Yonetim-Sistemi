@@ -1,5 +1,5 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const ts=require('typescript');const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
-function load(file,mocks={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>name==='@/lib/settings/server'?{readSettings:async(_db,_org,section)=>({values:section==='kurum'?{display_name:'Sprint Yüzme Okulu'}:{report_title:'Rapor Merkezi',report_footer:''}})}:name in mocks?mocks[name]:name.startsWith("@/")?load(name.slice(2)+".ts",mocks):require(name),Intl,Date,Map,Set,Number,Boolean,String,console});return exports;}
+function load(file,mocks={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2017,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>name==='@/lib/settings/server'?{readSettings:async(_db,_org,section)=>({values:section==='kurum'?{display_name:'Sprint Yüzme Okulu'}:{report_title:'Rapor Merkezi',report_footer:''}})}:name in mocks?mocks[name]:name.startsWith("@/")?load(name.slice(2)+".ts",mocks):require(name),Intl,Date,Map,Set,Number,Boolean,String,console});return exports;}
 function fixture(){return {branches:[{id:'b1',name:'Meltem',is_active:true},{id:'b2',name:'Lara',is_active:true}],training_groups:[{id:'g',branch_id:'b1',name:'Çocuk',primary_coach_id:'c1',is_active:true}],students:[{id:'s',first_name:'Test',last_name:'Öğrenci',status:'active',branch_id:'b2',is_deleted:false}],student_enrollments:[{id:'e',student_id:'s',branch_id:'b1',group_id:'g',status:'active',created_at:'2026-10-01T10:00:00Z',start_date:'2026-10-01',planned_end_date:'2026-10-31',total_lessons:8,used_lessons:2,lesson_weekdays:[7],package_id:'p'}],attendance_records:[{id:'a',student_id:'s',branch_id:'b1',group_id:'g',schedule_id:'sc',coach_id:'c2',lesson_date:'2026-10-11',status:'present'}],student_payments:[{id:'p1',student_id:'s',enrollment_id:'e',payment_status:'received',amount:1000,received_at:'2026-09-30T22:00:00Z'},{id:'p2',student_id:'s',enrollment_id:'e',payment_status:'pending',amount:9000,received_at:'2026-10-02T10:00:00Z'},{id:'p3',student_id:'s',enrollment_id:'e',payment_status:'cancelled',amount:3000,received_at:'2026-10-02T10:00:00Z'}],profiles:[{id:'c1',full_name:'Plan Hoca',role:'coach'},{id:'c2',full_name:'Gerçek Hoca',role:'admin'}],lesson_schedules:[{id:'sc',branch_id:'b1',group_id:'g',coach_id:'c1',weekday:0,start_time:'19:00:00',is_active:true}],lesson_staff_assignments:[],lesson_student_assignments:[],course_packages:[{id:'p',price:4500}],student_payment_plans:[{id:'pl',enrollment_id:'e',total_amount:4000,status:'active'}],student_payment_installments:[]};}
 async function render(data,params={}){let sheets;let reads=0;const db={rpc:async()=>({error:null}),from(table){let rows=data[table]||[];return {select(){return this},in(k,vs){rows=rows.filter(r=>vs.includes(r[k]));return this},then(resolve){return Promise.resolve({data:rows,error:null}).then(resolve)},eq(k,v){rows=rows.filter(r=>r[k]===v);return this},gte(k,v){rows=rows.filter(r=>r[k]>=v);return this},lte(k,v){rows=rows.filter(r=>r[k]<=v);return this},order(){return this},async range(a,b){reads++;return {data:rows.slice(a,b+1),error:null}}}}};const Page=load('app/raporlar/page.tsx',{'next/link':{default:({children,...p})=>React.createElement('a',p,children),__esModule:true},'@/lib/auth/profile':{requireProfile:async()=>({organization_id:'org'})},'@/lib/supabase/server':{createClient:async()=>db},'./reports.css':{},'./report-exports':{default:p=>{sheets=p.sheets;return null},__esModule:true},'@/lib/schedules/weekday':load('lib/schedules/weekday.ts'),'@/lib/schedules/effective':load('lib/schedules/effective.ts')}).default;
 for(const rows of Object.values(data)) for(const row of rows)row.organization_id='org';const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({from:'2026-10-01',to:'2026-10-13',...params})}));return {html,sheets,reads};}
@@ -63,4 +63,32 @@ test('missing package and conflicting plans remain unknown rather than debt free
  const r=(await render(d)).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];assert.equal(r[8],null);assert.equal(r[13],'Belirlenemedi');
  d.student_payment_plans=[{id:'a',enrollment_id:'e',total_amount:4000},{id:'b',enrollment_id:'e',total_amount:5000}];d.course_packages=[{id:'p',price:4500}];
  assert.equal((await render(d)).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][8],null);
+});
+
+test('null enrollment branch resolves from its group for filters and branch totals',async()=>{
+ const d=fixture();d.student_enrollments[0].branch_id=null;
+ const {sheets}=await render(d,{branch:'b1'});
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows.length,2);
+ assert.equal(sheets.find(s=>s.name==='Şubeler').rows.find(r=>r[0]==='Meltem')[1],1);
+});
+test('state breakdown keeps passive legacy active rows out of active scope and preserves receipt totals',async()=>{
+ const d=fixture();d.students.push({...d.students[0],id:'passive',status:'passive'});
+ d.student_enrollments.push({...d.student_enrollments[0],id:'ep',student_id:'passive'});
+ d.student_payments.push({...d.student_payments[0],id:'pp',student_id:'passive',enrollment_id:'ep',amount:2000});
+ const {sheets}=await render(d);
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows.length,2);
+ const breakdown=sheets.find(s=>s.name==='Kayıt durumları').rows;
+ assert.deepEqual(Array.from(breakdown.find(r=>r[0]==='Aktif kayıt').slice(1)),[1,1,1000]);
+ assert.deepEqual(Array.from(breakdown.find(r=>r[0]==='Pasif kursiyer kaydı').slice(1)),[1,1,2000]);
+ assert.equal(breakdown.slice(1).reduce((sum,r)=>sum+r[3],0),3000);
+ const passive=(await render(d,{status:'passive'})).sheets.find(s=>s.name==='Kayıt ve ödeme').rows;
+ assert.equal(passive.length,2);assert.equal(passive[1][15],'Pasif kursiyer kaydı');
+});
+test('unresolved branch remains visible rather than disappearing from branch totals',async()=>{
+ const d=fixture();d.student_enrollments[0].branch_id=null;d.student_enrollments[0].group_id=null;d.students[0].branch_id=null;
+ const {sheets}=await render(d);assert.equal(sheets.find(s=>s.name==='Şubeler').rows.find(r=>r[0]==='Şubesi belirlenemeyen')[1],1);
+});
+test('group primary coach is part of the current planned session staff',async()=>{
+ const d=fixture();d.lesson_schedules[0].coach_id=null;d.lesson_student_assignments=[{id:'as',schedule_id:'sc',student_id:'s',coach_id:'c1',is_active:true}];
+ const {sheets}=await render(d);const a=sheets.find(s=>s.name==='Atamalar').rows[1];assert.equal(a[4],'Plan Hoca');assert.equal(a[5],'Plan Hoca');
 });
