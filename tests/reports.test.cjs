@@ -22,12 +22,12 @@ test('active, awaiting-start and closed records have disjoint scopes; passive hi
  const summary=(await render(d)).sheets.find(s=>s.name==='Yönetici özeti');
  assert.equal(summary.rows.find(r=>r[0]==='Aktif öğrenci')[1],1);
 });
-test('no verified enrollment price means unknown debt, never a current catalog estimate',async()=>{
+test('missing payment plan uses the Payment Center package and discloses its source',async()=>{
  const d=fixture();d.student_payment_plans=[];d.course_packages[0].price=99999;
  const {sheets}=await render(d);const r=sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];
- assert.equal(r[6],null);assert.equal(r[7],1000);assert.equal(r[8],null);assert.equal(r[10],'Ücret kontrolü gerekli');
+ assert.equal(r[6],99999);assert.equal(r[7],1000);assert.equal(r[8],98999);assert.equal(r[13],'Borcu var');assert.match(r[14],/güncel paket ücreti/);
  assert.equal(sheets.find(s=>s.name==='Ödeme yapılmayanlar').rows.length,1);
- assert.equal(sheets.find(s=>s.name==='Yönetici özeti').rows.find(r=>r[0]==='Ücreti bilinmeyen kayıt')[1],1);
+ assert.equal(sheets.find(s=>s.name==='Yönetici özeti').rows.find(r=>r[0]==='Ücreti bilinmeyen kayıt')[1],0);
 });
 test('a later renewal keeps the expiry warning and appears as separate context',async()=>{
  const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
@@ -48,4 +48,19 @@ test('expired enrollment keeps expiry warning alongside makeup rights',async()=>
  assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
  assert.match(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][11],/telafi hakkı var/);
  assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
+});
+
+test('period numbers survive filters and payments never cross renewal periods',async()=>{
+ const d=fixture();d.student_enrollments.push({...d.student_enrollments[0],id:'old',status:'completed',start_date:'2026-09-01',planned_end_date:'2026-09-30'});
+ d.student_payments.push({...d.student_payments[0],id:'oldpay',enrollment_id:'old',amount:4500});
+ const active=(await render(d)).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];
+ assert.equal(active[12],'2. kayıt dönemi');assert.equal(active[7],1000);assert.equal(active[8],3000);
+ const old=(await render(d,{status:'all'})).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];
+ assert.equal(old[12],'1. kayıt dönemi');assert.equal(old[13],'Borcu yok');
+});
+test('missing package and conflicting plans remain unknown rather than debt free',async()=>{
+ const d=fixture();d.student_payment_plans=[];d.course_packages=[];
+ const r=(await render(d)).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1];assert.equal(r[8],null);assert.equal(r[13],'Belirlenemedi');
+ d.student_payment_plans=[{id:'a',enrollment_id:'e',total_amount:4000},{id:'b',enrollment_id:'e',total_amount:5000}];d.course_packages=[{id:'p',price:4500}];
+ assert.equal((await render(d)).sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][8],null);
 });
