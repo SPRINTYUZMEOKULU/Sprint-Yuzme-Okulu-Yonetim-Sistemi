@@ -1,6 +1,7 @@
 "use server";
 
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
+import { missingEnrollmentReason, type CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireProfile } from "@/lib/auth/profile";
@@ -110,6 +111,7 @@ function laterDate(a?: string | null, b?: string | null) {
 
 export async function applyLessonCancellation(input: LessonCancellationInput) {
   const preparedMessages: PreparedCancellationMessage[] = [];
+  const outcomes: CancellationOutcome[] = [];
 
   try {
     const profile = await requireProfile([...ALLOWED_ROLES]);
@@ -273,6 +275,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
       if (!enrollment) {
         skipped += 1;
+        outcomes.push({ studentId: student.id, studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(), groupName: group.name, status: "skipped", reason: missingEnrollmentReason((enrollmentsResult.data || []).filter(e => e.student_id === student.id), input.cancelledDate) });
         continue;
       }
 
@@ -280,6 +283,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
       if (sourceWeekday && selectedWeekdays.length && !selectedWeekdays.includes(sourceWeekday)) {
         skipped += 1;
+        outcomes.push({ studentId: student.id, studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(), groupName: group.name, status: "skipped", reason: `Katılım günleri (${selectedWeekdays.map(day => DAY_NAMES[day]).join(", ")}) iptal edilen ${DAY_NAMES[sourceWeekday]} seansını kapsamıyor.` });
         continue;
       }
 
@@ -296,6 +300,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
         if (!next) {
           skipped += 1;
+          outcomes.push({ studentId: student.id, studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(), groupName: group.name, status: "skipped", reason: "Telafi için uygun sonraki ders günü bulunamadı; katılım programını kontrol edin." });
           continue;
         }
 
@@ -333,6 +338,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
         if (compensationInsert.error) {
           skipped += 1;
+          outcomes.push({ studentId: student.id, studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(), groupName: group.name, status: "skipped", reason: "Telafi kaydı oluşturulamadı. Kursiyer dosyasından kontrol edin." });
           continue;
         }
 
@@ -404,8 +410,9 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         approved_at: now,
       });
 
+      let messageWarning = "";
       if (input.prepareMessages) {
-        await supabase.from("message_logs").insert({
+        const messageInsert = await supabase.from("message_logs").insert({
           organization_id: organizationId,
           student_id: student.id,
           template_key: "lesson_cancellation_compensation",
@@ -429,7 +436,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
           },
         });
 
-        preparedMessages.push({
+        if (messageInsert.error) messageWarning = " Mesaj hazırlanamadı; kursiyer dosyasından kontrol edin.";
+        else preparedMessages.push({
           studentId: student.id,
           studentName,
           recipient,
@@ -441,6 +449,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       }
 
       processed += 1;
+      outcomes.push({ studentId: student.id, studentName, groupName: group.name, status: "processed", reason: (compensationDate ? `Telafi planlandı: ${formatDateTR(compensationDate)}` : "Telafi hakkı saklı; planlama bekliyor.") + messageWarning, warning: Boolean(messageWarning) });
       revalidatePath(`/ogrenciler/${student.id}`);
     }
 
@@ -457,10 +466,11 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         (input.compensationMode === "reserve"
           ? "Telafi hakları planlama bekliyor."
           : `${compensationCreated} telafi dersi oluşturuldu.`) +
-        (skipped ? ` ${skipped} kursiyer seçili seansa dahil olmadığı veya kayıt bilgisi eksik olduğu için atlandı.` : ""),
+        (skipped ? ` ${skipped} kursiyere işlem uygulanmadı; isim ve gerekçeler aşağıda.` : ""),
       processedCount: processed,
       compensationCreated,
       skippedCount: skipped,
+      outcomes,
       preparedMessages,
       source: {
         groupName: group.name,
@@ -473,6 +483,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     return {
       ok: false as const,
       message: error instanceof Error ? `Ders operasyonu tamamlanamadı: ${error.message}` : "Ders operasyonu sırasında beklenmeyen hata oluştu.",
+      outcomes,
       preparedMessages,
     };
   }
