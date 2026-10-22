@@ -111,6 +111,12 @@ const groups: NavGroup[] = [
   {
     title: "FİNANS",
     items: [
+      { label: "Fatura Merkezi", href: "/fatura-merkezi", children: [
+        { label: "Fatura Merkezi", href: "/fatura-merkezi" },
+        { label: "Kesilen Faturalar", href: "/fatura-merkezi?tab=issued" },
+        { label: "VakıfBank Excel Yükle", href: "/fatura-merkezi/banka" },
+        { label: "Güvenli Ödeme Talepleri", href: "/odeme-bilgileri/belgeler" },
+      ] },
       {
         label: "Paketler",
         href: "/paketler",
@@ -205,7 +211,7 @@ const groups: NavGroup[] = [
 
 function shouldHide(pathname: string) {
   if (pathname === "/" || pathname.startsWith("/veli-")) return true;
-  return ["/login", "/giris", "/on-kayit", "/veli-paneli", "/veli-giris", "/reset-password", "/sifremi-unuttum"].some(
+  return ["/login", "/giris", "/odeme-belge", "/on-kayit", "/veli-paneli", "/veli-giris", "/reset-password", "/sifremi-unuttum"].some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 }

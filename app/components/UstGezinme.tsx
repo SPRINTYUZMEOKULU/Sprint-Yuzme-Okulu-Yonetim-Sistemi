@@ -28,6 +28,7 @@ const menuItems: MenuItem[] = [
   { label: "Personel & Puantaj", href: "/personel-puantaj", moduleKey: "attendance" },
   { label: "Ödemeler", href: "/odemeler", moduleKey: "finance" },
   { label: "Kasa", href: "/kasa", moduleKey: "finance" },
+  { label: "Fatura Merkezi", href: "/fatura-merkezi", moduleKey: "finance" },
   { label: "Raporlar", href: "/raporlar", moduleKey: "reports" },
   { label: "Değişiklik ve Denetim", href: "/denetim-merkezi", moduleKey: "permissions" },
   { label: "Kullanıcılar ve Yetkiler", href: "/kullanicilar-ve-yetkiler", moduleKey: "permissions" },
