@@ -137,6 +137,7 @@ export default async function LessonOperationsPage({
   return (
     <main className="lessonOpsPage" style={{ minHeight: "100vh", padding: "24px", background: "#f4f7fb" }}>
       <OperationSelectionCookieGuard selectedMode={selectedMode} />
+      <Link href="/ders-operasyonlari/gecmis" style={{display:"block",maxWidth:1140,margin:"0 auto 18px",padding:18,borderRadius:16,background:"#eaf3ff",border:"1px solid #bcd6f6",color:"#125db1",fontWeight:800,textDecoration:"none"}}>İşlem Geçmişi / Sonuçlar →<small style={{display:"block",marginTop:6,fontWeight:400}}>Önceki iptal, telafi, atlanan kursiyer ve mesaj durumlarını işlemi tekrarlamadan görüntüleyin.</small></Link>
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <nav className="lessonOpsTopNav" aria-label="Ders operasyonu hızlı menü">
           <Link href="/ogrenciler">

@@ -397,6 +397,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         },
         new_value: {
           reason: input.reason.trim(),
+          group_id: input.groupId,
+          group_name: group.name,
           compensation_mode: input.compensationMode,
           compensation_date: compensationDate,
           target_schedule_id: targetScheduleId,
@@ -454,6 +456,16 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     }
 
     revalidatePath("/ogrenciler");
+    const skippedRows = outcomes.filter(item => item.status === "skipped");
+    const skippedHistory = skippedRows.length ? await supabase.from("student_activity_logs").insert(skippedRows.map(item => ({
+      organization_id: organizationId, student_id: item.studentId,
+      activity_type: "lesson_cancellation_skipped", title: "Ders iptali · işlem uygulanmadı",
+      description: item.reason, old_value: {cancelled_lesson_date: input.cancelledDate, schedule_id: input.scheduleId},
+      new_value: {group_id: input.groupId, group_name: group.name, reason: item.reason},
+      source_type: "lesson_cancellation_operation", source_id: input.scheduleId,
+      performed_by: profile.id, performed_at: now,
+    }))) : {error:null};
+    revalidatePath("/ders-operasyonlari/gecmis");
     revalidatePath("/yoklama");
     revalidatePath("/ders-operasyonlari");
     revalidatePath("/veli-paneli");
@@ -466,7 +478,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         (input.compensationMode === "reserve"
           ? "Telafi hakları planlama bekliyor."
           : `${compensationCreated} telafi dersi oluşturuldu.`) +
-        (skipped ? ` ${skipped} kursiyere işlem uygulanmadı; isim ve gerekçeler aşağıda.` : ""),
+        (skipped ? ` ${skipped} kursiyere işlem uygulanmadı; isim ve gerekçeler aşağıda.` : "") +
+        (skippedHistory.error ? " Atlanan kursiyerler işlem geçmişine kaydedilemedi; bu ekrandaki listeyi kontrol edin." : ""),
       processedCount: processed,
       compensationCreated,
       skippedCount: skipped,
@@ -588,7 +601,7 @@ export async function confirmCancellationMessageSent(input: {studentId:string;me
     metadata:{...(row.metadata||{}),delivery_confirmation:"user_confirmed",confirmed_at:now,confirmed_by:profile.id}})
     .eq("organization_id",profile.organization_id).eq("id",row.id).eq("status","prepared").select("id");
   if(updateError||!updated?.length)return {ok:false,message:"Gönderim kaydı güncellenemedi. Sayfayı yenileyip kontrol edin."};
-  revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath(`/ogrenciler/${input.studentId}`);
+  revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath("/ders-operasyonlari/gecmis");revalidatePath(`/ogrenciler/${input.studentId}`);
   return {ok:true,message:"Mesaj gönderildi olarak kaydedildi."};
 }
 

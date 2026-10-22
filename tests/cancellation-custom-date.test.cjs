@@ -31,14 +31,14 @@ test('skipped participant identifies the student and the exact participation day
  const s=setup();s.rows.student_attendance_plans[0].selected_weekdays=[7];
  const r=await s.call('2026-10-18');assert.equal(r.skippedCount,1);assert.equal(r.processedCount,0);
  assert.equal(r.outcomes[0].studentId,'student');assert.equal(r.outcomes[0].studentName,'Test');
- assert.equal(r.outcomes[0].status,'skipped');assert.match(r.outcomes[0].reason,/Pazar.*Cumartesi/);assert.equal(s.writes.length,0);
+ assert.equal(r.outcomes[0].status,'skipped');assert.match(r.outcomes[0].reason,/Pazar.*Cumartesi/);assert.equal(s.writes.filter(w=>w.table==='student_compensation_lessons').length,0);assert.equal(s.writes.find(w=>w.table==='student_activity_logs').value[0].activity_type,'lesson_cancellation_skipped');
 });
 test('missing, future and unconfirmed registration periods have distinct reasons',async()=>{
  for(const [change,pattern] of [
   [s=>s.rows.student_enrollments=[],/aktif kayıt dönemi bulunamadı/],
   [s=>s.rows.student_enrollments[0].start_date='2026-11-01',/iptal tarihinden sonra başlıyor/],
   [s=>{s.rows.student_enrollments[0].start_confirmation_required=true},/başlatma onayı/],
- ]){const s=setup();change(s);const r=await s.call('2026-10-18');assert.equal(r.outcomes[0].status,'skipped');assert.match(r.outcomes[0].reason,pattern);assert.equal(s.writes.length,0);}
+ ]){const s=setup();change(s);const r=await s.call('2026-10-18');assert.equal(r.outcomes[0].status,'skipped');assert.match(r.outcomes[0].reason,pattern);assert.equal(s.writes.filter(w=>w.table==='student_compensation_lessons').length,0);}
 });
 test('failed compensation is reported without claiming cancellation was applied',async()=>{
  const s=setup('b','adult',0,'student_compensation_lessons');const r=await s.call('2026-10-18');

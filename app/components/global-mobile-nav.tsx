@@ -36,6 +36,7 @@ const groups: NavGroup[] = [
           { label: "Aktif Öğrenciler", href: "/ogrenciler?durum=active" },
           { label: "Pasif / Arşiv", href: "/ogrenciler?durum=passive" },
           { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
         ],
       },
       {
@@ -68,6 +69,7 @@ const groups: NavGroup[] = [
           { label: "Grup Merkezi", href: "/gruplar" },
           { label: "Ders Programı", href: "/ders-programi" },
           { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
         ],
       },
       {
@@ -77,6 +79,7 @@ const groups: NavGroup[] = [
           { label: "Ders Programı", href: "/ders-programi" },
           { label: "Operasyon Planı", href: "/operasyon-plani" },
           { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
           { label: "Yoklama", href: "/yoklama" },
         ],
       },
@@ -86,6 +89,7 @@ const groups: NavGroup[] = [
         children: [
           { label: "Operasyon Planı", href: "/operasyon-plani" },
           { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
           { label: "Ders Programı", href: "/ders-programi" },
           { label: "Yoklama", href: "/yoklama" },
         ],
@@ -97,9 +101,11 @@ const groups: NavGroup[] = [
           { label: "Yoklama Merkezi", href: "/yoklama" },
           { label: "Ders Programı", href: "/ders-programi" },
           { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
         ],
       },
       { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
     ],
   },
   {

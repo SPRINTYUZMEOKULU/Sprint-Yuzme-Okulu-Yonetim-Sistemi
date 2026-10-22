@@ -20,6 +20,7 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
     { label: "Aktif Öğrenciler", href: "/ogrenciler?durum=active" },
     { label: "Pasif / Arşiv", href: "/ogrenciler?durum=passive" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
   ],
   "/veliler": [
     { label: "Veli Merkezi", href: "/veliler" },
@@ -35,16 +36,19 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
     { label: "Seviye Yönetimi", href: "/ayarlar/seviyeler" },
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
   ],
   "/ders-programi": [
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Operasyon Planı", href: "/operasyon-plani" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
     { label: "Yoklama", href: "/yoklama" },
   ],
   "/operasyon-plani": [
     { label: "Operasyon Planı", href: "/operasyon-plani" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Yoklama", href: "/yoklama" },
   ],
@@ -52,6 +56,7 @@ const sidebarBranches: Record<string, Array<{ label: string; href: string }>> = 
     { label: "Yoklama Merkezi", href: "/yoklama" },
     { label: "Ders Programı", href: "/ders-programi" },
     { label: "Ders İptali / Telafi", href: "/ders-operasyonlari" },
+          { label: "İşlem Geçmişi / Sonuçlar", href: "/ders-operasyonlari/gecmis" },
   ],
   "/paketler": [
     { label: "Paket Yönetimi", href: "/paketler" },
