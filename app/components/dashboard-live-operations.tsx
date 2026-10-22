@@ -10,7 +10,7 @@ import { cancellationMessageLabel } from "@/lib/dashboard/cancellation-summary";
 import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
 type PastSlot = {date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string};
- type LiveData = {
+ export type LiveData = {
   ok: boolean;
   date: string;
   cancellationMessagesAvailable?: boolean;
@@ -248,7 +248,7 @@ function OperationPanel() {
           <h2>Bugün ne yapılması gerekiyor?</h2>
           <p>Ders, yoklama, doğum günü ve bekleyen işlemler tek ekranda canlı takip edilir.</p>
         </div>
-        <a href="/bildirimler" className={actionCount ? "liveOpsSignal active" : "liveOpsSignal"}>
+        <a href="/uyarilar" className={actionCount ? "liveOpsSignal active" : "liveOpsSignal"}>
           <i /> {actionCount ? `${actionCount} işlem` : "Operasyon normal"}
         </a>
       </div>
