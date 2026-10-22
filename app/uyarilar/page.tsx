@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { reopenAlert, resolveAlert } from "./actions";
 import "./uyarilar.css";
+import OperationsCenter from "./operations-center";
 
 export const dynamic = "force-dynamic";
 
@@ -36,60 +37,14 @@ function formatAlertDate(value: unknown) {
   }
 }
 
-function turkeyToday() {
-  const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" });
-  const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
-  const iso = `${parts.year}-${parts.month}-${parts.day}`;
-  const day = new Date(`${iso}T12:00:00+03:00`).getDay();
-  return { iso, weekday: day === 0 ? 7 : day };
-}
-
 export default async function AlertsPage() {
   const profile = await requireProfile([...roles]);
   const supabase = await createClient();
-  const today = turkeyToday();
-
-  const [alertsResult, schedulesResult, enrollmentsResult, attendanceResult, approvalsResult, cashResult, preregResult] = await Promise.all([
-    supabase.from("alerts").select("*").eq("organization_id", profile.organization_id).order("created_at", { ascending: false }).limit(100),
-    supabase.from("lesson_schedules").select("id,group_id").eq("organization_id", profile.organization_id).eq("weekday", today.weekday).eq("is_active", true),
-    supabase.from("student_enrollments").select("student_id,group_id").eq("organization_id", profile.organization_id).eq("status", "active"),
-    supabase.from("attendance_records").select("student_id,group_id,schedule_id").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
-    supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pending"),
-    supabase.from("payments").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("cash_status", "handoff_pending"),
-    supabase.from("students").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id).eq("status", "pre_registration"),
-  ]);
-
-  const alerts = ((alertsResult.data || []) as AlertRow[]);
-  const open = alerts.filter((item) => ["open", "in_progress"].includes(item.status || "open"));
-  const resolved = alerts.filter((item) => (item.status || "open") !== "open");
-  const schedules = schedulesResult.data || [];
-  const enrollments = enrollmentsResult.data || [];
-  const attendance = attendanceResult.data || [];
-
-  const enrolledByGroup = new Map<string, Set<string>>();
-  for (const enrollment of enrollments) {
-    if (!enrollment.group_id) continue;
-    if (!enrolledByGroup.has(enrollment.group_id)) enrolledByGroup.set(enrollment.group_id, new Set());
-    enrolledByGroup.get(enrollment.group_id)?.add(enrollment.student_id);
-  }
-
-  const pendingAttendance = schedules.filter((schedule) => {
-    const enrolled = enrolledByGroup.get(schedule.group_id || "") || new Set<string>();
-    const recorded = new Set(attendance.filter((row) => row.schedule_id === schedule.id || (!row.schedule_id && row.group_id === schedule.group_id)).map((row) => row.student_id));
-    return !(enrolled.size > 0 && recorded.size >= enrolled.size);
-  }).length;
-
-  const pendingApprovals = approvalsResult.count || 0;
-  const pendingCash = cashResult.count || 0;
-  const preRegistrations = preregResult.count || 0;
-  const actionCount = pendingAttendance + pendingApprovals + pendingCash + open.length;
-
-  const operations = [
-    { label: "Yoklama Bekleyen", value: pendingAttendance, note: pendingAttendance ? "Bugünkü seanslarda yoklama tamamlanmalı" : "Bugünkü yoklamalar tamamlandı", href: "/yoklama", tone: "orange", action: "Yoklamaya Git" },
-    { label: "Yönetici Onayı", value: pendingApprovals, note: pendingApprovals ? "Onay bekleyen talepler bulunuyor" : "Bekleyen yönetici onayı yok", href: "/onay-merkezi", tone: "blue", action: "Onaylara Git" },
-    { label: "Kasa Onayı", value: pendingCash, note: pendingCash ? "Kasa teslim onayı bekliyor" : "Bekleyen kasa teslimi yok", href: "/kasa", tone: "purple", action: "Kasaya Git" },
-    { label: "Açık Uyarı", value: open.length, note: open.length ? "Sistem uyarıları işlem bekliyor" : "Açık sistem uyarısı yok", href: "#acik-uyarilar", tone: "red", action: "Uyarıları Gör" },
-  ];
+  const alertsResult = await supabase.from("alerts").select("*")
+    .eq("organization_id", profile.organization_id).order("created_at", { ascending: false }).limit(100);
+  const alerts = (alertsResult.data || []) as AlertRow[];
+  const open = alerts.filter(item => item.status === "open");
+  const resolved = alerts.filter(item => ["resolved", "closed", "completed", "dismissed"].includes(item.status || "open"));
 
   return (
     <main className="alertsPage">
@@ -102,19 +57,7 @@ export default async function AlertsPage() {
         <div className="alertsHeroActions"><Link href="/">Ana Sayfa</Link><Link className="primary" href="/bildirimler">Bildirimleri Aç</Link></div>
       </header>
 
-      <section className="operationSummary">
-        <div><span>BUGÜN</span><strong>{actionCount ? `${actionCount} işlem bekliyor` : "Her şey yolunda"}</strong><small>{actionCount ? "Öncelikli işlemleri aşağıdan tamamlayın." : "Şu anda kritik bekleyen işlem bulunmuyor."}</small></div>
-        <b className={actionCount ? "operationBadge active" : "operationBadge"}>{actionCount}</b>
-      </section>
-
-      <section className="operationGrid">
-        {operations.map((item) => <Link href={item.href} className={`operationCard ${item.tone} ${item.value ? "hasWork" : ""}`} key={item.label}>
-          <div className="operationTop"><span>{item.label}</span><strong>{item.value}</strong></div>
-          <p>{item.note}</p><b>{item.action} →</b>
-        </Link>)}
-      </section>
-
-      {preRegistrations > 0 ? <Link href="/on-kayitlar" className="preRegStrip"><div><strong>{preRegistrations} ön kayıt takipte</strong><span>Geri dönüş bekleyen ön kayıtları kontrol edin.</span></div><b>Ön Kayıtlara Git →</b></Link> : null}
+      <OperationsCenter />
 
       {alertsResult.error ? <section className="alertsCard errorCard"><strong>Uyarılar yüklenemedi</strong><span>{alertsResult.error.message}</span></section> : null}
 
