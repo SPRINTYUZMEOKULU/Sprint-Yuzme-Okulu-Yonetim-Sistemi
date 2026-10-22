@@ -1,5 +1,6 @@
 "use client";
 
+import { compatibleCompensationGroups, compensationCourseKind, compensationTargetOptions } from "@/lib/lesson-operations/compensation-targets";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyLessonCancellation, recordCancellationMessageOpened, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
@@ -159,8 +160,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   function compatibleTarget(sourceId: string, targetId: string | null) {
     const source = groups.find(g => g.id === sourceId);
     const target = groups.find(g => g.id === targetId);
-    const adult = (value?: string | null) => /yetişkin|yetiskin|adult|master/i.test(value || "");
-    return Boolean(source && target && source.branch_id === target.branch_id && adult(source.course_type) === adult(target.course_type));
+    return compatibleCompensationGroups(source, target);
   }
 
   async function submitOperation() {
@@ -413,7 +413,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             </button>
             <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
               <strong>Farklı tarih / seans planla</strong>
-              <span>Her grup için tarih seçin; aynı havuzdaki uygun çocuk veya yetişkin grubunun seansına telafi planlayın.</span>
+              <span>Her grup için telafinin yapılacağı günü ve saati seçin; aynı havuzdaki uygun çocuk, yetişkin veya takım seansına planlayın.</span>
             </button>
             <button type="button" className={mode === "reserve" ? "active" : ""} onClick={() => setMode("reserve")}>
               <strong>Hakkı saklı tut, sonra planla</strong>
@@ -425,17 +425,22 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             {!selectedIds.length && <p>Telafi planlamak için önce grup seçin.</p>}
             {selectedIds.map(id => {
               const target = customTargets[id] || {date:"", scheduleId:""};
-              const day = target.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-              const options = schedules.filter(s => compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
+              const options = compensationTargetOptions(id, target.date, groups, schedules);
+              const source = groups.find(g => g.id === id);
+              const kind = compensationCourseKind(source?.course_type);
+              const kindLabel = kind === "adult" ? "Yetişkin" : kind === "team" ? "Takım" : kind === "child" ? "Çocuk" : source?.course_type || "Grup";
+              const branchName = branches.find(b => b.id === source?.branch_id)?.name || "";
               return <fieldset key={id} className="customTarget">
                 <legend>{groups.find(g => g.id === id)?.name}</legend>
                 <div className="fieldGrid customFields">
-                  <label><span>Telafi Tarihi</span><input type="date" value={target.date} disabled={submitting} onChange={event => setCustomTargets(prev => ({...prev,[id]:{date:event.target.value,scheduleId:""}}))} /></label>
-                  <label><span>Telafi Grubu / Seansı</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
-                    <option value="">Seans seçin</option>
-                    {options.map(schedule => <option key={schedule.id} value={schedule.id}>{groups.find(g => g.id === schedule.group_id)?.name} · {scheduleText(schedule)}</option>)}
+                  <label><span>Telafinin Yapılacağı Tarih</span><input type="date" min={cancelledDate || undefined} value={target.date} disabled={submitting} onChange={event => setCustomTargets(prev => ({...prev,[id]:{date:event.target.value,scheduleId:""}}))} /></label>
+                  <label><span>Telafinin Yapılacağı Seans</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
+                    <option value="">{target.date ? "Telafi seansı seçin" : "Önce telafi tarihini seçin"}</option>
+                    {options.map(schedule => <option key={schedule.id} value={schedule.id}>{branchName} · {kindLabel} · {scheduleText(schedule)}</option>)}
                   </select></label>
                 </div>
+                <p>Bu alanlar telafinin yapılacağı gün ve saati belirler. Kursiyerin normal kayıt grubu değişmez; aynı saatteki ortak seanslar tek seçenek gösterilir.</p>
+                {target.scheduleId && <p role="status"><strong>Telafi planı: {formatDate(target.date)} · {kindLabel} · {scheduleText(schedules.find(s => s.id === target.scheduleId))}</strong></p>}
                 {target.date && !options.length && <p role="status">Seçilen tarihte aynı havuzda uygun aktif seans bulunamadı. Havuzun grup programını kontrol edin.</p>}
               </fieldset>;
             })}

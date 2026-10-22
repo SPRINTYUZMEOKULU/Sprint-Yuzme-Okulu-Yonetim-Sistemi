@@ -1,5 +1,6 @@
 "use server";
 
+import { compatibleCompensationGroups } from "@/lib/lesson-operations/compensation-targets";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -251,9 +252,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         .select("id,branch_id,course_type,is_active").eq("organization_id", organizationId)
         .eq("id", customSchedule.group_id).eq("is_active", true).maybeSingle();
       const targetGroup = targetGroupResult.data;
-      if (targetGroupResult.error || !targetGroup || targetGroup.branch_id !== group.branch_id
-        || isAdultCourse(targetGroup.course_type) !== isAdultCourse(group.course_type)) {
-        return { ok: false as const, message: "Telafi için aynı havuzdaki uygun çocuk veya yetişkin grubunu seçin.", preparedMessages };
+      if (targetGroupResult.error || !targetGroup || !compatibleCompensationGroups(group, targetGroup)) {
+        return { ok: false as const, message: "Telafi için aynı havuzdaki aynı türde çocuk, yetişkin veya takım grubunu seçin.", preparedMessages };
       }
       const targetDay = new Date(`${input.customDate}T12:00:00Z`).getUTCDay() || 7;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== participationWeekday(customSchedule.weekday)) {
