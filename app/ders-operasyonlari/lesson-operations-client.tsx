@@ -1,6 +1,7 @@
 "use client";
 
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
+import type { CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyLessonCancellation, recordCancellationMessageOpened, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
@@ -68,18 +69,22 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [prepareMessages, setPrepareMessages] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
+  const [outcomes, setOutcomes] = useState<CancellationOutcome[]>([]);
+  const [messageFeedback, setMessageFeedback] = useState("");
+  const [messageFilter, setMessageFilter] = useState<"all" | "pending" | "sent" | "missing">("all");
   const [preparedMessages, setPreparedMessages] = useState<PreparedCancellationMessage[]>([]);
   const [sentMessageKeys,setSentMessageKeys]=useState<string[]>([]);
   const [confirmingMessage,setConfirmingMessage]=useState<string|null>(null);
   const confirmationLock=useRef(false);
   async function confirmSent(item:PreparedCancellationMessage){
     if(confirmationLock.current)return;
+    if(!window.confirm(`${item.studentName} için WhatsApp mesajını gönderdiniz mi? Onayınız gönderim kaydı olarak saklanır.`))return;
     confirmationLock.current=true;
     const key=item.studentId+item.message;setConfirmingMessage(key);
     try{const response=await confirmCancellationMessageSent({studentId:item.studentId,message:item.message});
       if(response.ok)setSentMessageKeys(keys=>keys.includes(key)?keys:[...keys,key]);
-      setResult(response.message);
-    }catch{setResult("Gönderim durumu kaydedilemedi. Tekrar deneyin.");}
+      setMessageFeedback(`${item.studentName}: ${response.message}`);
+    }catch{setMessageFeedback(`${item.studentName}: Gönderim durumu kaydedilemedi. Tekrar deneyin.`);}
     finally{confirmationLock.current=false;setConfirmingMessage(null);}
   }
   const [queueIndex, setQueueIndex] = useState(0);
@@ -192,6 +197,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     setSubmitting(true);
     setResult("Ders iptali ve telafi işlemleri uygulanıyor…");
     setPreparedMessages([]);
+    setOutcomes([]);
+    setMessageFeedback("");
+    setMessageFilter("all");
     setQueueIndex(0);
     setOpenedStudentIds([]);
     setSentMessageKeys([]);
@@ -199,6 +207,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     try {
       const messages: PreparedCancellationMessage[] = [];
       const results: string[] = [];
+      const operationOutcomes: CancellationOutcome[] = [];
       for (const id of selectedIds) {
         const response = await applyLessonCancellation({
           groupId: id,
@@ -211,6 +220,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
         });
         results.push(`${groups.find((g) => g.id === id)?.name}: ${response.message}`);
         messages.push(...(response.preparedMessages || []));
+        operationOutcomes.push(...("outcomes" in response ? response.outcomes || [] : []));
+        setOutcomes([...operationOutcomes]);
         setResult(results.join("\n"));
         setPreparedMessages([...messages]);
         if (!response.ok) break;
@@ -224,9 +235,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   }
 
   function openNextWhatsapp() {
-    const sendable = preparedMessages.filter((item) => Boolean(item.recipient));
+    const sendable = preparedMessages.filter((item) => Boolean(item.recipient) && !sentMessageKeys.includes(item.studentId+item.message));
     if (!sendable.length) {
-      window.alert("WhatsApp gönderimi için geçerli telefon numarası bulunamadı.");
+      setMessageFeedback("Gönderim bekleyen, telefon numarası kayıtlı mesaj kalmadı.");
       return;
     }
 
@@ -234,18 +245,27 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     const current = sendable[safeIndex];
     if (!current.recipient) return;
 
-    window.open(
-      `https://wa.me/${whatsappPhone(current.recipient)}?text=${encodeURIComponent(current.message)}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-
-    void recordCancellationMessageOpened({studentId:current.studentId,message:current.message});
-    setOpenedStudentIds((currentIds) =>
-      currentIds.includes(current.studentId) ? currentIds : [...currentIds, current.studentId]
-    );
+    openWhatsapp(current);
     setQueueIndex(safeIndex + 1 >= sendable.length ? 0 : safeIndex + 1);
   }
+
+  function openWhatsapp(item: PreparedCancellationMessage) {
+    if (!item.recipient) return;
+    window.open(`https://wa.me/${whatsappPhone(item.recipient)}?text=${encodeURIComponent(item.message)}`, "_blank", "noopener,noreferrer");
+    const key = item.studentId + item.message;
+    setOpenedStudentIds(ids => ids.includes(key) ? ids : [...ids, key]);
+    setMessageFeedback(`${item.studentName}: WhatsApp açma isteği oluşturuldu. Mesajı gönderdikten sonra gönderim kaydını onaylayın.`);
+    void recordCancellationMessageOpened({studentId:item.studentId,message:item.message}).then(response => {
+      if (!response.ok) setMessageFeedback(`${item.studentName}: WhatsApp açma durumu kaydedilemedi. Gönderim yaptıysanız ayrıca onaylayabilirsiniz.`);
+    }).catch(() => setMessageFeedback(`${item.studentName}: Bağlantı nedeniyle açılma durumu kaydedilemedi.`));
+  }
+
+  const skippedOutcomes = outcomes.filter(item => item.status === "skipped");
+  const processedOutcomes = outcomes.filter(item => item.status === "processed");
+  const warningCount = outcomes.filter(item => item.warning).length;
+  const pendingCount = preparedMessages.filter(item => item.recipient && !sentMessageKeys.includes(item.studentId+item.message)).length;
+  const missingPhoneCount = preparedMessages.filter(item => !item.recipient).length;
+  const visibleMessages = preparedMessages.filter(item => messageFilter === "all" || (messageFilter === "sent" ? sentMessageKeys.includes(item.studentId+item.message) : messageFilter === "missing" ? !item.recipient : Boolean(item.recipient) && !sentMessageKeys.includes(item.studentId+item.message)));
 
   return (
     <div className="lessonOpsShell">
@@ -462,7 +482,16 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             {submitting ? "İşlem uygulanıyor…" : "Ders İptalini Uygula + Telafiyi İşle"}
           </button>
 
-          {result && <div className="resultBox">{result}</div>}
+          {result && <div className="resultBox" role="status">{result}</div>}
+          {outcomes.length > 0 && <div className="operationResults">
+            <div className="outcomeStats"><strong>{processedOutcomes.length} kursiyere işlem uygulandı</strong><span>{skippedOutcomes.length} kursiyere işlem uygulanmadı</span>{warningCount > 0 && <span role="alert">{warningCount} kursiyerin mesajı hazırlanamadı; aşağıdaki işlem listesini kontrol edin.</span>}</div>
+            {skippedOutcomes.length > 0 && <details className="outcomeDetails skippedDetails" open>
+              <summary>İşlem uygulanmayan kursiyerler ({skippedOutcomes.length})</summary>
+              <p>Bu listedeki kursiyerlere iptal / telafi işlemi uygulanmadı. Gerekçeyi kontrol ederek kursiyer dosyasından ilerleyebilirsiniz.</p>
+              <ul>{skippedOutcomes.map((item,index) => <li key={`${item.groupName}:${item.studentId}:${index}`}><div><strong>{item.studentName || "Kursiyer"}</strong><small>{item.groupName}</small><span>{item.reason}</span></div><a href={`/ogrenciler/${item.studentId}`} target="_blank" rel="noopener noreferrer">Dosyayı aç</a></li>)}</ul>
+            </details>}
+            {processedOutcomes.length > 0 && <details className="outcomeDetails" open={warningCount > 0 ? true : undefined}><summary>İşlem uygulanan kursiyerler ({processedOutcomes.length})</summary><ul>{processedOutcomes.map((item,index) => <li key={`${item.groupName}:${item.studentId}:${index}`}><div><strong>{item.studentName}</strong><small>{item.groupName}</small><span>{item.reason}</span></div></li>)}</ul></details>}
+          </div>}
         </div>
       </section>
 
@@ -472,22 +501,28 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             <div>
               <span>3 · VELİ BİLGİLENDİRME</span>
               <h2>{preparedMessages.length} mesaj · {sentMessageKeys.length} gönderildi</h2>
-              <p>WhatsApp’ta gönderdiğiniz mesajın durumunu “Gönderildi olarak kaydet” ile onaylayın.</p>
+              <p>WhatsApp’ta mesajı gönderdikten sonra “Gönderildi olarak kaydet” ile onaylayın. WhatsApp’ın açılması gönderim onayı değildir.</p>
               <p>Her mesaj gerçek öğrenci tarihlerini kullanır. Önce iptal bilgisi, sonra telafi ve iki bitiş tarihi gösterilir.</p>
             </div>
-            <button type="button" className="whatsappButton" onClick={openNextWhatsapp}>
+            <button type="button" className="whatsappButton" disabled={!pendingCount || submitting} onClick={openNextWhatsapp}>
               {openedStudentIds.length
-                ? `Sıradaki Mesajı Aç (${openedStudentIds.length}/${preparedMessages.filter((item) => item.recipient).length})`
-                : `WhatsApp Gönderimini Başlat (${preparedMessages.filter((item) => item.recipient).length})`}
+                ? `Sıradaki mesajı aç · ${pendingCount} onay bekliyor`
+                : `WhatsApp mesajlarını aç (${pendingCount})`}
             </button>
           </div>
 
+          <div className="messageToolbar" aria-label="Mesaj durum filtresi">
+            {([['all',`Tümü (${preparedMessages.length})`],['pending',`Gönderim onayı bekleyen (${pendingCount})`],['sent',`Gönderildi (${sentMessageKeys.length})`],['missing',`Telefon eksik (${missingPhoneCount})`]] as const).map(([value,label]) => <button type="button" key={value} aria-pressed={messageFilter===value} onClick={() => setMessageFilter(value)}>{label}</button>)}
+          </div>
+          {messageFeedback && <p className="messageFeedback" role="status">{messageFeedback}</p>}
           <div className="messageList">
-            {preparedMessages.map((item) => (
-              <article key={item.studentId}>
+            {!visibleMessages.length && <p className="messageFeedback">Bu durumda mesaj bulunmuyor.</p>}
+            {visibleMessages.map((item) => (
+              <article key={item.studentId+item.message}>
                 <div>
                   <strong>{item.studentName}</strong>
-                  <span>{item.recipient ? "WhatsApp hazır" : "Telefon bilgisi yok"}</span>
+                  <span>{item.recipient || "Telefon bilgisi yok · Kursiyer dosyasından güncelleyin"}</span>
+                  <details className="messagePreview"><summary>Mesaj içeriğini göster</summary><p>{item.message}</p></details>
                 </div>
                 <div className="dateCompare">
                   <span>Normal bitiş <b>{formatDate(item.oldNormalEndDate)}</b></span>
@@ -496,8 +531,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                 </div>
                 <div className="messageSendState">
                   <span className={sentMessageKeys.includes(item.studentId+item.message) ? "sentFlag opened" : "sentFlag"}>
-                    {sentMessageKeys.includes(item.studentId+item.message) ? "Gönderildi" : openedStudentIds.includes(item.studentId) ? "WhatsApp açıldı" : item.recipient ? "Sırada" : "Eksik"}
+                    {sentMessageKeys.includes(item.studentId+item.message) ? "Gönderildi · Kullanıcı onaylı" : openedStudentIds.includes(item.studentId+item.message) ? "WhatsApp açma isteği · Onay bekliyor" : item.recipient ? "Mesaj hazır" : "Telefon eksik"}
                   </span>
+                  {item.recipient && <button type="button" className="openMessage" onClick={() => openWhatsapp(item)}>WhatsApp’ta aç</button>}
                   {item.recipient && !sentMessageKeys.includes(item.studentId+item.message) && <button type="button" disabled={Boolean(confirmingMessage)} onClick={()=>void confirmSent(item)}>
                     {confirmingMessage===item.studentId+item.message ? "Kaydediliyor…" : "Gönderildi olarak kaydet"}
                   </button>}
@@ -509,6 +545,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       )}
 
       <style jsx>{`
+        .operationResults{display:grid;gap:10px;margin-top:12px}.outcomeStats{display:flex;flex-wrap:wrap;gap:8px 16px;padding:12px;background:#f3f7fc;border-radius:12px;font-size:13px}.outcomeStats span{color:#8a5713}.outcomeDetails{border:1px solid #d8e3ef;border-radius:12px;padding:12px;background:#fff}.outcomeDetails summary{cursor:pointer;font-size:13px;font-weight:800}.outcomeDetails p{font-size:12px;line-height:1.5;color:#705b3c}.outcomeDetails ul{list-style:none;padding:0;margin:8px 0 0;max-height:360px;overflow:auto}.outcomeDetails li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #e5ebf2}.outcomeDetails li div{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}.outcomeDetails small{color:#64748b;font-size:11px}.outcomeDetails li span{font-size:12px;line-height:1.5}.outcomeDetails a{flex-shrink:0;padding:9px;border:1px solid #cadbee;border-radius:9px;text-decoration:none;color:#1268d6;font-size:12px;font-weight:800}.skippedDetails{border-color:#ebd1a0;background:#fffbf3}.messageToolbar{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px;background:#f8fafd;border-bottom:1px solid #e3ebf4}.messageToolbar button{padding:9px 12px;border:1px solid #d8e2ee;border-radius:10px;background:#fff;color:#526980;cursor:pointer;font:inherit;font-size:12px;font-weight:700}.messageToolbar button[aria-pressed=true]{background:#eaf3ff;border-color:#1268d6;color:#1260b6}.messageFeedback{padding:12px 20px;margin:0;border-bottom:1px solid #dce7f4;background:#f0f6ff;color:#214f7a;font-size:13px;line-height:1.5}.messageSendState{display:grid;gap:8px;justify-items:start}.messageSendState button{min-height:40px;border:1px solid #1268d6;border-radius:10px;padding:9px 12px;background:#1268d6;color:#fff;font-weight:700;cursor:pointer}.messageSendState .openMessage{background:#edf9f1;border-color:#bce1c9;color:#17643c}.messageSendState button:disabled,.whatsappButton:disabled{opacity:.5;cursor:default}.messagePreview{margin-top:7px;font-size:12px;color:#1260b6}.messagePreview summary{cursor:pointer}.messagePreview p{white-space:pre-wrap;overflow-wrap:anywhere;color:#314966;line-height:1.6;padding:10px;background:#f5f8fc;border-radius:10px;max-height:260px;overflow:auto}.sentFlag{line-height:1.5}.messageList article{grid-template-columns:minmax(160px,1fr) minmax(170px,1fr) minmax(160px,.9fr)}@media(max-width:900px){.messageList article{grid-template-columns:1fr}.messageSendState{justify-items:stretch}.messageSendState button{width:100%}.outcomeDetails li{align-items:flex-start}}
         .participantDetails{margin:0 4px 10px;padding:10px 12px;border:1px solid #cfdae7;border-top:0;border-radius:0 0 11px 11px;background:#fff;color:#17345c}.participantDetails summary{cursor:pointer;font-size:13px;font-weight:700;line-height:1.5}.participantDetails summary span{display:block;font-size:11px;color:#1268d6}.participantDetails ol{margin:10px 0 0;padding-left:25px;max-height:240px;overflow:auto}.participantDetails li{padding:5px;overflow-wrap:anywhere}.participantDetails p,.customTarget p{font-size:12px;line-height:1.5}.customTargets{display:grid;gap:12px;margin-top:14px}.customTarget{min-width:0;margin:0;padding:12px;border:1px solid #cfdae7;border-radius:12px}.customTarget legend{font-size:13px;font-weight:700;max-width:100%;overflow-wrap:anywhere}
 
         .startingWarning{padding:16px;margin-bottom:18px;border:1px solid #edbd62;border-radius:14px;background:#fff8e8;color:#704811}.startingWarning p{font-size:13px;line-height:1.5}.startingPerson{display:grid;gap:5px;padding:10px 0;border-top:1px solid #eddbb6}.startingPerson span,.startingWarning small{font-size:12px}.startingWarning button,.startingPerson a{display:block;padding:11px;border:0;border-radius:10px;background:#1268d6;color:#fff;text-decoration:none;font-weight:700;margin:8px 0}.startingWarning small{display:block}.lessonOpsShell{display:grid;gap:18px;color:#10233f}.lessonOpsHero{display:flex;justify-content:space-between;gap:20px;padding:26px;border-radius:22px;background:linear-gradient(135deg,#061f3d,#0a4f8c);color:#fff;box-shadow:0 18px 45px rgba(15,58,107,.18)}.lessonOpsHero>div:first-child{max-width:760px}.lessonOpsHero span{font-size:11px;font-weight:900;letter-spacing:.1em;color:#ffad2f}.lessonOpsHero h1{margin:7px 0 8px;font-size:30px}.lessonOpsHero p{margin:0;color:rgba(255,255,255,.82);line-height:1.6}.heroRule{min-width:260px;max-width:330px;padding:16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:rgba(255,255,255,.08);display:grid;gap:6px}.heroRule strong{font-size:13px}.heroRule span{font-size:12px;line-height:1.5;color:#fff;letter-spacing:0}.lessonOpsGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lessonOpsCard{background:#fff;border:1px solid #dce5ef;border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(22,53,88,.06)}.lessonOpsCard h2{margin:0 0 16px;font-size:20px}.fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fieldGrid+ .fieldGrid{margin-top:12px}.fieldGrid label,.customFields label{display:grid;gap:6px}.fieldGrid label>span{font-size:12px;font-weight:800;color:#526980}.fieldGrid select,.fieldGrid input{box-sizing:border-box;min-width:0;max-width:100%;width:100%;min-height:44px;border:1px solid #cfdaE7;border-radius:11px;padding:0 11px;background:#fff;color:#17345c;font:inherit}.sourcePreview{display:grid;gap:4px;margin-top:14px;padding:13px;border-radius:12px;background:#eef6ff;border:1px solid #cfe2f8}.sourcePreview span{font-size:12px;color:#5a718a}.modeCards{display:grid;gap:9px}.modeCards button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid #d8e2ed;border-radius:13px;background:#fff;color:#17345c;cursor:pointer}.modeCards button.active{border-color:#1671e8;background:#eef6ff;box-shadow:0 0 0 2px rgba(22,113,232,.08)}.modeCards strong{font-size:13px}.modeCards span{font-size:11px;line-height:1.5;color:#60758c}.customFields{margin-top:14px}.checkRow{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:13px;border:1px solid #d7e5dc;border-radius:12px;background:#f2fbf6}.checkRow input{width:18px;height:18px;margin-top:2px}.checkRow strong,.checkRow span{display:block}.checkRow strong{font-size:13px;color:#15603c}.checkRow span{margin-top:4px;font-size:11px;color:#5d7467;line-height:1.45}.ruleBox{margin-top:14px;padding:14px;border-radius:12px;background:#fff8ea;border:1px solid #efd3a3}.ruleBox strong{color:#8a5713}.ruleBox p{margin:5px 0 0;font-size:12px;line-height:1.6;color:#705b3c}.applyButton{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:12px;background:#1268d6;color:#fff;font-weight:900;cursor:pointer}.applyButton:disabled{opacity:.6;cursor:wait}.groupField{display:grid;gap:6px}.groupField>span{font-size:12px;font-weight:800;color:#526980}.groupChoices{display:grid;gap:8px}.fieldGrid .groupChoice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #cfdae7;border-radius:11px;background:#f6faff}.groupChoice input{width:20px;min-height:20px;height:20px;flex-shrink:0}.groupChoice small{display:block;color:#526980;margin-top:4px}.sourcePreview label{display:grid;gap:6px}.sourcePreview select{width:100%;min-height:44px;border:1px solid #cfdae7;border-radius:11px;background:#fff}.modeCards button:disabled{opacity:.5;cursor:not-allowed}.resultBox{white-space:pre-line;margin-top:12px;padding:13px;border-radius:11px;background:#edf8f2;border:1px solid #c4e6d2;color:#17623b;font-size:13px;font-weight:800}.messageSection{padding:0;overflow:hidden}.messageHead{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:20px;border-bottom:1px solid #dfe7ef}.messageHead>div>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:#1671e8}.messageHead h2{margin:4px 0}.messageHead p{margin:0;color:#64748b;font-size:12px}.whatsappButton{border:0;border-radius:11px;padding:12px 14px;background:#1fa463;color:#fff;font-weight:900;cursor:pointer}.messageList{display:grid}.messageList article{display:grid;grid-template-columns:minmax(180px,1fr) 2fr auto;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid #edf1f5}.messageList article:last-child{border-bottom:0}.messageList article>div:first-child strong,.messageList article>div:first-child span{display:block}.messageList article>div:first-child span{margin-top:3px;font-size:10px;color:#718096}.dateCompare{display:flex;gap:14px;flex-wrap:wrap}.dateCompare span{font-size:11px;color:#6a7f95}.dateCompare b{color:#17345c}.sentFlag{border-radius:999px;padding:6px 9px;background:#edf2f7;color:#64748b;font-size:10px;font-weight:900}.sentFlag.opened{background:#e1f6e9;color:#157044}@media(max-width:900px){.lessonOpsHero{flex-direction:column}.heroRule{max-width:none}.lessonOpsGrid{grid-template-columns:1fr}.fieldGrid{grid-template-columns:1fr}.messageHead{align-items:stretch;flex-direction:column}.messageList article{grid-template-columns:1fr}.whatsappButton{width:100%}}
