@@ -32,7 +32,7 @@ export default async function RenewalOperationsPage(){
     supabase.from("student_group_memberships").select("student_id,group_id,started_at,is_active").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
     supabase.from("student_enrollments").select("id,student_id,group_id,total_lessons,used_lessons,start_date,planned_end_date,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_lesson_balance").select("student_id,compensation_lesson_balance"),
-    supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
+    supabase.from("student_status_change_requests").select("student_id,status,request_type,reason,description,created_at,reviewed_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
     supabase.from("student_activity_logs").select("id,student_id,title,description,new_value,performed_at").eq("organization_id",organizationId).eq("activity_type","registration_renewed").order("performed_at",{ascending:false}).limit(250),
     supabase.from("approval_requests").select("id,student_id,status,new_values,metadata,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).eq("request_type","registration_custom_lesson_count").order("created_at",{ascending:false}).limit(250),
   ]);
@@ -74,7 +74,7 @@ export default async function RenewalOperationsPage(){
     return {
       id:student.id,studentNumber:student.student_number||null,name:`${student.first_name||""} ${student.last_name||""}`.trim()||"Kursiyer",status,
       branchName:student.branch_id?branches.get(student.branch_id)||null:null,groupName:membership?.group_id?groups.get(membership.group_id)||null:null,totalLessons:total,usedLessons:used,remainingLessons:remaining,plannedEndDate:endDate,reason,category,
-      passiveRequestPending:statusRequest?.request_type==="deactivate"&&statusRequest?.status==="pending",passiveReason:student.status==="passive"?(statusRequest?.reason||null):null,passiveAt:student.status==="passive"?(statusRequest?.applied_at||statusRequest?.reviewed_at||statusRequest?.created_at||null):null,lastRenewedAt:lastRenewed.get(student.id)||null,
+      passiveRequestPending:statusRequest?.request_type==="deactivate"&&statusRequest?.status==="pending",passiveReason:student.status==="passive"?(statusRequest?.reason||null):null,passiveAt:student.status==="passive"?(statusRequest?.reviewed_at||statusRequest?.created_at||null):null,lastRenewedAt:lastRenewed.get(student.id)||null,
     };
   }).sort((a,b)=>{
     const rank=(x:CenterItem)=>x.category==="action"?0:x.category==="soon"?1:x.category==="passive"?2:3;
