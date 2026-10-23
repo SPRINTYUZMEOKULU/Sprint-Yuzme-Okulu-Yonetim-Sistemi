@@ -1,3 +1,4 @@
+import CompensationPlanEditor from "./compensation-plan-editor";
 import CommunicationSummary from "./communication-summary";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { studentLessonRights } from "@/lib/students/lesson-rights";
@@ -268,12 +269,14 @@ export default async function StudentFile({
   ]);
 
   const student = studentResult.data;
-  const studentAge = ageFromBirthDate(student.birth_date);
+
 
   if (!student) {
     notFound();
   }
 
+  const studentAge = ageFromBirthDate(student.birth_date);
+  const canManageCompensation = ["owner", "admin", "branch_manager"].includes(String(profile.role));
   const enrollment = enrollmentResult.data;
   const membership = membershipResult.data;
   const attendancePlan = attendancePlanResult.data?.enrollment_id === enrollment?.id ? attendancePlanResult.data : null;
@@ -923,6 +926,7 @@ export default async function StudentFile({
           </div>
 
           <form action={updateStudentProfile} className="formGrid">
+            {["first_name","last_name","birth_date","email","guardian_email"].map(name=><input key={name} type="hidden" name={name} value={student[name] || ""} />)}
             <input type="hidden" name="student_id" value={student.id} />
 
             <label>
@@ -1302,7 +1306,7 @@ export default async function StudentFile({
           {plannedCompensations.map((item:any)=><article key={`planned-${item.id}`}>
             <div><strong>TELAFİ · {item.status==="planned"?"Planlandı":item.status==="completed"?"Tamamlandı":"İptal edildi"}</strong>
               <p>{fmtDate(item.lesson_date)} · {String(cancellationSchedulesResult.data?.find((schedule:any)=>schedule.id===item.target_schedule_id)?.start_time||"").slice(0,5)} · {item.note||"Telafi dersi"}</p>
-            </div><span>{fmtDate(item.lesson_date)}</span>
+            </div><div><span>{fmtDate(item.lesson_date)}</span>{item.status==="planned"&&canManageCompensation&&<CompensationPlanEditor id={item.id} date={item.lesson_date} schedules={operationSchedules} groups={operationGroups} branches={operationBranches}/>}</div>
           </article>)}
           {lessonLedger.map((item: any) => (
             <article key={item.id}>

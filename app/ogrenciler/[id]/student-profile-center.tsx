@@ -98,7 +98,10 @@ export default function StudentProfileCenter() {
 
       event.preventDefault();
       event.stopPropagation();
-      void openEditor(id, detectAdultCourse());
+      const field=summaryButton?.dataset.profileField;
+      void openEditor(id, detectAdultCourse()).then(()=>{
+        if(field) window.requestAnimationFrame(()=>document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`.profileCenterPanel [data-profile-field="${field}"]`)?.focus());
+      });
     };
 
     document.addEventListener("click", onClick, true);
@@ -161,7 +164,10 @@ export default function StudentProfileCenter() {
     const response = await saveStudentProfileFromCenter({ studentId: id, ...form });
     setMessage(response.message);
     setSaving(false);
-    if (response.ok) router.refresh();
+    if (response.ok) {
+      window.dispatchEvent(new CustomEvent("student-profile-saved", {detail: form}));
+      router.refresh();
+    }
   }
 
   async function createOrLinkPortal() {
@@ -232,29 +238,29 @@ export default function StudentProfileCenter() {
             <section>
               <div className="sectionTitle"><b>1</b><div><strong>{adultCourse ? "Kursiyer Bilgileri" : "Öğrenci Bilgileri"}</strong><small>Kimlik ve doğrudan iletişim bilgileri</small></div></div>
               <div className="profileGrid">
-                <label><span>Ad</span><input value={form.firstName} onChange={(e) => set("firstName", e.target.value)} /></label>
-                <label><span>Soyad</span><input value={form.lastName} onChange={(e) => set("lastName", e.target.value)} /></label>
-                <label><span>Doğum Tarihi</span><input type="date" value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} /></label>
-                <label><span>{adultCourse ? "Kursiyer Telefonu" : "Öğrenci Telefonu"}</span><input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
-                <label className="full"><span>{adultCourse ? "Kursiyer E-postası" : "Öğrenci E-postası"}</span><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></label>
+                <label><span>Ad</span><input data-profile-field="firstName" value={form.firstName} onChange={(e) => set("firstName", e.target.value)} /></label>
+                <label><span>Soyad</span><input data-profile-field="lastName" value={form.lastName} onChange={(e) => set("lastName", e.target.value)} /></label>
+                <label><span>Doğum Tarihi</span><input data-profile-field="birthDate" type="date" value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} /></label>
+                <label><span>{adultCourse ? "Kursiyer Telefonu" : "Öğrenci Telefonu"}</span><input data-profile-field="phone" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
+                <label className="full"><span>{adultCourse ? "Kursiyer E-postası" : "Öğrenci E-postası"}</span><input data-profile-field="email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></label>
               </div>
             </section>
 
             <section>
               <div className="sectionTitle"><b>2</b><div><strong>{adultCourse ? "Yakın Bilgileri" : "Veli Bilgileri"}</strong><small>{adultCourse ? "İsteğe bağlı yakın iletişim bilgileri" : "İletişim, ödeme ve bilgilendirme için ana veli kaydı"}</small></div></div>
               <div className="profileGrid">
-                <label><span>{relationLabel} Adı Soyadı</span><input value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} /></label>
-                <label><span>{relationLabel} Telefonu</span><input value={form.guardianPhone} onChange={(e) => set("guardianPhone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
-                <label className="full"><span>{relationLabel} E-postası</span><input type="email" value={form.guardianEmail} onChange={(e) => set("guardianEmail", e.target.value)} /></label>
+                <label><span>{relationLabel} Adı Soyadı</span><input data-profile-field="guardianName" value={form.guardianName} onChange={(e) => set("guardianName", e.target.value)} /></label>
+                <label><span>{relationLabel} Telefonu</span><input data-profile-field="guardianPhone" value={form.guardianPhone} onChange={(e) => set("guardianPhone", e.target.value)} placeholder="05xx xxx xx xx" /></label>
+                <label className="full"><span>{relationLabel} E-postası</span><input data-profile-field="guardianEmail" type="email" value={form.guardianEmail} onChange={(e) => set("guardianEmail", e.target.value)} /></label>
               </div>
             </section>
 
             <section>
               <div className="sectionTitle"><b>3</b><div><strong>Acil Durum ve Yönetim Notu</strong><small>Gerektiğinde hızlı erişilecek kişi ve kurum içi not</small></div></div>
               <div className="profileGrid">
-                <label><span>Acil Durum Kişisi</span><input value={form.emergencyContactName} onChange={(e) => set("emergencyContactName", e.target.value)} /></label>
-                <label><span>Acil Durum Telefonu</span><input value={form.emergencyContactPhone} onChange={(e) => set("emergencyContactPhone", e.target.value)} /></label>
-                <label className="full"><span>Genel Yönetim Notu</span><textarea rows={4} value={form.generalNote} onChange={(e) => set("generalNote", e.target.value)} /></label>
+                <label><span>Acil Durum Kişisi</span><input data-profile-field="emergencyContactName" value={form.emergencyContactName} onChange={(e) => set("emergencyContactName", e.target.value)} /></label>
+                <label><span>Acil Durum Telefonu</span><input data-profile-field="emergencyContactPhone" value={form.emergencyContactPhone} onChange={(e) => set("emergencyContactPhone", e.target.value)} /></label>
+                <label className="full"><span>Genel Yönetim Notu</span><textarea data-profile-field="generalNote" rows={4} value={form.generalNote} onChange={(e) => set("generalNote", e.target.value)} /></label>
               </div>
             </section>
 

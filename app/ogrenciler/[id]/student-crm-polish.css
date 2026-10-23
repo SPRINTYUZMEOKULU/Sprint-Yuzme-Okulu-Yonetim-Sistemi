@@ -40,3 +40,17 @@
 }
 @media (max-width:390px){.studentFilePage .fileCommandActions{grid-template-columns:1fr!important}.studentFilePage .fileCommandActions button{min-height:52px!important}}
 @media print{.studentFilePage .metricGrid{display:grid;grid-template-columns:repeat(4,1fr);overflow:visible}.professionalSummaryHead button{display:none}}
+
+.studentFilePage .professionalSummaryGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.professionalSummaryGrid>button,.professionalSummaryNote{font:inherit;text-align:left;cursor:pointer;min-width:0;padding:12px;border:1px solid #dce7f2;border-radius:12px;background:#f8fbff}
+.professionalSummaryGrid>button:hover,.professionalSummaryNote:hover{background:#edf6ff;border-color:#7bb0dd}
+.professionalSummaryGrid>button:focus-visible,.professionalSummaryNote:focus-visible{outline:3px solid #1675c8;outline-offset:2px}
+.professionalSummaryGrid i{float:right;font-style:normal;color:#1675c8}
+.professionalSummaryGrid strong{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.makeupEditor{margin-top:10px;max-width:460px}.makeupEditor button{border:1px solid #bfd6ea;border-radius:10px;background:#eff6ff;color:#17558c;padding:10px 12px;font:inherit;cursor:pointer}
+.makeupFields{display:grid;gap:10px;margin-top:10px;padding:14px;background:#f5f9fe;border-radius:14px}.makeupFields label{display:grid;gap:6px;font-size:12px}.makeupFields input,.makeupFields select{width:100%;min-width:0;box-sizing:border-box;padding:10px;border:1px solid #cbd9e8;border-radius:9px;background:white;color:#12385e}.makeupEditor .cancelMakeup{color:#a12525;background:#fff3f3;border-color:#ecc5c5}.makeupEditor button:disabled{opacity:.5;cursor:wait}
+@media(max-width:380px){.studentFilePage .professionalSummaryGrid{grid-template-columns:1fr}}
+
+.studentSettingsShortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.studentSettingsShortcuts a{padding:12px;border:1px solid #c8dcee;border-radius:11px;background:white;color:#18568c;text-decoration:none;font-size:12px;font-weight:700}
+
+.studentFilePage[data-active-file-tab="all"] [data-file-panel]{display:block!important}.studentFilePage[data-active-file-tab="all"] .metricGrid{display:grid!important}
