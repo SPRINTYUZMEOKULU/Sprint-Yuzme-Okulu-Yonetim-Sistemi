@@ -23,6 +23,8 @@ const MANAGEMENT_PREFIXES = [
   "/ders-programi",
   "/yoklama",
   "/odemeler",
+  "/fatura-merkezi",
+  "/odeme-bilgileri",
   "/kasa",
   "/onay-merkezi",
   "/raporlar",
