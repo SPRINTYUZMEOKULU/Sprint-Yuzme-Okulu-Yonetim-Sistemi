@@ -69,6 +69,7 @@ export default function StudentProfileCenter() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -114,8 +115,10 @@ export default function StudentProfileCenter() {
     setAdultCourse(adult);
     setOpen(true);
     setLoading(true);
+    setProfileLoaded(false);
     setMessage("");
 
+    try {
     const response = await getStudentProfileForCenter(id);
     if (!response.ok || !response.student) {
       setMessage(response.message || "Bilgiler alınamadı.");
@@ -145,7 +148,8 @@ export default function StudentProfileCenter() {
       relationship: adult ? "Yakını" : "Veli",
       temporaryPassword: "",
     });
-    setLoading(false);
+    setProfileLoaded(true);
+    } catch { setMessage("Bilgiler yüklenemedi. Düzenlemeyi kapatıp tekrar açın."); } finally { setLoading(false); }
   }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -158,9 +162,10 @@ export default function StudentProfileCenter() {
 
   async function save() {
     const id = activeStudentId();
-    if (!id || saving) return;
+    if (!id || saving || !profileLoaded) return;
     setSaving(true);
     setMessage("");
+    try {
     const response = await saveStudentProfileFromCenter({ studentId: id, ...form });
     setMessage(response.message);
     setSaving(false);
@@ -168,6 +173,7 @@ export default function StudentProfileCenter() {
       window.dispatchEvent(new CustomEvent("student-profile-saved", {detail: form}));
       router.refresh();
     }
+    } catch { setMessage("Bilgiler kaydedilemedi. Bağlantıyı kontrol edip tekrar deneyin."); } finally { setSaving(false); }
   }
 
   async function createOrLinkPortal() {

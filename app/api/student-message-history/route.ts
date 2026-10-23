@@ -12,6 +12,7 @@ const ALLOWED_ROLES = [
 ] as const;
 
 const LABELS: Record<string, string> = {
+  compensation_plan_change: "Telafi Planı Değişikliği",
   payment_information: "Ödeme Bilgilendirmesi",
   registration_update: "Kayıt Güncelleme",
   renewal: "Kayıt Yenileme",

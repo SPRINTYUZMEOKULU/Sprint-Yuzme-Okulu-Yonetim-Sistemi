@@ -1,4 +1,5 @@
 "use server";
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { portalCredentialContact, savePortalCredential } from "@/app/veliler/portal-credential-actions";
 
 import { revalidatePath } from "next/cache";
@@ -154,7 +155,7 @@ export async function saveStudentProfileFromCenter(payload: ProfileCenterPayload
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: savedStudent, error } = await supabase
     .from("students")
     .update({
       first_name: firstName,
@@ -171,9 +172,9 @@ export async function saveStudentProfileFromCenter(payload: ProfileCenterPayload
       updated_at: new Date().toISOString(),
     })
     .eq("organization_id", profile.organization_id)
-    .eq("id", studentId);
+    .eq("id", studentId).select("id").maybeSingle();
 
-  if (error) return { ok: false as const, message: error.message };
+  if (error || !savedStudent) return { ok: false as const, message: error?.message || "Kayıt bulunamadı veya güncelleme yetkiniz yok." };
 
   await supabase.from("student_timeline_events").insert({
     organization_id: profile.organization_id,
@@ -184,8 +185,9 @@ export async function saveStudentProfileFromCenter(payload: ProfileCenterPayload
     created_by: profile.id,
   });
 
-  revalidatePath(`/ogrenciler/${studentId}`);
-  return { ok: true as const, message: "Öğrenci ve veli bilgileri kaydedildi." };
+  revalidateGuardianConnection(profile.id, studentId);
+  revalidateStudentSurfaces(studentId);
+  return { ok: true as const, message: "Öğrenci ve veli iletişim bilgileri kaydedildi. Portal giriş hesabı ayarları ayrı yönetilir." };
 }
 
 export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload) {

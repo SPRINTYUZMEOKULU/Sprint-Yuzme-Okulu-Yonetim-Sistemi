@@ -147,6 +147,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "student_not_resolved" });
   }
 
+  // Opening a saved makeup-change message never marks it as sent.
+  const {data:makeupMessages,error:makeupLookupError}=await supabase.from("message_logs").select("id,status,message_body,metadata")
+    .eq("organization_id",organizationId).eq("student_id",studentId).eq("template_key","compensation_plan_change").order("prepared_at",{ascending:false}).limit(50);
+  if(makeupLookupError) return NextResponse.json({ok:false,message:"Mesaj durumu doğrulanamadı."},{status:500});
+  const normalizeMessage=(value:string)=>String(value||"").replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ]/g,"");
+  const makeupMessage=(makeupMessages||[]).find(row=>normalizeMessage(row.message_body)===normalizeMessage(message));
+  if(makeupMessage) return NextResponse.json({ok:true,studentId,type:"compensation_plan_change",status:makeupMessage.status,opened:true});
+
   if(sourcePath === "/ders-operasyonlari") {
     // Opening a prepared cancellation is an interaction, not delivery confirmation.
     const {data:prepared,error}=await supabase.from("message_logs").select("id,message_body,metadata,status")

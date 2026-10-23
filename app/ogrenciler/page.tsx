@@ -573,9 +573,7 @@ export default async function StudentsPage() {
         enrollment?.planned_end_date ??
         null;
 
-      const compensationEndDate =
-        attendancePlan?.compensation_planned_end_date ??
-        normalEndDate;
+      const compensationEndDate = rights.endDate ?? normalEndDate;
 
       const activeEnrollmentId = enrollment?.id
         ? String(enrollment.id)
