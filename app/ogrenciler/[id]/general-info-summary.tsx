@@ -198,18 +198,22 @@ export default function GeneralInfoSummary() {
 
     if (panel && form && panel.dataset.professionalSummary !== "1") {
       const rows = [
-        ["Telefon", valueOf(form, "phone")],
-        ["E-posta", valueOf(form, "email")],
-        [adultCourse ? "Yakını Adı Soyadı" : "Veli Adı Soyadı", valueOf(form, "guardian_name")],
-        [adultCourse ? "Yakını Telefonu" : "Veli Telefonu", valueOf(form, "guardian_phone")],
-        [adultCourse ? "Yakını E-postası" : "Veli E-postası", valueOf(form, "guardian_email")],
-        ["Acil Durum Kişisi", valueOf(form, "emergency_contact_name")],
-        ["Acil Durum Telefonu", valueOf(form, "emergency_contact_phone")],
+        ["Ad", "first_name", "firstName"], ["Soyad", "last_name", "lastName"],
+        ["Doğum Tarihi", "birth_date", "birthDate"],
+        ["Telefon", "phone", "phone"], ["E-posta", "email", "email"],
+        [adultCourse ? "Yakını Adı Soyadı" : "Veli Adı Soyadı", "guardian_name", "guardianName"],
+        [adultCourse ? "Yakını Telefonu" : "Veli Telefonu", "guardian_phone", "guardianPhone"],
+        [adultCourse ? "Yakını E-postası" : "Veli E-postası", "guardian_email", "guardianEmail"],
+        ["Acil Durum Kişisi", "emergency_contact_name", "emergencyContactName"],
+        ["Acil Durum Telefonu", "emergency_contact_phone", "emergencyContactPhone"],
       ];
-
       const summary = document.createElement("div");
       summary.className = "professionalGeneralSummary";
-      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER PROFİLİ</span><strong>${adultCourse ? "İletişim ve yakın özeti" : "İletişim ve veli özeti"}</strong><small>Bilgileri değiştirmek için “Bilgileri Düzenle” işlemini kullanın.</small></div><button type="button" data-open-profile-center="1">✎ Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="professionalSummaryNote"><span>Genel Yönetim Notu</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></div>`;
+      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER BİLGİ MERKEZİ</span><strong>Bilgiler ve ayarlar</strong><small>Düzenlemek için bir bilgiye dokunun. Tüm değişiklikleri tek seferde kaydedin.</small></div><button type="button" data-open-profile-center="1">Tüm Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, name, field]) => { const raw=valueOf(form,name); const value=name==="birth_date"&&raw!=="—"?dateText(raw):raw; return `<button type="button" data-open-profile-center="1" data-profile-field="${field}" aria-label="${escapeHtml(label)} düzenle"><span>${escapeHtml(label)} <i aria-hidden="true">✎</i></span><strong>${escapeHtml(value==="—"?"Bilgi ekle":value)}</strong></button>`; }).join("")}</div><button type="button" class="professionalSummaryNote" data-open-profile-center="1" data-profile-field="generalNote"><span>Genel Yönetim Notu · Düzenle</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></button>`;
+      const shortcuts=document.createElement("div");
+      shortcuts.className="studentSettingsShortcuts";
+      shortcuts.innerHTML='<a href="#tum-bilgiler">Tüm bilgileri tek sayfada aç</a><a href="#kurs-kaydi" data-open-file-tab="registration" data-target-id="kurs-kaydi">Kayıt ve program</a><a href="#ders-hareketleri" data-open-file-tab="lessons" data-target-id="ders-hareketleri">Telafileri düzenle</a><a href="#saglik" data-open-file-tab="health" data-target-id="saglik">Sağlık ve beyanlar</a><a href="#odeme" data-open-file-tab="finance" data-target-id="odeme">Ödeme ve kasa</a><a href="#notlar" data-open-file-tab="notes" data-target-id="notlar">Not ve hatırlatmalar</a>';
+      summary.appendChild(shortcuts);
       form.hidden = true;
       form.setAttribute("aria-hidden", "true");
       panel.appendChild(summary);
@@ -333,8 +337,22 @@ export default function GeneralInfoSummary() {
         ?.click();
     };
 
+    const syncSavedProfile=(event: Event)=>{
+      const values=(event as CustomEvent<Record<string,string>>).detail;
+      panel?.querySelectorAll<HTMLButtonElement>("button[data-profile-field]").forEach(button=>{
+        const key=button.dataset.profileField || "";
+        const raw=values?.[key] || "";
+        const target=button.querySelector("strong,p");
+        if(target) target.textContent=key==="birthDate"&&raw?dateText(raw):raw||"Bilgi ekle";
+      });
+    };
+    window.addEventListener("student-profile-saved",syncSavedProfile);
     document.addEventListener("click", openProfileForMissingPhone, true);
     return () => {
+      panel?.querySelector(".professionalGeneralSummary")?.remove();
+      if(panel) delete panel.dataset.professionalSummary;
+      if(form){form.hidden=false;form.removeAttribute("aria-hidden");}
+      window.removeEventListener("student-profile-saved",syncSavedProfile);
       cancelled = true;
       window.clearTimeout(adultLabelTimer);
       document.removeEventListener("click", openProfileForMissingPhone, true);

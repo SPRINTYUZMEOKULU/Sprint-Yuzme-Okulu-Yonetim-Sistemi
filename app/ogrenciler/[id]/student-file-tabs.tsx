@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 const tabs = [
+  { id: "tum-bilgiler", label: "Tüm Bilgiler ve Düzenleme" },
   { id: "genel-bilgiler", label: "Genel Bilgiler" },
   { id: "kurs-kaydi", label: "Kayıt ve Program" },
   { id: "odeme", label: "Ödeme ve Kasa" },
@@ -19,6 +20,7 @@ type TabId = (typeof tabs)[number]["id"];
 type TabMeta = Partial<Record<TabId, { count?: number; ready?: boolean }>>;
 
 const targetToTab: Record<string, TabId> = {
+  "tum-bilgiler": "tum-bilgiler",
   "genel-bilgiler": "genel-bilgiler",
   duzenle: "genel-bilgiler",
   "kurs-kaydi": "kurs-kaydi",
@@ -44,6 +46,7 @@ const panelToTab: Record<string, TabId> = {
 };
 
 const tabToLegacyPanel: Record<TabId, string> = {
+  "tum-bilgiler": "all",
   "genel-bilgiler": "general",
   "kurs-kaydi": "registration",
   odeme: "finance",
@@ -140,7 +143,7 @@ function applyVisibility(root: HTMLElement, tab: TabId) {
   for (const element of Array.from(
     root.querySelectorAll<HTMLElement>("[data-file-tab]"),
   )) {
-    element.hidden = element.dataset.fileTab !== tab;
+    element.hidden = tab !== "tum-bilgiler" && element.dataset.fileTab !== tab;
   }
 
   for (const container of Array.from(
