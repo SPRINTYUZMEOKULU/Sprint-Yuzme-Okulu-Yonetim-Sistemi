@@ -1,3 +1,4 @@
+import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
 import CompensationPlanEditor from "./compensation-plan-editor";
 import CommunicationSummary from "./communication-summary";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
@@ -19,6 +20,7 @@ import StudentFileOperations from "./student-file-operations";
 import StudentStatusButton from "./student-status-button";
 import PendingSubmitButton from "./pending-submit-button";
 import "./student-detail.css";
+import "./compensation-plan.css";
 
 export const dynamic = "force-dynamic";
 
@@ -201,7 +203,7 @@ export default async function StudentFile({
 
     supabase
       .from("message_logs")
-      .select("id,template_key,channel,status,message_body,prepared_at,sent_at")
+      .select("id,template_key,channel,status,message_body,prepared_at,sent_at,recipient,metadata")
       .eq("student_id", id)
       .order("prepared_at", { ascending: false })
       .limit(20),
@@ -547,7 +549,7 @@ export default async function StudentFile({
    */
 
   const [compensationsResult,cancellationsResult,cancellationSchedulesResult,scheduledUsageResult]=await Promise.all([
-    supabase.from("student_compensation_lessons").select("id,enrollment_id,lesson_date,status,note,target_schedule_id")
+    supabase.from("student_compensation_lessons").select("id,enrollment_id,lesson_date,status,note,target_schedule_id,target_group_id")
       .eq("organization_id",profile.organization_id).eq("student_id",id).order("lesson_date"),
     supabase.from("student_activity_logs").select("source_id,old_value,new_value")
       .eq("organization_id",profile.organization_id).eq("student_id",id).eq("activity_type","lesson_cancellation_compensation"),
@@ -611,8 +613,7 @@ export default async function StudentFile({
     enrollment?.planned_end_date ??
     null;
 
-  const compensationEndDate =
-    attendancePlan?.compensation_planned_end_date ?? normalEndDate;
+  const compensationEndDate = rightsAvailable ? plannedCompensationEndDate(normalEndDate, plannedCompensations.filter((row:any)=>row.enrollment_id===enrollment?.id)) : attendancePlan?.compensation_planned_end_date ?? normalEndDate;
 
   /*
    * =========================================================
@@ -1303,11 +1304,18 @@ export default async function StudentFile({
 
         <div className="list">
           {!rightsAvailable && <p className="empty">Telafi bilgileri doğrulanamadı. Sayfayı yenileyip kontrol edin.</p>}
-          {plannedCompensations.map((item:any)=><article key={`planned-${item.id}`}>
-            <div><strong>TELAFİ · {item.status==="planned"?"Planlandı":item.status==="completed"?"Tamamlandı":"İptal edildi"}</strong>
-              <p>{fmtDate(item.lesson_date)} · {String(cancellationSchedulesResult.data?.find((schedule:any)=>schedule.id===item.target_schedule_id)?.start_time||"").slice(0,5)} · {item.note||"Telafi dersi"}</p>
-            </div><div><span>{fmtDate(item.lesson_date)}</span>{item.status==="planned"&&canManageCompensation&&<CompensationPlanEditor id={item.id} date={item.lesson_date} schedules={operationSchedules} groups={operationGroups} branches={operationBranches}/>}</div>
-          </article>)}
+          {plannedCompensations.map((item:any)=>{
+            const schedule=cancellationSchedulesResult.data?.find((row:any)=>row.id===item.target_schedule_id);
+            const targetGroup=operationGroups.find((row:any)=>row.id===(schedule?.group_id||item.target_group_id));
+            const targetBranch=operationBranches.find((row:any)=>row.id===targetGroup?.branch_id);
+            const notice=messages.find((row:any)=>row.template_key==="compensation_plan_change"&&row.metadata?.compensation_id===item.id&&row.status!=="cancelled"&&row.metadata?.current_plan?.date===item.lesson_date&&row.metadata?.current_plan?.schedule_id===item.target_schedule_id&&Boolean(row.metadata?.current_plan?.cancelled)===(item.status==="cancelled"));
+            return <article key={`planned-${item.id}`} className="compensationCard">
+              <div className="compensationCardHead"><div><small>TELAFİ DERSİ</small><h3>{fmtDate(item.lesson_date)}{schedule?.start_time?` · ${String(schedule.start_time).slice(0,5)}–${String(schedule.end_time).slice(0,5)}`:""}</h3></div><span className={`compensationStatus ${item.status}`}>{item.status==="planned"?"Planlandı":item.status==="completed"?"Tamamlandı":"İptal edildi"}</span></div>
+              <div className="compensationLocation">{[targetBranch?.name,targetGroup?.name].filter(Boolean).join(" · ")||"Seans bilgisi"}</div>
+              {item.note&&<details className="compensationSource"><summary>Kaynak ders ve açıklama</summary><p>{item.note}</p></details>}
+              {canManageCompensation&&<CompensationPlanEditor id={item.id} date={item.lesson_date} status={item.status} canPrepare={activityLogs.some((row:any)=>row.source_id===item.id&&["compensation_cancelled","compensation_rescheduled"].includes(row.activity_type))} notification={notice?{id:notice.id,body:notice.message_body,recipient:notice.recipient||"",status:notice.status}:null} schedules={operationSchedules} groups={operationGroups} branches={operationBranches}/>}
+            </article>;
+          })}
           {lessonLedger.map((item: any) => (
             <article key={item.id}>
               <div>
@@ -1680,7 +1688,7 @@ export default async function StudentFile({
                 </div>
 
                 <span>
-                  {message.status} •{" "}
+                  {({prepared:"Hazır · Gönderilmedi",sent:"Gönderildi",cancelled:"Geçersiz / Önceki plan"} as Record<string,string>)[message.status] || message.status} •{" "}
                   {fmt(
                     message.sent_at ??
                       message.prepared_at ??
@@ -1690,11 +1698,10 @@ export default async function StudentFile({
               </article>
             ))}
 
-            {!contactLogs.length &&
-              messages.map((message: any) => (
+            {messages.filter((row:any)=>row.template_key==="compensation_plan_change"||!contactLogs.length).map((message: any) => (
                 <article key={message.id}>
                   <div>
-                    <strong>{message.template_key || "Mesaj"}</strong>
+                    <strong>{message.template_key==="compensation_plan_change"?"Telafi Planı Değişikliği":message.template_key || "Mesaj"}</strong>
 
                     <p>
                       {message.message_body?.slice(0, 180)}
@@ -1703,7 +1710,7 @@ export default async function StudentFile({
                   </div>
 
                   <span>
-                    {message.status} •{" "}
+                    {({prepared:"Hazır · Gönderilmedi",sent:"Gönderildi",cancelled:"Geçersiz / Önceki plan"} as Record<string,string>)[message.status] || message.status} •{" "}
                     {fmt(message.sent_at ?? message.prepared_at)}
                   </span>
                 </article>

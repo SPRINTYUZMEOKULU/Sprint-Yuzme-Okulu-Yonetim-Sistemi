@@ -1,4 +1,5 @@
 "use server";
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 
 import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
 import { revalidatePath } from "next/cache";
@@ -254,7 +255,7 @@ export async function updateStudentProfile(
 
   const supabase = await createClient();
 
-  const payload = {
+  const payload: Record<string, string | null> = {
     phone:
       getText(
         formData.get("phone"),
@@ -324,7 +325,9 @@ export async function updateStudentProfile(
       ) || null,
   };
 
-  const { error } = await supabase
+  // Missing fields belong to other editors; never erase their saved values.
+  for (const key of Object.keys(payload)) if(!formData.has(key)) delete payload[key];
+  const { data: savedStudent, error } = await supabase
     .from("students")
     .update(payload)
     .eq(
@@ -334,12 +337,12 @@ export async function updateStudentProfile(
     .eq(
       "id",
       studentId
-    );
+    ).select("id").maybeSingle();
 
-  if (error) {
+  if (error || !savedStudent) {
     goError(
       studentId,
-      error.message
+      error?.message || "Kayıt bulunamadı veya güncelleme yetkiniz yok."
     );
   }
 
@@ -411,6 +414,7 @@ export async function updateStudentProfile(
     `/ogrenciler/${studentId}`
   );
 
+  revalidateStudentSurfaces(studentId);
   goSaved(
     studentId,
     "profile"
@@ -449,7 +453,7 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
     goError(studentId, "Öğrenci bulunamadı veya bu kayda erişim yetkiniz yok.");
   }
 
-  const { error: healthError } = await supabase
+  const { data: savedHealth, error: healthError } = await supabase
     .from("students")
     .update({
       allergy_note: getText(formData.get("allergy_note"), 2000) || null,
@@ -460,10 +464,10 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
         getText(formData.get("emergency_medical_note"), 2000) || null,
     })
     .eq("organization_id", profile.organization_id)
-    .eq("id", studentId);
+    .eq("id", studentId).select("id").maybeSingle();
 
-  if (healthError) {
-    goError(studentId, `Sağlık bilgileri kaydedilemedi: ${healthError.message}`);
+  if (healthError || !savedHealth) {
+    goError(studentId, `Sağlık bilgileri kaydedilemedi: ${healthError?.message || "Güncelleme yetkisi veya kayıt bulunamadı."}`);
   }
 
   // Kullanıcı ve organizasyon erişimi yukarıda doğrulandı. Beyan tablosunun
@@ -472,7 +476,7 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
   const admin = createAdminClient();
   const { data: existingConsent, error: lookupError } = await admin
     .from("registration_consents")
-    .select("student_id,form_snapshot")
+    .select("student_id,form_snapshot,registration_for")
     .eq("student_id", studentId)
     .maybeSingle();
 
@@ -489,7 +493,7 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
       : {};
   const consentPayload = {
     organization_id: profile.organization_id,
-    registration_for: "child",
+    registration_for: existingConsent?.registration_for || (student.birth_date && new Date(student.birth_date).getTime() < new Date(new Date().setFullYear(new Date().getFullYear()-13)).getTime() ? "adult" : "child"),
     health_declaration: healthDeclaration,
     health_note: healthNote,
     rules_accepted: rulesAccepted,
@@ -533,6 +537,7 @@ export async function updateStudentHealthAndConsents(formData: FormData) {
 
   revalidatePath(`/ogrenciler/${studentId}`);
   revalidatePath("/on-kayitlar");
+  revalidateStudentSurfaces(studentId);
   goSaved(studentId, "health-consents");
 }
 

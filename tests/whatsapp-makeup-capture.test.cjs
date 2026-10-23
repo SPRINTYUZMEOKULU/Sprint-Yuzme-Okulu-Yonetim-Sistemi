@@ -1,0 +1,6 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+for(const status of ['prepared','cancelled','sent'])test(`opening ${status} telafi message never fabricates a sent log`,async()=>{
+ const writes=[];const client={from(table){const q={select(){return q},eq(){return q},order(){return q},limit(){return q},maybeSingle(){return q},insert(value){writes.push(value);return q},then(resolve){return Promise.resolve({error:null,data:table==='students'?{id:'student'}:[{id:'notice',status,message_body:'Telafi tarihi düzenlenmiştir.'}]}).then(resolve)}};return q}};
+ const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync('app/api/whatsapp-interactions/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(name=>name==='next/server'?{NextResponse:{json:(body,{status=200}={})=>({body,status})}}:name==='@/lib/auth/profile'?{requireProfile:async()=>({id:'staff',organization_id:'org'})}:{createClient:async()=>client},m,m.exports);
+ const result=await m.exports.POST({json:async()=>({studentId:'student',recipient:'905551112233',message:'Telafi tarihi düzenlenmiştir.',sourcePath:'/ogrenciler/student'})});assert.equal(result.body.status,status);assert.equal(writes.length,0);
+});
