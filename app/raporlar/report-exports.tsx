@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { printReportHtml } from "./print-report";
 
 type Sheet = { name: string; rows: (string | number | null | undefined)[][] };
 export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename:string}) {
@@ -9,9 +8,19 @@ export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename
     setError("");
     const sheet=sheets.find(s=>s.name===selected);
     if(!sheet) return;
-    const popup=window.open("", "_blank");
-    if(!popup) {setError("Rapor önizlemesi açılamadı. Tarayıcıda bu site için açılır pencerelere izin verin.");return;}
-    popup.document.open();popup.document.write(printReportHtml(sheet,filename));popup.document.close();popup.focus();
+    // A real same-origin document avoids blank popup printing on mobile browsers.
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/raporlar/yazdir";
+    form.target = "_self";
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "report";
+    input.value = JSON.stringify({ sheet, filename });
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
   }
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
