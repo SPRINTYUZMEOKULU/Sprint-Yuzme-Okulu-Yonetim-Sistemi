@@ -4,7 +4,7 @@ import { useState } from "react";
 type Sheet = { name: string; rows: (string | number | null | undefined)[][] };
 export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename:string}) {
   const [selected,setSelected]=useState("Yönetici özeti");
-  function printSelected() {
+  function printSelected(format: "html" | "pdf" = "html") {
     setError("");
     const sheet=sheets.find(s=>s.name===selected);
     if(!sheet) return;
@@ -18,6 +18,11 @@ export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename
     input.name = "report";
     input.value = JSON.stringify({ sheet, filename });
     form.appendChild(input);
+    const formatInput = document.createElement("input");
+    formatInput.type = "hidden";
+    formatInput.name = "format";
+    formatInput.value = format;
+    form.appendChild(formatInput);
     document.body.appendChild(form);
     form.submit();
     form.remove();
@@ -42,7 +47,7 @@ export default function ReportExports({sheets,filename}:{sheets:Sheet[];filename
   return <div className="reportExportBar">
     <div><strong>Yönetici raporunu dışa aktar</strong><span>Önce rapor türünü seçin; yalnızca o bölüm çıktıya alınır.</span></div>
     <label className="reportPrintChoice">Çıktı türü<select value={selected} onChange={e=>setSelected(e.target.value)}>{sheets.map(s=><option key={s.name} value={s.name}>{s.name}{s.name === "Yönetici özeti" ? " (kısa özet)" : ` (${Math.max(0,s.rows.length-1)} satır)`}</option>)}</select></label>
-    <div className="reportExportButtons"><button onClick={printSelected}>A4 / PDF önizle</button><button onClick={excel} disabled={busy}>{busy?"Excel hazırlanıyor…":"Excel indir (.xlsx)"}</button></div>
+    <div className="reportExportButtons"><button onClick={() => printSelected()}>A4 / PDF önizle</button><button onClick={() => printSelected("pdf")}>PDF indir</button><button onClick={excel} disabled={busy}>{busy?"Excel hazırlanıyor…":"Excel indir (.xlsx)"}</button></div>
     <small>Özet varsayılan olarak açılır. Ayrıntılı ödeme, öğrenci ve eğitmen raporlarını ayrı ayrı yazdırabilirsiniz. Excel tüm raporları ayrı sekmelerde içerir.</small>
     {error && <span role="alert">{error}</span>}
   </div>;

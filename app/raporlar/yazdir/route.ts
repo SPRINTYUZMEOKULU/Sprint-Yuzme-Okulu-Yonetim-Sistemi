@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth/profile";
 import { printReportHtml, type ReportSheet } from "../print-report";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
@@ -21,6 +22,20 @@ export async function POST(request: Request) {
       || !report.sheet.rows.every(row => Array.isArray(row) && row.every(value => value == null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value))))) throw new Error("Invalid report");
   } catch {
     return new Response("Rapor okunamadı. Rapor merkezinden yeniden oluşturun.", { status: 400 });
+  }
+  if (form.get("format") === "pdf") {
+    try {
+      const { reportPdf } = await import("../report-pdf");
+      const pdf = await reportPdf(report.sheet, report.filename);
+      const safeFilename = `${report.filename}-${report.sheet.name}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      return new Response(pdf, { headers: {
+        "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${safeFilename}.pdf"`,
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+      } });
+    } catch (error) {
+      console.error("Rapor PDF oluşturulamadı", error instanceof Error ? error.message : "PDF error");
+      return new Response("PDF oluşturulamadı. Geri dönüp yeniden deneyin.", { status: 500 });
+    }
   }
   return new Response(printReportHtml(report.sheet, report.filename), {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },

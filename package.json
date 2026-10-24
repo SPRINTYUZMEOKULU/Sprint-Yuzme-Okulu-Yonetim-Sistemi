@@ -15,6 +15,7 @@
     "@supabase/ssr": "0.6.1",
     "@supabase/supabase-js": "2.49.1",
     "next": "15.5.18",
+    "pdfmake": "0.2.20",
     "react": "19.0.6",
     "react-dom": "19.0.6",
     "web-push": "3.6.7",
