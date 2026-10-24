@@ -227,14 +227,17 @@ export default function QuickAttendanceClient(p:Props){
    if(!writableGroups.length){setMessage(incompleteGroups.length?`${incompleteGroups.flatMap(g=>missingStudents(g)).length} öğrencinin yoklaması işaretlenmedi. Hiçbir seans kaydedilmedi.`:"Kaydedilecek öğrenci yok. Yoklama kaydedilmedi.");return}
    startTransition(async()=>{
      const warnings:string[]=[];
+     const failures:string[]=[];
+     let savedCount=0;
      for(const g of writableGroups){
        const r=await persistGroup(g);
-       if(!r.ok){setMessage(r.message);return}
+       if(!r.ok){failures.push(`${g.group.name||"Seans"}: ${r.message}`);continue}
+       savedCount++;
        if(r.message.includes("İşlem günlüğü"))warnings.push(r.message);
        setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
      }
-     if(!incompleteGroups.length)try{localStorage.removeItem(draftKey)}catch{}
-     setMessage(`${incompleteGroups.length?"⚠ Kısmi kayıt:":"✓"} ${formatDisplayDate(date)} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
+     if(!incompleteGroups.length&&!failures.length)try{localStorage.removeItem(draftKey)}catch{}
+     setMessage(`${incompleteGroups.length||failures.length?"⚠ Kısmi kayıt:":"✓"} ${formatDisplayDate(date)} · ${time}: ${savedCount} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${failures.length?`Kaydedilemeyen seanslar: ${failures.join(" · ")}. Taslaklar korundu.`:""} ${warnings.join(" ")}`);
    })
  }
 
