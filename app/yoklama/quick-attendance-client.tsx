@@ -144,8 +144,12 @@ export default function QuickAttendanceClient(p:Props){
      }catch{if(live)setSyncMessage("Bağlantı kurulamadı. Mevcut seçimleriniz korunuyor.");}
      finally{inFlight=false;}
    }
-   const timer=window.setInterval(()=>void refresh(),30000);
-   return()=>{live=false;window.clearInterval(timer)};
+   const onReturn=()=>void refresh();
+   window.addEventListener("focus",onReturn);
+   window.addEventListener("online",onReturn);
+   document.addEventListener("visibilitychange",onReturn);
+   const timer=window.setInterval(onReturn,30000);
+   return()=>{live=false;window.clearInterval(timer);window.removeEventListener("focus",onReturn);window.removeEventListener("online",onReturn);document.removeEventListener("visibilitychange",onReturn)};
  },[date,branchId,time,rosterSignature,router]);
 
  const total=groups.reduce((n,g)=>n+g.students.length,0);
@@ -188,7 +192,7 @@ export default function QuickAttendanceClient(p:Props){
    setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}));setMessage("");
  }
 
- function markAllPresent(g:(typeof groups)[number]){setStatuses(v=>{const n={...v};g.students.forEach(s=>{const e=g.enrollmentByStudent.get(s.id);if(remaining(e)<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)])return;n[attendanceKey(g.schedule.id,s.id)]=g.compensationIds.has(s.id)?"compensation":"present"});return n});setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}))}
+ function markAllPresent(g:(typeof groups)[number]){mutationVersion.current++;setStatuses(v=>{const n={...v};g.students.forEach(s=>{const e=g.enrollmentByStudent.get(s.id);if(remaining(e)<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)])return;n[attendanceKey(g.schedule.id,s.id)]=g.compensationIds.has(s.id)?"compensation":"present"});return n});setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:false}))}
 
  function eligibleStudents(g:(typeof groups)[number]){return g.students.filter(s=>!(remaining(g.enrollmentByStudent.get(s.id))<=0&&!g.compensationIds.has(s.id)&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]))}
  function missingStudents(g:(typeof groups)[number]){return eligibleStudents(g).filter(s=>!statuses[attendanceKey(g.schedule.id,s.id)])}
@@ -230,7 +234,7 @@ export default function QuickAttendanceClient(p:Props){
        setSavedGroups(v=>({...v,[groupSaveKey(g.group.id,g.schedule.id)]:true}));
      }
      if(!incompleteGroups.length)try{localStorage.removeItem(draftKey)}catch{}
-     setMessage(`✓ ${formatDisplayDate(date)} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
+     setMessage(`${incompleteGroups.length?"⚠ Kısmi kayıt:":"✓"} ${formatDisplayDate(date)} · ${time}: ${writableGroups.length} seansın yoklaması kaydedildi ve sunucudan doğrulandı. ${incompleteGroups.length?`${incompleteGroups.length} seans eksik işaretleme nedeniyle kaydedilmedi; taslakları korundu.`:""} ${warnings.join(" ")}`);
    })
  }
 
@@ -247,6 +251,8 @@ export default function QuickAttendanceClient(p:Props){
    </section>
 
    {ready&&Object.keys(legacyDraft).length>0&&<div className="qaMessage">Bu cihazda önceki sürümden {Object.keys(legacyDraft).length} kaydedilmemiş seçim bulundu. Seçimleri kontrol edip kaydedebilirsiniz. <button onClick={()=>{setStatuses(v=>({...v,...legacyDraft}));setLegacyDraft({});setMessage("Önceki taslak getirildi. Tarihi ve seçimleri kontrol edip Kaydet'e basın.")}}>Eski Taslağı Getir</button></div>}
+   <button type="button" disabled={pending} onClick={()=>setLoadAttempt(v=>v+1)}>Sunucudaki yoklamayı yeniden yükle</button>
+   {ready&&marked>0&&groups.some(g=>g.students.some(s=>{const k=attendanceKey(g.schedule.id,s.id);return statuses[k]!==storedStatuses[k]}))&&<div className="qaMessage" role="status">Kaydedilmemiş seçimler var. Bu cihazdaki seçimler diğer hesaplarda görünmez. İlgili seansın Kaydet düğmesine basın ve sunucu doğrulamasını bekleyin.</div>}
    <AttendanceReminderPanel key={draftKey} students={p.students} context={`${formatDisplayDate(date)} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
@@ -261,7 +267,7 @@ export default function QuickAttendanceClient(p:Props){
          <button disabled={expired||pending} className={cur==="excused"?"on excused":""} onClick={()=>setStatus(g,s,"excused")}>○ İzinli</button>
        </div>
      </article>})}</div>
-     <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansı ayrı kaydedin</b><span>Diğer seansları beklemeden kayıt işlemini tamamlar.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>
+     <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansın kaydı tamamlanmadı</b><span>{g.students.filter(s=>storedStatuses[attendanceKey(g.schedule.id,s.id)]).length}/{g.students.length} sunucuda kayıtlı · Seçimler kaydedilene kadar bu cihazda taslaktır.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>
    </section>})}
 
    {message&&<div className="qaMessage" role="status" aria-live="polite">{message}</div>}
