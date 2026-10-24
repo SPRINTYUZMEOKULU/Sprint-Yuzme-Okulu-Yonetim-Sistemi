@@ -303,7 +303,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const planned = plannedIds.map(id => coachMap.get(String(id)) || "Bilinmeyen eğitmen");
       if (!names.length) addNote(name,`${dayNames[normalizeWeekday(sc.weekday)]} ${sc.start_time.slice(0,5)}: öğrenciye özel eğitmen ataması eksik.`);
       if (!planned.length) addNote(name,`${sc.start_time.slice(0,5)} seansında eğitmen ataması eksik.`);
-      return {id:`${e.id}:${sc.id}`,name,branch:branchMap.get(sc.branch_id || "") || "—",group:groupMap.get(sc.group_id || "")?.name || "—",session:`${dayNames[normalizeWeekday(sc.weekday)]} ${sc.start_time.slice(0,5)}`,planned:planned.join(", ") || "Atama yok",assigned:names.join(", ") || "Öğrenci ataması eksik"};
+      return {id:`${e.id}:${sc.id}`,scheduleId:sc.id,name,branch:branchMap.get(sc.branch_id || "") || "—",group:groupMap.get(sc.group_id || "")?.name || "—",session:`${dayNames[normalizeWeekday(sc.weekday)]} ${sc.start_time.slice(0,5)}`,planned:planned.join(", ") || "Atama yok",assigned:names.join(", ") || "Öğrenci ataması eksik"};
     });
   });
   const lessonRows = filteredAttendance.map(a => {
@@ -339,6 +339,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }).sort((a,b)=>(a.priority === "Yüksek" ? 0 : 1)-(b.priority === "Yüksek" ? 0 : 1) || a.subject.localeCompare(b.subject,"tr"));
   const debtTotal = financeRows.reduce((sum,r)=>sum+(r.balance || 0),0);
   const overdueTotal = financeRows.reduce((sum,r)=>sum+r.overdue,0);
+  const missingCoachAttendance = filteredAttendance.filter(a => !a.coach_id);
+  const missingCoachSessions = new Set(missingCoachAttendance.map(a => `${a.lesson_date}:${a.schedule_id || a.group_id || a.id}`)).size;
+  const missingStudentAssignments = assignmentRows.filter(r => r.assigned === "Öğrenci ataması eksik");
+  const missingAssignmentSessions = new Set(missingStudentAssignments.map(r => r.scheduleId)).size;
   const exportSheets = [
     {name:"Yönetici özeti",rows:[
       ["Rapor aralığı",`${dateLabel(from)} – ${dateLabel(to)}`],
@@ -349,8 +353,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       ["Tahsilat",collectionTotal],["Tahsilat açıklaması",`${validPayments.length} alınmış ödeme · ${money(collectionTotal)} · aktif/pasif tüm geçmiş; durum ayrımı Kayıt durumları raporunda.`],
       ["Doğrulanmış kayıt borcu",money(debtTotal)],["Gecikmiş taksit",money(overdueTotal)],
       ["Kalan ders",remainingLessons],["Katılım",`${presentCount} katıldı · ${absentCount} gelmedi · ${pct(attendanceRate)}`],
-      ["Eğitmeni eksik yoklama",lessonRows.filter(r=>r.actual === "Kaydedilmedi").length],
-      ["Öğrenci ataması eksik seans",assignmentRows.filter(r=>r.assigned === "Öğrenci ataması eksik").length],
+      ["Eğitmen bilgisi eksik ders / seans",missingCoachSessions],
+      ["Eğitmen eksikliği ayrıntısı",`${missingCoachAttendance.length} öğrenci yoklama satırı · ${missingCoachSessions} farklı tarih/seans. Seçilen tarih aralığı ve şube kapsamındadır.`],
+      ["Öğrenci eğitmen ataması eksik seans",missingAssignmentSessions],
+      ["Öğrenci ataması eksikliği ayrıntısı",`${missingStudentAssignments.length} öğrenci–seans eşleşmesi · ${missingAssignmentSessions} farklı seans. Güncel aktif kayıtlar ve aktif seanslar kapsamındadır.`],
       ["Borçlu kayıt sayısı",financeRows.filter(r=>(r.balance || 0)>0).length],
       ["Ücreti bilinmeyen kayıt",financeRows.filter(r=>r.balance === null).length],
       ["Borç toplamının kapsamı",financeRows.some(r=>r.balance === null) ? "Eksik toplam: ücreti bilinmeyen kayıtlar hariçtir; borçsuz oldukları anlamına gelmez." : "Seçilen kayıtların doğrulanmış borç toplamı."],
