@@ -2,6 +2,7 @@ import { readSettings } from "@/lib/settings/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notifications/create-notification";
+import { sanitizeRegistrationAttribution } from "@/lib/pre-registration-attribution";
 
 type CustomResponseInput = {
   field_id?: unknown;
@@ -1120,6 +1121,7 @@ export async function POST(
       );
 
     const snapshot = {
+      marketing_attribution: sanitizeRegistrationAttribution(body.marketing_attribution),
       registration_for:
         registrationFor,
 
@@ -1461,6 +1463,7 @@ export async function POST(
           `${branchText} / ${groupText} / ${packageText} için web ön kaydı oluşturuldu.`,
 
         new_value: {
+          marketing_attribution: sanitizeRegistrationAttribution(body.marketing_attribution),
           registration_for:
             registrationFor,
 
