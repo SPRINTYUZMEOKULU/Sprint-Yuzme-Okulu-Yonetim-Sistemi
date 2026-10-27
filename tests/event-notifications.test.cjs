@@ -46,6 +46,7 @@ test('repeated pending/approved cash actions do not update payments or notify ag
     let writes=0,pushes=0;
     const client={from(){const q={select(){return q},eq(){return q},maybeSingle:async()=>({data:{id:'payment',student_id:'s',amount:100,payment_method:'cash',cash_handover_status:status},error:null}),update(){writes++;throw Error('unexpected update')}};return q}};
     const api=load('app/odemeler/actions.ts',name=>{
+      if(name==='@/lib/notifications/cash-target')return load('lib/notifications/cash-target.ts',require);
       if(name==='next/cache')return {revalidatePath(){}};
       if(name==='@supabase/supabase-js')return {};
       if(name==='@/lib/auth/profile')return {requireProfile:async()=>({id:'owner',organization_id:'org'})};

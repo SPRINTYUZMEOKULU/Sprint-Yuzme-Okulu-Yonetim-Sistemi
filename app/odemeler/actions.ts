@@ -1,5 +1,6 @@
 "use server";
 
+import { cashNotificationTarget } from "@/lib/notifications/cash-target";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
 import { revalidatePath } from "next/cache";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -173,7 +174,7 @@ async function addSystemNotification(
     event_key: input.eventKey, notification_type: input.eventKey,
     title: input.title, body: input.message, severity: input.severity,
     student_id: studentId, entity_type: input.entityType, entity_id: input.entityId,
-    target_path: input.category === "approval" ? "/onay-merkezi" : input.eventKey === "cash_handover_requested" ? "/kasa?durum=handoff_pending" : studentId ? `/ogrenciler/${studentId}?payment=history` : "/odemeler",
+    target_path: input.category === "approval" ? "/onay-merkezi" : cashNotificationTarget({ event_key: input.eventKey, entity_id: input.entityId, metadata: input.metadata }) || (studentId ? `/ogrenciler/${studentId}?payment=history` : "/odemeler"),
     push_requested: Boolean(input.pushRequested), metadata: input.metadata,
   });
 

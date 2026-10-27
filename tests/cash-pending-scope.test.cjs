@@ -41,3 +41,17 @@ test('unknown status does not widen the daily query to all dates',async()=>{
  const {props}=await renderScope({date:'2026-10-18',durum:'anything'});
  assert.equal(props.rows.length,0);assert.equal(props.pendingOnly,false);
 });
+
+test('notification opens exactly its older payment without widening organization scope',async()=>{
+ const {html,props,trace}=await renderScope({date:'2026-10-18',paymentId:'pending-2',durum:'handoff_pending'});
+ assert.deepEqual(props.rows.map(row=>row.id),['pending-2']);
+ assert.equal(props.pendingOnly,false);
+ assert.match(html,/Seçilen Kasa İşlemi/);
+ assert.ok(!trace.some(([op])=>op==='gte'||op==='lt'));
+ assert.ok(trace.some(([op,table,k,v])=>op==='eq'&&table==='student_payments'&&k==='organization_id'&&v==='org'));
+});
+test('missing notification payment shows no unrelated payments',async()=>{
+ const {html,props}=await renderScope({paymentId:'missing'});
+ assert.equal(props.rows.length,0);
+ assert.match(html,/Kasa işlemi bulunamadı/);
+});

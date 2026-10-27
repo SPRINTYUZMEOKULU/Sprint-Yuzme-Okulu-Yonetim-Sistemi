@@ -1,3 +1,4 @@
+import { cashNotificationTarget } from "@/lib/notifications/cash-target";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -217,6 +218,9 @@ export default async function BildirimlerPage() {
           message,
           category,
           notification_type,
+          event_key,
+          entity_id,
+          source_id,
           severity,
           priority,
           target_path,
@@ -248,14 +252,14 @@ export default async function BildirimlerPage() {
   ]);
 
   const notifications =
-    ((notificationsResult.data as (NotificationItem & { metadata?: { reminder_at?: string } | null })[] | null) ?? [])
+    ((notificationsResult.data as (NotificationItem & { event_key?: string | null; entity_id?: string | null; source_id?: string | null; metadata?: Record<string, unknown> & { reminder_at?: string } | null })[] | null) ?? [])
       .filter((item) => {
         if (!["registration_note_reminder", "student_note_reminder"].includes(item.notification_type || "")) return true;
         const reminderAt = item.metadata?.reminder_at;
         if (!reminderAt) return true;
         const time = new Date(reminderAt).getTime();
         return !Number.isFinite(time) || time <= Date.now();
-      });
+      }).map(item => ({ ...item, target_path: cashNotificationTarget(item) || item.target_path }));
 
   const devices =
     (subscriptionsResult.data as DeviceRow[] | null) ?? [];
