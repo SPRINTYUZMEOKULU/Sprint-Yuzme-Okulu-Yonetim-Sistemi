@@ -100,9 +100,10 @@ function formatDayLabel(dateKey: string) {
 export default async function CashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; durum?: string }>;
+  searchParams: Promise<{ date?: string; durum?: string; paymentId?: string }>;
 }) {
-  const { date, durum } = await searchParams;
+  const { date, durum, paymentId: rawPaymentId } = await searchParams;
+  const paymentId = typeof rawPaymentId === "string" ? rawPaymentId.trim() : "";
   const pendingOnly = durum === "handoff_pending";
   const todayKey = getIstanbulTodayKey();
   const selectedDateKey = normalizeSelectedDate(date, todayKey);
@@ -167,7 +168,9 @@ export default async function CashPage({
 
   let paymentsQuery = supabase.from("student_payments").select("*")
     .eq("organization_id", organizationId);
-  if (pendingOnly) {
+  if (paymentId) {
+    paymentsQuery = paymentsQuery.eq("id", paymentId);
+  } else if (pendingOnly) {
     paymentsQuery = paymentsQuery.eq("cash_handover_status", "handoff_pending");
   } else {
     paymentsQuery = paymentsQuery.gte("received_at", startIso).lt("received_at", endIso);
@@ -263,7 +266,7 @@ export default async function CashPage({
           <p>SPRİNTOS · FİNANS VE KASA</p>
           <h1>Günlük Kasa</h1>
           <span>
-            {pendingOnly
+            {paymentId ? "Bildirime ait tahsilat ve kasa teslim kaydı." : pendingOnly
               ? "Tüm tarihlerde teslim onayı bekleyen işlemleri görüntüleyin."
               : `${isToday ? "Bugün" : selectedDayLabel} alınan ödemeleri, ödeme yöntemlerini, personeldeki nakdi ve ana kasa teslim durumunu tek ekrandan yönetin.`}
           </span>
@@ -272,7 +275,7 @@ export default async function CashPage({
 
       <FinanceQuickNav />
 
-      {!pendingOnly ? <section className="cashDateNavigator" aria-label="Kasa tarihi">
+      {!pendingOnly && !paymentId ? <section className="cashDateNavigator" aria-label="Kasa tarihi">
         <Link href={`/kasa?date=${previousDateKey}`} className="cashDateArrow">
           ← Önceki Gün
         </Link>
@@ -292,23 +295,25 @@ export default async function CashPage({
           </span>
         )}
       </section> : <section className="cashDateNavigator" aria-label="Kasa kapsamı">
-        <div className="cashDateCurrent"><small>TÜM TARİHLER</small><strong>Teslim Onayı Bekleyen İşlemler</strong></div>
+        <div className="cashDateCurrent"><small>TÜM TARİHLER</small><strong>{paymentId ? "Seçilen Kasa İşlemi" : "Teslim Onayı Bekleyen İşlemler"}</strong></div>
         <Link href="/kasa" className="cashDateArrow">Günlük Kasaya Dön</Link>
       </section>}
 
-      {!pendingOnly && !isToday ? (
+      {!pendingOnly && !paymentId && !isToday ? (
         <div className="cashTodayShortcut">
           <Link href="/kasa">Bugünün Kasasına Dön</Link>
         </div>
       ) : null}
 
+      {paymentId && !rows.length ? <p role="status" className="tableEmpty">Kasa işlemi bulunamadı veya bu kayda erişiminiz yok.</p> : null}
+
       <KasaClient
-        key={pendingOnly ? "pending" : selectedDateKey}
-        pendingOnly={pendingOnly}
+        key={paymentId || (pendingOnly ? "pending" : selectedDateKey)}
+        pendingOnly={pendingOnly && !paymentId}
         rows={rows}
         currentProfileId={profile.id}
-        dayLabel={selectedDayLabel}
-        isToday={isToday}
+        dayLabel={paymentId ? "Seçilen işlem · tüm tarihler" : selectedDayLabel}
+        isToday={isToday && !paymentId}
       />
 
       <style>{`
