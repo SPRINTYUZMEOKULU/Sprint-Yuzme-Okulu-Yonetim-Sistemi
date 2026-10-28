@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import PassiveStudentGuard from "./passive-student-guard";
 import { Icons } from "@/app/components/dashboard-icons";
 
 type SearchResult = {
@@ -34,13 +35,21 @@ function durumMetni(status?: string | null) {
   const map: Record<string, string> = {
     active: "Aktif Öğrenci",
     passive: "Pasif Öğrenci",
+    pasif: "Pasif Öğrenci",
+    aktif: "Aktif Öğrenci",
     pre_registration: "Ön Kayıt",
     pending: "Bekliyor",
     cancelled: "İptal",
     completed: "Tamamlandı",
   };
 
-  return map[status] || status;
+  return map[status.toLowerCase()] || status;
+}
+
+function statusColors(status?: string | null) {
+  if (["passive", "pasif"].includes((status || "").toLowerCase())) return { color: "#b91c1c", background: "#fee2e2" };
+  if (["active", "aktif"].includes((status || "").toLowerCase())) return { color: "#166534", background: "#dcfce7" };
+  return { color: "#475569", background: "#f1f5f9" };
 }
 
 export default function GlobalSearch() {
@@ -357,7 +366,7 @@ export default function GlobalSearch() {
           ================================================= */}
 
           {selected ? (
-            <div>
+            <PassiveStudentGuard status={selected.status} name={selected.name} explicitOnly><div>
               {/* ÜST */}
 
               <div
@@ -458,9 +467,7 @@ export default function GlobalSearch() {
                             "#64748b",
                         }}
                       >
-                        {durumMetni(
-                          selected.status
-                        )}
+                        <span style={{ ...statusColors(selected.status), padding: "3px 7px", borderRadius: "6px", fontWeight: 800 }}>{durumMetni(selected.status)}</span>
                       </small>
                     </div>
                   </div>
@@ -651,7 +658,7 @@ export default function GlobalSearch() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div></PassiveStudentGuard>
           ) : (
             <>
               {/* SONUÇ BAŞLIĞI */}
@@ -846,7 +853,7 @@ export default function GlobalSearch() {
                             "1px solid #eef2f7",
 
                           background:
-                            "#ffffff",
+                            ["passive", "pasif"].includes((result.status || "").toLowerCase()) ? "#fff7f7" : "#ffffff",
 
                           cursor:
                             "pointer",
@@ -867,7 +874,7 @@ export default function GlobalSearch() {
                               "12px",
 
                             background:
-                              "#edf5ff",
+                              statusColors(result.status).background,
 
                             display:
                               "flex",
@@ -879,12 +886,12 @@ export default function GlobalSearch() {
                               "center",
 
                             color:
-                              "#1769e8",
+                              statusColors(result.status).color,
 
                             flexShrink: 0,
                           }}
                         >
-                          <Icons.child />
+                          <span aria-hidden="true" style={{ fontSize: "14px", fontWeight: 900 }}>{result.name.split(" ").filter(Boolean).map(word => word[0]).slice(0, 2).join("")}</span>
                         </span>
 
                         <span
@@ -921,6 +928,7 @@ export default function GlobalSearch() {
                             {result.name}
                           </strong>
 
+                          {result.type === "student" ? <small style={{ ...statusColors(result.status), alignSelf: "flex-start", borderRadius: "6px", padding: "3px 7px", fontSize: "11px", fontWeight: 800, marginTop: "4px" }}>{durumMetni(result.status)}</small> : null}
                           {result.subtitle ? (
                             <small
                               style={{
@@ -1076,6 +1084,7 @@ function ActionButton({
   return (
     <button
       type="button"
+      data-student-action
       onClick={handleClick}
       disabled={isOpening}
       aria-busy={isOpening}

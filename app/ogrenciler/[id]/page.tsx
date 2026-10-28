@@ -1,3 +1,4 @@
+import PassiveStudentGuard from "@/app/components/passive-student-guard";
 import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
 import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
 import CompensationPlanEditor from "./compensation-plan-editor";
@@ -752,7 +753,7 @@ export default async function StudentFile({
   }>;
 
   return (
-    <main className="studentFilePage" data-active-file-tab="general">
+    <PassiveStudentGuard status={student.status} name={`${student.first_name} ${student.last_name}`}><main className="studentFilePage" data-active-file-tab="general">
       {/* =====================================================
           ÜST KART
           ===================================================== */}
@@ -1777,6 +1778,6 @@ export default async function StudentFile({
           </div>
         </section>
       </div>
-    </main>
+    </main></PassiveStudentGuard>
   );
 }
