@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       .limit(100),
     supabase
       .from("message_logs")
-      .select("id,template_key,channel,recipient,subject,message_body,status,prepared_at,sent_at")
+      .select("id,template_key,channel,recipient,subject,message_body,status,prepared_at,sent_at,metadata")
       .eq("organization_id", organizationId)
       .eq("student_id", studentId)
       .order("prepared_at", { ascending: false })
@@ -105,34 +105,39 @@ export async function GET(request: NextRequest) {
       channel: row.channel || "whatsapp",
       recipient: row.recipient || null,
       body: row.message_body || "Bilgilendirme gönderildi.",
-      status: row.status || "sent",
+      status: row.metadata?.delivery_confirmation === "whatsapp_opened" ? "opened" : row.metadata?.delivery_confirmation === "manual_confirmed" ? "confirmed" : row.status || "prepared",
+      deliveryConfirmation: row.metadata?.delivery_confirmation || null,
       sentAt: row.sent_at || row.prepared_at,
       source: "message",
     })),
   ];
 
-  const seen = new Set<string>();
-  const timeline = merged
-    .filter((item: any) => item.sentAt)
-    .sort((a: any, b: any) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
-    .filter((item: any) => {
-      const bodyKey = String(item.body || "").replace(/\s+/g, " ").trim().slice(0, 160);
-      const timeBucket = Math.floor(new Date(item.sentAt).getTime() / 30000);
-      const key = `${item.type}|${item.recipient || ""}|${bodyKey}|${timeBucket}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 60);
+  // Prefer the authoritative message row over its mirrored contact entry.
+  const canonicalMessages=merged.filter(item=>item.source==="message");
+  const normalizeBody=(value:string)=>String(value||"").replace(/\s+/g," ").trim();
+  const normalizeRecipient=(value:string|null)=>String(value||"").replace(/\D/g,"").replace(/^90/,"").replace(/^0/,"");
+  const timeline=merged.filter(item=>{
+    if(!item.sentAt)return false;
+    if(item.source==="message")return true;
+    return !canonicalMessages.some(message=>
+      message.rawId===item.rawId ||
+      (normalizeBody(message.body)===normalizeBody(item.body) &&
+       normalizeRecipient(message.recipient)===normalizeRecipient(item.recipient) &&
+       Math.abs(new Date(message.sentAt).getTime()-new Date(item.sentAt).getTime())<=30000));
+  }).sort((a,b)=>new Date(b.sentAt).getTime()-new Date(a.sentAt).getTime()).slice(0,60);
 
   const paymentNotices = activities
     .filter((row: any) => row.activity_type === "payment_information_sent")
+    .filter((row:any)=>!timeline.some(item=>item.status==="opened" &&
+      normalizeRecipient(item.recipient)===normalizeRecipient(row.new_value?.recipient||null) &&
+      Math.abs(new Date(item.sentAt).getTime()-new Date(row.performed_at).getTime())<=30000))
     .map((row: any) => ({
       id: row.id,
       title: row.title || "Ödeme bilgilendirmesi gönderildi",
       description: row.description || "WhatsApp üzerinden ödeme bilgisi gönderildi.",
       sentAt: row.performed_at,
       recipient: row.new_value?.recipient || null,
+      deliveryConfirmation: row.new_value?.delivery_confirmation || null,
     }));
 
   return NextResponse.json({
