@@ -16,6 +16,7 @@ type TimelineItem = {
 };
 
 type PaymentNotice = {
+  deliveryConfirmation?: string | null;
   id: string;
   title: string;
   description: string;
