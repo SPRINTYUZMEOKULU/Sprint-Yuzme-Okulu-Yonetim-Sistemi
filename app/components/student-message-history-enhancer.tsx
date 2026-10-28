@@ -55,7 +55,7 @@ function renderMessage(item: TimelineItem) {
   const body=String(item.body||"");
   const preview=body.length>200?body.slice(0,200)+"…":body;
   const icon=state==="success"?"✓":state==="error"?"!":"◷";
-  const title=String(item.title||"WhatsApp Bilgilendirmesi").replace(item.status==="opened"?/\\s+gönderildi$/i:/$^/,"");
+  const title=String(item.title||"WhatsApp Bilgilendirmesi").replace(item.status==="opened"?/\s+gönderildi$/i:/$^/,"");
 
   return `
     <article class="sprintMessageHistoryCard ${state}" data-message-history-id="${escapeHtml(item.id)}">
@@ -211,3 +211,4 @@ export default function StudentMessageHistoryEnhancer() {
 
   return null;
 }
+
