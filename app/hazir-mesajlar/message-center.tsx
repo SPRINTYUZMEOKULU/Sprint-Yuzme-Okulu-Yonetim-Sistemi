@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   SPRINT_MESSAGE_TEMPLATES,
   renderSprintMessage,
@@ -43,8 +43,15 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   const [giftCount,setGiftCount] = useState(1);
   const [giftNote,setGiftNote] = useState("");
   const [result,setResult] = useState<any>(null);
-  const [queue,setQueue] = useState<QueueItem[]>([]);
-  const [queueIndex,setQueueIndex] = useState(0);
+  const [queue,updateQueue] = useState<QueueItem[]>([]);
+  const queueRef = useRef<QueueItem[]>([]);
+  const lastQueueAction = useRef(0);
+  const [queueError,setQueueError] = useState("");
+  function setQueue(next:QueueItem[]){
+    queueRef.current=next;
+    updateQueue(next);
+    setQueueError("");
+  }
   const [apiSending,setApiSending] = useState(false);
   const [apiResult,setApiResult] = useState<string>("");
   const [pending,startTransition] = useTransition();
@@ -125,19 +132,37 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       status:"waiting" as const,
     })).filter(x=>Boolean(x.phone));
     if(!prepared.length){ window.alert("Seçili kursiyerlerde WhatsApp için geçerli telefon numarası bulunamadı."); return; }
-    setQueue(prepared); setQueueIndex(0); setApiResult("");
+    setQueue(prepared); setApiResult("");
   }
 
-  function openQueueItem(index:number){
-    const item=queue[index]; if(!item)return;
-    const url=`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`;
-    window.open(url,"_blank","noopener,noreferrer");
-    setQueue(prev=>prev.map((q,i)=>i===index?{...q,status:"opened"}:q));
-  }
-
-  function markSentAndNext(){
-    setQueue(prev=>prev.map((q,i)=>i===queueIndex?{...q,status:"sent"}:q));
-    setQueueIndex(i=>Math.min(i+1,Math.max(queue.length-1,0)));
+  // Keep the synchronous ref authoritative while React batches state updates.
+  function advanceQueue(){
+    const now=Date.now();
+    if(now-lastQueueAction.current<700)return;
+    lastQueueAction.current=now;
+    let next=queueRef.current;
+    const opened=next.findIndex(q=>q.status==="opened");
+    if(opened>=0){
+      next=next.map((q,i)=>i===opened?{...q,status:"sent" as const}:q);
+      setQueue(next);
+    }
+    const index=next.findIndex(q=>q.status==="waiting"||q.status==="error");
+    if(index<0)return;
+    const item=next[index];
+    try{
+      // Open within the click gesture; preserve the shared WhatsApp history hook.
+      const popup=window.open(`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`,"_blank");
+      if(!popup){
+        setQueue(next.map((q,i)=>i===index?{...q,status:"error"}:q));
+        setQueueError("WhatsApp penceresi açılamadı. Açılır pencere iznini kontrol edip tekrar deneyin.");
+        return;
+      }
+      popup.opener=null;
+      setQueue(next.map((q,i)=>i===index?{...q,status:"opened"}:q));
+    }catch{
+      setQueue(next.map((q,i)=>i===index?{...q,status:"error"}:q));
+      setQueueError("WhatsApp açılamadı. Tekrar deneyin.");
+    }
   }
 
   async function sendViaApi(){
@@ -166,12 +191,14 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       setResult(response);
       if(response?.messages?.length){
         const prepared=response.messages.map((m:any)=>({studentId:m.studentId,studentName:m.studentName,phone:cleanPhone(m.recipient),message:m.message,status:"waiting" as const})).filter((q:QueueItem)=>Boolean(q.phone));
-        setQueue(prepared); setQueueIndex(0); setTemplateKey("gift");
+        setQueue(prepared); setTemplateKey("gift");
       }
     });
   }
 
-  const currentQueueItem=queue[queueIndex];
+  const currentQueueItem=queue.find(q=>q.status==="opened") || queue.find(q=>q.status==="waiting"||q.status==="error");
+  const sentCount=queue.filter(q=>q.status==="sent").length;
+  const queueComplete=queue.length>0 && sentCount===queue.length;
 
   return <section className={styles.workspace}>
     <nav className={styles.tabs}>
@@ -209,14 +236,17 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
 
         {queue.length>0 && <div className={styles.card}>
           <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
-          <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status||"—"}</b></span></div>
-          <p className={styles.muted}>WhatsApp bağlantısı tarayıcıdan mesajı otomatik gönderemez. Bu kuyruk her kursiyeri tek tek güvenli biçimde hazırlar; WhatsApp'ta gönderimi onayladıktan sonra “Gönderildi, sıradaki” düğmesine basın.</p>
-          <div className={styles.quickTemplates}>
-            <button className={styles.primary} onClick={()=>openQueueItem(queueIndex)} disabled={!currentQueueItem}>Sıradakini WhatsApp'ta Aç</button>
-            <button onClick={markSentAndNext} disabled={!currentQueueItem}>Gönderildi · Sıradaki</button>
-            <button onClick={()=>setQueue([])}>Kuyruğu Kapat</button>
+          <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status==="opened"?"Gönderim onayı bekleniyor":currentQueueItem?.status==="error"?"Tekrar deneyin":queueComplete?"Tamamlandı":"Hazır"}</b></span></div>
+          <progress className={styles.queueProgress} value={sentCount} max={queue.length} aria-label="Onaylanan gönderimler" />
+          <p className={styles.muted} aria-live="polite">{queueComplete?"Tüm gönderimleri onayladınız. Kuyruk tamamlandı.":currentQueueItem?.status==="opened"?"WhatsApp’ta mesajı gönderin. Döndüğünüzde aşağıdaki düğmeyle gönderimi onaylayıp sıradaki kişiyi açın.":"Mesaj WhatsApp’ta hazır açılır. Gönder düğmesine WhatsApp içinde basmanız gerekir."}</p>
+          {queueError && <p className={styles.error} role="alert">{queueError}</p>}
+          <div className={styles.queueActions}>
+            <button className={styles.primary} onClick={advanceQueue} disabled={!currentQueueItem}>
+              {queueComplete?"Gönderim tamamlandı":currentQueueItem?.status==="opened"?(sentCount===queue.length-1?"Gönderimi Onayla ve Tamamla":"Gönderimi Onayla ve Sıradakini Aç"):currentQueueItem?.status==="error"?"WhatsApp’ı Tekrar Aç":"WhatsApp’ta Gönderime Başla"}
+            </button>
+            <button onClick={()=>{if(sentCount<queue.length&&!window.confirm("Kuyruğu kapatmak kalan gönderimleri iptal eder. Kapatılsın mı?"))return;setQueue([]);}}>Kuyruğu Kapat</button>
           </div>
-          <div className={styles.people}>{queue.slice(0,120).map((q,i)=><div key={`${q.studentId}-${i}`} className={styles.person}><div><b>{i+1}. {q.studentName}</b><small>{q.phone} · {q.status==="sent"?"Gönderildi":q.status==="opened"?"WhatsApp açıldı":"Bekliyor"}</small></div></div>)}</div>
+          <div className={styles.people}>{queue.slice(0,120).map((q,i)=><div key={`${q.studentId}-${i}`} className={styles.person}><div><b>{i+1}. {q.studentName}</b><small>{q.phone} · {q.status==="sent"?"Gönderildi":q.status==="opened"?"Gönderim onayı bekleniyor":q.status==="error"?"Açılamadı · tekrar deneyin":"Bekliyor"}</small></div></div>)}</div>
         </div>}
       </div>
 
@@ -230,7 +260,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
           </div>
         </div>
         <div className={styles.sendBox}><div><b>{whatsappApiReady?"WhatsApp Business API hazır":"Manuel gönderim kuyruğu hazır"}</b><small>{sendableCount} gönderilebilir · {missingPhoneCount} telefon eksik</small></div></div>
-        {whatsappApiReady ? <button className={styles.whatsapp} disabled={apiSending||!sendableCount} onClick={sendViaApi}>{apiSending?"Toplu gönderiliyor…":`${sendableCount} Kişiye Toplu Gönder`}</button> : <button className={styles.whatsapp} disabled={!sendableCount} onClick={buildQueue}>{sendableCount} Kişilik WhatsApp Kuyruğu Oluştur</button>}
+        {whatsappApiReady ? <button className={styles.whatsapp} disabled={apiSending||!sendableCount} onClick={sendViaApi}>{apiSending?"Toplu gönderiliyor…":`${sendableCount} Kişiye Toplu Gönder`}</button> : <button className={styles.whatsapp} onClick={buildQueue} disabled={queue.length>0||!sendableCount}>{sendableCount} Kişilik WhatsApp Kuyruğu Oluştur</button>}
         {apiResult&&<div className={apiResult.includes("başarısız")?styles.error:styles.success}>{apiResult}</div>}
         <p className={styles.note}>{whatsappApiReady?"API aktif olduğunda gönderim sunucu üzerinden yapılır. Meta'nın müşteri hizmeti penceresi ve onaylı şablon kuralları yine geçerlidir.":"Gerçek tek-tuş toplu gönderim için Meta WhatsApp Business Cloud API telefon numarası ve erişim anahtarı Vercel ortam değişkenlerine bağlanmalıdır. API hazır olana kadar güvenli gönderim kuyruğu kullanılabilir."}</p>
       </aside>
