@@ -55,13 +55,14 @@ function renderMessage(item: TimelineItem) {
   const body=String(item.body||"");
   const preview=body.length>200?body.slice(0,200)+"…":body;
   const icon=state==="success"?"✓":state==="error"?"!":"◷";
+  const title=String(item.title||"WhatsApp Bilgilendirmesi").replace(item.status==="opened"?/\\s+gönderildi$/i:/$^/,"");
 
   return `
     <article class="sprintMessageHistoryCard ${state}" data-message-history-id="${escapeHtml(item.id)}">
       <div class="sprintMessageHistoryIcon" aria-hidden="true">${icon}</div>
       <div class="sprintMessageHistoryBody">
         <div class="sprintMessageHistoryTitleRow">
-          <strong>${escapeHtml(item.title || "WhatsApp Bilgilendirmesi")}</strong>
+          <strong>${escapeHtml(title)}</strong>
           <span class="sprintMessageHistoryBadge">WhatsApp</span>
         </div>
         <p class="sprintMessagePreview">${escapeHtml(preview||"Mesaj içeriği bulunamadı.")}</p>
