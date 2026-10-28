@@ -15,6 +15,8 @@ type LiveNotification = {
   eventKey: string | null;
   targetPath: string;
   createdAt: string;
+  authorName?: string;
+  authorRole?: string;
 };
 
 const SEEN_KEY = "sprintos-live-notification-seen";
@@ -73,7 +75,7 @@ export default function LiveNotificationCenter() {
   }, []);
 
   const check = useCallback(async () => {
-    if (checkingRef.current || currentRef.current || document.visibilityState !== "visible") return;
+    if (checkingRef.current || document.visibilityState !== "visible") return;
 
     checkingRef.current = true;
     try {
@@ -84,6 +86,11 @@ export default function LiveNotificationCenter() {
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok || !Array.isArray(data.notifications)) return;
 
+      const active=currentRef.current;
+      if(active){
+        if(data.notifications.some((item:LiveNotification)=>item.id===active.id))return;
+        currentRef.current=null;setCurrent(null);
+      }
       const next = data.notifications.find(
         (item: LiveNotification) => !seenRef.current.has(logicalKey(item)),
       ) as LiveNotification | undefined;
@@ -97,7 +104,7 @@ export default function LiveNotificationCenter() {
       if ("Notification" in window && Notification.permission === "granted") {
         try {
           const n = new Notification(formatDatesInText(next.title), {
-            body: formatDatesInText(next.body),
+            body: `${next.authorName?`Yazan: ${next.authorName}\n`:""}${formatDatesInText(next.body)}`,
             icon: "/icons/icon-192.png",
             tag: `sprintos-live-${logicalKey(next)}`,
           });
@@ -124,6 +131,8 @@ export default function LiveNotificationCenter() {
     const timer = window.setInterval(() => void check(), 12000);
     const onVisibility = () => void check();
     const onFocus = () => void check();
+    const onCompleted=()=>void check();
+    window.addEventListener("sprintos-note-completed",onCompleted);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -132,6 +141,7 @@ export default function LiveNotificationCenter() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("sprintos-note-completed",onCompleted);
     };
   }, [check]);
 
@@ -174,6 +184,7 @@ export default function LiveNotificationCenter() {
         <button type="button" className="x" aria-label="Bildirimi kapat" disabled={navigating || closing} onClick={close}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <div className="liveNotificationCopy">
+        {current.authorName&&<div className="noteAuthor">Yazan: <b>{current.authorName}</b></div>}
         <strong id={titleId}>{formatDatesInText(current.title)}</strong>
         <p className={expanded || body.length <= 160 ? "expanded" : ""}>{body}</p>
         {body.length > 160 && <button type="button" className="expand" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Daha az göster" : "Devamını göster"}</button>}
@@ -191,7 +202,7 @@ export default function LiveNotificationCenter() {
         .liveNotificationToast.success{--accent:#087f5b;--tint:#ecfdf5}.liveNotificationToast.warning{--accent:#a56508;--tint:#fff7e8}.liveNotificationToast.error,.liveNotificationToast.critical{--accent:#c73d45;--tint:#fff1f2}
         .liveNotificationHeader{display:flex;align-items:center;gap:10px;margin-bottom:13px}.liveNotificationIcon{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:12px;background:var(--tint);color:var(--accent)}
         .liveNotificationMeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.liveNotificationMeta span{font-size:11px;font-weight:700;color:var(--accent);line-height:1.4}.liveNotificationMeta time{font-size:11px;color:#64748b;line-height:1.4;font-variant-numeric:tabular-nums}
-        .liveNotificationCopy{min-width:0}.liveNotificationCopy strong{display:block;font-size:15px;font-weight:750;line-height:1.45;letter-spacing:-.2px;color:#142e4c;overflow-wrap:anywhere}.liveNotificationCopy p{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;margin:7px 0 0;font-size:13px;line-height:1.65;color:#52647a;overflow-wrap:anywhere;white-space:pre-line}.liveNotificationCopy p.expanded{display:block;overflow:visible}.expand{border:0;background:transparent;padding:7px 0;color:#245fa6;font-size:12px;font-weight:650;cursor:pointer;min-height:36px}
+        .noteAuthor{margin-bottom:7px;padding:7px 9px;border-radius:9px;background:#f3f6fa;color:#52647a;font-size:12px}.noteAuthor b{color:#18314e}.liveNotificationCopy{min-width:0}.liveNotificationCopy strong{display:block;font-size:15px;font-weight:750;line-height:1.45;letter-spacing:-.2px;color:#142e4c;overflow-wrap:anywhere}.liveNotificationCopy p{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;margin:7px 0 0;font-size:13px;line-height:1.65;color:#52647a;overflow-wrap:anywhere;white-space:pre-line}.liveNotificationCopy p.expanded{display:block;overflow:visible}.expand{border:0;background:transparent;padding:7px 0;color:#245fa6;font-size:12px;font-weight:650;cursor:pointer;min-height:36px}
         .liveNotificationActions{display:flex;gap:8px;margin-top:16px;padding-top:13px;border-top:1px solid #edf1f6}.liveNotificationActions button{min-height:42px;padding:0 16px;border-radius:11px;font-weight:650;font-size:13px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.liveNotificationActions button:active:not(:disabled){transform:scale(.98)}.liveNotificationActions button:disabled{opacity:.65;cursor:wait}
         .open{display:flex;align-items:center;justify-content:center;gap:16px;flex:1;border:1px solid #1d58c6;background:#2563eb;color:white}.open span{font-size:17px}.dismiss{border:1px solid #dce4ee;background:#f8fafc;color:#52647a;min-width:92px}
         .x{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:#718196;cursor:pointer;padding:0;touch-action:manipulation}.x:hover,.dismiss:hover{background:#edf2f8}.x:disabled{opacity:.45}button:focus-visible{outline:3px solid #93b8fa;outline-offset:3px}

@@ -15,6 +15,8 @@ import {
 } from "./actions";
 
 export type NotificationItem = {
+  authorName?:string;
+  reminderCompleted?:boolean;
   id: string;
   title: string;
   body: string | null;
@@ -677,6 +679,8 @@ export default function BildirimMerkeziClient({
                         </time>
                       </div>
 
+                      {notification.authorName&&<p style={{fontSize:12,color:"#52647a"}}>Yazan: <strong>{notification.authorName}</strong></p>}
+                      {notification.reminderCompleted&&<span className="status-badge">✓ İşlem tamamlandı</span>}
                       <h3>
                         {formatDatesInText(notification.title)}
                       </h3>

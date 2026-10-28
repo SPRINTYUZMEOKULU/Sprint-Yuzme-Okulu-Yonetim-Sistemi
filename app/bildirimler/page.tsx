@@ -1,3 +1,4 @@
+import {decorateNoteReminders} from "@/lib/notifications/note-reminder-state";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -217,6 +218,7 @@ export default async function BildirimlerPage() {
           message,
           category,
           notification_type,
+          student_id,source_type,source_id,entity_id,
           severity,
           priority,
           target_path,
@@ -247,8 +249,10 @@ export default async function BildirimlerPage() {
       .order("created_at", { ascending: false }),
   ]);
 
+  const decorated=await decorateNoteReminders(admin,profile.organization_id,notificationsResult.data||[]);
   const notifications =
-    ((notificationsResult.data as (NotificationItem & { metadata?: { reminder_at?: string } | null })[] | null) ?? [])
+    ((decorated as (NotificationItem & { metadata?: { reminder_at?: string } | null })[] | null) ?? [])
+      .map((item:any)=>item.reminderCompleted?{...item,is_read:true}:item)
       .filter((item) => {
         if (!["registration_note_reminder", "student_note_reminder"].includes(item.notification_type || "")) return true;
         const reminderAt = item.metadata?.reminder_at;

@@ -1,3 +1,4 @@
+import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
 import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
 import CompensationPlanEditor from "./compensation-plan-editor";
 import CommunicationSummary from "./communication-summary";
@@ -1539,13 +1540,14 @@ export default async function StudentFile({
             </PendingSubmitButton>
           </form>
 
-          <div className="list">
+          <StudentNoteFollowUps studentId={student.id}><div className="list">
             {notes.map((note: any) => (
               <article key={note.id} className="managedNote">
                 <div>
                   <strong>{String(note.note_type).toUpperCase()}</strong><small style={{display:"block",marginTop:6,color:note.is_guardian_visible?"#087443":"#66758a"}}>{note.is_guardian_visible?"Alıcı: bağlı portal velileri · Mesajlar ekranında görünür":"Kurum içi · Yalnızca yetkili personel görür"}</small>
 
                   <p>{note.body}</p>
+                  <StudentNoteFollowUp noteId={note.id}/>
                 </div>
 
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
@@ -1591,7 +1593,7 @@ export default async function StudentFile({
             ))}
 
             {!notes.length && <p className="empty">Henüz not yok.</p>}
-          </div>
+          </div></StudentNoteFollowUps>
 
           <div className="registrationNotesBlock">
             <div className="panelHead compact">
