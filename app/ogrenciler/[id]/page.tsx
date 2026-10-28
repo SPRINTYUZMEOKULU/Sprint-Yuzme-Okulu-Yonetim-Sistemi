@@ -24,6 +24,21 @@ import "./compensation-plan.css";
 
 export const dynamic = "force-dynamic";
 
+function MessageBody({ body }: { body?: string | null }) {
+  const text = body || "Mesaj metni kaydedilmemiş.";
+  if (text.length <= 180) return <p className="contactMessageText">{text}</p>;
+  return (
+    <details className="contactMessageDetails">
+      <summary>
+        <p className="contactMessagePreview">{text.slice(0, 180)}…</p>
+        <b className="contactMessageExpand">Tamamını gör</b>
+        <b className="contactMessageCollapse">Daralt</b>
+      </summary>
+      <p className="contactMessageText">{text}</p>
+    </details>
+  );
+}
+
 const fmt = (value?: string | null) => {
   if (!value) return "—";
 
@@ -1684,7 +1699,7 @@ export default async function StudentFile({
                 <div>
                   <strong>{message.contact_type || "Bilgilendirme"}</strong>
 
-                  <p>{message.message_text || "Mesaj kaydı"}</p>
+                  <MessageBody body={message.message_text} />
                 </div>
 
                 <span>
@@ -1698,15 +1713,12 @@ export default async function StudentFile({
               </article>
             ))}
 
-            {messages.filter((row:any)=>row.template_key==="compensation_plan_change"||!contactLogs.length).map((message: any) => (
+            {messages.map((message: any) => (
                 <article key={message.id}>
                   <div>
                     <strong>{message.template_key==="compensation_plan_change"?"Telafi Planı Değişikliği":message.template_key || "Mesaj"}</strong>
 
-                    <p>
-                      {message.message_body?.slice(0, 180)}
-                      {message.message_body?.length > 180 ? "…" : ""}
-                    </p>
+                    <MessageBody body={message.message_body} />
                   </div>
 
                   <span>
