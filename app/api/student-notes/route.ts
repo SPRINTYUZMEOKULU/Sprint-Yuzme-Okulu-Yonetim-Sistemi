@@ -374,7 +374,7 @@ export async function PUT(request: NextRequest) {
   // Profile and student ownership were checked above; scope privileged cleanup to this note.
   const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: reminders, error: reminderError } = await admin.from("student_activity_logs").update({ reminder_completed: true })
+  const { data: reminders, error: reminderError } = await admin.from("student_activity_logs").update({ reminder_completed: true, reminder_completed_at:new Date().toISOString(),reminder_completed_by:profile.id })
     .eq("organization_id", organizationId).eq("student_id", studentId)
     .eq("activity_type", "student_note_reminder").eq("source_type", "student_note").eq("source_id", noteId).select("id");
   if (reminderError) return NextResponse.json({ error: reminderError.message }, { status: 500 });
@@ -382,7 +382,9 @@ export async function PUT(request: NextRequest) {
   const { error: notificationError } = await admin.from("system_notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq("organization_id", organizationId).eq("student_id", studentId)
-    .in("notification_type", ["student_note_reminder"]).in("source_id", sourceIds);
+    .in("notification_type", ["student_note_reminder","registration_note_reminder"])
+    .or(`source_id.in.(${sourceIds.join(",")}),entity_id.eq.${noteId}`);
   if (notificationError) return NextResponse.json({ error: notificationError.message }, { status: 500 });
+  revalidatePath(`/ogrenciler/${studentId}`);revalidatePath("/bildirimler");
   return NextResponse.json({ ok: true });
 }

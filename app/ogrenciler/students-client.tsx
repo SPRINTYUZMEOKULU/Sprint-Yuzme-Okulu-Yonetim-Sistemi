@@ -1151,6 +1151,7 @@ async function completeStudentNote(noteId: string) {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Not tamamlanamadı.");
+    window.dispatchEvent(new Event("sprintos-note-completed"));
     setCompletingNoteId(null);
     setNoteCompletionReply("");
     await loadStudentNotes(noteStudent.id);
