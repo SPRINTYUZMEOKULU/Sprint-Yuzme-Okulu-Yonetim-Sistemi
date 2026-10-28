@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   SPRINT_MESSAGE_TEMPLATES,
   renderSprintMessage,
@@ -47,11 +47,39 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   const queueRef = useRef<QueueItem[]>([]);
   const lastQueueAction = useRef(0);
   const [queueError,setQueueError] = useState("");
+  const queueStorageReady = useRef(false);
+  const queueStorageKey = "sprintos-ready-message-queue-v2";
   function setQueue(next:QueueItem[]){
     queueRef.current=next;
     updateQueue(next);
     setQueueError("");
+    // Persist before leaving for WhatsApp, even if Android unloads this page.
+    try{
+      if(next.length) sessionStorage.setItem(queueStorageKey,JSON.stringify({savedAt:Date.now(),queue:next}));
+      else sessionStorage.removeItem(queueStorageKey);
+    }catch{ /* The in-memory queue remains usable when storage is unavailable. */ }
   }
+  useEffect(()=>{
+    if(queueStorageReady.current)return;
+    queueStorageReady.current=true;
+    try{
+      const raw=sessionStorage.getItem(queueStorageKey);
+      if(!raw)return;
+      const saved=JSON.parse(raw);
+      const allowedIds=new Set(students.map(s=>s.id));
+      if(!Array.isArray(saved.queue)||!Number.isFinite(saved.savedAt)||Date.now()-saved.savedAt>86400000){
+        sessionStorage.removeItem(queueStorageKey);return;
+      }
+      const restored=saved.queue.filter((q:QueueItem)=>
+        q && allowedIds.has(q.studentId) && typeof q.phone==="string" &&
+        typeof q.message==="string" && typeof q.studentName==="string" &&
+        ["waiting","opened","sent","error"].includes(q.status));
+      if(restored.length!==saved.queue.length){sessionStorage.removeItem(queueStorageKey);return;}
+      queueRef.current=restored;
+      updateQueue(restored);
+      setSelected(restored.map((q:QueueItem)=>q.studentId));
+    }catch{ /* Ignore an unavailable or invalid saved queue. */ }
+  },[students]);
   const [apiSending,setApiSending] = useState(false);
   const [apiResult,setApiResult] = useState<string>("");
   const [pending,startTransition] = useTransition();
@@ -132,6 +160,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       status:"waiting" as const,
     })).filter(x=>Boolean(x.phone));
     if(!prepared.length){ window.alert("Seçili kursiyerlerde WhatsApp için geçerli telefon numarası bulunamadı."); return; }
+    if(queueRef.current.length)return;
     setQueue(prepared); setApiResult("");
   }
 
@@ -235,7 +264,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
         </div> : null}
 
         {queue.length>0 && <div className={styles.card}>
-          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
+          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu · v2.1</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
           <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status==="opened"?"Gönderim onayı bekleniyor":currentQueueItem?.status==="error"?"Tekrar deneyin":queueComplete?"Tamamlandı":"Hazır"}</b></span></div>
           <progress className={styles.queueProgress} value={sentCount} max={queue.length} aria-label="Onaylanan gönderimler" />
           <p className={styles.muted} aria-live="polite">{queueComplete?"Tüm gönderimleri onayladınız. Kuyruk tamamlandı.":currentQueueItem?.status==="opened"?"WhatsApp’ta mesajı gönderin. Döndüğünüzde aşağıdaki düğmeyle gönderimi onaylayıp sıradaki kişiyi açın.":"Mesaj WhatsApp’ta hazır açılır. Gönder düğmesine WhatsApp içinde basmanız gerekir."}</p>
