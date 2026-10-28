@@ -1307,3 +1307,23 @@
   display: grid !important;
 }
 .studentCommunicationSummary{padding:16px;border:1px solid #dce7f4;border-radius:14px;background:#f6f9fe;margin-bottom:20px}.studentCommunicationSummary>strong{font-size:15px;color:#173e66}.studentCommunicationSummary p{font-size:12px;line-height:1.7;color:#637a93}.studentCommunicationSummary a{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #dfe8f2;text-decoration:none;color:#155eab;font-size:12px}.studentCommunicationSummary b{color:#187852}
+
+/* Expandable message history: keep complete text readable on narrow screens. */
+#mesajlar .list article { flex-wrap: wrap; }
+#mesajlar .list article > div { min-width: 0; flex: 1 1 100%; }
+#mesajlar .list article > span { white-space: normal; overflow-wrap: anywhere; }
+#mesajlar .contactMessageText,
+#mesajlar .contactMessagePreview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: none;
+  -webkit-line-clamp: unset;
+}
+#mesajlar .contactMessageDetails summary { cursor: pointer; list-style: none; }
+#mesajlar .contactMessageDetails summary::-webkit-details-marker { display: none; }
+#mesajlar .contactMessageDetails summary:focus-visible { outline: 2px solid #0b4d88; outline-offset: 4px; }
+#mesajlar .contactMessageDetails b { color: #0b4d88; padding: 12px 0; display: inline-block; }
+#mesajlar .contactMessageDetails .contactMessageCollapse { display: none; }
+#mesajlar .contactMessageDetails[open] .contactMessagePreview,
+#mesajlar .contactMessageDetails[open] .contactMessageExpand { display: none; }
+#mesajlar .contactMessageDetails[open] .contactMessageCollapse { display: inline-block; }
