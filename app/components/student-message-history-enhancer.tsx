@@ -12,6 +12,7 @@ type TimelineItem = {
   body: string;
   status: string;
   sentAt: string;
+  deliveryConfirmation?: string | null;
 };
 
 type PaymentNotice = {
@@ -47,18 +48,25 @@ function getStudentId() {
 
 function renderMessage(item: TimelineItem) {
   const phone = item.recipient ? ` • ${escapeHtml(item.recipient)}` : "";
-  const status = item.status === "sent" ? "Gönderildi" : escapeHtml(item.status || "Kayıtlı");
+  const labels:Record<string,string>={confirmed:"Gönderim onaylandı",sent:"Gönderildi",opened:"WhatsApp açıldı · Onay bekliyor",prepared:"Hazırlandı",failed:"Gönderilemedi",cancelled:"İptal edildi"};
+  const status=labels[item.status]||"Kayıtlı";
+  const state=["confirmed","sent"].includes(item.status)?"success":item.status==="failed"?"error":"pending";
+  const body=String(item.body||"");
+  const preview=body.length>200?body.slice(0,200)+"…":body;
+  const icon=state==="success"?"✓":state==="error"?"!":"◷";
 
   return `
-    <article class="sprintMessageHistoryCard" data-message-history-id="${escapeHtml(item.id)}">
-      <div class="sprintMessageHistoryIcon" aria-hidden="true">✓</div>
+    <article class="sprintMessageHistoryCard ${state}" data-message-history-id="${escapeHtml(item.id)}">
+      <div class="sprintMessageHistoryIcon" aria-hidden="true">${icon}</div>
       <div class="sprintMessageHistoryBody">
         <div class="sprintMessageHistoryTitleRow">
           <strong>${escapeHtml(item.title || "WhatsApp Bilgilendirmesi")}</strong>
           <span class="sprintMessageHistoryBadge">WhatsApp</span>
         </div>
-        <p>${escapeHtml(item.body || "Bilgilendirme gönderildi.")}</p>
-        <small>${status}${phone} • ${escapeHtml(formatDate(item.sentAt))}</small>
+        <p class="sprintMessagePreview">${escapeHtml(preview||"Mesaj içeriği bulunamadı.")}</p>
+        ${body.length>200?`<details class="sprintMessageFull"><summary>Mesajın tamamını göster</summary><div class="sprintMessageFullText">${escapeHtml(body)}</div></details>`:""}
+        <div class="sprintMessageHistoryMeta"><span class="sprintMessageStatus ${state}">${escapeHtml(status)}</span><small>${escapeHtml(formatDate(item.sentAt))}${phone}</small></div>
+        ${item.status==="confirmed"?'<small class="sprintMessageDeliveryNote">Kullanıcı onayıdır; WhatsApp teslim / okundu bilgisi değildir.</small>':""}
       </div>
     </article>
   `;
@@ -72,7 +80,7 @@ function renderPaymentNotice(item: PaymentNotice) {
         <strong>WhatsApp ödeme bilgilendirmesi</strong>
         <p>${escapeHtml(item.description || "Ödeme bilgileri veli/kursiyere gönderildi.")}</p>
       </div>
-      <span>Bilgilendirme gönderildi${phone} • ${escapeHtml(formatDate(item.sentAt))}</span>
+      <span>${item.deliveryConfirmation==="manual_confirmed"?"Gönderim onaylandı":"Bilgilendirme gönderildi"}${phone} • ${escapeHtml(formatDate(item.sentAt))}</span>
     </article>
   `;
 }
@@ -91,8 +99,20 @@ function ensureStyles() {
     .sprintMessageHistoryTitleRow{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .sprintMessageHistoryTitleRow strong{font-size:13px}
     .sprintMessageHistoryBadge{display:inline-flex;padding:4px 7px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:800}
-    .sprintMessageHistoryCard p{white-space:pre-wrap;margin:6px 0 7px!important;color:#475569!important;font-size:12px!important;line-height:1.45!important;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+    .sprintMessageHistoryCard p{white-space:pre-wrap;margin:6px 0 7px!important;color:#475569!important;font-size:12px!important;line-height:1.45!important;display:block;overflow-wrap:anywhere}
     .sprintMessageHistoryCard small{color:#64748b;font-size:10px;font-weight:700}
+    .sprintMessageHistoryCard.pending .sprintMessageHistoryIcon{background:#fff7ed;color:#b45309}
+    .sprintMessageHistoryCard.error .sprintMessageHistoryIcon{background:#fff1f2;color:#be123c}
+    .sprintMessageHistoryMeta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+    .sprintMessageStatus{display:inline-flex;padding:5px 8px;border-radius:8px;font-size:10px;font-weight:800;background:#f1f5f9;color:#475569}
+    .sprintMessageStatus.success{background:#ecfdf3;color:#166534}
+    .sprintMessageStatus.pending{background:#fff7ed;color:#9a3412}
+    .sprintMessageStatus.error{background:#fff1f2;color:#be123c}
+    .sprintMessageFull{margin:8px 0;border:1px solid #dbe5ef;border-radius:10px;background:#f8fafc}
+    .sprintMessageFull summary{cursor:pointer;padding:10px 12px;color:#1761b5;font-size:12px;font-weight:800;min-height:40px;box-sizing:border-box}
+    .sprintMessageFullText{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border-top:1px solid #dbe5ef;color:#334155;font-size:12px;line-height:1.6}
+    .sprintMessageDeliveryNote{display:block;margin-top:7px;font-weight:500!important}
+    @media(max-width:600px){.sprintMessageHistoryCard{grid-template-columns:28px minmax(0,1fr);padding:12px!important}.sprintMessageHistoryIcon{width:26px;height:26px}.sprintMessageHistoryMeta{align-items:flex-start;flex-direction:column}}
     #odeme .sprintPaymentNotice{border:1px solid #dbeafe!important;background:#f8fbff!important;border-radius:12px!important;padding:11px 12px!important}
     #odeme .sprintPaymentNotice strong{color:#1e3a8a;font-size:12px}
     #odeme .sprintPaymentNotice p{margin:4px 0 0!important;color:#475569!important;font-size:11px!important}
@@ -126,8 +146,8 @@ async function enhance() {
 
   if (messagePanel) {
     const head = messagePanel.querySelector<HTMLElement>(".panelHead");
-    if (head && !head.querySelector(".sprintMessageHistoryCount")) {
-      const badge = document.createElement("span");
+    if (head) {
+      const badge = head.querySelector<HTMLElement>(".sprintMessageHistoryCount") || document.createElement("span");
       badge.className = "sprintMessageHistoryCount";
       badge.textContent = `${data.count || 0} iletişim kaydı`;
       head.appendChild(badge);
@@ -137,9 +157,15 @@ async function enhance() {
     if (list) {
       const timeline = data.timeline || [];
       list.classList.add("sprintUnifiedMessageList");
-      list.innerHTML = timeline.length
-        ? timeline.map(renderMessage).join("")
-        : '<p class="empty">Henüz WhatsApp mesaj kaydı yok.</p>';
+      const expanded=new Set(Array.from(list.querySelectorAll<HTMLDetailsElement>("article details[open]")).map(node=>node.closest("article")?.getAttribute("data-message-history-id")));
+      const markup=timeline.length?timeline.map(renderMessage).join(""):'<p class="empty">Henüz WhatsApp mesaj kaydı yok.</p>';
+      if(list.dataset.historyMarkup!==markup){
+        list.innerHTML=markup;
+        list.dataset.historyMarkup=markup;
+        list.querySelectorAll<HTMLDetailsElement>("article details").forEach(node=>{
+          if(expanded.has(node.closest("article")?.getAttribute("data-message-history-id")))node.open=true;
+        });
+      }
     }
   }
 

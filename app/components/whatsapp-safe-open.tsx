@@ -73,6 +73,8 @@ const recentlyLogged = new Map<string, number>();
 
 function logWhatsAppInteraction(input: string | URL) {
   if (!isWhatsAppUrl(input)) return;
+  // The ready-message queue logs explicit student IDs and delivery confirmation itself.
+  if (window.location.pathname === "/hazir-mesajlar") return;
 
   const payload = extractWhatsAppPayload(input);
   if (!payload.message) return;

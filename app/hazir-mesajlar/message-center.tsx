@@ -17,7 +17,7 @@ type Student = { id:string; first_name:string; last_name:string; phone?:string|n
 type Membership = { student_id:string; group_id:string; is_active:boolean };
 type AttendancePlan = { student_id:string; group_id?:string|null; selected_weekdays?:number[]|null; is_active:boolean };
 type Props = { templates?:SprintMessageTemplate[]; branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
-type QueueItem = { studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
+type QueueItem = { interactionId?:string; templateKey?:string; templateTitle?:string; studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
 
 const DAYS:Record<number,string> = {1:"Pzt",2:"Sal",3:"Çar",4:"Per",5:"Cum",6:"Cmt",7:"Paz"};
 
@@ -46,6 +46,8 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   const [queue,updateQueue] = useState<QueueItem[]>([]);
   const queueRef = useRef<QueueItem[]>([]);
   const lastQueueAction = useRef(0);
+  const queueBusyRef = useRef(false);
+  const [queueBusy,setQueueBusy] = useState(false);
   const [queueError,setQueueError] = useState("");
   const queueStorageReady = useRef(false);
   const queueStorageKey = "sprintos-ready-message-queue-v2";
@@ -153,6 +155,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
 
   function buildQueue(){
     const prepared:QueueItem[] = activeStudents.map(s=>({
+      interactionId:crypto.randomUUID(), templateKey, templateTitle:templates.find(t=>t.key===templateKey)?.title,
       studentId:s.id,
       studentName:studentName(s),
       phone:cleanPhone(s.guardian_phone)||cleanPhone(s.phone),
@@ -164,34 +167,53 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
     setQueue(prepared); setApiResult("");
   }
 
-  // Keep the synchronous ref authoritative while React batches state updates.
-  function advanceQueue(){
+  async function recordQueueEvent(item:QueueItem,event:"opened"|"confirmed"){
+    const response=await fetch("/api/whatsapp-interactions",{
+      method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+      body:JSON.stringify({studentId:item.studentId,recipient:item.phone,message:item.message,
+        sourcePath:"/hazir-mesajlar",queueEvent:event,interactionId:item.interactionId,
+        templateKey:item.templateKey,templateTitle:item.templateTitle}),
+    });
+    const data=await response.json().catch(()=>null);
+    if(!response.ok||!data?.ok)throw new Error(data?.message||"Mesaj geçmişi kaydedilemedi. Tekrar deneyin.");
+  }
+
+  async function advanceQueue(){
     const now=Date.now();
-    if(now-lastQueueAction.current<700)return;
+    if(queueBusyRef.current||now-lastQueueAction.current<700)return;
     lastQueueAction.current=now;
-    let next=queueRef.current;
+    let next=queueRef.current.map(q=>({...q,interactionId:q.interactionId||crypto.randomUUID()}));
+    setQueue(next);
     const opened=next.findIndex(q=>q.status==="opened");
-    if(opened>=0){
-      next=next.map((q,i)=>i===opened?{...q,status:"sent" as const}:q);
-      setQueue(next);
-    }
     const index=next.findIndex(q=>q.status==="waiting"||q.status==="error");
-    if(index<0)return;
-    const item=next[index];
+    // Reserve a window in the user's click gesture before awaiting the history save.
+    let popup:Window|null=null;
+    if(index>=0){
+      try{popup=window.open("about:blank","_blank");if(popup)popup.opener=null;}catch{}
+    }
+    queueBusyRef.current=true;setQueueBusy(true);
     try{
-      // Open within the click gesture; preserve the shared WhatsApp history hook.
-      const popup=window.open(`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`,"_blank");
+      if(opened>=0){
+        await recordQueueEvent(next[opened],"confirmed");
+        next=next.map((q,i)=>i===opened?{...q,status:"sent" as const}:q);
+        setQueue(next);
+      }
+      if(index<0)return;
       if(!popup){
         setQueue(next.map((q,i)=>i===index?{...q,status:"error"}:q));
         setQueueError("WhatsApp penceresi açılamadı. Açılır pencere iznini kontrol edip tekrar deneyin.");
         return;
       }
-      popup.opener=null;
+      const item=next[index];
+      popup.location.href=`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`;
       setQueue(next.map((q,i)=>i===index?{...q,status:"opened"}:q));
-    }catch{
-      setQueue(next.map((q,i)=>i===index?{...q,status:"error"}:q));
-      setQueueError("WhatsApp açılamadı. Tekrar deneyin.");
-    }
+      popup=null;
+      try{await recordQueueEvent(item,"opened");}
+      catch{setQueueError("WhatsApp açıldı; geçmiş kaydı henüz alınamadı. Gönderimi onayladığınızda yeniden kaydedilecek.");}
+    }catch(error){
+      popup?.close();
+      setQueueError(error instanceof Error?error.message:"Gönderim onayı kaydedilemedi. Tekrar deneyin.");
+    }finally{queueBusyRef.current=false;setQueueBusy(false);}
   }
 
   async function sendViaApi(){
@@ -264,16 +286,16 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
         </div> : null}
 
         {queue.length>0 && <div className={styles.card}>
-          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu · v2.1</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
+          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu · v2.2</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
           <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status==="opened"?"Gönderim onayı bekleniyor":currentQueueItem?.status==="error"?"Tekrar deneyin":queueComplete?"Tamamlandı":"Hazır"}</b></span></div>
           <progress className={styles.queueProgress} value={sentCount} max={queue.length} aria-label="Onaylanan gönderimler" />
           <p className={styles.muted} aria-live="polite">{queueComplete?"Tüm gönderimleri onayladınız. Kuyruk tamamlandı.":currentQueueItem?.status==="opened"?"WhatsApp’ta mesajı gönderin. Döndüğünüzde aşağıdaki düğmeyle gönderimi onaylayıp sıradaki kişiyi açın.":"Mesaj WhatsApp’ta hazır açılır. Gönder düğmesine WhatsApp içinde basmanız gerekir."}</p>
           {queueError && <p className={styles.error} role="alert">{queueError}</p>}
           <div className={styles.queueActions}>
-            <button className={styles.primary} onClick={advanceQueue} disabled={!currentQueueItem}>
-              {queueComplete?"Gönderim tamamlandı":currentQueueItem?.status==="opened"?(sentCount===queue.length-1?"Gönderimi Onayla ve Tamamla":"Gönderimi Onayla ve Sıradakini Aç"):currentQueueItem?.status==="error"?"WhatsApp’ı Tekrar Aç":"WhatsApp’ta Gönderime Başla"}
+            <button className={styles.primary} onClick={advanceQueue} disabled={!currentQueueItem||queueBusy}>
+              {queueBusy?"Geçmiş kaydediliyor…":queueComplete?"Gönderim tamamlandı":currentQueueItem?.status==="opened"?(sentCount===queue.length-1?"Gönderimi Onayla ve Tamamla":"Gönderimi Onayla ve Sıradakini Aç"):currentQueueItem?.status==="error"?"WhatsApp’ı Tekrar Aç":"WhatsApp’ta Gönderime Başla"}
             </button>
-            <button onClick={()=>{if(sentCount<queue.length&&!window.confirm("Kuyruğu kapatmak kalan gönderimleri iptal eder. Kapatılsın mı?"))return;setQueue([]);}}>Kuyruğu Kapat</button>
+            <button disabled={queueBusy} onClick={()=>{if(sentCount<queue.length&&!window.confirm("Kuyruğu kapatmak kalan gönderimleri iptal eder. Kapatılsın mı?"))return;setQueue([]);}}>Kuyruğu Kapat</button>
           </div>
           <div className={styles.people}>{queue.slice(0,120).map((q,i)=><div key={`${q.studentId}-${i}`} className={styles.person}><div><b>{i+1}. {q.studentName}</b><small>{q.phone} · {q.status==="sent"?"Gönderildi":q.status==="opened"?"Gönderim onayı bekleniyor":q.status==="error"?"Açılamadı · tekrar deneyin":"Bekliyor"}</small></div></div>)}</div>
         </div>}

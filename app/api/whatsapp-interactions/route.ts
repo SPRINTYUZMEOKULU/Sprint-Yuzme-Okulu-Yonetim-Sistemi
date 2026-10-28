@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -107,6 +108,10 @@ export async function POST(request: Request) {
     recipient?: string | null;
     message?: string | null;
     sourcePath?: string | null;
+    queueEvent?: "opened" | "confirmed";
+    interactionId?: string;
+    templateKey?: string;
+    templateTitle?: string;
   } | null;
 
   const suppliedStudentId = String(body?.studentId || "").trim();
@@ -129,6 +134,56 @@ export async function POST(request: Request) {
       .eq("id", studentId)
       .maybeSingle();
     if (!data) studentId = "";
+  }
+
+  // Ready-message queues always carry the student ID; never guess a sibling by phone.
+  if(sourcePath==="/hazir-mesajlar" && body?.queueEvent){
+    if(!suppliedStudentId || !studentId || !/^[0-9a-f-]{36}$/i.test(body.interactionId||"") ||
+       !["opened","confirmed"].includes(body.queueEvent) || !recipient){
+      return NextResponse.json({ok:false,message:"Mesaj ve öğrenci bilgileri doğrulanamadı."},{status:400});
+    }
+    const digest=createHash("sha256").update(`${organizationId}|${studentId}|${body.interactionId}`).digest("hex").slice(0,32);
+    const id=`${digest.slice(0,8)}-${digest.slice(8,12)}-${digest.slice(12,16)}-${digest.slice(16,20)}-${digest.slice(20)}`;
+    const {data:existing,error:readError}=await supabase.from("message_logs").select("id,prepared_at,sent_at,metadata,status")
+      .eq("organization_id",organizationId).eq("student_id",studentId).eq("id",id).maybeSingle();
+    if(readError)return NextResponse.json({ok:false,message:"Mesaj geçmişi okunamadı."},{status:500});
+    const confirmed=body.queueEvent==="confirmed";
+    const now=new Date().toISOString();
+    const hint:Record<string,string>={registration:"hoş geld",renewal:"yenileme",payment:"ödeme",bank_info:"iban",compensation:"telafi",time_change:"seans",group_transfer:"seans"};
+    const kind=classify(hint[body.templateKey||""]||"","");
+    const title=String(body.templateTitle||"WhatsApp Bilgilendirmesi").slice(0,180);
+    const sentAt=existing?.sent_at||now;
+    const metadata={...existing?.metadata,source:"ready_message_queue",source_path:sourcePath,
+      interaction_id:body.interactionId,opened_at:existing?.metadata?.opened_at||now,
+      delivery_confirmation:confirmed?"manual_confirmed":"whatsapp_opened",
+      ...(confirmed?{confirmed_at:existing?.metadata?.confirmed_at||now,confirmed_by:profile.id}:{})};
+    // An opened request arriving late cannot downgrade a confirmed row.
+    const log=await supabase.from("message_logs").upsert({
+      id,organization_id:organizationId,student_id:studentId,template_key:kind.templateKey,
+      channel:"whatsapp",recipient,subject:title,message_body:message,
+      status:confirmed?"sent":"opened",prepared_by:profile.id,prepared_at:existing?.prepared_at||now,
+      ...(confirmed?{sent_by:profile.id,sent_at:sentAt}:{}),metadata,
+    },{onConflict:"id",ignoreDuplicates:!confirmed});
+    if(log.error)return NextResponse.json({ok:false,message:"Mesaj geçmişi kaydedilemedi. Tekrar deneyin."},{status:500});
+    if(confirmed){
+      // Stable IDs make retries repair partial writes without adding duplicate history.
+      const results=await Promise.all([
+        supabase.from("student_contact_logs").upsert({
+          id,organization_id:organizationId,student_id:studentId,contact_type:kind.contactType,
+          channel:"whatsapp",recipient_phone:recipient,message_text:message,status:"sent",
+          handled_by:profile.id,prepared_at:existing?.prepared_at||now,sent_at:sentAt,confirmed_at:sentAt,
+        },{onConflict:"id",ignoreDuplicates:true}),
+        supabase.from("student_activity_logs").upsert({
+          id,organization_id:organizationId,student_id:studentId,activity_type:kind.activityType,
+          title:`${title} · Gönderim onaylandı`,
+          description:"WhatsApp gönderimi kullanıcı tarafından onaylandı.",
+          new_value:{channel:"whatsapp",recipient,sent_at:sentAt,source_path:sourcePath,delivery_confirmation:"manual_confirmed",message_log_id:id},
+          source_type:"whatsapp",source_id:id,performed_by:profile.id,performed_at:sentAt,
+        },{onConflict:"id",ignoreDuplicates:true}),
+      ]);
+      if(results.some(r=>r.error))return NextResponse.json({ok:false,message:"Geçmişin bir bölümü kaydedilemedi. Onayı tekrar deneyin."},{status:500});
+    }
+    return NextResponse.json({ok:true,studentId,messageLogId:id,status:confirmed?"sent":existing?.status||"opened"});
   }
 
   if (!studentId && recipient) {
