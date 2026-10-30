@@ -24,3 +24,19 @@
  .studentCard .cardFooter{flex-wrap:wrap;gap:10px}
  .studentCard :is(.cardHeader,.cardFooter,.studentActions) :is(strong,span,a,button){overflow-wrap:anywhere}
 }
+
+
+/* Student notes: compact, scrollable mobile modal without clipping the date picker. */
+.noteOverlay{position:fixed!important;inset:0!important;z-index:1000!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:16px!important;box-sizing:border-box!important;overflow-y:auto!important;overscroll-behavior:contain!important;background:rgba(11,30,56,.5)!important}
+.notePanel{width:min(100%,920px)!important;max-height:calc(100dvh - 32px)!important;min-width:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;border-radius:20px!important;background:#fff!important;box-shadow:0 20px 60px rgba(15,42,76,.2)!important}
+.notePanelHeader{flex-shrink:0!important;display:flex!important;justify-content:space-between!important;align-items:flex-start!important;gap:12px!important}
+.notePanelBody{flex:1!important;min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important}
+.notePanelBody,.notePanelBody *{box-sizing:border-box!important}
+.notePanelBody :is(input,select,textarea){min-width:0!important;max-width:100%!important}
+.notePanelBody input[type="datetime-local"]{width:100%!important}
+.noteHistoryItem{min-width:0!important;overflow-wrap:anywhere!important}
+.noteHistoryActions{display:flex!important;flex-wrap:wrap!important;gap:8px!important}
+.noteHistoryActions button{min-height:40px!important;white-space:normal!important}
+.noteSectionToggle{display:block;width:100%;padding:11px 14px;margin:0 0 12px;border:1px solid #d7e5f6;border-radius:12px;background:#f3f8ff;color:#16558f;font-weight:750;text-align:left;cursor:pointer}
+.noteSuccess{margin:10px 0;padding:12px 14px;border:1px solid #a8e0c0;border-radius:10px;background:#eaf9f0;color:#13603c;font-weight:700}
+@media(max-width:760px){.noteOverlay{padding:0!important;align-items:stretch!important}.notePanel{width:100%!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important}.notePanelHeader{padding-top:max(14px,env(safe-area-inset-top))!important}.notePanelBody{padding-bottom:max(22px,env(safe-area-inset-bottom))!important}.noteHistoryActions button{flex:1 1 auto}}
