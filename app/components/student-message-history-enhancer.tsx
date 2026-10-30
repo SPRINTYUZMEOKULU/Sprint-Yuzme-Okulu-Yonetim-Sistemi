@@ -49,7 +49,7 @@ function getStudentId() {
 
 function renderMessage(item: TimelineItem) {
   const phone = item.recipient ? ` • ${escapeHtml(item.recipient)}` : "";
-  const labels:Record<string,string>={confirmed:"Gönderim onaylandı",sent:"Gönderildi",opened:"WhatsApp açıldı · Onay bekliyor",prepared:"Hazırlandı",failed:"Gönderilemedi",cancelled:"İptal edildi"};
+  const labels:Record<string,string>={confirmed:"Gönderim onaylandı",sent:"Gönderildi (sistem kaydı)",opened:"WhatsApp açıldı · Onay bekliyor",prepared:"Hazırlandı · Gönderilmedi",failed:"Gönderilemedi",cancelled:"İptal edildi"};
   const status=labels[item.status]||"Kayıtlı";
   const state=["confirmed","sent"].includes(item.status)?"success":item.status==="failed"?"error":"pending";
   const body=String(item.body||"");
