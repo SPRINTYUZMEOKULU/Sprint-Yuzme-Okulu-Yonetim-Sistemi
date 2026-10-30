@@ -29,3 +29,11 @@ test('message-history enhancement preserves React children through the renewal r
  await React.act(async()=>app.render(React.createElement(Page,{ids:['new']})));
  assert.equal(errors.length,0);assert.ok(document.querySelector('[data-original="new"]'));await React.act(async()=>app.unmount());dom.window.close();
 });
+
+test('message tab count uses unified messages once while React legacy rows remain hidden',()=>{
+ const dom=new JSDOM('<main><section id="mesajlar"><div class="list" style="display:none"><article>A</article><article>B</article></div><div data-unified-message-history><article>Unified message</article></div></section></main>');
+ const source=fs.readFileSync('app/ogrenciler/[id]/student-file-tabs.tsx','utf8');
+ const excerpt=source.slice(source.indexOf('function articleCount'),source.indexOf('function paymentStatusCount'))+';module.exports=articleCount;';
+ const m={exports:{}};new Function('module',ts.transpileModule(excerpt,{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText)(m);
+ assert.equal(m.exports(dom.window.document.querySelector('main'),'#mesajlar'),1);dom.window.close();
+});

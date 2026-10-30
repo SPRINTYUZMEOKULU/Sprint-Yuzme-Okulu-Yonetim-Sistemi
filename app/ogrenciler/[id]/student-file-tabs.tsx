@@ -157,6 +157,8 @@ function applyVisibility(root: HTMLElement, tab: TabId) {
 }
 
 function articleCount(root: HTMLElement, selector: string) {
+  const unified=selector==="#mesajlar"?root.querySelector("[data-unified-message-history]"):null;
+  if(unified)return unified.querySelectorAll("article").length;
   return root.querySelectorAll(`${selector} article`).length;
 }
 
