@@ -544,3 +544,19 @@ button,input,a{-webkit-tap-highlight-color:transparent}
     transition: none !important;
   }
 }
+
+
+/* SprintOS single-column mobile sign-in: keep branding and form as one surface. */
+@media(max-width:760px){
+ .v2LoginPage.compactLogin{display:flex!important;flex-direction:column!important;align-items:stretch!important;min-height:100dvh!important;background:linear-gradient(165deg,#061a42 0%,#123f83 48%,#eef5ff 48%)!important;overflow-x:hidden!important}
+ .compactLogin .v2BrandPanel{width:100%!important;min-height:0!important;padding:24px 20px 16px!important;background:transparent!important}
+ .compactLogin .v2BrandContent{width:100%!important;max-width:430px!important;margin:auto!important;display:flex!important;align-items:center!important;flex-direction:column!important;text-align:center!important;gap:5px!important}
+ .compactLogin .v2LogoFrame{width:132px!important;height:132px!important;max-width:40vw!important;max-height:40vw!important;margin:0 auto!important;overflow:hidden!important;border-radius:22px!important}
+ .compactLogin .v2BrandLogo{width:100%!important;height:100%!important;object-fit:contain!important}
+ .compactLogin .cloudLabel{margin:3px 0!important}
+ .compactLogin .v2Slogan{margin:0!important}
+ .compactLogin .v2FeatureGrid,.compactLogin .brandDescription,.compactLogin .poweredBy,.compactLogin .v2SloganLine{display:none!important}
+ .compactLogin .v2FormPanel{width:100%!important;flex:1!important;padding:0 16px max(22px,env(safe-area-inset-bottom))!important;align-items:flex-start!important;min-width:0!important}
+ .compactLogin .v2LoginCard{width:100%!important;max-width:430px!important;margin:0 auto!important;padding:18px!important;border-radius:22px!important;box-shadow:0 12px 38px rgba(6,26,66,.13)!important}
+ .compactLogin input,.compactLogin button,.compactLogin select{min-height:44px}
+}
