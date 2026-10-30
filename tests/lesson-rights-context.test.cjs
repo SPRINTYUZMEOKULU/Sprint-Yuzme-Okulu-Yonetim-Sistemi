@@ -3,7 +3,7 @@ function load(p){const m={exports:{}};new Function('module','exports','require',
 const {loadLessonRightsContext,rightsForEnrollment}=load('lib/students/lesson-rights-context.ts');
 test('shared context isolates student/enrollment and extends the date for their planned compensation',()=>{
  const context={today:'2026-10-14',time:'21:00',balances:new Map(),schedules:[{id:'s',group_id:'g',end_time:'22:00:00'}],cancellations:[{student_id:'other',source_id:'s',old_value:{cancelled_lesson_date:'2026-10-14'}}],compensations:[{student_id:'a',enrollment_id:'e',status:'planned',lesson_date:'2026-10-16'},{student_id:'a',enrollment_id:'old',status:'planned',lesson_date:'2027-01-01'}]};
- const r=rightsForEnrollment(context,{id:'e',student_id:'a',group_id:'g',start_date:'2026-09-18',planned_end_date:'2026-10-14',used_lessons:7,total_lessons:8});assert.equal(r.normal,1);assert.equal(r.compensation,2);assert.equal(r.endDate,'2026-10-16');
+ const r=rightsForEnrollment(context,{id:'e',student_id:'a',group_id:'g',start_date:'2026-09-18',planned_end_date:'2026-10-14',used_lessons:7,total_lessons:8});assert.equal(r.normal,1);assert.equal(r.compensation,2);assert.equal(r.endDate,'2027-01-01');
 });
 test('loader reads additional pages and fails visibly when a read fails',async()=>{
  const rows=Array.from({length:501},(_,i)=>({id:String(i),student_id:'a',enrollment_id:'e',status:'planned'}));

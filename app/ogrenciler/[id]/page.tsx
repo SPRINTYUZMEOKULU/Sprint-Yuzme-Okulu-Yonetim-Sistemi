@@ -630,7 +630,7 @@ export default async function StudentFile({
     enrollment?.planned_end_date ??
     null;
 
-  const compensationEndDate = rightsAvailable ? plannedCompensationEndDate(normalEndDate, plannedCompensations.filter((row:any)=>row.enrollment_id===enrollment?.id)) : attendancePlan?.compensation_planned_end_date ?? normalEndDate;
+  const compensationEndDate = rightsAvailable ? plannedCompensationEndDate(normalEndDate, plannedCompensations.filter((row:any)=>enrollment?.status!=="completed"||row.enrollment_id===enrollment?.id)) : attendancePlan?.compensation_planned_end_date ?? normalEndDate;
 
   /*
    * =========================================================
@@ -915,7 +915,7 @@ export default async function StudentFile({
         </article>
 
         <article>
-          <span>Toplam Hak</span>
+          <span>Toplam Kalan</span>
           <strong>{totalRights}</strong>
         </article>
 

@@ -1,3 +1,4 @@
+import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -518,32 +519,19 @@ export default async function StudentsPage() {
         ? schedulesByGroup.get(groupId) || []
         : [];
 
-      const selectedWeekdays = Array.isArray(
-        attendancePlan?.selected_weekdays
-      )
-        ? attendancePlan.selected_weekdays
-            .map((day: unknown) => Number(day))
-            .filter(
-              (day: number) =>
-                Number.isInteger(day) &&
-                day >= 1 &&
-                day <= 7
-            )
-        : [];
-
-      const studentSchedules = regularSchedules.filter(
-        (schedule) =>
-          selectedWeekdays.length === 0 ||
-          selectedWeekdays.includes(
-            Number(schedule.weekday)
-          )
+      const selectedWeekdays = participationDays(
+        attendancePlan?.selected_weekdays, enrollment?.lesson_weekdays,
+        regularSchedules.map(schedule => schedule.weekday),
+      );
+      const studentSchedules = regularSchedules.filter(schedule =>
+        selectedWeekdays.includes(participationWeekday(schedule.weekday)),
       );
 
       const scheduleText = studentSchedules
         .slice()
         .sort((a, b) => {
-          const dayA = Number(a.weekday || 0);
-          const dayB = Number(b.weekday || 0);
+          const dayA = participationWeekday(a.weekday);
+          const dayB = participationWeekday(b.weekday);
 
           if (dayA !== dayB) return dayA - dayB;
 
@@ -553,7 +541,7 @@ export default async function StudentsPage() {
         })
         .map((schedule) => {
           const day =
-            DAY_NAMES[Number(schedule.weekday)] || "Ders";
+            DAY_NAMES[participationWeekday(schedule.weekday)] || "Ders";
           const start = timeText(schedule.start_time);
           const end = timeText(schedule.end_time);
 
@@ -646,11 +634,11 @@ export default async function StudentsPage() {
 
         schedule_text: scheduleText || null,
         schedule_weekdays: studentSchedules
-          .map((schedule) => Number(schedule.weekday))
+          .map((schedule) => participationWeekday(schedule.weekday))
           .filter((day) => Number.isInteger(day)),
         schedule_slots: studentSchedules.map((schedule) => ({
           id: schedule.id,
-          weekday: Number(schedule.weekday),
+          weekday: participationWeekday(schedule.weekday),
           start_time: schedule.start_time || null,
           end_time: schedule.end_time || null,
         })),
