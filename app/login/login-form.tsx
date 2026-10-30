@@ -152,10 +152,12 @@ export default function LoginForm() {
   }
 
   return <div>
+    <p className="sprintLoginRoleLabel">Giriş yapmak istediğiniz paneli seçin</p>
     <div className="v2RoleTabs" role="tablist" aria-label="Giriş türü">
       {roles.map((item) => <button key={item.value} type="button" role="tab" aria-selected={role === item.value} className={role === item.value ? "v2RoleTab active" : "v2RoleTab"} onClick={() => { setRole(item.value); setError(""); }}><Icon name={item.icon}/><span>{item.label}</span></button>)}
     </div>
 
+    <p className="sprintLoginRoleDescription" role="status">{role === "admin" ? "Yönetici ve yetkili personel girişi" : role === "coach" ? "Eğitmen ve yoklama paneli girişi" : "Veli ve kursiyer takibi girişi"}</p>
     <form className="v2LoginForm" onSubmit={handleSubmit}>
       <div className="v2MethodTabs">
         <button type="button" className={method === "email" ? "active" : ""} onClick={() => { setMethod("email"); setError(""); setPhonePreview(""); }}><Icon name="mail"/>E-posta ile giriş</button>
