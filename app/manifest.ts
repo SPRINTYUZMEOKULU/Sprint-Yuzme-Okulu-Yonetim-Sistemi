@@ -27,7 +27,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
 
     icons: [
-      { src: "/icons/sprint-pwa-splash.svg?v=8", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+      { src: "/icons/sprint-pwa-splash.svg?v=8", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
       {
         src: "/icons/icon-192.png?v=7",
         sizes: "192x192",
