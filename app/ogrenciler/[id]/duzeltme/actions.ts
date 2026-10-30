@@ -1,5 +1,6 @@
 "use server";
 
+import { syncCorrectedPlan } from "@/lib/students/sync-corrected-plan";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -217,9 +218,7 @@ export async function applyManagerCorrection(formData: FormData) {
       .eq("organization_id", organizationId)
       .eq("student_id", studentId)
       .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: false }),
     supabase
       .from("branches")
       .select("id,name")
@@ -267,7 +266,7 @@ export async function applyManagerCorrection(formData: FormData) {
   const student = studentResult.data;
   let enrollment = enrollmentResult.data;
   const membership = membershipResult.data;
-  const oldPlan = planResult.data;
+  const oldPlan = (planResult.data || []).find((plan:any)=>plan.enrollment_id===enrollment?.id) || null;
   const branch = branchResult.data;
   const group = groupResult.data;
   const coursePackage = packageResult.data;
@@ -526,42 +525,12 @@ export async function applyManagerCorrection(formData: FormData) {
     );
   }
 
-  const activePlanResult = await supabase
-    .from("student_attendance_plans")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .eq("student_id", studentId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const activePlan = activePlanResult.data;
-  if (activePlan?.id) {
-    const currentCompEnd = activePlan.compensation_planned_end_date || null;
-    const normalEnd = updatedEnrollment.planned_end_date || null;
-    const compensationEnd =
-      currentCompEnd && normalEnd
-        ? currentCompEnd >= normalEnd
-          ? currentCompEnd
-          : normalEnd
-        : currentCompEnd || normalEnd;
-
-    await supabase
-      .from("student_attendance_plans")
-      .update({
-        group_id: groupId,
-        selected_weekdays: isoWeekdays,
-        weekly_frequency: isoWeekdays.length,
-        package_lesson_count: totalLessons,
-        start_date: startDate,
-        normal_planned_end_date: normalEnd,
-        compensation_planned_end_date: compensationEnd,
-        updated_by: profile.id,
-        updated_at: now,
-      })
-      .eq("organization_id", organizationId)
-      .eq("id", activePlan.id);
+  const planSync=await syncCorrectedPlan(supabase,{
+    organizationId,studentId,enrollmentId:updatedEnrollment.id,groupId,weekdays:isoWeekdays,
+    totalLessons,startDate,normalEnd:updatedEnrollment.planned_end_date||null,actorId:profile.id,now,
+  });
+  if(!planSync.ok){
+    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt güncellendi; ders planı doğrulanamadı: ${planSync.error}`)}`);
   }
 
   let oldPaymentSnapshot: any = null;

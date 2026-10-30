@@ -329,6 +329,7 @@ export async function managerConfirmLegacyTransfer(formData: FormData) {
       organization_id: organizationId,
       student_id: studentId,
       package_id: packageId,
+      branch_id: branchId,
       group_id: groupId,
       start_date: startDate,
       planned_end_date: plannedEndDate,

@@ -1337,6 +1337,8 @@ export async function completeRegistration(
           packageId ||
           null,
 
+        branch_id: branchId,
+
         group_id:
           groupId,
 
