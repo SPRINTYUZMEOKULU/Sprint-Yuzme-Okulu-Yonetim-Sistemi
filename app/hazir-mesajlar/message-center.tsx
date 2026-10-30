@@ -155,6 +155,14 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   function toggleStudent(id:string){ setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]); setQueue([]); }
 
   function buildQueue(){
+    const previous=queueRef.current;
+    if(previous.length){
+      const confirmed=previous.filter(q=>q.status==="sent").length;
+      window.alert(confirmed===previous.length
+        ? `Bu gönderim tamamlandı (${confirmed}/${previous.length}). Aynı kişilere yeniden mesaj açılmadı. Yeni bir gönderim için önce kuyruğu kapatın.`
+        : `Gönderim devam ediyor (${confirmed}/${previous.length} onaylandı). Aynı kişilere tekrar mesaj açılmaması için mevcut kuyruktan devam edin.`);
+      return;
+    }
     const prepared:QueueItem[] = activeStudents.map(s=>({
       interactionId:crypto.randomUUID(), templateKey, templateTitle:templates.find(t=>t.key===templateKey)?.title,
       studentId:s.id,
@@ -164,8 +172,9 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       status:"waiting" as const,
     })).filter(x=>Boolean(x.phone));
     if(!prepared.length){ window.alert("Seçili kursiyerlerde WhatsApp için geçerli telefon numarası bulunamadı."); return; }
-    if(queueRef.current.length)return;
-    setQueue(prepared); setApiResult("");
+    const unique=new Set<string>();
+    const nonDuplicate=prepared.filter(q=>{const key=q.studentId+":"+q.phone+":"+q.message;if(unique.has(key))return false;unique.add(key);return true;});
+    setQueue(nonDuplicate); setApiResult("");
   }
 
   async function recordQueueEvent(item:QueueItem,event:"opened"|"confirmed"){
@@ -182,6 +191,10 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   async function advanceQueue(){
     const now=Date.now();
     if(queueBusyRef.current||now-lastQueueAction.current<700)return;
+    if(queueRef.current.length && queueRef.current.every(q=>q.status==="sent")){
+      window.alert("Bu gönderim zaten tamamlandı. Hiçbir mesaj yeniden açılmadı.");
+      return;
+    }
     lastQueueAction.current=now;
     let next=queueRef.current.map(q=>({...q,interactionId:q.interactionId||crypto.randomUUID()}));
     setQueue(next);
@@ -291,13 +304,14 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
           <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu · v2.2</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
           <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status==="opened"?"Gönderim onayı bekleniyor":currentQueueItem?.status==="error"?"Tekrar deneyin":queueComplete?"Tamamlandı":"Hazır"}</b></span></div>
           <progress className={styles.queueProgress} value={sentCount} max={queue.length} aria-label="Onaylanan gönderimler" />
+          {queueComplete && <p className={styles.success} role="status">✓ {sentCount} kişinin gönderimi onaylandı. Liste başa dönmeyecek; bu mesajlar yeniden açılmayacak.</p>}
           <p className={styles.muted} aria-live="polite">{queueComplete?"Tüm gönderimleri onayladınız. Kuyruk tamamlandı.":currentQueueItem?.status==="opened"?"WhatsApp’ta mesajı gönderin. Döndüğünüzde aşağıdaki düğmeyle gönderimi onaylayıp sıradaki kişiyi açın.":"Mesaj WhatsApp’ta hazır açılır. Gönder düğmesine WhatsApp içinde basmanız gerekir."}</p>
           {queueError && <p className={styles.error} role="alert">{queueError}</p>}
           <div className={styles.queueActions}>
             <button className={styles.primary} onClick={advanceQueue} disabled={!currentQueueItem||queueBusy}>
               {queueBusy?"Geçmiş kaydediliyor…":queueComplete?"Gönderim tamamlandı":currentQueueItem?.status==="opened"?(sentCount===queue.length-1?"Gönderimi Onayla ve Tamamla":"Gönderimi Onayla ve Sıradakini Aç"):currentQueueItem?.status==="error"?"WhatsApp’ı Tekrar Aç":"WhatsApp’ta Gönderime Başla"}
             </button>
-            <button disabled={queueBusy} onClick={()=>{if(sentCount<queue.length&&!window.confirm("Kuyruğu kapatmak kalan gönderimleri iptal eder. Kapatılsın mı?"))return;setQueue([]);}}>Kuyruğu Kapat</button>
+            <button disabled={queueBusy} onClick={()=>{if(!window.confirm(queueComplete?"Gönderim tamamlandı. Kuyruğu kapatıp yeni bir gönderime geçilsin mi?":"Mevcut gönderim kuyruğu kapatılsın mı? Onaylanmamış kişiler yeniden açılmak zorunda kalabilir."))return;setQueue([]);}}>Kuyruğu Kapat</button>
           </div>
           <div className={styles.people}>{queue.slice(0,120).map((q,i)=><div key={`${q.studentId}-${i}`} className={styles.person}><div><b>{i+1}. {q.studentName}</b><small>{q.phone} · {q.status==="sent"?"Gönderildi":q.status==="opened"?"Gönderim onayı bekleniyor":q.status==="error"?"Açılamadı · tekrar deneyin":"Bekliyor"}</small></div></div>)}</div>
         </div>}
