@@ -8,7 +8,7 @@ function newestEnrollment(rows:Enrollment[]){return [...rows].sort((a,b)=>enroll
 
 // Shared by the daily attendance screen and dashboard counters.
 export function attendanceRoster<S extends Student,E extends Enrollment>(p:{students:S[];enrollments:E[];memberships:Membership[];compensationLessons:Compensation[]},groupId:string,scheduleId:string,date:string,day:number){
-   const enrollmentRows=p.enrollments.filter(e=>e.group_id===groupId&&e.status==="active");
+   const enrollmentRows=p.enrollments.filter(e=>e.group_id===groupId&&["active","scheduled"].includes(e.status||"")&&(!e.start_date||e.start_date<=date));
    const enrollmentByStudent=new Map<string,E>();
    for(const enrollment of enrollmentRows){const studentId=enrollment.student_id||"";if(!studentId)continue;const current=enrollmentByStudent.get(studentId);enrollmentByStudent.set(studentId,current?newestEnrollment([current,enrollment]) as E:enrollment)}
 

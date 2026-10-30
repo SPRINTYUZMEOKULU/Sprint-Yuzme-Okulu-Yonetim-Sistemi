@@ -1,3 +1,4 @@
+import {awaitingEnrollmentStart,nextRegisteredLesson} from "@/lib/enrollment/starting";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +25,7 @@ export async function GET(){
 
     const [studentsResult,enrollmentsResult,attendanceResult,transferStartedResult,groupsResult,branchesResult,schedulesResult]=await Promise.all([
       supabase.from("students").select("id,first_name,last_name,student_number,guardian_name,guardian_phone,phone,status,registration_source").eq("organization_id",organizationId).eq("status","active").eq("is_deleted",false),
-      supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("status","active").order("created_at",{ascending:false}),
+      supabase.from("student_enrollments").select("id,student_id,group_id,branch_id,start_date,status,created_at,lesson_weekdays,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).in("status",["active","scheduled"]).order("created_at",{ascending:false}),
       supabase.from("attendance_records").select("student_id,enrollment_id,lesson_date,status").eq("organization_id",organizationId).in("status",["present","absent","excused"]),
       supabase.from("student_activity_logs").select("student_id").eq("organization_id",organizationId).eq("activity_type","legacy_transfer_manager_confirmed"),
       supabase.from("training_groups").select("id,name,branch_id").eq("organization_id",organizationId).eq("is_active",true),
@@ -46,22 +47,18 @@ export async function GET(){
     for(const s of schedulesResult.data||[]){const id=String(s.group_id||"");if(!id)continue;const arr=schedulesByGroup.get(id)||[];arr.push(s);schedulesByGroup.set(id,arr);}
 
     const today=trToday();
-    function nextLesson(groupId:string,startDate?:string|null){const schedules=schedulesByGroup.get(groupId)||[];if(!schedules.length)return null;const base=startDate&&startDate>today?startDate:today;for(let offset=0;offset<21;offset++){const date=addDays(base,offset);const wd=isoWeekday(date);const matches=schedules.filter((s:any)=>Number(s.weekday)===wd).sort((a:any,b:any)=>String(a.start_time||"").localeCompare(String(b.start_time||"")));if(matches.length){const s=matches[0];return {date,startTime:String(s.start_time||"").slice(0,5),endTime:String(s.end_time||"").slice(0,5),scheduleId:s.id};}}return null;}
+
 
     const students=(studentsResult.data||[]).flatMap((student:any)=>{
       const studentId=String(student.id);
       const enrollment=enrollmentMap.get(student.id);
-      if(!enrollment||enrollment.actual_started_at)return [];
-      const pendingStart=enrollment.start_confirmation_required&&!enrollment.actual_started_at;
-      const futureStart=Boolean(enrollment.start_date&&enrollment.start_date>today);
-      const attended=(attendanceByEnrollment.get(enrollment.id)||[]).some(row=>row.student_id===studentId && enrollment.start_date && row.lesson_date>=enrollment.start_date);
-      if(!pendingStart&&!futureStart&&(attended||transferStarted.has(studentId)))return [];
+      if(!awaitingEnrollmentStart(enrollment,today,attendanceByEnrollment.get(enrollment?.id)||[],transferStarted.has(studentId)))return [];
       const group=groupMap.get(String(enrollment.group_id||""));
       const branchId=String(group?.branch_id||enrollment.branch_id||"");
       const startDate=enrollment.start_date||null;
       const phase=startDate&&startDate>today?"waiting_start":"waiting_first_attendance";
-      const next=nextLesson(String(enrollment.group_id||""),startDate);
-      return [{id:student.id,name:`${student.first_name||""} ${student.last_name||""}`.trim(),studentNumber:student.student_number||null,groupId:enrollment.group_id||null,groupName:group?.name||"Grup bilgisi yok",branchName:branchMap.get(branchId)||"Şube bilgisi yok",startDate,phase,daysUntilStart:startDate&&startDate>today?daysBetween(today,startDate):0,nextLesson:next,phone:student.guardian_phone||student.phone||null,guardianName:student.guardian_name||null}];
+      const next=nextRegisteredLesson(schedulesByGroup.get(String(enrollment.group_id||""))||[],startDate,today,enrollment.lesson_weekdays);
+      return [{id:student.id,name:`${student.first_name||""} ${student.last_name||""}`.trim(),studentNumber:student.student_number||null,groupId:enrollment.group_id||null,groupName:group?.name||"Grup bilgisi yok",branchName:branchMap.get(branchId)||"Şube bilgisi yok",startDate,phase,renewalScheduled:enrollment.status==="scheduled",daysUntilStart:startDate&&startDate>today?daysBetween(today,startDate):0,nextLesson:next,phone:student.guardian_phone||student.phone||null,guardianName:student.guardian_name||null}];
     }).sort((a:any,b:any)=>{if(a.phase!==b.phase)return a.phase==="waiting_first_attendance"?-1:1;const ad=a.nextLesson?.date||"9999-12-31";const bd=b.nextLesson?.date||"9999-12-31";if(ad!==bd)return ad.localeCompare(bd);return String(a.nextLesson?.startTime||"").localeCompare(String(b.nextLesson?.startTime||""));});
 
     const waitingToStart=students.filter((s:any)=>s.phase==="waiting_start").length;
