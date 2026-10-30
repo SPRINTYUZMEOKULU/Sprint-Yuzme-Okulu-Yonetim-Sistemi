@@ -11,6 +11,7 @@ export class IsnetEsmmError extends Error {
   constructor(
     public readonly outcome: "not_sent" | "uncertain" | "rejected",
     message: string,
+    public readonly documentIdentity?: { ettn: string; documentNumber: string },
   ) {
     super(message);
     this.name = "IsnetEsmmError";
@@ -41,6 +42,7 @@ export type EsmmTestDraft = {
   externalDocumentNumber: string;
   documentNumber: string;
   documentDate: string;
+  createdDate: string;
   note: string;
   receiver: {
     taxCode: string;
@@ -116,14 +118,19 @@ function validateDraft(d: EsmmTestDraft) {
       "not_sent",
       "Test firmasının yetkili makbuz serisi/numarası gerekli.",
     );
-  if (
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+03:00$/.test(d.documentDate) ||
-    !Number.isFinite(Date.parse(d.documentDate))
-  )
-    throw new IsnetEsmmError(
-      "not_sent",
-      "Test belge tarihi Türkiye saatiyle verilmelidir.",
-    );
+  for (const date of [d.createdDate, d.documentDate]) {
+    if (
+      typeof date !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+03:00$/.test(date) ||
+      !Number.isFinite(Date.parse(date)) ||
+      new Date(`${date.slice(0, 10)}T12:00:00Z`).toISOString().slice(0, 10) !==
+        date.slice(0, 10)
+    )
+      throw new IsnetEsmmError(
+        "not_sent",
+        "Test belge ve oluşturulma tarihleri geçerli Türkiye saatiyle verilmelidir.",
+      );
+  }
   identity(d.receiver.taxCode);
   for (const [key, value] of Object.entries(d.receiver)) text(value, key);
   if (
@@ -229,7 +236,7 @@ export function buildEsmmTestSend(companyTaxCode: string, d: EsmmTestDraft) {
   const receiver = `<b:Receiver><a:Address>${tag("BoulevardAveneuStreetName", d.receiver.address)}${tag("CityName", d.receiver.city)}${tag("EMail", d.receiver.email)}${tag("TaxOfficeName", d.receiver.taxOffice)}${tag("TownName", d.receiver.town)}</a:Address>${tag("ReceiverName", d.receiver.name)}${tag("ReceiverTaxCode", d.receiver.taxCode)}${tag("RecipientType", "NONE")}${tag("SendingType", "ELEKTRONIK")}</b:Receiver>`;
   return (
     tag("CompanyTaxCode", companyTaxCode) +
-    `<a:ESMM xmlns:b="${dataModel}">${tag("CrossRate", "1", "b")}${tag("CurrencyCode", "TRY", "b")}<b:DetailList>${lineXml}</b:DetailList>${tag("DocumentDate", d.documentDate, "b")}${tag("DocumentNumber", d.documentNumber, "b")}${tag("ETTN", d.ettn, "b")}${tag("ExternalDocumentNumber", d.externalDocumentNumber, "b")}${tag("GrossAmount", d.grossAmount, "b")}${tag("Note", d.note, "b")}${tag("PayableAmount", d.payableAmount, "b")}${receiver}${tag("TotalAmount", d.totalAmount, "b")}${tag("TotalCollectedVatAmount", d.totalCollectedVatAmount, "b")}${tag("TotalStoppageAmount", d.totalStoppageAmount, "b")}${tag("TotalTaxAmount", d.totalTaxAmount, "b")}${tag("TotalVatAmount", d.totalVatAmount, "b")}${tag("TotalWitholdingAmount", d.totalWitholdingAmount, "b")}</a:ESMM>`
+    `<a:ESMM xmlns:b="${dataModel}">${tag("CreatedDate", d.createdDate, "b")}${tag("CrossRate", "1", "b")}${tag("CurrencyCode", "TRY", "b")}<b:DetailList>${lineXml}</b:DetailList>${tag("DocumentDate", d.documentDate, "b")}${tag("DocumentNumber", d.documentNumber, "b")}${tag("ETTN", d.ettn, "b")}${tag("ExternalDocumentNumber", d.externalDocumentNumber, "b")}${tag("GrossAmount", d.grossAmount, "b")}${tag("Note", d.note, "b")}${tag("PayableAmount", d.payableAmount, "b")}${receiver}${tag("TotalAmount", d.totalAmount, "b")}${tag("TotalCollectedVatAmount", d.totalCollectedVatAmount, "b")}${tag("TotalStoppageAmount", d.totalStoppageAmount, "b")}${tag("TotalTaxAmount", d.totalTaxAmount, "b")}${tag("TotalVatAmount", d.totalVatAmount, "b")}${tag("TotalWitholdingAmount", d.totalWitholdingAmount, "b")}</a:ESMM>`
   );
 }
 export function buildEsmmTestSearch(
@@ -246,6 +253,20 @@ export function buildEsmmTestSearch(
   return (
     tag("CompanyTaxCode", companyTaxCode) +
     tag("ExternalDocumentNumber", externalDocumentNumber) +
+    `<a:PagingRequest>${tag("PageNumber", "1")}${tag("RecordsPerPage", "2")}</a:PagingRequest><a:ResultSet xmlns:b="${dataModel}">${tag("IsDetailsIncluded", "true", "b")}${tag("IsPDFIncluded", String(includeFiles), "b")}${tag("IsXMLIncluded", String(includeFiles), "b")}</a:ResultSet>`
+  );
+}
+export function buildEsmmTestSearchByEttn(
+  companyTaxCode: string,
+  ettn: string,
+  includeFiles = false,
+) {
+  identity(companyTaxCode);
+  if (!uuid.test(ettn))
+    throw new IsnetEsmmError("not_sent", "Geçerli test ETTN gerekli.");
+  return (
+    tag("CompanyTaxCode", companyTaxCode) +
+    tag("Ettn", ettn) +
     `<a:PagingRequest>${tag("PageNumber", "1")}${tag("RecordsPerPage", "2")}</a:PagingRequest><a:ResultSet xmlns:b="${dataModel}">${tag("IsDetailsIncluded", "true", "b")}${tag("IsPDFIncluded", String(includeFiles), "b")}${tag("IsXMLIncluded", String(includeFiles), "b")}</a:ResultSet>`
   );
 }
@@ -353,13 +374,32 @@ export class IsnetEsmmTestClient {
     )
       throw new IsnetEsmmError(
         "uncertain",
-        "Gönderim kimliği doğrulanamadı. Aynı harici kodla sorgulayın.",
+        "Gönderim kimliği doğrulanamadı. Yeniden göndermeyin; aynı harici kod ve ETTN ile sorgulayın.",
+        result.Ettn === draft.ettn &&
+          typeof result.DocumentNumber === "string" &&
+          result.DocumentNumber
+          ? { ettn: result.Ettn, documentNumber: result.DocumentNumber }
+          : undefined,
       );
     return {
       ettn: String(result.Ettn),
       documentNumber: String(result.DocumentNumber),
       externalCode: String(result.ExternalESMMCode),
     };
+  }
+  async searchByEttn(ettn: string, includeFiles = false) {
+    const result = await this.call(
+      "SearchESMM",
+      buildEsmmTestSearchByEttn(this.companyTaxCode, ettn, includeFiles),
+    );
+    const raw = result.ESMM?.ESMM;
+    const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (rows.some((row: any) => row.ETTN !== ettn))
+      throw new IsnetEsmmError(
+        "uncertain",
+        "İşNet sorgusu farklı bir ETTN döndürdü.",
+      );
+    return rows as Record<string, any>[];
   }
   async search(externalCode: string, includeFiles = false) {
     const result = await this.call(

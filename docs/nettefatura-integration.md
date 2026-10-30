@@ -82,3 +82,15 @@ Kullanıcının seçtiği ürün İşNet NetteFatura e-SMM'dir. Yukarıdaki Invo
 3. İşNet'in e-postada istediği başarılı test belgesinin XML'si ve gerçek sabit çıkış IP'si, kullanıcı tarafından sağlayıcıya iletilir. Onaylı canlı uç nokta ve IP–firma yetkisi elde edilmeden üretim gönderimi açılmaz. Vercel'in rastgele fonksiyon IP'si sabit IP kabul edilmez.
 4. Muhasebe hizmet/vergi profili ve yönetici içerik onayı, ödeme değişikliği kontrolü, atomik gönderim kilidi ve kalıcı sonucu saklama akışı tamamlanır. 27 banka hareketi kullanıcı incelemesinden geçmeden otomatik kursiyer/fatura alıcısı kabul edilmez.
 5. İlk canlı belge ayrıca doğrulanır; ancak bundan sonra istenen otomasyon kapsamı açılır. Şu an otomatik/canlı makbuz kesimi açık değildir.
+
+
+## 30 Ekim 2026 — kullanıcı onaylı gerçek test servisi denemesi
+
+- Kullanıcı, İşNet'in kendi sağladığı test firma bilgileriyle yalnız test ortamında bir e-SMM oluşturulmasını ve PDF/XML/durum doğrulamasını açıkça onayladı. Önceki otomatik onay engeli bu kapsam için kullanıcı tarafından giderildi.
+- İki test firmasının e-SMM yetkisi ve seri bilgisi `GetCompany` ile doğrulandı. Gönderimden önce harici kod ve numara için kayıt bulunmadığı kontrol edildi.
+- İlk `SendESMM` isteği `CreatedDate` zorunluluğu nedeniyle Failed döndü. Yeniden sorguyla kayıt oluşmadığı doğrulandıktan sonra aynı ETTN/harici kod korundu ve zorunlu alan eklendi. İstemci artık oluşturulma tarihi ve gerçek takvim günü kontrolünü yerel olarak da yapıyor.
+- Düzeltilen gönderim `Success`, sağlayıcı makbuz numarası ve aynı ETTN ile yanıtlandı. Sağlayıcı istekteki numara yerine kendi seri numarasını atadı. `ExternalESMMCode` ise boş döndü. Bu nedenle kabul yanıtı uçtan uca doğrulama sayılmadı.
+- Harici kod ve ETTN ile `SearchESMM` kontrolleri `Success / 0 kayıt` döndü. Belgelenmiş aktif kayıt/hedef alanlarıyla kontroller de aynı sonucu verdi. `GetDocumentViewerLink` Outgoing/ESMM çağrısı `Success` ancak boş link döndürdü. Yeni bir makbuz gönderilmedi.
+- GİB test rapor kabulü ve gerçek makbuz PDF/XML'si henüz doğrulanamadı; canlı/otomatik kesim açılmadı. İşNet'in aynı ETTN üzerinden kayıt/sorgu uyumluluğunu incelemesi gerekiyor.
+- İstemciye belirsiz kabul yanıtında dönen ETTN/numarayı koruma ve yalnız ETTN ile salt okunur kurtarma sorgusu eklendi. Boş sorgu kesinleşmiş belge sayılmaz; farklı ETTN dönerse sonuç reddedilir. Otomatik tekrar kesim yoktur.
+- Maskeleme yapılmış istek/servis yanıtları ve teknik destek mesajı taslağı ayrı test raporunda saklandı. Bu SOAP servis yanıtları GİB makbuz XML'si değildir. Gerçek firma/müşteri verileri, sağlayıcı test VKN'leri, portal bilgileri ve erişim anahtarları repoya eklenmedi.
