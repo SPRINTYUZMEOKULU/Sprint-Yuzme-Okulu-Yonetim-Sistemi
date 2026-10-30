@@ -29,7 +29,7 @@ Test adresleri:
 7. Canlı servis adresleri ve yetki doğrulandıktan sonra yönetici onaylı gönderimi aç.
 8. Sağlayıcı sonucu belge ID/numarasıyla sakla; PDF/XML'yi yetkili öğrenci dosyasına bağla. Erişim linklerini herkese açık loglara koyma.
 
-Bu çalışma SOAP gönderim istemcisi içermez; banka hareketleri aşağıdaki kontrollü Excel aktarımıyla alınır. IBAN hareketlerini otomatik almak ayrıca VakıfBank bağlantısı gerektirir. Otomatik öğrenci eşleştirmesi yalnızca isim/tutarla kesin kabul edilmemelidir.
+Banka hareketleri aşağıdaki kontrollü Excel aktarımıyla alınır. 30 Ekim ekinde yalnız test ortamı için hazırlanan e-SMM istemcisinin kapsamı açıklanmıştır. IBAN hareketlerini otomatik almak ayrıca VakıfBank bağlantısı gerektirir. Otomatik öğrenci eşleştirmesi yalnızca isim/tutarla kesin kabul edilmemelidir.
 
 ## Fatura Merkezi ve Excel alternatif yolu
 
@@ -62,3 +62,23 @@ Kullanıcının seçtiği ürün İşNet NetteFatura e-SMM'dir. Yukarıdaki Invo
 - Vercel proje ayarlarına erişim artık başarılı. Production/preview ortam anahtarlarında İşNet/NetteFatura yapılandırması yok; değerler açılmadı.
 - Fatura Merkezi hazır banka aktarımı ve ödeme eşleştirme aşamalarını, eksik e-SMM gönderim/onay/test aşamalarından açıkça ayırır.
 - e-SMM sözleşmesi/test erişimi ve muhasebe hizmet/vergi ayarları elde edilmeden sağlayıcı istemcisi uydurulmadı, canlı gönderim açılmadı. Resmi İşNet SSS harici yazılımlar için web servis başvurusu ve sözleşme gerektiğini belirtiyor: https://nettefatura.isnet.net.tr/EFaturaSSS.html
+
+
+## 30 Ekim 2026 — e-SMM sözleşmesi ve kontrollü test hazırlığı
+
+- İşNet'in 14 Ekim tarihli “Web servis erişimi” yanıtı ve daha önce sağladığı WebServis arşivi yeniden incelendi. Arşivde ayrı `IsNet-ESMM-WebServiceArayuzDokumani` bulundu. Önceki “e-SMM sözleşmesi bulunamadı” değerlendirmesi artık güncel değildir.
+- Sağlayıcının verdiği HTTPS InvoiceService uç noktasının güncel WSDL'sinde `SendESMM`, `SearchESMM` ve `SendESMMXml` doğrulandı. Yeni e-SMM istemcisi bu SOAP sözleşmesini kullanır; mobil REST belgeleri gönderim protokolü yerine kullanılmaz.
+- `lib/invoicing/isnet-esmm-test.ts`: yalnız sabit İşNet TEST adresine çağrı yapabilir. Üretim adresi, canlı gönderim veya arka plan kesim işi içermez. Belge kimliği ve `ExternalDocumentNumber` kalıcı olmalıdır. Ağ hatasında otomatik yeniden gönderim yapılmaz; aynı harici kodla sorgulama gerekir. Sorgu farklı harici belge döndürürse sonuç kullanılamaz.
+- Vergi oranları, matrahlar, makbuz numarası/seri ve alıcı bilgileri açıkça sağlanmalıdır; öğrenci paketinden veya dekonttan türetilmez. Tutarların satır/toplam tutarlılığı kontrol edilir; gerçek muhasebe profilinin doğrulanması yerine geçmez.
+- Yerel testler gerçek firma/müşteri verisi kullanmaz ve sağlayıcıya ağ çağrısı yapmaz. SOAP sırası/ad alanları, XML kaçışları, yanıt kimliği, belirsiz teslim, hatalı XML ve yanlış belge eşleştirmesi kontrol edilir.
+- Firma bilgisi içermeyen `HealthCheck` çağrısı HTTP 200 / true döndü. Bu sonuç firma yetkisi veya başarılı e-SMM kesimi değildir.
+- Test firma VKN'siyle yapılacak sorgu otomatik onay denetimince açık kullanıcı onayı gerektiği için engellendi; başka bir yoldan tekrarlanmadı. Sağlayıcıda test belge gönderimi yapılmadı.
+- Canlı salt okunur kontrol: 27 banka hareketi `review`, 1 belge talebi `waiting_customer/e_smm`, 0 bağlı sağlayıcı belgesi. İşNet yapılandırma anahtarları Vercel ortamında bulunmadı; diğer anahtarların değerleri açılmadı.
+
+### Sonraki doğrulama sırası
+
+1. Kullanıcının açık onayıyla, yalnız İşNet'in sağladığı test firma bilgileri ve test ortamı kullanılarak deneme e-SMM oluşturulur. Gerçek kursiyer/vergi bilgileri test ortamına taşınmaz. Test numara/seri ve örnek vergi profili sağlayıcının yetkili test bilgileriyle doğrulanır.
+2. Aynı ETTN/harici kodla `SearchESMM` çalıştırılır. Sadece `SendESMM` Success sonucu yeterli değildir; belge durumları, test rapor kabulü ve PDF/XML birlikte doğrulanır.
+3. İşNet'in e-postada istediği başarılı test belgesinin XML'si ve gerçek sabit çıkış IP'si, kullanıcı tarafından sağlayıcıya iletilir. Onaylı canlı uç nokta ve IP–firma yetkisi elde edilmeden üretim gönderimi açılmaz. Vercel'in rastgele fonksiyon IP'si sabit IP kabul edilmez.
+4. Muhasebe hizmet/vergi profili ve yönetici içerik onayı, ödeme değişikliği kontrolü, atomik gönderim kilidi ve kalıcı sonucu saklama akışı tamamlanır. 27 banka hareketi kullanıcı incelemesinden geçmeden otomatik kursiyer/fatura alıcısı kabul edilmez.
+5. İlk canlı belge ayrıca doğrulanır; ancak bundan sonra istenen otomasyon kapsamı açılır. Şu an otomatik/canlı makbuz kesimi açık değildir.
