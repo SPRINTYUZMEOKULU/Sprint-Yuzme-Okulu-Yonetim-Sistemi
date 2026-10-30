@@ -47,12 +47,12 @@ export default async function StudentFileLayout({
       <RegistrationGuardianAutoBridge studentId={id} />
       <PortalQueryOpener />
       <GeneralInfoSummary />
-      <StudentRenewalCenter />
+      <StudentRenewalCenter key={id} studentId={id} />
       <StudentFinanceCenter studentId={id} />
       <StudentActionRouter />
       <StudentActionFeedback />
       <StudentHeroEnhancer />
-      <RenewalApprovalOpenBridge />
+      <RenewalApprovalOpenBridge key={id} />
       <RenewalMobilePolish />
       {canCorrect ? <AdminCorrectionLauncher studentId={id} /> : null}
     </>

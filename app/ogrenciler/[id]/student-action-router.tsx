@@ -22,30 +22,12 @@ function isRenewalAction(element: HTMLElement | null) {
   );
 }
 
-function hardOpenRenewal() {
-  const url = new URL(window.location.href);
-  url.searchParams.set("renewalOpen", "1");
-  url.hash = "";
-  window.location.assign(url.toString());
+function openRenewal() {
+  window.dispatchEvent(new CustomEvent("sprint:open-renewal"));
 }
 
 export default function StudentActionRouter() {
   useEffect(() => {
-    let renewalTapAt = 0;
-
-    const onPointerUp = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      const quickAction = target?.closest<HTMLElement>(
-        ".fileCommandActions button, .fileCommandActions a, [data-renewal-button='1']",
-      );
-      if (!isRenewalAction(quickAction || null)) return;
-
-      renewalTapAt = Date.now();
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      hardOpenRenewal();
-    };
-
     const onClick = (event: MouseEvent) => {
       const routedEvent = event as RoutedMouseEvent;
       if (routedEvent.__sprintRouted) return;
@@ -73,11 +55,11 @@ export default function StudentActionRouter() {
 
         if (text.includes("bilgileri düzenle")) return;
 
+        if(quickAction.dataset.renewalButton==="1")return;
         if (isRenewalAction(quickAction)) {
           event.preventDefault();
           event.stopImmediatePropagation();
-          if (Date.now() - renewalTapAt < 1200) return;
-          hardOpenRenewal();
+          openRenewal();
         }
         return;
       }
@@ -114,14 +96,12 @@ export default function StudentActionRouter() {
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        hardOpenRenewal();
+        openRenewal();
       }
     };
 
-    document.addEventListener("pointerup", onPointerUp, true);
     document.addEventListener("click", onClick, true);
     return () => {
-      document.removeEventListener("pointerup", onPointerUp, true);
       document.removeEventListener("click", onClick, true);
     };
   }, []);

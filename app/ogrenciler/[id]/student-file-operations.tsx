@@ -1,5 +1,6 @@
 "use client";
 
+import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
 import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
@@ -558,6 +559,7 @@ export default function StudentFileOperations({
             </span>
           </button>
 
+          <StudentRenewalButton />
           <button type="button" onClick={() => selectTab("general", "duzenle")}>
             <FileIcon name="edit" /> Bilgileri Düzenle
           </button>

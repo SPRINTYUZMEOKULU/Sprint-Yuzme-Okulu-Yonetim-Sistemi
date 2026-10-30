@@ -36,15 +36,9 @@ function quick(
   label: string,
   state: "normal" | "checking" | "pending" | "approved" = "normal",
 ) {
-  const b = document.querySelector<HTMLButtonElement>(
-    "[data-renewal-button='1']",
-  );
-  if (!b) return;
-  b.dataset.renewalState = state;
-  b.disabled = state === "checking";
-  b.innerHTML = `<span aria-hidden="true">↻</span> ${label}`;
+  window.dispatchEvent(new CustomEvent("sprint:renewal-button-state",{detail:{label,state}}));
 }
-export default function StudentRenewalCenter() {
+export default function StudentRenewalCenter({studentId:providedId}:{studentId?:string}={}) {
   const router = useRouter();
   const panelOpen = useRef(false);
   const opening = useRef(false),
@@ -76,10 +70,10 @@ export default function StudentRenewalCenter() {
     [renewalMessage, setRenewalMessage] = useState("");
   const studentId = useMemo(
     () =>
-      typeof window === "undefined"
+      providedId || (typeof window === "undefined"
         ? ""
-        : window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "",
-    [],
+        : window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || ""),
+    [providedId],
   );
   const selectedPackage = packages.find((x) => x.id === packageId) || null;
   const packagePrice = Number(selectedPackage?.price || 0);
@@ -98,6 +92,7 @@ export default function StudentRenewalCenter() {
   async function openCenter(requestId?: string) {
     if (!studentId || opening.current || panelOpen.current) return;
     panelOpen.current = true;
+    if(completed){setOpen(true);return;}
     opening.current = true;
     setOpen(true);
     setLoading(true);
@@ -136,6 +131,12 @@ export default function StudentRenewalCenter() {
       setPaymentAmount("");
       setPaymentMethod("cash");
       setActiveRequest(null);
+      if(d.scheduledEnrollment){
+        const existing=d.scheduledEnrollment;
+        setCompleted(true);setStartDate(existing.start_date);setPackageId(existing.package_id||d.selectedPackageId||"");
+        setMessage(`Kayıt zaten yenilenmiş. ${existing.total_lessons} derslik yeni dönem ${existing.start_date.split("-").reverse().join(".")} tarihinde başlayacak. Planlanan bitiş: ${existing.planned_end_date.split("-").reverse().join(".")}.`);
+        setMessageKind("success");quick("Yenileme Hazır");return;
+      }
       if (s.ok && sd.ok && sd.request) {
         const req = sd.request as RenewalRequest;
         setActiveRequest(req);
@@ -168,38 +169,15 @@ export default function StudentRenewalCenter() {
       setLoading(false);
     }
   }
+  const openCenterRef=useRef(openCenter);
+  openCenterRef.current=openCenter;
   useEffect(() => {
-    const ensure = () => {
-      const a = document.querySelector<HTMLElement>(".fileCommandActions");
-      if (!a || a.querySelector("[data-renewal-button='1']")) return;
-      const b = document.createElement("button");
-      b.type = "button";
-      b.dataset.renewalButton = "1";
-      b.className = "renewalQuickButton";
-      b.innerHTML = '<span aria-hidden="true">↻</span> Kayıt Yenile';
-      const p = a.querySelector("button");
-      p?.nextSibling ? a.insertBefore(b, p.nextSibling) : a.appendChild(b);
-    };
-    const click = (e: MouseEvent) => {
-      const t = (e.target as Element | null)?.closest(
-        "[data-renewal-button='1']",
-      );
-      if (!t) return;
-      e.preventDefault();
-      e.stopPropagation();
-      void openCenter();
-    };
     const custom = (e: Event) =>
-      void openCenter(
+      void openCenterRef.current(
         (e as CustomEvent<{ requestId?: string }>).detail?.requestId,
       );
-    ensure();
-    const timer = setTimeout(ensure, 300);
-    document.addEventListener("click", click, true);
     window.addEventListener("sprint:open-renewal", custom as EventListener);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", click, true);
       window.removeEventListener(
         "sprint:open-renewal",
         custom as EventListener,
@@ -251,6 +229,7 @@ export default function StudentRenewalCenter() {
         }),
       });
       const d = await r.json();
+      if(d.alreadyScheduled){setCompleted(true);setMessage(d.error);setMessageKind("success");quick("Yenileme Hazır");return;}
       if (d.approvalRequired) {
         setMessage(d.message || "Yönetici onayı bekleniyor.");
         setMessageKind("approval");
@@ -365,7 +344,7 @@ export default function StudentRenewalCenter() {
   return (
     <>
       <div className="renewalOverlay" onClick={closeCenter}>
-        <aside className="renewalPanel" onClick={(e) => e.stopPropagation()}>
+        <aside className="renewalPanel" role="dialog" aria-modal="true" aria-label="Kayıt Yenileme Merkezi" onClick={(e) => e.stopPropagation()}>
           <header>
             <div>
               <span>KAYIT · ÖDEME · İLETİŞİM</span>

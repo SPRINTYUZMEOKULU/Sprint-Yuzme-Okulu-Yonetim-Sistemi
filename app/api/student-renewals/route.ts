@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient();
-    const [packagesResult, studentResult, enrollmentResult] = await Promise.all(
+    const [packagesResult, studentResult, enrollmentResult, scheduledResult] = await Promise.all(
       [
         supabase
           .from("course_packages")
@@ -136,9 +136,12 @@ export async function GET(request: NextRequest) {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase.from("student_enrollments").select("id,package_id,start_date,planned_end_date,total_lessons")
+          .eq("organization_id",organizationId).eq("student_id",studentId).eq("status","scheduled").maybeSingle(),
       ],
     );
 
+    if(scheduledResult.error)return fail("scheduled-enrollment",scheduledResult.error);
     if (packagesResult.error) return fail("packages", packagesResult.error);
     if (studentResult.error) return fail("student", studentResult.error);
     if (enrollmentResult.error)
@@ -153,6 +156,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       packages: packagesResult.data || [],
+      scheduledEnrollment:scheduledResult.data||null,
       selectedPackageId:
         enrollmentResult.data?.package_id ||
         studentResult.data.preferred_package_id ||
@@ -238,6 +242,13 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
+
+    const {data:existingScheduled,error:scheduledError}=await supabase.from("student_enrollments")
+      .select("id,start_date,planned_end_date,total_lessons").eq("organization_id",organizationId)
+      .eq("student_id",studentId).eq("status","scheduled").maybeSingle();
+    if(scheduledError)return fail("scheduled-enrollment",scheduledError);
+    if(existingScheduled)return NextResponse.json({ok:false,alreadyScheduled:true,scheduledEnrollment:existingScheduled,
+      error:`Kayıt zaten yenilenmiş. Yeni dönem ${formatDateTR(existingScheduled.start_date)} tarihinde başlayacak.`},{status:409});
 
     let packageId = String(
       body.packageId ||
@@ -601,6 +612,9 @@ export async function POST(request: NextRequest) {
     const optionalWrites = await Promise.allSettled([
       supabase.from("system_notifications").insert({
         organization_id: organizationId,
+        notification_type:"registration_renewed",
+        body:`${studentName} için ${lessonCount} derslik yeni dönem oluşturuldu.`,
+        student_id:studentId,
         category: "registration",
         event_key: "student_registration_renewed",
         title: "Öğrenci kaydı yenilendi",
@@ -638,11 +652,8 @@ export async function POST(request: NextRequest) {
         recipient_phone: recipient || null,
         message_text: renewalMessage,
         status: "prepared",
-        created_by: profile.id,
-        metadata: {
-          source: "student_renewal_center",
-          enrollment_id: newEnrollment.id,
-        },
+        handled_by: profile.id,
+
       }),
     ]);
 

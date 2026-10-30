@@ -155,7 +155,12 @@ async function enhance() {
       head.appendChild(badge);
     }
 
-    const list = messagePanel.querySelector<HTMLElement>(".list");
+    const legacyList = messagePanel.querySelector<HTMLElement>(".list:not([data-unified-message-history])");
+    let list=messagePanel.querySelector<HTMLElement>("[data-unified-message-history]");
+    if(legacyList){
+      legacyList.style.display="none";
+      if(!list){list=document.createElement("div");list.className="list sprintUnifiedMessageList";list.dataset.unifiedMessageHistory="1";legacyList.insertAdjacentElement("afterend",list);}
+    }
     if (list) {
       const timeline = data.timeline || [];
       list.classList.add("sprintUnifiedMessageList");

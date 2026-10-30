@@ -73,7 +73,7 @@ export default function StudentHeroEnhancer() {
 
           backButton.textContent = "← Öğrenciler";
           backButton.classList.add("heroTopBack");
-          actions.appendChild(backButton);
+          backButton.style.order="2";
           hero.appendChild(actions);
         }
       }
