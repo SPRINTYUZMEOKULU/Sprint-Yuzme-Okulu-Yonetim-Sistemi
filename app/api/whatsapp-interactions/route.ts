@@ -250,62 +250,24 @@ export async function POST(request: Request) {
     delivery_confirmation: "whatsapp_opened",
   };
 
-  const [messageLog, contactLog, activityLog] = await Promise.all([
-    supabase.from("message_logs").insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      template_key: kind.templateKey,
-      channel: "whatsapp",
-      recipient: recipient || null,
-      subject: kind.title,
-      message_body: message,
-      status: "sent",
-      prepared_by: profile.id,
-      sent_by: profile.id,
-      prepared_at: sentAt,
-      sent_at: sentAt,
-      metadata,
-    }),
-    supabase.from("student_contact_logs").insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      contact_type: kind.contactType,
-      channel: "whatsapp",
-      recipient_phone: recipient || null,
-      message_text: message,
-      status: "sent",
-      handled_by: profile.id,
-      prepared_at: sentAt,
-      sent_at: sentAt,
-      confirmed_at: sentAt,
-    }),
-    supabase.from("student_activity_logs").insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      activity_type: kind.activityType,
-      title: kind.title,
-      description: `WhatsApp üzerinden bilgilendirme gönderildi.${recipient ? ` Alıcı: ${recipient}` : ""}`,
-      new_value: {
-        channel: "whatsapp",
-        template_key: kind.templateKey,
-        recipient: recipient || null,
-        sent_at: sentAt,
-        source_path: sourcePath || null,
-      },
-      source_type: "whatsapp",
-      source_id: studentId,
-      performed_by: profile.id,
-      performed_at: sentAt,
-    }),
-  ]);
-
-  const error = messageLog.error || contactLog.error || activityLog.error;
+  // A WhatsApp deep link only opens the composer. Never claim delivery without
+  // explicit user confirmation or an official WhatsApp delivery webhook.
+  const { error } = await supabase.from("message_logs").insert({
+    organization_id: organizationId,
+    student_id: studentId,
+    template_key: kind.templateKey,
+    channel: "whatsapp",
+    recipient: recipient || null,
+    subject: kind.title.replace(/ gönderildi$/i, ""),
+    message_body: message,
+    status: "opened",
+    prepared_by: profile.id,
+    prepared_at: sentAt,
+    metadata,
+  });
   if (error) {
-    return NextResponse.json(
-      { ok: false, message: `WhatsApp geçmişi kaydedilemedi: ${error.message}` },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, message: "WhatsApp açılma kaydı kaydedilemedi." }, { status: 500 });
   }
+  return NextResponse.json({ ok: true, studentId, openedAt: sentAt, status: "opened", type: kind.contactType });
 
-  return NextResponse.json({ ok: true, studentId, sentAt, type: kind.contactType });
 }
