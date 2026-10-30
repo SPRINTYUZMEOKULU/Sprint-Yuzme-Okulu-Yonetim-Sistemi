@@ -15,7 +15,7 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
   if(name==='@/lib/lesson-operations/outcomes')return load('lib/lesson-operations/outcomes.ts');
   throw Error(name);
  });
- return {writes,rows,call:(date,schedule='target',mode='custom')=>actions.applyLessonCancellation({groupId:'g',scheduleId:'source',cancelledDate:'2026-10-17',reason:'Pool closure',compensationMode:mode,customDate:date,customScheduleId:schedule,prepareMessages:true})};
+ return {writes,rows,call:(date,schedule='target',mode='custom',cancelledDate='2026-10-17')=>actions.applyLessonCancellation({groupId:'g',scheduleId:'source',cancelledDate,reason:'Pool closure',compensationMode:mode,customDate:date,customScheduleId:schedule,prepareMessages:true})};
 }
 test('custom compensation rejects wrong weekday before any writes',async()=>{const s=setup();const r=await s.call('2026-10-19');assert.equal(r.ok,false);assert.match(r.message,/seansın gününe/);assert.equal(s.writes.length,0);});
 test('custom compensation rejects dates before cancellation before any writes',async()=>{const s=setup();const r=await s.call('2026-10-11');assert.equal(r.ok,false);assert.match(r.message,/iptal tarihinden sonra/);assert.equal(s.writes.length,0);});
@@ -47,4 +47,20 @@ test('failed compensation is reported without claiming cancellation was applied'
 test('failed message preparation keeps the successful compensation and warns without a false ready message',async()=>{
  const s=setup('b','adult',0,'message_logs');const r=await s.call('2026-10-18');
  assert.equal(r.processedCount,1);assert.equal(r.compensationCreated,1);assert.equal(r.preparedMessages.length,0);assert.equal(r.outcomes[0].status,'processed');assert.match(r.outcomes[0].reason,/Mesaj hazırlanamadı/);
+});
+
+test('reopening a previously processed cancellation cannot add a second lesson',async()=>{
+ const s=setup();s.rows.student_activity_logs=[{id:'previous',student_id:'student',activity_type:'lesson_cancellation_compensation',source_id:'source','old_value->>cancelled_lesson_date':'2026-10-17'}];
+ const r=await s.call('2026-10-18');assert.equal(r.compensationCreated,0);assert.equal(r.skippedCount,1);assert.match(r.outcomes[0].reason,/zaten kayıtlı/);
+});
+test('two cancellations can be planned in consecutive sessions on the same day',async()=>{
+ const s=setup();assert.equal((await s.call('2026-10-25')).compensationCreated,1);
+ s.rows.student_compensation_lessons=[{id:'first',student_id:'student',lesson_date:'2026-10-25',target_schedule_id:'target',status:'planned'}];
+ s.rows.lesson_schedules.push({...s.rows.lesson_schedules[1],id:'target-late',start_time:'20:00',end_time:'21:00'});
+ const r=await s.call('2026-10-25','target-late','custom','2026-10-24');assert.equal(r.compensationCreated,1);
+ const lessons=s.writes.filter(w=>w.table==='student_compensation_lessons');assert.equal(lessons.length,2);assert.notEqual(lessons[0].value.target_schedule_id,lessons[1].value.target_schedule_id);
+});
+test('two different cancelled lessons cannot occupy the same makeup session',async()=>{
+ const s=setup();s.rows.student_compensation_lessons=[{id:'first',student_id:'student',lesson_date:'2026-10-25',target_schedule_id:'target',status:'planned'}];
+ const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.match(r.outcomes[0].reason,/zaten telafi var/);
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { currentRecipient } from "@/lib/messaging/current-recipient";
 import { useEffect } from "react";
 
 function sanitizeWhatsAppText(value: string) {
@@ -109,6 +110,19 @@ export default function WhatsAppSafeOpen() {
     ) => {
       const safeUrl = url ? sanitizeWhatsAppUrl(url) : url;
 
+      const studentId=extractStudentId();
+      if(safeUrl&&isWhatsAppUrl(safeUrl)&&studentId&&!/şifre|sifre|doğrulama|otp|giriş bilg|giris bilg/i.test(extractWhatsAppPayload(safeUrl).message)){
+        const popup=originalOpen.call(window,"about:blank","_blank");
+        if(!popup)return null;
+        popup.opener=null;
+        const payload=extractWhatsAppPayload(safeUrl);
+        void currentRecipient(studentId,payload.recipient).then(recipient=>{
+          const resolved=`https://wa.me/${recipient}?text=${encodeURIComponent(payload.message)}`;
+          popup.location.href=resolved;
+          logWhatsAppInteraction(resolved);
+        }).catch(error=>{popup.close();window.alert(error.message);});
+        return popup;
+      }
       if (safeUrl && isWhatsAppUrl(safeUrl)) {
         logWhatsAppInteraction(safeUrl);
       }
@@ -121,6 +135,12 @@ export default function WhatsAppSafeOpen() {
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor || !isWhatsAppUrl(anchor.href)) return;
 
+      // Authentication messages retain the separately verified account recipient.
+      if(extractStudentId()&&!/şifre|sifre|doğrulama|otp|giriş bilg|giris bilg/i.test(extractWhatsAppPayload(anchor.href).message)){
+        event.preventDefault();
+        window.open(anchor.href,"_blank","noopener,noreferrer");
+        return;
+      }
       const safeHref = sanitizeWhatsAppUrl(anchor.href);
       if (safeHref !== anchor.href) anchor.href = safeHref;
       logWhatsAppInteraction(safeHref);

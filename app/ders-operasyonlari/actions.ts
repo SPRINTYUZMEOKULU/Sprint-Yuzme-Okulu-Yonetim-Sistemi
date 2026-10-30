@@ -287,6 +287,17 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         continue;
       }
 
+      // A repeated click or reopening the operation must never grant a second makeup right.
+      const {data:previousOperation,error:previousError}=await supabase.from("student_activity_logs").select("id")
+        .eq("organization_id",organizationId).eq("student_id",student.id)
+        .eq("activity_type","lesson_cancellation_compensation").eq("source_id",input.scheduleId)
+        .eq("old_value->>cancelled_lesson_date",input.cancelledDate).maybeSingle();
+      if(previousError||previousOperation){
+        skipped++;
+        outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:previousError?"Önceki iptal kaydı doğrulanamadı; mükerrer telafiyi önlemek için işlem durduruldu.":"Bu dersin iptal / telafi işlemi zaten kayıtlı. Mevcut telafiyi kursiyer dosyasından düzenleyin."});
+        continue;
+      }
+
       const oldNormalEndDate = plan?.normal_planned_end_date || enrollment.planned_end_date || null;
       const currentCompensationEndDate = plan?.compensation_planned_end_date || oldNormalEndDate;
 
@@ -315,6 +326,12 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         newCompensationEndDate = laterDate(currentCompensationEndDate, compensationDate);
       }
 
+      if(compensationDate&&targetScheduleId){
+        const {data:occupied,error:occupiedError}=await supabase.from("student_compensation_lessons").select("id")
+          .eq("organization_id",organizationId).eq("student_id",student.id).eq("lesson_date",compensationDate)
+          .eq("target_schedule_id",targetScheduleId).in("status",["planned","completed"]).maybeSingle();
+        if(occupiedError||occupied){skipped++;outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:occupiedError?"Telafi çakışması kontrol edilemedi.":"Bu tarih ve seansta zaten telafi var. Ayrı bir seans seçin."});continue;}
+      }
       if (compensationDate) {
         const compensationInsert = await supabase
           .from("student_compensation_lessons")

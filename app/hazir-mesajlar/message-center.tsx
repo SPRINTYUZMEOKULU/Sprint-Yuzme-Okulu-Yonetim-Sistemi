@@ -7,6 +7,7 @@ import {
   type SprintMessageKey,
   type SprintMessageTemplate,
 } from "@/lib/messaging/sprint-message-catalog";
+import { currentRecipient } from "@/lib/messaging/current-recipient";
 import { addGiftLessons } from "./actions";
 import styles from "./page.module.css";
 
@@ -204,7 +205,8 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
         setQueueError("WhatsApp penceresi açılamadı. Açılır pencere iznini kontrol edip tekrar deneyin.");
         return;
       }
-      const item=next[index];
+      const item={...next[index],phone:await currentRecipient(next[index].studentId,next[index].phone)};
+      next=next.map((q,i)=>i===index?item:q);
       popup.location.href=`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`;
       setQueue(next.map((q,i)=>i===index?{...q,status:"opened"}:q));
       popup=null;

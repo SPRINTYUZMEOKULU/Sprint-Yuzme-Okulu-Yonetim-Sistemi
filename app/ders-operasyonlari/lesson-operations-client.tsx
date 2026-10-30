@@ -1,5 +1,6 @@
 "use client";
 
+import { openCurrentWhatsapp } from "@/lib/messaging/current-recipient";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import type { CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -43,14 +44,6 @@ function formatDate(value?: string | null) {
   return y && m && d ? `${d}.${m}.${y}` : value;
 }
 
-function whatsappPhone(value: string) {
-  const raw = value.replace(/\D/g, "");
-  if (raw.startsWith("90")) return raw;
-  if (raw.startsWith("0")) return `90${raw.slice(1)}`;
-  if (raw.length === 10) return `90${raw}`;
-  return raw;
-}
-
 export default function LessonOperationsClient({ branches, groups, schedules, memberCounts: totalMemberCounts, participation }: Props) {
   const [startingMessages, setStartingMessages] = useState<StartingCancellationMessage[]>([]);
   const [startingStatus, setStartingStatus] = useState("");
@@ -66,6 +59,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<Mode>("append_end");
   const [customTargets, setCustomTargets] = useState<Record<string, {date: string; scheduleId: string}>>({});
+  const [extraLessons,setExtraLessons]=useState<{key:string;groupId:string;cancelledDate:string;scheduleId:string;customDate:string;customScheduleId:string}[]>([]);
+  const operationLock=useRef(false);
+  const completedOperations=useRef(new Set<string>());
   const [prepareMessages, setPrepareMessages] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
@@ -169,6 +165,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   }
 
   async function submitOperation() {
+    if(operationLock.current)return;
     if (!selectedIds.length || !cancelledDate || !reason.trim() || selectedIds.some((id) => !sourceFor(id))) {
       setResult("Grup, tarih ve gerekçe seçin; her grup için iptal tarihinin gününe uygun seansı seçin.");
       return;
@@ -183,6 +180,32 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       return;
     }
 
+    const jobs = [
+      ...selectedIds.map(id=>({groupId:id,scheduleId:sourceFor(id)!.id,cancelledDate,customDate:customTargets[id]?.date||null,customScheduleId:customTargets[id]?.scheduleId||null})),
+      ...extraLessons,
+    ];
+    const keys=new Set<string>(),targets=new Set<string>();
+    for(const job of jobs){
+      const source=schedules.find(s=>s.id===job.scheduleId&&s.group_id===job.groupId&&s.is_active!==false);
+      const key=`${job.groupId}:${job.scheduleId}:${job.cancelledDate}`;
+      if(!source||!job.cancelledDate||participationWeekday(source.weekday)!==(new Date(`${job.cancelledDate}T12:00:00Z`).getUTCDay()||7)||keys.has(key)){
+        setResult("Her telafi için farklı bir iptal dersi ve o güne uygun kaynak seans seçin. Aynı iptal dersini iki kez ekleyemezsiniz.");return;
+      }
+      keys.add(key);
+      if(mode==="custom"){
+        const target=schedules.find(s=>s.id===job.customScheduleId&&s.is_active!==false&&compatibleTarget(job.groupId,s.group_id));
+        const targetKey=`${job.groupId}:${job.customDate}:${job.customScheduleId}`;
+        if(!target||!job.customDate||job.customDate<=job.cancelledDate||participationWeekday(target.weekday)!==(new Date(`${job.customDate}T12:00:00Z`).getUTCDay()||7)||targets.has(targetKey)){
+          setResult("Her iptal dersi için ayrı, uygun bir telafi tarihi ve seansı seçin. Aynı telafi seansı iki kez eklenemez.");return;
+        }
+        targets.add(targetKey);
+      }
+    }
+
+    if(jobs.every(job=>completedOperations.current.has(JSON.stringify({...job,mode})))){
+      setResult("Seçilen derslerin işlemleri zaten tamamlandı. Mesajları aşağıdan açabilirsiniz.");return;
+    }
+
     const modeText =
       mode === "append_end"
         ? "telafileri kayıt sonuna ekleyip bitiş tarihlerini güncellemek"
@@ -190,36 +213,39 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           ? "telafileri seçilen özel tarih/seansa planlamak"
           : "telafi haklarını saklı tutup daha sonra planlamak";
 
-    if (!window.confirm(`${selectedIds.map((id) => groups.find((g) => g.id === id)?.name).join("; ")} için ${formatDate(cancelledDate)} tarihli ders iptal edilecek ve ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
+    if (!window.confirm(`${jobs.map(job=>`${groups.find(g=>g.id===job.groupId)?.name} · ${formatDate(job.cancelledDate)} · ${scheduleText(schedules.find(s=>s.id===job.scheduleId))}${mode==="custom"?` → ${formatDate(job.customDate)} · ${scheduleText(schedules.find(s=>s.id===job.customScheduleId))}`:""}`).join("\n")}\n\n${jobs.length} iptal dersi için ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
       return;
     }
 
+    operationLock.current=true;
     setSubmitting(true);
     setResult("Ders iptali ve telafi işlemleri uygulanıyor…");
-    setPreparedMessages([]);
-    setOutcomes([]);
+    // Retain completed messages and outcomes if a later row needs a retry.
     setMessageFeedback("");
     setMessageFilter("all");
     setQueueIndex(0);
-    setOpenedStudentIds([]);
-    setSentMessageKeys([]);
+
 
     try {
-      const messages: PreparedCancellationMessage[] = [];
+      const messages: PreparedCancellationMessage[] = [...preparedMessages];
       const results: string[] = [];
-      const operationOutcomes: CancellationOutcome[] = [];
-      for (const id of selectedIds) {
+      const operationOutcomes: CancellationOutcome[] = [...outcomes];
+      for (const job of jobs) {
+        const id=job.groupId;
+        const operationKey=JSON.stringify({...job,mode});
+        if(completedOperations.current.has(operationKey))continue;
         const response = await applyLessonCancellation({
           groupId: id,
-          scheduleId: sourceFor(id)!.id,
-          cancelledDate, reason, description,
+          scheduleId: job.scheduleId,
+          cancelledDate:job.cancelledDate, reason, description,
           compensationMode: mode,
-          customDate: mode === "custom" ? customTargets[id].date : null,
-          customScheduleId: mode === "custom" ? customTargets[id].scheduleId : null,
+          customDate: mode === "custom" ? job.customDate : null,
+          customScheduleId: mode === "custom" ? job.customScheduleId : null,
           prepareMessages,
         });
-        results.push(`${groups.find((g) => g.id === id)?.name}: ${response.message}`);
-        messages.push(...(response.preparedMessages || []));
+        if(response.ok)completedOperations.current.add(operationKey);
+        results.push(`${formatDate(job.cancelledDate)} · ${groups.find((g) => g.id === id)?.name}: ${response.message}`);
+        for(const item of response.preparedMessages||[])if(!messages.some(m=>m.studentId===item.studentId&&m.message===item.message))messages.push(item);
         operationOutcomes.push(...("outcomes" in response ? response.outcomes || [] : []));
         setOutcomes([...operationOutcomes]);
         setResult(results.join("\n"));
@@ -230,6 +256,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       console.error(error);
       setResult("Ders operasyonu sırasında bağlantı hatası oluştu.");
     } finally {
+      operationLock.current=false;
       setSubmitting(false);
     }
   }
@@ -245,19 +272,21 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     const current = sendable[safeIndex];
     if (!current.recipient) return;
 
-    openWhatsapp(current);
+    void openWhatsapp(current);
     setQueueIndex(safeIndex + 1 >= sendable.length ? 0 : safeIndex + 1);
   }
 
-  function openWhatsapp(item: PreparedCancellationMessage) {
-    if (!item.recipient) return;
-    window.open(`https://wa.me/${whatsappPhone(item.recipient)}?text=${encodeURIComponent(item.message)}`, "_blank", "noopener,noreferrer");
+  async function openWhatsapp(item: PreparedCancellationMessage) {
+    try {
+    const recipient = await openCurrentWhatsapp(item.studentId,item.recipient,item.message);
+    setPreparedMessages(items=>items.map(row=>row.studentId===item.studentId&&row.message===item.message?{...row,recipient}:row));
     const key = item.studentId + item.message;
     setOpenedStudentIds(ids => ids.includes(key) ? ids : [...ids, key]);
     setMessageFeedback(`${item.studentName}: WhatsApp açma isteği oluşturuldu. Mesajı gönderdikten sonra gönderim kaydını onaylayın.`);
     void recordCancellationMessageOpened({studentId:item.studentId,message:item.message}).then(response => {
       if (!response.ok) setMessageFeedback(`${item.studentName}: WhatsApp açma durumu kaydedilemedi. Gönderim yaptıysanız ayrıca onaylayabilirsiniz.`);
     }).catch(() => setMessageFeedback(`${item.studentName}: Bağlantı nedeniyle açılma durumu kaydedilemedi.`));
+    } catch(error) {setMessageFeedback(error instanceof Error?error.message:"Güncel telefon doğrulanamadı.");}
   }
 
   const skippedOutcomes = outcomes.filter(item => item.status === "skipped");
@@ -294,6 +323,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                 value={branchId}
                 onChange={(event) => {
                   setBranchId(event.target.value);
+                  setExtraLessons([]);
                   setGroupId("");
                   setGroupIds([]);
                   setSourceSchedules({});
@@ -418,7 +448,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               {startingMessages.map((item) => <div key={item.studentId} className="startingPerson">
                 <b>{item.studentName}</b><span>{item.groupName}</span>
                 {!item.recipient && <span>Telefon bilgisi eksik</span>}
-                {startingPrepared && item.recipient && <a href={`https://wa.me/${whatsappPhone(item.recipient)}?text=${encodeURIComponent(item.message)}`} target="_blank" rel="noopener noreferrer">Başlangıç mesajını WhatsApp’ta aç</a>}
+                {startingPrepared && item.recipient && <button type="button" onClick={()=>{void openCurrentWhatsapp(item.studentId,item.recipient,item.message).catch(error=>setStartingStatus(error.message));}}>Başlangıç mesajını WhatsApp’ta aç</button>}
               </div>)}
               <button type="button" disabled={preparingStarting || submitting} onClick={() => void prepareStarting()}>{preparingStarting ? "Mesaj hazırlanıyor…" : "Ayrı başlangıç mesajlarını hazırla"}</button>
               <small>WhatsApp açıldığında mesajı göndermek için Gönder’e basın.</small>
@@ -460,6 +490,28 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               </fieldset>;
             })}
           </div>}
+
+          <section className="customTargets" aria-label="Ek telafi dersleri">
+            <h3>Birden fazla telafi dersi</h3>
+            <p>Her satırı ayrı bir iptal dersiyle eşleştirin. Aynı gün arka arkaya iki farklı seans veya farklı günler seçebilirsiniz.</p>
+            {extraLessons.map((row,index)=>{
+              const sourceDay=row.cancelledDate?(new Date(`${row.cancelledDate}T12:00:00Z`).getUTCDay()||7):0;
+              const targetDay=row.customDate?(new Date(`${row.customDate}T12:00:00Z`).getUTCDay()||7):0;
+              const update=(changes:Partial<typeof row>)=>setExtraLessons(rows=>rows.map(item=>item.key===row.key?{...item,...changes}:item));
+              return <fieldset key={row.key} className="customTarget" disabled={submitting}>
+                <legend>Ek telafi dersi {index+1}</legend>
+                <div className="fieldGrid customFields">
+                  <label><span>Kaynak grup</span><select value={row.groupId} onChange={event=>update({groupId:event.target.value,scheduleId:"",customScheduleId:""})}><option value="">Grup seçin</option>{visibleGroups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+                  <label><span>İptal edilen dersin tarihi</span><input type="date" value={row.cancelledDate} onChange={event=>update({cancelledDate:event.target.value,scheduleId:""})}/></label>
+                  <label><span>İptal edilen seans</span><select value={row.scheduleId} onChange={event=>update({scheduleId:event.target.value})}><option value="">Seans seçin</option>{schedules.filter(s=>s.group_id===row.groupId&&s.is_active!==false&&participationWeekday(s.weekday)===sourceDay).map(s=><option key={s.id} value={s.id}>{scheduleText(s)}</option>)}</select></label>
+                  {mode==="custom"&&<><label><span>Telafi tarihi</span><input type="date" value={row.customDate} onChange={event=>update({customDate:event.target.value,customScheduleId:""})}/></label>
+                  <label><span>Telafi grubu / seansı</span><select value={row.customScheduleId} onChange={event=>update({customScheduleId:event.target.value})}><option value="">Seans seçin</option>{schedules.filter(s=>s.is_active!==false&&compatibleTarget(row.groupId,s.group_id)&&participationWeekday(s.weekday)===targetDay).map(s=><option key={s.id} value={s.id}>{groups.find(g=>g.id===s.group_id)?.name} · {scheduleText(s)}</option>)}</select></label></>}
+                </div>
+                <button type="button" onClick={()=>setExtraLessons(rows=>rows.filter(item=>item.key!==row.key))}>Bu satırı kaldır</button>
+              </fieldset>;
+            })}
+            <button type="button" disabled={submitting||extraLessons.length>=11} onClick={()=>setExtraLessons(rows=>[...rows,{key:crypto.randomUUID(),groupId:groupId||"",cancelledDate:"",scheduleId:"",customDate:"",customScheduleId:""}])}>+ Telafi Dersi Ekle</button>
+          </section>
 
           <label className="checkRow">
             <input type="checkbox" checked={prepareMessages} onChange={(event) => setPrepareMessages(event.target.checked)} />

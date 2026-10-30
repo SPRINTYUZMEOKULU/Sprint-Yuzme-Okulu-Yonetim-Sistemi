@@ -1785,8 +1785,7 @@ export async function updateStudentOperationalDetails(input: {
         created_by: profile.id,
       });
 
-    revalidatePath(`/ogrenciler/${input.studentId}`);
-    revalidatePath("/ogrenciler");
+    revalidateStudentSurfaces(input.studentId);
 
     return {
       ok: true as const,
