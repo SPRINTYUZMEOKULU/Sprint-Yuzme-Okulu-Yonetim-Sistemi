@@ -1,3 +1,4 @@
+import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
 import PassiveStudentGuard from "@/app/components/passive-student-guard";
 import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
 import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
@@ -267,16 +268,7 @@ export default async function StudentFile({
       .order("created_at", { ascending: false })
       .limit(100),
 
-    supabase
-      .from("attendance_records")
-      .select(
-        "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at",
-      )
-      .eq("organization_id", profile.organization_id)
-      .eq("student_id", id)
-      .order("lesson_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(200),
+    loadStudentAttendance(supabase, profile.organization_id, [id], "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at"),
 
     supabase
       .from("registration_consents")
@@ -319,6 +311,7 @@ export default async function StudentFile({
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
+  const currentAttendanceSummary = attendanceResult.error ? null : attendanceSummary(attendanceRecords, enrollment);
   const consent = consentResult.data;
 
   const [
@@ -893,6 +886,10 @@ export default async function StudentFile({
           DERS ÖZETİ
           ===================================================== */}
 
+      <section className="panel" data-file-panel="registration" aria-label="Bu kayıt döneminin yoklaması">
+        {currentAttendanceSummary ? <p>Yoklama · Bu dönem: <b>Geldi: {currentAttendanceSummary.present}</b> · <b>Gelmedi: {currentAttendanceSummary.absent}</b> · <b>İzinli: {currentAttendanceSummary.excused}</b></p> : <p>Yoklama özeti yüklenemedi.</p>}
+      </section>
+
       <section className="metricGrid" data-file-panel="registration">
         <article>
           <span>Normal Ders</span>
@@ -900,7 +897,7 @@ export default async function StudentFile({
         </article>
 
         <article>
-          <span>Kullanılan</span>
+          <span title="Katılım durumundan bağımsız hesaplanır">Tamamlanan Ders</span>
           <strong>{usedLessons}</strong>
         </article>
 
@@ -1752,7 +1749,7 @@ export default async function StudentFile({
             </div>
 
             <div>
-              <span>Kullanılan</span>
+              <span title="Katılım durumundan bağımsız hesaplanır">Tamamlanan Ders</span>
               <strong>{usedLessons} ders</strong>
             </div>
 

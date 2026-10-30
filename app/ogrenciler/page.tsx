@@ -1,3 +1,4 @@
+import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { requireProfile } from "@/lib/auth/profile";
@@ -257,12 +258,7 @@ export default async function StudentsPage() {
           .eq("status", "planned")
           .order("lesson_date", { ascending: true }),
 
-        supabase
-          .from("attendance_records")
-          .select("student_id,lesson_date,status,updated_at")
-          .in("student_id", studentIds)
-          .order("lesson_date", { ascending: false })
-          .order("updated_at", { ascending: false }),
+        loadStudentAttendance(supabase, organizationId, studentIds),
 
         supabase
           .from("student_notes")
@@ -628,6 +624,7 @@ export default async function StudentsPage() {
           plannedCompensationCount.get(student.id) || 0,
 
         used_lessons: usedLessons,
+        attendance_summary: attendanceSummary(lastAttendanceResult.data || [], enrollment),
         normal_remaining_lessons: normalRemaining,
         total_remaining_lessons: totalRemaining,
         remaining_lessons: totalRemaining,
