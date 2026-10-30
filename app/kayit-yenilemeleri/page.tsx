@@ -5,7 +5,7 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import RenewalStatusCenterClient, { type CenterItem, type RenewalApproval, type RenewalHistory } from "./renewal-status-center-client";
 import DecisionCompletionSummary from "./decision-completion-summary";
-import { enrollmentDateEnded } from "@/lib/enrollment/dates";
+import { enrollmentDateEnded, RENEWAL_WARNING_DAYS } from "@/lib/enrollment/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export default async function RenewalOperationsPage(){
   for(const row of (activityResult.data||[]) as any[]){if(row.student_id&&!lastRenewed.has(row.student_id)&&row.performed_at)lastRenewed.set(row.student_id,row.performed_at)}
 
   const today=isoDateInIstanbul();
-  const soonDate=addDays(today,14);
+  const soonDate=addDays(today,RENEWAL_WARNING_DAYS);
   const rightsContext=await loadLessonRightsContext(supabase,organizationId,(studentsRes.data||[]).map(student=>student.id));
   const items:CenterItem[]=((studentsRes.data||[]) as any[]).map((student):CenterItem=>{
     const enrollment=enrollments.get(student.id);
@@ -92,5 +92,5 @@ export default async function RenewalOperationsPage(){
     return [{id:row.id,studentId:row.student_id||null,studentName:studentMap.get(row.student_id)||"Öğrenci",status,lessonCount:Number(next.total_lessons||0)||null,requestedAt:row.requested_at||row.created_at||null,reviewedAt:row.reviewed_at||null}];
   });
 
-  return <><UstGezinme/><DecisionCompletionSummary items={items} history={history}/><RenewalStatusCenterClient items={items} history={history} approvals={approvals} canApprove={["owner","admin"].includes(profile.role)}/></>;
+  return <><UstGezinme/><DecisionCompletionSummary items={items} history={history} approvals={approvals}/><RenewalStatusCenterClient items={items} history={history} approvals={approvals} canApprove={["owner","admin"].includes(profile.role)}/></>;
 }

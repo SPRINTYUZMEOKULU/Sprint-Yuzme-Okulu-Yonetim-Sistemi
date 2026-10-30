@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { calculatePackageEndDate, isISODate, istanbulDate, normalizeWeekdays, renewalWeekdays } from "@/lib/enrollment/dates";
+import {
+  calculatePackageEndDate,
+  isISODate,
+  istanbulDate,
+  normalizeWeekdays,
+  renewalWeekdays,
+} from "@/lib/enrollment/dates";
 
-const ROLES = ["owner", "admin", "branch_manager", "registration_staff"] as const;
+const ROLES = [
+  "owner",
+  "admin",
+  "branch_manager",
+  "registration_staff",
+] as const;
 
 function isoDate(value: unknown) {
   const text = String(value || "");
@@ -13,7 +24,9 @@ function isoDate(value: unknown) {
 
 function errorText(error: unknown) {
   if (error && typeof error === "object" && "message" in error) {
-    return String((error as { message?: unknown }).message || "Bilinmeyen hata");
+    return String(
+      (error as { message?: unknown }).message || "Bilinmeyen hata",
+    );
   }
   return String(error || "Bilinmeyen hata");
 }
@@ -45,7 +58,10 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function insertEnrollmentCompat(supabase: any, initialPayload: Record<string, unknown>) {
+async function insertEnrollmentCompat(
+  supabase: any,
+  initialPayload: Record<string, unknown>,
+) {
   const payload = { ...initialPayload };
   const removed: string[] = [];
 
@@ -73,50 +89,65 @@ async function insertEnrollmentCompat(supabase: any, initialPayload: Record<stri
     console.warn(`student renewal compatibility: ${missingColumn} omitted`);
   }
 
-  return { data: null, error: new Error("Uyumlu kayıt şeması bulunamadı."), removed };
+  return {
+    data: null,
+    error: new Error("Uyumlu kayıt şeması bulunamadı."),
+    removed,
+  };
 }
 
 export async function GET(request: NextRequest) {
   try {
     const profile = await requireProfile([...ROLES]);
     const organizationId = profile.organization_id;
-    const studentId = String(request.nextUrl.searchParams.get("studentId") || "");
+    const studentId = String(
+      request.nextUrl.searchParams.get("studentId") || "",
+    );
 
     if (!organizationId || !studentId) {
-      return NextResponse.json({ ok: false, error: "Öğrenci bilgisi eksik." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Öğrenci bilgisi eksik." },
+        { status: 400 },
+      );
     }
 
     const supabase = await createClient();
-    const [packagesResult, studentResult, enrollmentResult] = await Promise.all([
-      supabase
-        .from("course_packages")
-        .select("id,name,lesson_count,price,is_active")
-        .eq("organization_id", organizationId)
-        .eq("is_active", true)
-        .order("lesson_count", { ascending: true })
-        .order("name", { ascending: true }),
-      supabase
-        .from("students")
-        .select("id,preferred_package_id")
-        .eq("organization_id", organizationId)
-        .eq("id", studentId)
-        .maybeSingle(),
-      supabase
-        .from("student_enrollments")
-        .select("id,package_id")
-        .eq("organization_id", organizationId)
-        .eq("student_id", studentId)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    const [packagesResult, studentResult, enrollmentResult] = await Promise.all(
+      [
+        supabase
+          .from("course_packages")
+          .select("id,name,lesson_count,price,is_active")
+          .eq("organization_id", organizationId)
+          .eq("is_active", true)
+          .order("lesson_count", { ascending: true })
+          .order("name", { ascending: true }),
+        supabase
+          .from("students")
+          .select("id,preferred_package_id")
+          .eq("organization_id", organizationId)
+          .eq("id", studentId)
+          .maybeSingle(),
+        supabase
+          .from("student_enrollments")
+          .select("id,package_id")
+          .eq("organization_id", organizationId)
+          .eq("student_id", studentId)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ],
+    );
 
     if (packagesResult.error) return fail("packages", packagesResult.error);
     if (studentResult.error) return fail("student", studentResult.error);
-    if (enrollmentResult.error) return fail("active-enrollment", enrollmentResult.error);
+    if (enrollmentResult.error)
+      return fail("active-enrollment", enrollmentResult.error);
     if (!studentResult.data) {
-      return NextResponse.json({ ok: false, error: "Öğrenci bulunamadı." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "Öğrenci bulunamadı." },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({
@@ -143,23 +174,33 @@ export async function POST(request: NextRequest) {
     const paymentDueDate = isoDate(body.paymentDueDate) || startDate;
     const rawCustomCount = body.customLessonCount;
     const customLessonCount =
-      rawCustomCount === null || rawCustomCount === undefined || rawCustomCount === ""
+      rawCustomCount === null ||
+      rawCustomCount === undefined ||
+      rawCustomCount === ""
         ? null
-        : Math.floor(Number(rawCustomCount));
+        : Number(rawCustomCount);
 
     if (!organizationId || !studentId || !startDate) {
       return NextResponse.json(
-        { ok: false, error: "Öğrenci ve yeni dönem başlangıç tarihi zorunludur." },
+        {
+          ok: false,
+          error: "Öğrenci ve yeni dönem başlangıç tarihi zorunludur.",
+        },
         { status: 400 },
       );
     }
 
     if (
       customLessonCount !== null &&
-      (!Number.isInteger(customLessonCount) || customLessonCount < 1 || customLessonCount > 100)
+      (!Number.isInteger(customLessonCount) ||
+        customLessonCount < 1 ||
+        customLessonCount > 100)
     ) {
       return NextResponse.json(
-        { ok: false, error: "Özel ders sayısı 1 ile 100 arasında tam sayı olmalıdır." },
+        {
+          ok: false,
+          error: "Özel ders sayısı 1 ile 100 arasında tam sayı olmalıdır.",
+        },
         { status: 400 },
       );
     }
@@ -186,19 +227,29 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (studentResult.error) return fail("student", studentResult.error);
-    if (enrollmentResult.error) return fail("active-enrollment", enrollmentResult.error);
+    if (enrollmentResult.error)
+      return fail("active-enrollment", enrollmentResult.error);
 
     const student = studentResult.data;
     const activeEnrollment = enrollmentResult.data;
     if (!student) {
-      return NextResponse.json({ ok: false, error: "Öğrenci bulunamadı." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "Öğrenci bulunamadı." },
+        { status: 404 },
+      );
     }
 
     let packageId = String(
-      body.packageId || activeEnrollment?.package_id || student.preferred_package_id || "",
+      body.packageId ||
+        activeEnrollment?.package_id ||
+        student.preferred_package_id ||
+        "",
     );
     const groupId = String(
-      body.groupId || activeEnrollment?.group_id || student.preferred_group_id || "",
+      body.groupId ||
+        activeEnrollment?.group_id ||
+        student.preferred_group_id ||
+        "",
     );
 
     if (!packageId || !groupId) {
@@ -237,10 +288,16 @@ export async function POST(request: NextRequest) {
     let selectedPackage = packageResult.data;
     const group = groupResult.data;
     if (!selectedPackage) {
-      return NextResponse.json({ ok: false, error: "Seçilen aktif paket bulunamadı." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Seçilen aktif paket bulunamadı." },
+        { status: 400 },
+      );
     }
     if (!group) {
-      return NextResponse.json({ ok: false, error: "Öğrencinin aktif grubu bulunamadı." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Öğrencinin aktif grubu bulunamadı." },
+        { status: 400 },
+      );
     }
 
     if (
@@ -248,30 +305,43 @@ export async function POST(request: NextRequest) {
       (customLessonCount === 8 || customLessonCount === 12) &&
       Number(selectedPackage.lesson_count) !== customLessonCount
     ) {
-      const { data: matchingPackage, error: matchingPackageError } = await supabase
-        .from("course_packages")
-        .select("id,name,lesson_count,price,is_active")
-        .eq("organization_id", organizationId)
-        .eq("lesson_count", customLessonCount)
-        .eq("is_active", true)
-        .order("name", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (matchingPackageError) return fail("standard-package-match", matchingPackageError);
+      const { data: matchingPackage, error: matchingPackageError } =
+        await supabase
+          .from("course_packages")
+          .select("id,name,lesson_count,price,is_active")
+          .eq("organization_id", organizationId)
+          .eq("lesson_count", customLessonCount)
+          .eq("is_active", true)
+          .order("name", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+      if (matchingPackageError)
+        return fail("standard-package-match", matchingPackageError);
       if (matchingPackage) {
         selectedPackage = matchingPackage;
         packageId = matchingPackage.id;
       }
     }
 
-    const lessonCount = customLessonCount ?? Math.floor(Number(selectedPackage.lesson_count));
-    if (!Number.isInteger(lessonCount) || lessonCount < 1 || lessonCount > 100) {
-      return NextResponse.json({ ok: false, error: "Yenileme ders sayısı geçersiz." }, { status: 400 });
+    const lessonCount =
+      customLessonCount ?? Math.floor(Number(selectedPackage.lesson_count));
+    if (
+      !Number.isInteger(lessonCount) ||
+      lessonCount < 1 ||
+      lessonCount > 100
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Yenileme ders sayısı geçersiz." },
+        { status: 400 },
+      );
     }
 
     const branchId = String(group.branch_id || student.branch_id || "");
     if (!branchId) {
-      return NextResponse.json({ ok: false, error: "Yenileme için şube bilgisi eksik." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Yenileme için şube bilgisi eksik." },
+        { status: 400 },
+      );
     }
 
     const { data: branch, error: branchError } = await supabase
@@ -282,7 +352,9 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (branchError) return fail("branch", branchError);
 
-    const availableDays = normalizeWeekdays((schedulesResult.data || []).map(row => Number(row.weekday)));
+    const availableDays = normalizeWeekdays(
+      (schedulesResult.data || []).map((row) => Number(row.weekday)),
+    );
     if (!availableDays.length) {
       return NextResponse.json(
         { ok: false, error: "Seçilen grubun aktif ders programı bulunamadı." },
@@ -291,12 +363,16 @@ export async function POST(request: NextRequest) {
     }
     let weekdays: number[];
     try {
-      weekdays = renewalWeekdays(activeEnrollment ? activeEnrollment.lesson_weekdays || [] : null, availableDays);
+      weekdays = renewalWeekdays(
+        activeEnrollment ? activeEnrollment.lesson_weekdays || [] : null,
+        availableDays,
+      );
     } catch (error) {
       return fail("selected-weekdays", error, 400);
     }
 
-    const customNeedsApproval = customLessonCount !== null && lessonCount !== 8 && lessonCount !== 12;
+    const customNeedsApproval =
+      customLessonCount !== null && lessonCount !== 8 && lessonCount !== 12;
     let approvalToConsume: any = null;
 
     if (customNeedsApproval) {
@@ -310,7 +386,8 @@ export async function POST(request: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(20);
 
-      if (approvalLookupError) return fail("approval-lookup", approvalLookupError);
+      if (approvalLookupError)
+        return fail("approval-lookup", approvalLookupError);
 
       const matchingRows = (approvalRows || []).filter((row: any) => {
         const meta = objectValue(row.metadata);
@@ -330,7 +407,9 @@ export async function POST(request: NextRequest) {
       });
 
       if (!approvalToConsume) {
-        const pending = matchingRows.find((row: any) => row.status === "pending");
+        const pending = matchingRows.find(
+          (row: any) => row.status === "pending",
+        );
         if (pending) {
           return NextResponse.json(
             {
@@ -344,52 +423,58 @@ export async function POST(request: NextRequest) {
         }
 
         const now = new Date().toISOString();
-        const { data: createdApproval, error: createApprovalError } = await supabase
-          .from("approval_requests")
-          .insert({
-            organization_id: organizationId,
-            request_type: "registration_custom_lesson_count",
-            request_label: "Kayıt Yenileme · Standart Dışı Ders Sayısı",
-            module: "enrollment",
-            priority: "high",
-            student_id: studentId,
-            branch_id: branchId,
-            group_id: groupId,
-            entity_type: "student",
-            entity_id: studentId,
-            requested_by: profile.id,
-            reason: `${lessonCount} derslik standart dışı kayıt yenileme talebi.`,
-            old_values: {
-              enrollment_id: activeEnrollment?.id || null,
-              total_lessons: activeEnrollment?.total_lessons || null,
-            },
-            new_values: {
-              total_lessons: lessonCount,
-              package_id: packageId,
-              group_id: groupId,
+        const { data: createdApproval, error: createApprovalError } =
+          await supabase
+            .from("approval_requests")
+            .insert({
+              organization_id: organizationId,
+              request_type: "registration_custom_lesson_count",
+              request_label: "Kayıt Yenileme · Standart Dışı Ders Sayısı",
+              module: "enrollment",
+              priority: "high",
+              student_id: studentId,
               branch_id: branchId,
-              start_date: startDate,
-              payment_due_date: paymentDueDate,
-            },
-            metadata: {
-              source: "student_renewal_center",
-              note: String(body.note || "").trim().slice(0, 1000) || null,
-            },
-            status: "pending",
-            requested_at: now,
-            created_at: now,
-          })
-          .select("id")
-          .single();
+              group_id: groupId,
+              entity_type: "student",
+              entity_id: studentId,
+              requested_by: profile.id,
+              reason: `${lessonCount} derslik standart dışı kayıt yenileme talebi.`,
+              old_values: {
+                enrollment_id: activeEnrollment?.id || null,
+                total_lessons: activeEnrollment?.total_lessons || null,
+              },
+              new_values: {
+                total_lessons: lessonCount,
+                package_id: packageId,
+                group_id: groupId,
+                branch_id: branchId,
+                start_date: startDate,
+                payment_due_date: paymentDueDate,
+              },
+              metadata: {
+                source: "student_renewal_center",
+                note:
+                  String(body.note || "")
+                    .trim()
+                    .slice(0, 1000) || null,
+              },
+              status: "pending",
+              requested_at: now,
+              created_at: now,
+            })
+            .select("id")
+            .single();
 
-        if (createApprovalError) return fail("approval-create", createApprovalError);
+        if (createApprovalError)
+          return fail("approval-create", createApprovalError);
 
         await supabase.from("system_notifications").insert({
           organization_id: organizationId,
           category: "approvals",
           event_key: "renewal_custom_lesson_count_requested",
           title: "Standart dışı kayıt yenileme onayı",
-          message: `${student.first_name || ""} ${student.last_name || ""} için ${lessonCount} derslik yenileme onayı bekliyor.`.trim(),
+          message:
+            `${student.first_name || ""} ${student.last_name || ""} için ${lessonCount} derslik yenileme onayı bekliyor.`.trim(),
           severity: "warning",
           entity_type: "approval_request",
           entity_id: createdApproval?.id || null,
@@ -410,7 +495,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const plannedEndDate = calculatePackageEndDate(startDate, lessonCount, weekdays);
+    const plannedEndDate = calculatePackageEndDate(
+      startDate,
+      lessonCount,
+      weekdays,
+    );
     const now = new Date().toISOString();
 
     const insertResult = await insertEnrollmentCompat(supabase, {
@@ -434,47 +523,66 @@ export async function POST(request: NextRequest) {
     });
 
     if (insertResult.error || !insertResult.data) {
-      return fail("new-enrollment", insertResult.error || "Yeni kayıt oluşturulamadı.");
+      return fail(
+        "new-enrollment",
+        insertResult.error || "Yeni kayıt oluşturulamadı.",
+      );
     }
     const newEnrollment = insertResult.data;
 
-    const { data: finalized, error: finalizeError } = await supabase.rpc("finalize_enrollment_renewal", {
-      p_new_id: newEnrollment.id,
-      p_previous_id: activeEnrollment?.id || null,
-    });
+    const { data: finalized, error: finalizeError } = await supabase.rpc(
+      "complete_student_renewal",
+      {
+        p_new_id: newEnrollment.id,
+        p_previous_id: activeEnrollment?.id || null,
+        p_note: String(body.note || "")
+          .trim()
+          .slice(0, 1000),
+        p_approval_id: approvalToConsume?.id || null,
+      },
+    );
     if (finalizeError || !finalized?.ok) {
-      await supabase.from("student_enrollments").delete().eq("organization_id", organizationId).eq("id", newEnrollment.id).eq("status", "renewal_pending");
-      return fail("finalize-renewal", finalizeError || "Dönem geçişi hazırlanamadı.", 409);
+      await supabase
+        .from("student_enrollments")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("id", newEnrollment.id)
+        .eq("status", "renewal_pending");
+      return fail(
+        "finalize-renewal",
+        finalizeError || "Dönem geçişi hazırlanamadı.",
+        409,
+      );
     }
     const scheduled = finalized.status === "scheduled";
 
-    if (approvalToConsume?.id) {
-      const existingMeta = objectValue(approvalToConsume.metadata);
-      await supabase
-        .from("approval_requests")
-        .update({
-          metadata: {
-            ...existingMeta,
-            consumed_at: now,
-            consumed_enrollment_id: newEnrollment.id,
-          },
-        })
-        .eq("organization_id", organizationId)
-        .eq("id", approvalToConsume.id);
-    }
-
-    const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    const studentName =
+      `${student.first_name || ""} ${student.last_name || ""}`.trim();
     const recipient = cleanPhone(student.guardian_phone || student.phone);
     const packageText = customNeedsApproval
       ? `Özel ${lessonCount} Ders (referans: ${selectedPackage.name})`
       : `${selectedPackage.name} (${lessonCount} ders)`;
-    const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-    const scheduleText = (schedulesResult.data || []).filter(row => weekdays.includes(Number(row.weekday) === 7 ? 0 : Number(row.weekday))).map(row => {
-      const day = Number(row.weekday) === 7 ? 0 : Number(row.weekday);
-      const start = String(row.start_time || "").slice(0, 5);
-      const end = String(row.end_time || "").slice(0, 5);
-      return `${dayNames[day] || ""}${start ? ` ${start}${end ? `–${end}` : ""}` : ""}`;
-    }).filter(Boolean).join(" / ");
+    const dayNames = [
+      "Pazar",
+      "Pazartesi",
+      "Salı",
+      "Çarşamba",
+      "Perşembe",
+      "Cuma",
+      "Cumartesi",
+    ];
+    const scheduleText = (schedulesResult.data || [])
+      .filter((row) =>
+        weekdays.includes(Number(row.weekday) === 7 ? 0 : Number(row.weekday)),
+      )
+      .map((row) => {
+        const day = Number(row.weekday) === 7 ? 0 : Number(row.weekday);
+        const start = String(row.start_time || "").slice(0, 5);
+        const end = String(row.end_time || "").slice(0, 5);
+        return `${dayNames[day] || ""}${start ? ` ${start}${end ? `–${end}` : ""}` : ""}`;
+      })
+      .filter(Boolean)
+      .join(" / ");
     const renewalMessage =
       `Merhaba${student.guardian_name ? ` ${student.guardian_name}` : ""},\n\n` +
       `${studentName} öğrencimizin Sprint Yüzme Okulu kaydı başarıyla yenilenmiştir.\n\n` +
@@ -490,81 +598,7 @@ export async function POST(request: NextRequest) {
       `Yeni döneminizin sağlıklı ve başarılı geçmesini dileriz.\n` +
       `*Sprint Yüzme Okulu*`;
 
-    const packageFee = Number(selectedPackage.price || 0);
-    if (Number.isFinite(packageFee) && packageFee > 0) {
-      const { data: existingPackageDebt, error: packageDebtLookupError } = await supabase
-        .from("student_financial_obligations")
-        .select("id,status")
-        .eq("organization_id", organizationId)
-        .eq("student_id", studentId)
-        .eq("enrollment_id", newEnrollment.id)
-        .eq("obligation_type", "installment")
-        .ilike("title", "Paket ücreti%")
-        .neq("status", "cancelled")
-        .limit(1)
-        .maybeSingle();
-
-      if (packageDebtLookupError) return fail("package-debt-lookup", packageDebtLookupError);
-
-      if (!existingPackageDebt) {
-        const { error: packageDebtError } = await supabase
-          .from("student_financial_obligations")
-          .insert({
-            organization_id: organizationId,
-            student_id: studentId,
-            enrollment_id: newEnrollment.id,
-            obligation_type: "installment",
-            title: `Paket ücreti · ${selectedPackage.name}`,
-            description: "Kayıt yenileme sırasında otomatik oluşturulan yeni dönem paket borcu.",
-            amount: packageFee,
-            paid_amount: 0,
-            due_date: paymentDueDate || startDate,
-            status: "open",
-            reminder_days: 3,
-            created_by: profile.id,
-          });
-
-        if (packageDebtError) return fail("package-debt-create", packageDebtError);
-      }
-    }
-
-    const optionalWrites = await Promise.all([
-      supabase.from("student_renewal_events").insert({
-        organization_id: organizationId,
-        student_id: studentId,
-        previous_enrollment_id: activeEnrollment?.id || null,
-        new_enrollment_id: newEnrollment.id,
-        renewal_status: scheduled ? "scheduled" : "completed",
-        note: String(body.note || "").trim().slice(0, 1000) || null,
-        created_by: profile.id,
-      }),
-      scheduled ? Promise.resolve({ error: null }) : supabase
-        .from("students")
-        .update({
-          status: "active",
-          branch_id: branchId,
-          preferred_group_id: groupId,
-          preferred_package_id: packageId,
-          updated_at: now,
-        })
-        .eq("organization_id", organizationId)
-        .eq("id", studentId),
-      supabase.from("student_activity_logs").insert({
-        organization_id: organizationId,
-        student_id: studentId,
-        activity_type: "registration_renewed",
-        title: "Kayıt yenilendi",
-        description: `${lessonCount} derslik yeni dönem ${startDate} tarihinde başlayacak. Planlanan bitiş: ${plannedEndDate}.`,
-        source_type: "student_renewal",
-        source_id: newEnrollment.id,
-        new_value: {
-          enrollment_id: newEnrollment.id,
-          package_id: packageId,
-          lesson_count: lessonCount,
-          custom_approval_id: approvalToConsume?.id || null,
-        },
-        performed_at: now,
-      }),
+    const optionalWrites = await Promise.allSettled([
       supabase.from("system_notifications").insert({
         organization_id: organizationId,
         category: "registration",
@@ -605,12 +639,20 @@ export async function POST(request: NextRequest) {
         message_text: renewalMessage,
         status: "prepared",
         created_by: profile.id,
-        metadata: { source: "student_renewal_center", enrollment_id: newEnrollment.id },
+        metadata: {
+          source: "student_renewal_center",
+          enrollment_id: newEnrollment.id,
+        },
       }),
     ]);
 
+    const warnings: string[] = [];
     optionalWrites.forEach((result, index) => {
-      if (result.error) console.error(`student renewal optional write ${index} error`, result.error);
+      const error = result.status === "rejected" ? result.reason : result.value.error;
+      if (error) {
+        warnings.push("Bildirim veya mesaj geçmişinin bir bölümü kaydedilemedi. Öğrenci dosyasından kontrol edin.");
+        console.error(`student renewal optional write ${index} error`, error);
+      }
     });
 
     const whatsappUrl = recipient
@@ -619,8 +661,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: scheduled ? `Sonraki dönem hazırlandı. ${formatDateTR(startDate)} tarihinde otomatik başlayacak. Mevcut ders ve telafi hakları korunuyor.` : `Kayıt yenilendi. Yeni bitiş tarihi: ${formatDateTR(plannedEndDate)}.`,
+      message: scheduled
+        ? `Sonraki dönem hazırlandı. ${formatDateTR(startDate)} tarihinde otomatik başlayacak. Mevcut ders ve telafi hakları korunuyor.`
+        : `Kayıt yenilendi. Yeni bitiş tarihi: ${formatDateTR(plannedEndDate)}.`,
       scheduled,
+      warnings: [...new Set(warnings)],
       enrollmentId: newEnrollment.id,
       packageName: selectedPackage.name,
       lessonCount,

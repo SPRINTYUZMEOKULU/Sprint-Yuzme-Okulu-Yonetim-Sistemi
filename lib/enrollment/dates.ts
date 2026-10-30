@@ -1,3 +1,4 @@
+export const RENEWAL_WARNING_DAYS = 14;
 export function istanbulDate(date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",

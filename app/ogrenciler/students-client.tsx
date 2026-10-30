@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
+import { RENEWAL_WARNING_DAYS } from "@/lib/enrollment/dates";
 import { startsAfterToday } from "@/lib/students/start-status";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -3042,7 +3043,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
             !lessonEnded &&
             (
               remaining <= 3 ||
-              (endDays !== null && endDays >= 0 && endDays <= 7)
+              (endDays !== null && endDays >= 0 && endDays <= RENEWAL_WARNING_DAYS)
             );
 
           const payment = paymentLabel(student);
@@ -3179,7 +3180,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     {remaining <= 3
                       ? `${remaining} ders kaldı.`
                       : ""}
-                    {endDays !== null && endDays >= 0 && endDays <= 7
+                    {endDays !== null && endDays >= 0 && endDays <= RENEWAL_WARNING_DAYS
                       ? ` Bitiş tarihine ${endDays} gün kaldı.`
                       : ""}
                   </span>

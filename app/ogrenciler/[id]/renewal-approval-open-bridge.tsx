@@ -65,19 +65,6 @@ export default function RenewalApprovalOpenBridge() {
       window.dispatchEvent(
         new CustomEvent("sprint:open-renewal", { detail: { requestId } }),
       );
-
-      const button = document.querySelector<HTMLButtonElement>(
-        "[data-renewal-button='1']",
-      );
-      if (button && !button.disabled) {
-        button.dispatchEvent(
-          new MouseEvent("click", {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-          }),
-        );
-      }
     };
 
     const open = () => {

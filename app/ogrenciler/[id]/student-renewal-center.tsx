@@ -1,16 +1,872 @@
 "use client";
+import {
+  RENEWAL_QUEUE_KEY,
+  readRenewalQueue,
+  advanceRenewalQueue,
+} from "@/lib/enrollment/renewal-queue";
 import { istanbulDate } from "@/lib/enrollment/dates";
-import {useEffect,useMemo,useState} from "react";
-import {useRouter} from "next/navigation";
-import {createStudentPayment} from "../../odemeler/actions";
-type PackageOption={id:string;name:string;lesson_count:number;price:number|string|null};type RenewalRequest={id:string;status:"pending"|"approved";totalLessons:number|null;packageId:string|null;startDate:string|null;paymentDueDate:string|null;note:string|null};type PaymentState="unpaid"|"full"|"partial";type PaymentMethod="cash"|"card"|"bank_transfer"|"eft"|"other";
-const today=()=>istanbulDate();const money=(v:number|string|null)=>new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:2}).format(Number(v||0));
-function quick(label:string,state:"normal"|"checking"|"pending"|"approved"="normal"){const b=document.querySelector<HTMLButtonElement>("[data-renewal-button='1']");if(!b)return;b.dataset.renewalState=state;b.disabled=state==="checking";b.innerHTML=`<span aria-hidden="true">↻</span> ${label}`}
-export default function StudentRenewalCenter(){const router=useRouter();const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[submitting,setSubmitting]=useState(false);const [message,setMessage]=useState(""),[messageKind,setMessageKind]=useState<"success"|"error"|"approval"|"">("");const [packages,setPackages]=useState<PackageOption[]>([]),[packageId,setPackageId]=useState(""),[customEnabled,setCustomEnabled]=useState(false),[customLessonCount,setCustomLessonCount]=useState("");const [startDate,setStartDate]=useState(today()),[paymentDueDate,setPaymentDueDate]=useState(today()),[note,setNote]=useState("");const [activeRequest,setActiveRequest]=useState<RenewalRequest|null>(null);const [paymentState,setPaymentState]=useState<PaymentState>("unpaid"),[paymentAmount,setPaymentAmount]=useState(""),[paymentMethod,setPaymentMethod]=useState<PaymentMethod>("cash");const [whatsappUrl,setWhatsappUrl]=useState<string|null>(null),[completed,setCompleted]=useState(false),[renewalMessage,setRenewalMessage]=useState("");const studentId=useMemo(()=>typeof window==="undefined"?"":window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1]||"",[]);const selectedPackage=packages.find(x=>x.id===packageId)||null;const packagePrice=Number(selectedPackage?.price||0);const customCount=Number(customLessonCount);const customNeedsApproval=customEnabled&&Number.isInteger(customCount)&&customCount>0&&customCount!==8&&customCount!==12;
-useEffect(()=>{if(paymentState==="full"&&packagePrice>0)setPaymentAmount(String(packagePrice));if(paymentState==="unpaid")setPaymentAmount("")},[paymentState,packagePrice]);
-async function openCenter(requestId?:string){if(!studentId)return;setOpen(true);setLoading(true);setMessage("");setMessageKind("");setWhatsappUrl(null);setRenewalMessage("");setCompleted(false);quick("Kontrol ediliyor…","checking");try{const q=new URLSearchParams({studentId});if(requestId)q.set("requestId",requestId);const [r,s]=await Promise.all([fetch(`/api/student-renewals?studentId=${encodeURIComponent(studentId)}`,{cache:"no-store"}),fetch(`/api/student-renewals/status?${q}`,{cache:"no-store"})]);const d=await r.json(),sd=await s.json();if(!r.ok||!d.ok){setMessage(d.error||"Yenileme bilgileri yüklenemedi.");setMessageKind("error");quick("Kayıt Yenile");return}setPackages(d.packages||[]);setPackageId(d.selectedPackageId||d.packages?.[0]?.id||"");setCustomEnabled(false);setCustomLessonCount("");setStartDate(today());setPaymentDueDate(today());setNote("");setPaymentState("unpaid");setPaymentMethod("cash");setActiveRequest(null);if(s.ok&&sd.ok&&sd.request){const req=sd.request as RenewalRequest;setActiveRequest(req);if(req.packageId)setPackageId(req.packageId);if(req.totalLessons){setCustomEnabled(true);setCustomLessonCount(String(req.totalLessons))}if(req.startDate)setStartDate(req.startDate);if(req.paymentDueDate)setPaymentDueDate(req.paymentDueDate);if(req.note)setNote(req.note);if(req.status==="pending"){setMessage("Bu yenileme yönetici onayı bekliyor.");setMessageKind("approval");quick("Onay Bekliyor","pending")}else{setMessage("Yenileme onaylandı. Ödeme durumunu seçip işlemi tamamlayabilirsiniz.");setMessageKind("success");quick("Onaylandı · Tamamla","approved")}}else quick("Kayıt Yenile")}catch{setMessage("Yenileme bilgileri yüklenirken bağlantı hatası oluştu.");setMessageKind("error");quick("Kayıt Yenile")}finally{setLoading(false)}}
-useEffect(()=>{const ensure=()=>{const a=document.querySelector<HTMLElement>(".fileCommandActions");if(!a||a.querySelector("[data-renewal-button='1']"))return;const b=document.createElement("button");b.type="button";b.dataset.renewalButton="1";b.className="renewalQuickButton";b.innerHTML='<span aria-hidden="true">↻</span> Kayıt Yenile';const p=a.querySelector("button");p?.nextSibling?a.insertBefore(b,p.nextSibling):a.appendChild(b)};const click=(e:MouseEvent)=>{const t=(e.target as Element|null)?.closest("[data-renewal-button='1']");if(!t)return;e.preventDefault();e.stopPropagation();void openCenter()};const custom=(e:Event)=>void openCenter((e as CustomEvent<{requestId?:string}>).detail?.requestId);ensure();const timer=setTimeout(ensure,300);document.addEventListener("click",click,true);window.addEventListener("sprint:open-renewal",custom as EventListener);return()=>{clearTimeout(timer);document.removeEventListener("click",click,true);window.removeEventListener("sprint:open-renewal",custom as EventListener)}},[studentId]);
-async function submit(){if(!studentId||submitting||loading)return;if(!packageId){setMessage("Yeni dönem için paket seçmelisiniz.");setMessageKind("error");return}if(activeRequest?.status==="pending")return;const amount=Number(paymentAmount.replace(/\./g,"").replace(",","."));if(paymentState!=="unpaid"&&(!Number.isFinite(amount)||amount<=0)){setMessage("Tahsilat tutarını giriniz.");setMessageKind("error");return}if(paymentState==="partial"&&packagePrice>0&&amount>=packagePrice){setMessage("Kısmi ödeme paket ücretinden düşük olmalıdır.");setMessageKind("error");return}setSubmitting(true);setMessage("Kayıt, ödeme ve mesaj bilgileri hazırlanıyor…");setMessageKind("approval");try{const r=await fetch("/api/student-renewals",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({studentId,packageId,customLessonCount:customEnabled?customCount:null,startDate,paymentDueDate:paymentDueDate||startDate,note:note.trim()})});const d=await r.json();if(d.approvalRequired){setMessage(d.message||"Yönetici onayı bekleniyor.");setMessageKind("approval");quick("Onay Bekliyor","pending");router.refresh();return}if(!r.ok||!d.ok){setMessage(d.error||"Kayıt yenileme tamamlanamadı.");setMessageKind("error");return}let paymentText="Ödeme alınmadı; yeni dönem borcu ödeme takibinde bekliyor.";if(paymentState!=="unpaid"){const pay=await createStudentPayment({studentId,enrollmentId:d.enrollmentId,amount,paymentMethod,description:`Kayıt yenileme tahsilatı · ${d.packageName||"Yeni dönem"}`,dueDate:paymentDueDate||startDate});paymentText=pay.ok?(paymentState==="full"?`Tam ödeme ${money(amount)} kaydedildi.`:`Kısmi ödeme ${money(amount)} kaydedildi; kalan bakiye açık.`):`Kayıt yenilendi fakat ödeme kaydı oluşturulamadı: ${pay.message}`}setWhatsappUrl(d.whatsappUrl||null);setRenewalMessage(d.renewalMessage||"");setCompleted(true);setMessage(`${d.message||"Kayıt başarıyla yenilendi."} ${paymentText} ${d.recipientFound?"Veli bilgilendirme mesajı hazır.":"Veli/öğrenci telefonu bulunamadı."}`);setMessageKind("success");setActiveRequest(null);quick("Kayıt Yenilendi");router.refresh()}catch{setMessage("Kayıt yenileme sırasında bağlantı hatası oluştu.");setMessageKind("error")}finally{setSubmitting(false)}}
-function paymentPage(){setOpen(false);setTimeout(()=>{window.location.hash="odeme";window.dispatchEvent(new Event("hashchange"));document.getElementById("odeme")?.scrollIntoView({behavior:"smooth",block:"start"})},80)}
-if(!open)return <style jsx global>{`.renewalQuickButton{background:#f3edff!important;border:1px solid #cdbcf1!important;color:#5e3b9c!important}`}</style>;
-return <><div className="renewalOverlay" onClick={()=>setOpen(false)}><aside className="renewalPanel" onClick={e=>e.stopPropagation()}><header><div><span>KAYIT · ÖDEME · İLETİŞİM</span><h2>Kayıt Yenileme Merkezi</h2><p>Yeni dönemi, tahsilatı ve veli bilgilendirmesini tek ekrandan tamamlayın.</p></div><button onClick={()=>setOpen(false)}>×</button></header><div className="renewalBody">{activeRequest&&<div className={`status ${activeRequest.status}`}><b>{activeRequest.status==="pending"?"Yönetici onayı bekleniyor":"Yönetici onayladı"}</b></div>}<div className="info"><b>Geçmiş kayıtlar korunur</b><p>Eski dönem, yoklama ve ödemeler silinmez. Yeni dönem ayrı aktif kayıt olarak açılır.</p></div>{loading?<div className="info">Bilgiler yükleniyor…</div>:<div className="grid"><label className="full"><span>Yeni Dönem Paketi</span><select value={packageId} onChange={e=>setPackageId(e.target.value)} disabled={activeRequest?.status==="pending"}><option value="">Paket seçin</option>{packages.map(x=><option key={x.id} value={x.id}>{x.name} · {x.lesson_count} ders · {money(x.price)}</option>)}</select></label>{selectedPackage&&<div className="package full"><b>{selectedPackage.name}</b><span>{selectedPackage.lesson_count} ders</span><strong>{money(selectedPackage.price)}</strong></div>}<label className="full check"><input type="checkbox" checked={customEnabled} onChange={e=>{setCustomEnabled(e.target.checked);if(!e.target.checked)setCustomLessonCount("")}}/><span>Özel ders sayısı ile yenile</span></label>{customEnabled&&<label className="full"><span>Özel Ders Sayısı</span><input type="number" min="1" max="100" value={customLessonCount} onChange={e=>setCustomLessonCount(e.target.value)}/><small>8 ve 12 standart; diğer sayılar yönetici onayı ister.</small></label>}{customNeedsApproval&&!activeRequest&&<div className="approval full">Yönetici onayı gerekli.</div>}<label><span>Yeni Dönem Başlangıcı</span><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label><span>Ödeme Vade Tarihi</span><input type="date" value={paymentDueDate} onChange={e=>setPaymentDueDate(e.target.value)}/></label><label className="full"><span>Yenileme Notu</span><textarea rows={3} value={note} onChange={e=>setNote(e.target.value)}/></label><section className="finance full"><b>ÖDEME DURUMU</b><h3>Yenileme Tahsilatı</h3><p>Buradaki tahsilat doğrudan Ödeme ve Kasa geçmişine işlenir.</p><div className="choices"><button className={paymentState==="unpaid"?"active":""} onClick={()=>setPaymentState("unpaid")} type="button">Ödeme Alınmadı</button><button className={paymentState==="full"?"active":""} onClick={()=>setPaymentState("full")} type="button">Tam Ödeme</button><button className={paymentState==="partial"?"active":""} onClick={()=>setPaymentState("partial")} type="button">Kısmi Ödeme</button></div>{paymentState!=="unpaid"&&<div className="payfields"><label><span>Tahsilat Tutarı</span><input inputMode="decimal" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)}/></label><label><span>Ödeme Yöntemi</span><select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value as PaymentMethod)}><option value="cash">Nakit</option><option value="card">Kart</option><option value="bank_transfer">Banka Havalesi</option><option value="eft">EFT</option><option value="other">Diğer</option></select></label></div>}</section></div>}{message&&<div className={`message ${messageKind}`}>{message}</div>}{completed&&<div className="post"><b>Yenileme tamamlandı</b><p>Yeni dönem başlangıç ve bitiş tarihini içeren mesaj hazır. WhatsApp açıldığında kontrol edip gönderebilirsiniz.</p>{renewalMessage&&<pre className="renewalMessagePreview">{renewalMessage}</pre>}<div>{whatsappUrl?<a href={whatsappUrl} target="_blank" rel="noopener noreferrer">Kaydınız Yenilenmiştir Mesajını Gönder</a>:<button disabled>Telefon Bulunamadı</button>}<button type="button" onClick={paymentPage}>Ödeme ve Kasa'yı Aç</button></div></div>}</div><footer><button className="ghost" onClick={()=>setOpen(false)}>Vazgeç</button><button className="primary" disabled={submitting||loading||!packageId||activeRequest?.status==="pending"||completed} onClick={submit}>{completed?"✓ Yenileme Tamamlandı":submitting?"İşlem yapılıyor…":customNeedsApproval?"✓ Yönetici Onayına Gönder":"✓ Kaydı Yenile ve İşlemleri Tamamla"}</button></footer></aside></div><style jsx>{`.renewalOverlay{position:fixed;inset:0;z-index:1510;display:flex;justify-content:flex-end;background:#041426a3;backdrop-filter:blur(7px)}.renewalPanel{width:min(680px,100vw);height:100%;display:flex;flex-direction:column;background:#f5f8fc}.renewalPanel header{display:flex;justify-content:space-between;padding:22px;background:linear-gradient(135deg,#2f1f59,#6843a8);color:white}.renewalPanel header span{color:#f6c55f;font-size:11px;font-weight:900}.renewalPanel header h2{margin:5px 0}.renewalPanel header p{margin:0}.renewalPanel header button{width:42px;height:42px;border:1px solid #ffffff55;border-radius:12px;background:#ffffff12;color:white;font-size:27px}.renewalBody{flex:1;overflow:auto;padding:20px}.info,.status,.message,.post{padding:14px;border-radius:13px;margin-bottom:14px}.info{background:#f2edff;border:1px solid #ded1fb;color:#52368a}.info p,.post p{margin:5px 0}.status.pending,.message.approval{background:#fff6df;border:1px solid #efcd82;color:#855b09}.status.approved,.message.success,.post{background:#eaf9f0;border:1px solid #b9dfc5;color:#17623b}.message.error{background:#fff0f0;border:1px solid #efc3c3;color:#a22727}.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.full{grid-column:1/-1}.grid label{display:grid;gap:6px}.grid label>span{font-size:12px;font-weight:850;color:#4f647a}.grid input,.grid textarea,.grid select{width:100%;box-sizing:border-box;border:1px solid #cfdbe8;border-radius:10px;padding:11px;background:white;font:inherit}.package{display:flex;gap:12px;padding:12px;border:1px solid #dcd3f3;border-radius:12px;background:#faf8ff}.package b{margin-right:auto}.check{display:flex!important;align-items:center;padding:12px;border:1px dashed #b8a5e2;border-radius:12px}.check input{width:18px!important}.approval{padding:12px;background:#fff7df;border:1px solid #f0c87c;border-radius:10px;color:#80580c}.finance{padding:16px;border:1px solid #bcd7ed;border-radius:15px;background:#f1f8fe}.finance h3{margin:4px 0}.finance p{margin:0 0 12px}.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.choices button{min-height:44px;border:1px solid #bfd0df;border-radius:10px;background:white;font-weight:800}.choices button.active{background:#0f6cab;color:white}.payfields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.renewalMessagePreview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6;padding:14px;background:white;border:1px solid #b9dfc5;border-radius:10px;color:#234536}.post>div{display:flex;gap:8px;margin-top:12px}.post a,.post button{display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border:0;border-radius:10px;background:#126c45;color:white;text-decoration:none;font-weight:900}.post button{background:#164f7d}footer{display:flex;gap:9px;justify-content:flex-end;padding:15px 20px;background:white;border-top:1px solid #dbe4ee}footer button{min-height:48px;padding:0 17px;border-radius:11px;font-weight:900}.ghost{background:white;border:1px solid #d2dce7}.primary{background:#6843a8;color:white;border:0}.primary:disabled{opacity:.55}@media(max-width:640px){.grid,.payfields{grid-template-columns:1fr}.full{grid-column:auto}.choices{grid-template-columns:1fr}.post>div{display:grid}footer{flex-direction:column-reverse}}`}</style></>}
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createStudentPayment } from "../../odemeler/actions";
+type PackageOption = {
+  id: string;
+  name: string;
+  lesson_count: number;
+  price: number | string | null;
+};
+type RenewalRequest = {
+  id: string;
+  status: "pending" | "approved";
+  totalLessons: number | null;
+  packageId: string | null;
+  startDate: string | null;
+  paymentDueDate: string | null;
+  note: string | null;
+};
+type PaymentState = "unpaid" | "full" | "partial";
+type PaymentMethod = "cash" | "card" | "bank_transfer" | "eft" | "other";
+const today = () => istanbulDate();
+const money = (v: number | string | null) =>
+  new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 2,
+  }).format(Number(v || 0));
+function quick(
+  label: string,
+  state: "normal" | "checking" | "pending" | "approved" = "normal",
+) {
+  const b = document.querySelector<HTMLButtonElement>(
+    "[data-renewal-button='1']",
+  );
+  if (!b) return;
+  b.dataset.renewalState = state;
+  b.disabled = state === "checking";
+  b.innerHTML = `<span aria-hidden="true">↻</span> ${label}`;
+}
+export default function StudentRenewalCenter() {
+  const router = useRouter();
+  const panelOpen = useRef(false);
+  const opening = useRef(false),
+    saving = useRef(false);
+  const [bulkNext, setBulkNext] = useState<string | null>(null),
+    [bulkMode, setBulkMode] = useState(false);
+  const [open, setOpen] = useState(false),
+    [loading, setLoading] = useState(false),
+    [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(""),
+    [messageKind, setMessageKind] = useState<
+      "success" | "error" | "approval" | ""
+    >("");
+  const [packages, setPackages] = useState<PackageOption[]>([]),
+    [packageId, setPackageId] = useState(""),
+    [customEnabled, setCustomEnabled] = useState(false),
+    [customLessonCount, setCustomLessonCount] = useState("");
+  const [startDate, setStartDate] = useState(today()),
+    [paymentDueDate, setPaymentDueDate] = useState(today()),
+    [note, setNote] = useState("");
+  const [activeRequest, setActiveRequest] = useState<RenewalRequest | null>(
+    null,
+  );
+  const [paymentState, setPaymentState] = useState<PaymentState>("unpaid"),
+    [paymentAmount, setPaymentAmount] = useState(""),
+    [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null),
+    [completed, setCompleted] = useState(false),
+    [renewalMessage, setRenewalMessage] = useState("");
+  const studentId = useMemo(
+    () =>
+      typeof window === "undefined"
+        ? ""
+        : window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "",
+    [],
+  );
+  const selectedPackage = packages.find((x) => x.id === packageId) || null;
+  const packagePrice = Number(selectedPackage?.price || 0);
+  const customCount = Number(customLessonCount);
+  const customNeedsApproval =
+    customEnabled &&
+    Number.isInteger(customCount) &&
+    customCount > 0 &&
+    customCount !== 8 &&
+    customCount !== 12;
+  useEffect(() => {
+    if (paymentState === "full" && packagePrice > 0)
+      setPaymentAmount(String(packagePrice));
+    if (paymentState === "unpaid") setPaymentAmount("");
+  }, [paymentState, packagePrice]);
+  async function openCenter(requestId?: string) {
+    if (!studentId || opening.current || panelOpen.current) return;
+    panelOpen.current = true;
+    opening.current = true;
+    setOpen(true);
+    setLoading(true);
+    setMessage("");
+    setMessageKind("");
+    setWhatsappUrl(null);
+    setRenewalMessage("");
+    setCompleted(false);
+    quick("Kontrol ediliyor…", "checking");
+    try {
+      const q = new URLSearchParams({ studentId });
+      if (requestId) q.set("requestId", requestId);
+      const [r, s] = await Promise.all([
+        fetch(
+          `/api/student-renewals?studentId=${encodeURIComponent(studentId)}`,
+          { cache: "no-store" },
+        ),
+        fetch(`/api/student-renewals/status?${q}`, { cache: "no-store" }),
+      ]);
+      const d = await r.json(),
+        sd = await s.json();
+      if (!r.ok || !d.ok) {
+        setMessage(d.error || "Yenileme bilgileri yüklenemedi.");
+        setMessageKind("error");
+        quick("Kayıt Yenile");
+        return;
+      }
+      setPackages(d.packages || []);
+      setPackageId(d.selectedPackageId || d.packages?.[0]?.id || "");
+      setCustomEnabled(false);
+      setCustomLessonCount("");
+      setStartDate(today());
+      setPaymentDueDate(today());
+      setNote("");
+      setPaymentState("unpaid");
+      setPaymentAmount("");
+      setPaymentMethod("cash");
+      setActiveRequest(null);
+      if (s.ok && sd.ok && sd.request) {
+        const req = sd.request as RenewalRequest;
+        setActiveRequest(req);
+        if (req.packageId) setPackageId(req.packageId);
+        if (req.totalLessons) {
+          setCustomEnabled(true);
+          setCustomLessonCount(String(req.totalLessons));
+        }
+        if (req.startDate) setStartDate(req.startDate);
+        if (req.paymentDueDate) setPaymentDueDate(req.paymentDueDate);
+        if (req.note) setNote(req.note);
+        if (req.status === "pending") {
+          setMessage("Bu yenileme yönetici onayı bekliyor.");
+          setMessageKind("approval");
+          quick("Onay Bekliyor", "pending");
+        } else {
+          setMessage(
+            "Yenileme onaylandı. Ödeme durumunu seçip işlemi tamamlayabilirsiniz.",
+          );
+          setMessageKind("success");
+          quick("Onaylandı · Tamamla", "approved");
+        }
+      } else quick("Kayıt Yenile");
+    } catch {
+      setMessage("Yenileme bilgileri yüklenirken bağlantı hatası oluştu.");
+      setMessageKind("error");
+      quick("Kayıt Yenile");
+    } finally {
+      opening.current = false;
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    const ensure = () => {
+      const a = document.querySelector<HTMLElement>(".fileCommandActions");
+      if (!a || a.querySelector("[data-renewal-button='1']")) return;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.renewalButton = "1";
+      b.className = "renewalQuickButton";
+      b.innerHTML = '<span aria-hidden="true">↻</span> Kayıt Yenile';
+      const p = a.querySelector("button");
+      p?.nextSibling ? a.insertBefore(b, p.nextSibling) : a.appendChild(b);
+    };
+    const click = (e: MouseEvent) => {
+      const t = (e.target as Element | null)?.closest(
+        "[data-renewal-button='1']",
+      );
+      if (!t) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void openCenter();
+    };
+    const custom = (e: Event) =>
+      void openCenter(
+        (e as CustomEvent<{ requestId?: string }>).detail?.requestId,
+      );
+    ensure();
+    const timer = setTimeout(ensure, 300);
+    document.addEventListener("click", click, true);
+    window.addEventListener("sprint:open-renewal", custom as EventListener);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", click, true);
+      window.removeEventListener(
+        "sprint:open-renewal",
+        custom as EventListener,
+      );
+    };
+  }, [studentId]);
+  async function submit() {
+    if (!studentId || saving.current || submitting || loading || completed)
+      return;
+    if (!packageId) {
+      setMessage("Yeni dönem için paket seçmelisiniz.");
+      setMessageKind("error");
+      return;
+    }
+    if (activeRequest?.status === "pending") return;
+    const amount = Number(paymentAmount.replace(/\./g, "").replace(",", "."));
+    if (
+      paymentState !== "unpaid" &&
+      (!Number.isFinite(amount) || amount <= 0)
+    ) {
+      setMessage("Tahsilat tutarını giriniz.");
+      setMessageKind("error");
+      return;
+    }
+    if (
+      paymentState === "partial" &&
+      packagePrice > 0 &&
+      amount >= packagePrice
+    ) {
+      setMessage("Kısmi ödeme paket ücretinden düşük olmalıdır.");
+      setMessageKind("error");
+      return;
+    }
+    saving.current = true;
+    setSubmitting(true);
+    setMessage("Kayıt, ödeme ve mesaj bilgileri hazırlanıyor…");
+    setMessageKind("approval");
+    try {
+      const r = await fetch("/api/student-renewals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId,
+          packageId,
+          customLessonCount: customEnabled ? customCount : null,
+          startDate,
+          paymentDueDate: paymentDueDate || startDate,
+          note: note.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (d.approvalRequired) {
+        setMessage(d.message || "Yönetici onayı bekleniyor.");
+        setMessageKind("approval");
+        quick("Onay Bekliyor", "pending");
+        router.refresh();
+        return;
+      }
+      if (!r.ok || !d.ok) {
+        setMessage(d.error || "Kayıt yenileme tamamlanamadı.");
+        setMessageKind("error");
+        return;
+      }
+      setCompleted(true);
+      completeBulkItem();
+      let paymentFailed = false;
+      let paymentText =
+        "Ödeme alınmadı; yeni dönem borcu ödeme takibinde bekliyor.";
+      if (paymentState !== "unpaid") {
+        let pay;
+        try {
+          pay = await createStudentPayment({
+            studentId,
+            enrollmentId: d.enrollmentId,
+            amount,
+            paymentMethod,
+            description: `Kayıt yenileme tahsilatı · ${d.packageName || "Yeni dönem"}`,
+            dueDate: paymentDueDate || startDate,
+          });
+        } catch {
+          pay = {
+            ok: false,
+            message:
+              "Bağlantı hatası. Ödeme ve Kasa ekranından kontrol edin; kaydı tekrar yenilemeyin.",
+          };
+        }
+        paymentFailed = !pay.ok;
+        paymentText = pay.ok
+          ? paymentState === "full"
+            ? `Tam ödeme ${money(amount)} kaydedildi.`
+            : `Kısmi ödeme ${money(amount)} kaydedildi; kalan bakiye açık.`
+          : `Kayıt yenilendi fakat ödeme kaydı oluşturulamadı: ${pay.message}`;
+      }
+      setWhatsappUrl(d.whatsappUrl || null);
+      setRenewalMessage(d.renewalMessage || "");
+      setMessage(
+        `${d.message || "Kayıt başarıyla yenilendi."} ${paymentText} ${d.recipientFound ? "Veli bilgilendirme mesajı hazır." : "Veli/öğrenci telefonu bulunamadı."}`,
+      );
+      setMessageKind(paymentFailed || d.warnings?.length ? "approval" : "success");
+      if (d.warnings?.length)
+        setMessage((previous) => `${previous} ${d.warnings.join(" ")}`);
+      setActiveRequest(null);
+      quick("Kayıt Yenilendi");
+      router.refresh();
+    } catch {
+      setMessage("Kayıt yenileme sırasında bağlantı hatası oluştu.");
+      setMessageKind("error");
+    } finally {
+      saving.current = false;
+      setSubmitting(false);
+    }
+  }
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("bulkRenewal") !== "1")
+      return;
+    try {
+      const ids = readRenewalQueue(sessionStorage.getItem(RENEWAL_QUEUE_KEY));
+      setBulkMode(ids.includes(studentId));
+    } catch {
+      setBulkMode(false);
+    }
+  }, [studentId]);
+  function completeBulkItem() {
+    if (!bulkMode) return;
+    try {
+      const remaining = advanceRenewalQueue(
+        readRenewalQueue(sessionStorage.getItem(RENEWAL_QUEUE_KEY)),
+        studentId,
+      );
+      sessionStorage.setItem(RENEWAL_QUEUE_KEY, JSON.stringify(remaining));
+      setBulkNext(remaining[0] || null);
+    } catch {
+      setMessage(
+        "Kayıt yenilendi; toplu işlem sırası okunamadı. Merkeze dönerek kalanları kontrol edin.",
+      );
+    }
+  }
+  function closeCenter() {
+    if (saving.current) return;
+    panelOpen.current = false;
+    setOpen(false);
+  }
+  function paymentPage() {
+    closeCenter();
+    setTimeout(() => {
+      window.location.hash = "odeme";
+      window.dispatchEvent(new Event("hashchange"));
+      document
+        .getElementById("odeme")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+  if (!open)
+    return (
+      <style jsx global>{`
+        .renewalQuickButton {
+          background: #f3edff !important;
+          border: 1px solid #cdbcf1 !important;
+          color: #5e3b9c !important;
+        }
+      `}</style>
+    );
+  return (
+    <>
+      <div className="renewalOverlay" onClick={closeCenter}>
+        <aside className="renewalPanel" onClick={(e) => e.stopPropagation()}>
+          <header>
+            <div>
+              <span>KAYIT · ÖDEME · İLETİŞİM</span>
+              <h2>Kayıt Yenileme Merkezi</h2>
+              <p>
+                Yeni dönemi, tahsilatı ve veli bilgilendirmesini tek ekrandan
+                tamamlayın.
+              </p>
+            </div>
+            <button onClick={closeCenter}>×</button>
+          </header>
+          <div className="renewalBody">
+            {activeRequest && (
+              <div className={`status ${activeRequest.status}`}>
+                <b>
+                  {activeRequest.status === "pending"
+                    ? "Yönetici onayı bekleniyor"
+                    : "Yönetici onayladı"}
+                </b>
+              </div>
+            )}
+            <div className="info">
+              <b>Geçmiş kayıtlar korunur</b>
+              <p>
+                Eski dönem, yoklama ve ödemeler silinmez. Yeni dönem ayrı aktif
+                kayıt olarak açılır.
+              </p>
+            </div>
+            {loading ? (
+              <div className="info">Bilgiler yükleniyor…</div>
+            ) : (
+              <div className="grid">
+                <label className="full">
+                  <span>Yeni Dönem Paketi</span>
+                  <select
+                    value={packageId}
+                    onChange={(e) => setPackageId(e.target.value)}
+                    disabled={activeRequest?.status === "pending"}
+                  >
+                    <option value="">Paket seçin</option>
+                    {packages.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name} · {x.lesson_count} ders · {money(x.price)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedPackage && (
+                  <div className="package full">
+                    <b>{selectedPackage.name}</b>
+                    <span>{selectedPackage.lesson_count} ders</span>
+                    <strong>{money(selectedPackage.price)}</strong>
+                  </div>
+                )}
+                <label className="full check">
+                  <input
+                    type="checkbox"
+                    checked={customEnabled}
+                    onChange={(e) => {
+                      setCustomEnabled(e.target.checked);
+                      if (!e.target.checked) setCustomLessonCount("");
+                    }}
+                  />
+                  <span>Özel ders sayısı ile yenile</span>
+                </label>
+                {customEnabled && (
+                  <label className="full">
+                    <span>Özel Ders Sayısı</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={customLessonCount}
+                      onChange={(e) => setCustomLessonCount(e.target.value)}
+                    />
+                    <small>
+                      8 ve 12 standart; diğer sayılar yönetici onayı ister.
+                    </small>
+                  </label>
+                )}
+                {customNeedsApproval && !activeRequest && (
+                  <div className="approval full">Yönetici onayı gerekli.</div>
+                )}
+                <label>
+                  <span>Yeni Dönem Başlangıcı</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Ödeme Vade Tarihi</span>
+                  <input
+                    type="date"
+                    value={paymentDueDate}
+                    onChange={(e) => setPaymentDueDate(e.target.value)}
+                  />
+                </label>
+                <label className="full">
+                  <span>Yenileme Notu</span>
+                  <textarea
+                    rows={3}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                </label>
+                <section className="finance full">
+                  <b>ÖDEME DURUMU</b>
+                  <h3>Yenileme Tahsilatı</h3>
+                  <p>
+                    Buradaki tahsilat doğrudan Ödeme ve Kasa geçmişine işlenir.
+                  </p>
+                  <div className="choices">
+                    <button
+                      className={paymentState === "unpaid" ? "active" : ""}
+                      onClick={() => setPaymentState("unpaid")}
+                      type="button"
+                    >
+                      Ödeme Alınmadı
+                    </button>
+                    <button
+                      className={paymentState === "full" ? "active" : ""}
+                      onClick={() => setPaymentState("full")}
+                      type="button"
+                    >
+                      Tam Ödeme
+                    </button>
+                    <button
+                      className={paymentState === "partial" ? "active" : ""}
+                      onClick={() => setPaymentState("partial")}
+                      type="button"
+                    >
+                      Kısmi Ödeme
+                    </button>
+                  </div>
+                  {paymentState !== "unpaid" && (
+                    <div className="payfields">
+                      <label>
+                        <span>Tahsilat Tutarı</span>
+                        <input
+                          inputMode="decimal"
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>Ödeme Yöntemi</span>
+                        <select
+                          value={paymentMethod}
+                          onChange={(e) =>
+                            setPaymentMethod(e.target.value as PaymentMethod)
+                          }
+                        >
+                          <option value="cash">Nakit</option>
+                          <option value="card">Kart</option>
+                          <option value="bank_transfer">Banka Havalesi</option>
+                          <option value="eft">EFT</option>
+                          <option value="other">Diğer</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+            {message && (
+              <div className={`message ${messageKind}`}>{message}</div>
+            )}
+            {completed && (
+              <div className="post">
+                <b>Yenileme tamamlandı</b>
+                {bulkMode && (
+                  <div>
+                    {bulkNext ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.location.assign(
+                            `/ogrenciler/${bulkNext}?renewal=1&bulkRenewal=1`,
+                          )
+                        }
+                      >
+                        Sıradaki Öğrenciye Geç →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.location.assign("/kayit-yenilemeleri")
+                        }
+                      >
+                        Toplu İşlem Tamamlandı · Merkeze Dön
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p>
+                  Yeni dönem başlangıç ve bitiş tarihini içeren mesaj hazır.
+                  WhatsApp açıldığında kontrol edip gönderebilirsiniz.
+                </p>
+                {renewalMessage && (
+                  <pre className="renewalMessagePreview">{renewalMessage}</pre>
+                )}
+                <div>
+                  {whatsappUrl ? (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Kaydınız Yenilenmiştir Mesajını Gönder
+                    </a>
+                  ) : (
+                    <button disabled>Telefon Bulunamadı</button>
+                  )}
+                  <button type="button" onClick={paymentPage}>
+                    Ödeme ve Kasa'yı Aç
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <footer>
+            <button className="ghost" onClick={closeCenter}>
+              Vazgeç
+            </button>
+            <button
+              className="primary"
+              disabled={
+                submitting ||
+                loading ||
+                !packageId ||
+                activeRequest?.status === "pending" ||
+                completed
+              }
+              onClick={submit}
+            >
+              {completed
+                ? "✓ Yenileme Tamamlandı"
+                : submitting
+                  ? "İşlem yapılıyor…"
+                  : customNeedsApproval
+                    ? "✓ Yönetici Onayına Gönder"
+                    : "✓ Kaydı Yenile ve İşlemleri Tamamla"}
+            </button>
+          </footer>
+        </aside>
+      </div>
+      <style jsx>{`
+        .renewalOverlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1510;
+          display: flex;
+          justify-content: flex-end;
+          background: #041426a3;
+          backdrop-filter: blur(7px);
+        }
+        .renewalPanel {
+          width: min(680px, 100vw);
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          background: #f5f8fc;
+        }
+        .renewalPanel header {
+          display: flex;
+          justify-content: space-between;
+          padding: 22px;
+          background: linear-gradient(135deg, #2f1f59, #6843a8);
+          color: white;
+        }
+        .renewalPanel header span {
+          color: #f6c55f;
+          font-size: 11px;
+          font-weight: 900;
+        }
+        .renewalPanel header h2 {
+          margin: 5px 0;
+        }
+        .renewalPanel header p {
+          margin: 0;
+        }
+        .renewalPanel header button {
+          width: 42px;
+          height: 42px;
+          border: 1px solid #ffffff55;
+          border-radius: 12px;
+          background: #ffffff12;
+          color: white;
+          font-size: 27px;
+        }
+        .renewalBody {
+          flex: 1;
+          overflow: auto;
+          padding: 20px;
+        }
+        .info,
+        .status,
+        .message,
+        .post {
+          padding: 14px;
+          border-radius: 13px;
+          margin-bottom: 14px;
+        }
+        .info {
+          background: #f2edff;
+          border: 1px solid #ded1fb;
+          color: #52368a;
+        }
+        .info p,
+        .post p {
+          margin: 5px 0;
+        }
+        .status.pending,
+        .message.approval {
+          background: #fff6df;
+          border: 1px solid #efcd82;
+          color: #855b09;
+        }
+        .status.approved,
+        .message.success,
+        .post {
+          background: #eaf9f0;
+          border: 1px solid #b9dfc5;
+          color: #17623b;
+        }
+        .message.error {
+          background: #fff0f0;
+          border: 1px solid #efc3c3;
+          color: #a22727;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 13px;
+        }
+        .full {
+          grid-column: 1/-1;
+        }
+        .grid label {
+          display: grid;
+          gap: 6px;
+        }
+        .grid label > span {
+          font-size: 12px;
+          font-weight: 850;
+          color: #4f647a;
+        }
+        .grid input,
+        .grid textarea,
+        .grid select {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid #cfdbe8;
+          border-radius: 10px;
+          padding: 11px;
+          background: white;
+          font: inherit;
+        }
+        .package {
+          display: flex;
+          gap: 12px;
+          padding: 12px;
+          border: 1px solid #dcd3f3;
+          border-radius: 12px;
+          background: #faf8ff;
+        }
+        .package b {
+          margin-right: auto;
+        }
+        .check {
+          display: flex !important;
+          align-items: center;
+          padding: 12px;
+          border: 1px dashed #b8a5e2;
+          border-radius: 12px;
+        }
+        .check input {
+          width: 18px !important;
+        }
+        .approval {
+          padding: 12px;
+          background: #fff7df;
+          border: 1px solid #f0c87c;
+          border-radius: 10px;
+          color: #80580c;
+        }
+        .finance {
+          padding: 16px;
+          border: 1px solid #bcd7ed;
+          border-radius: 15px;
+          background: #f1f8fe;
+        }
+        .finance h3 {
+          margin: 4px 0;
+        }
+        .finance p {
+          margin: 0 0 12px;
+        }
+        .choices {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+        .choices button {
+          min-height: 44px;
+          border: 1px solid #bfd0df;
+          border-radius: 10px;
+          background: white;
+          font-weight: 800;
+        }
+        .choices button.active {
+          background: #0f6cab;
+          color: white;
+        }
+        .payfields {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 12px;
+        }
+        .renewalMessagePreview {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          font: inherit;
+          line-height: 1.6;
+          padding: 14px;
+          background: white;
+          border: 1px solid #b9dfc5;
+          border-radius: 10px;
+          color: #234536;
+        }
+        .post > div {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .post a,
+        .post button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 44px;
+          padding: 0 14px;
+          border: 0;
+          border-radius: 10px;
+          background: #126c45;
+          color: white;
+          text-decoration: none;
+          font-weight: 900;
+        }
+        .post button {
+          background: #164f7d;
+        }
+        footer {
+          display: flex;
+          gap: 9px;
+          justify-content: flex-end;
+          padding: 15px 20px;
+          background: white;
+          border-top: 1px solid #dbe4ee;
+        }
+        footer button {
+          min-height: 48px;
+          padding: 0 17px;
+          border-radius: 11px;
+          font-weight: 900;
+        }
+        .ghost {
+          background: white;
+          border: 1px solid #d2dce7;
+        }
+        .primary {
+          background: #6843a8;
+          color: white;
+          border: 0;
+        }
+        .primary:disabled {
+          opacity: 0.55;
+        }
+        @media (max-width: 640px) {
+          .grid,
+          .payfields {
+            grid-template-columns: 1fr;
+          }
+          .full {
+            grid-column: auto;
+          }
+          .choices {
+            grid-template-columns: 1fr;
+          }
+          .post > div {
+            display: grid;
+          }
+          footer {
+            flex-direction: column-reverse;
+          }
+        }
+      `}</style>
+    </>
+  );
+}

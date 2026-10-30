@@ -42,7 +42,7 @@ export default function RenewalStatusCenterClient({items,history,approvals,canAp
     }catch{setMessage("Toplu işlem sırasında bağlantı hatası oluştu.")}finally{setBusy(null)}
   }
 
-  function startBulkRenewal(){const ids=selected.filter(id=>items.find(x=>x.id===id)?.status==="active");if(!ids.length){setMessage("Kayıt yenilemek için en az bir aktif öğrenci seçin.");return}try{sessionStorage.setItem("sprint:bulk-renewal-queue",JSON.stringify(ids))}catch{}router.push(`/ogrenciler/${ids[0]}?renewal=1&bulkRenewal=1`)}
+  function startBulkRenewal(){const ids=selected.filter(id=>items.find(x=>x.id===id)?.status==="active");if(!ids.length){setMessage("Kayıt yenilemek için en az bir aktif öğrenci seçin.");return}try{sessionStorage.setItem("sprint:bulk-renewal-queue",JSON.stringify(ids))}catch{setMessage("Toplu işlem sırası kaydedilemedi. Tarayıcı depolama iznini kontrol edin.");return}router.push(`/ogrenciler/${ids[0]}?renewal=1&bulkRenewal=1`)}
 
   return <main className="page">
     <section className="hero"><div><span>SPRİNTOS · KAYIT VE DURUM OPERASYONU</span><h1>Kayıt Yenileme ve Durum Merkezi</h1><p>Kayıt kararı, yenileme, yönetici onayı, pasife alma ve yeniden aktifleştirme işlemlerini tek ekrandan yönetin. Öğrenci geçmişi korunur.</p></div><div className="heroBtns"><Link href="/ogrenciler">Öğrenci Merkezi</Link><Link className="primary" href="/onay-merkezi">Onay Merkezi</Link></div></section>

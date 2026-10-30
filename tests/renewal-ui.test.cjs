@@ -1,0 +1,25 @@
+const test=require('node:test'),fs=require('fs'),ts=require('typescript'),assert=require('node:assert/strict');
+const {JSDOM}=require('jsdom');
+const React=require('react');
+const {createRoot}=require('react-dom/client');
+const root=process.cwd();
+function load(path,mocks={}){const m={exports:{}};new Function('module','exports','require',ts.transpileModule(fs.readFileSync(root+'/'+path,'utf8').replace(/<style jsx(?: global)?>/g,'<style>'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText)(m,m.exports,n=>n in mocks?mocks[n]:require(require.resolve(n,{paths:[root]})));return m.exports;}
+const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
+test('mounted renewal UI opens once and preserves completed renewal on payment failure',async()=>{const dom=new JSDOM('<div class="fileCommandActions"><button>Edit</button></div><div id="root"></div>',{url:`http://localhost/ogrenciler/${a}?renewal=1&bulkRenewal=1`});
+Object.assign(global,{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,CustomEvent:dom.window.CustomEvent,MouseEvent:dom.window.MouseEvent,Event:dom.window.Event,IS_REACT_ACT_ENVIRONMENT:true});
+let loads=0,posts=0,payments=0;global.fetch=async(url,opts)=>{if(opts?.method==='POST'){posts++;return {ok:true,json:async()=>({ok:true,enrollmentId:a,packageName:'8 Ders',recipientFound:true})}}if(url.includes('/status?'))return {ok:true,json:async()=>({ok:true,request:null})};loads++;return {ok:true,json:async()=>({ok:true,packages:[{id:a,name:'8 Ders',lesson_count:8,price:4000}],selectedPackageId:a})}};
+sessionStorage.setItem('sprint:bulk-renewal-queue',JSON.stringify([a,b]));
+const Student=load('app/ogrenciler/[id]/student-renewal-center.tsx',{'next/navigation':{useRouter:()=>({refresh(){}})},'@/lib/enrollment/renewal-queue':load('lib/enrollment/renewal-queue.ts'),'@/lib/enrollment/dates':load('lib/enrollment/dates.ts'),'../../odemeler/actions':{createStudentPayment:async()=>{payments++;throw Error('TEST payment failure')}}}).default;
+const Bridge=load('app/ogrenciler/[id]/renewal-approval-open-bridge.tsx').default;
+const app=createRoot(document.getElementById('root'));await React.act(async()=>{app.render(React.createElement(React.Fragment,null,React.createElement(Student),React.createElement(Bridge)));});
+await React.act(async()=>{await new Promise(r=>setTimeout(r,450))});
+const button=text=>[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===text);
+assert.equal(loads,1);assert.ok(document.querySelector('.renewalOverlay'));
+await React.act(async()=>button('Tam Ödeme').click());
+await React.act(async()=>button('✓ Kaydı Yenile ve İşlemleri Tamamla').click());
+assert.equal(posts,1);assert.equal(payments,1);assert.equal(button('✓ Yenileme Tamamlandı').disabled,true);
+assert.match(document.body.textContent,/kaydı tekrar yenilemeyin/);assert.ok(button('Sıradaki Öğrenciye Geç →'));
+assert.deepEqual(JSON.parse(sessionStorage.getItem('sprint:bulk-renewal-queue')),[b]);
+await React.act(async()=>button('✓ Yenileme Tamamlandı').click());assert.equal(posts,1);
+await React.act(async()=>app.unmount());dom.window.close();console.log('PASS mounted UI: single opening, one renewal write, payment failure keeps completed state, next student, no repeat renewal');
+});

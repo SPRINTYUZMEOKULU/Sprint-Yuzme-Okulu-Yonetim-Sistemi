@@ -506,6 +506,7 @@ export async function POST(request: NextRequest) {
 
       const organizationId = approvalRequest.organization_id;
       const requestType = clean(approvalRequest.request_type, 100);
+      const isRenewalLessonApproval = requestType === "registration_custom_lesson_count" && asObject(approvalRequest.metadata).source === "student_renewal_center";
       const studentId =
         typeof approvalRequest.student_id === "string"
           ? approvalRequest.student_id
@@ -575,7 +576,7 @@ export async function POST(request: NextRequest) {
           console.error("central approval reject audit error:", auditError);
         }
 
-        if (requestType === "registration_custom_lesson_count" && studentId) {
+        if (requestType === "registration_custom_lesson_count" && studentId && !isRenewalLessonApproval) {
           const lessonCount = Number(newValues.total_lessons ?? 0);
           const { data: checklist } = await supabase
             .from("registration_completion_checklists")
@@ -639,7 +640,7 @@ export async function POST(request: NextRequest) {
           source_id: id,
           target_path:
             requestType === "registration_custom_lesson_count" && studentId
-              ? `/kayit-tamamlama/${studentId}?approval=rejected`
+              ? (isRenewalLessonApproval ? `/ogrenciler/${studentId}?renewal=1` : `/kayit-tamamlama/${studentId}?approval=rejected`)
               : "/onay-merkezi",
           is_read: false,
           push_requested: true,
@@ -884,6 +885,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        if (!isRenewalLessonApproval) {
         /*
          * Bu onay öğrenciyi pasife almaz ve doğrudan enrollment oluşturmaz.
          * Pasif bir ön kayıt yanlışlıkla bu akışa girdiyse tekrar
@@ -924,6 +926,8 @@ export async function POST(request: NextRequest) {
           })
           .eq("organization_id", organizationId)
           .eq("student_id", studentId);
+
+        }
 
         appliedEntityType = "student";
         appliedEntityId = studentId;
@@ -1046,7 +1050,7 @@ export async function POST(request: NextRequest) {
             approvalRequest.request_label
           )} onaylandı`;
       const notificationMessage = isRegistrationLessonApproval
-        ? `${approvedLessonCount || "Standart dışı"} derslik kayıt talebiniz ${actorName} tarafından onaylandı. Kesin kayıt işlemine devam edebilirsiniz.`
+        ? `${approvedLessonCount || "Standart dışı"} derslik kayıt talebiniz ${actorName} tarafından onaylandı. ${isRenewalLessonApproval ? "Kayıt yenileme işlemine devam edebilirsiniz." : "Kesin kayıt işlemine devam edebilirsiniz."}`
         : `${actorName} tarafından onaylandı ve uygulandı.`;
 
       const { error: notificationError } = await publishEventNotification({
@@ -1075,7 +1079,7 @@ export async function POST(request: NextRequest) {
           source_id: id,
           target_path:
             isRegistrationLessonApproval && studentId
-              ? `/kayit-tamamlama/${studentId}?approval=approved`
+              ? (isRenewalLessonApproval ? `/ogrenciler/${studentId}?renewalApproval=approved&renewalRequestId=${id}` : `/kayit-tamamlama/${studentId}?approval=approved`)
               : "/onay-merkezi",
           is_read: false,
           push_requested: true,
