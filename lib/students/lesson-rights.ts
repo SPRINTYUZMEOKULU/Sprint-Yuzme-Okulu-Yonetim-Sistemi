@@ -13,10 +13,12 @@ export function studentLessonRights(p:{total:number;scheduledUsed:number;legacyC
  const upcoming=rows.filter(row=>row.date>p.today||(row.date===p.today&&String(row.schedule.end_time).slice(0,5)>p.time)).length;
  // Unused scheduled rights belong to the student across renewals. Completed
  // history still belongs to its original enrollment and never consumes the new package.
- const planned=p.compensations.filter(row=>row.status==='planned'&&(e?.status!=='completed'||row.enrollment_id===e?.id)).length;
+ const currentPeriodCompensations=p.compensations.filter(row=>Boolean(e?.id)&&row.enrollment_id===e.id);
+ const planned=currentPeriodCompensations.filter(row=>row.status==='planned').length;
  const reserved=rows.filter(row=>row.new_value?.compensation_mode==='reserve'&&!row.new_value?.compensation_date).length;
- const compensation=Math.max(0,p.legacyCompensation,planned+reserved);
- const completed=p.compensations.filter(row=>row.enrollment_id===e?.id&&row.status==='completed').length;
+ // Student-wide legacy balances must not leak into the next registration period.
+ const compensation=Math.max(0,planned+reserved);
+ const completed=currentPeriodCompensations.filter(row=>row.status==='completed').length;
  const used=Math.max(0,p.scheduledUsed-elapsed)+completed;
  const normal=Math.max(0,p.total-p.scheduledUsed-upcoming);
  return {used,normal,compensation,total:normal+compensation};

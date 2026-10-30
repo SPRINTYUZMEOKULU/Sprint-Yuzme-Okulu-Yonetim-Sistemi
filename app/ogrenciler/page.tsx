@@ -252,7 +252,7 @@ export default async function StudentsPage() {
         supabase
           .from("student_compensation_lessons")
           .select(
-            "id,student_id,status,lesson_date,target_group_id,target_schedule_id"
+            "id,student_id,enrollment_id,status,lesson_date,target_group_id,target_schedule_id"
           )
           .in("student_id", studentIds)
           .eq("status", "planned")
@@ -401,16 +401,10 @@ export default async function StudentsPage() {
   const nextCompensationMap = new Map<string, any>();
 
   for (const row of (compensationPlansResult.data || []) as any[]) {
-    if (!row.student_id) continue;
-
-    plannedCompensationCount.set(
-      row.student_id,
-      (plannedCompensationCount.get(row.student_id) || 0) + 1
-    );
-
-    if (!nextCompensationMap.has(row.student_id)) {
-      nextCompensationMap.set(row.student_id, row);
-    }
+    if (!row.student_id || !row.enrollment_id) continue;
+    const periodKey = `${row.student_id}:${row.enrollment_id}`;
+    plannedCompensationCount.set(periodKey, (plannedCompensationCount.get(periodKey) || 0) + 1);
+    if (!nextCompensationMap.has(periodKey)) nextCompensationMap.set(periodKey, row);
   }
 
   const lastAttendanceMap = new Map<string, any>();
@@ -460,7 +454,7 @@ export default async function StudentsPage() {
       const paymentSummary = paymentSummaryMap.get(student.id) as any;
       const lastAttendance = lastAttendanceMap.get(student.id) as any;
       const lastAbsent = lastAbsentMap.get(student.id) as any;
-      const nextCompensation = nextCompensationMap.get(student.id) as any;
+      const nextCompensation = nextCompensationMap.get(`${student.id}:${enrollment?.id || ""}`) as any;
       const latestNote = latestNoteMap.get(student.id) as any;
       const activeNoteReminder = activeReminderMap.get(student.id) as any;
       const reminderNote = activeNoteReminder?.source_id
@@ -621,7 +615,7 @@ export default async function StudentsPage() {
 
         compensation_lessons: compensationBalance,
         planned_compensation_lessons:
-          plannedCompensationCount.get(student.id) || 0,
+          plannedCompensationCount.get(`${student.id}:${enrollment?.id || ""}`) || 0,
 
         used_lessons: usedLessons,
         attendance_summary: attendanceSummary(lastAttendanceResult.data || [], enrollment),
