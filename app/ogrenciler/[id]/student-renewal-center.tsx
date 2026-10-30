@@ -535,7 +535,7 @@ export default function StudentRenewalCenter() {
             {message && (
               <div className={`message ${messageKind}`}>{message}</div>
             )}
-            {completed && (
+            {completed && !submitting && (
               <div className="post">
                 <b>Yenileme tamamlandı</b>
                 {bulkMode && (
