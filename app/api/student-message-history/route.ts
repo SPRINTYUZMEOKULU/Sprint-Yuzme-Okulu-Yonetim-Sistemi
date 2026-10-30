@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       channel: row.channel || "whatsapp",
       recipient: row.recipient || null,
       body: row.message_body || "Bilgilendirme gönderildi.",
-      status: row.metadata?.delivery_confirmation === "whatsapp_opened" ? "opened" : row.metadata?.delivery_confirmation === "manual_confirmed" ? "confirmed" : row.status || "prepared",
+      status: row.metadata?.delivery_confirmation === "manual_confirmed" ? "confirmed" : row.metadata?.delivery_confirmation === "whatsapp_opened" ? "opened" : row.status || "prepared",
       deliveryConfirmation: row.metadata?.delivery_confirmation || null,
       sentAt: row.sent_at || row.prepared_at,
       source: "message",
