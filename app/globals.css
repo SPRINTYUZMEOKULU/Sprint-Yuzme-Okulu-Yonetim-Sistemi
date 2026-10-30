@@ -560,3 +560,14 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2LoginCard{width:100%!important;max-width:430px!important;margin:0 auto!important;padding:18px!important;border-radius:22px!important;box-shadow:0 12px 38px rgba(6,26,66,.13)!important}
  .compactLogin input,.compactLogin button,.compactLogin select{min-height:44px}
 }
+
+
+/* Shared role switcher: same visual identity for guardian, coach and admin. */
+.sprintLoginRoleLabel{margin:0 0 10px;color:#55708e;font-size:12px;font-weight:800;letter-spacing:.02em}
+.sprintLoginRoleDescription{margin:10px 0 17px;padding:10px 12px;border-radius:11px;background:#f1f7ff;color:#24527f;font-size:12px;font-weight:700;line-height:1.45}
+.v2RoleTabs{min-width:0;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important}
+.v2RoleTabs .v2RoleTab{min-width:0!important;min-height:65px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:6px!important;border-radius:12px!important;padding:9px 5px!important;text-align:center!important;white-space:normal!important;line-height:1.2!important}
+.v2RoleTabs .v2RoleTab svg{width:20px!important;height:20px!important;flex-shrink:0!important}
+.v2RoleTabs .v2RoleTab span{font-size:12px!important;overflow-wrap:anywhere!important}
+.v2RoleTabs .v2RoleTab.active{border-color:#3482fa!important;background:#edf5ff!important;color:#145cc0!important;box-shadow:0 0 0 1px rgba(52,130,250,.22)!important}
+@media(max-width:390px){.v2RoleTabs{gap:5px!important}.v2RoleTabs .v2RoleTab{padding:8px 4px!important}.v2RoleTabs .v2RoleTab span{font-size:11px!important}}
