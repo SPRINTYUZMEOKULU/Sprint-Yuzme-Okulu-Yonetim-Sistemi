@@ -1038,6 +1038,9 @@ const [noteItems, setNoteItems] = useState<StudentNoteItem[]>([]);
 const [noteLoading, setNoteLoading] = useState(false);
 const [noteSaving, setNoteSaving] = useState(false);
 const [noteError, setNoteError] = useState("");
+const [noteSuccess, setNoteSuccess] = useState("");
+const [noteEditorOpen, setNoteEditorOpen] = useState(true);
+const [showCompletedNotes, setShowCompletedNotes] = useState(false);
 const [noteBody, setNoteBody] = useState("");
 const [noteType, setNoteType] = useState("general");
 const [noteReminderAt, setNoteReminderAt] = useState("");
@@ -1066,6 +1069,9 @@ async function loadStudentNotes(studentId: string) {
 function openStudentNotes(student: StudentListItem) {
   noteReturnScrollYRef.current = window.scrollY;
   setNoteStudent(student);
+  setNoteEditorOpen(true);
+  setShowCompletedNotes(false);
+  setNoteSuccess("");
   setEditingNoteId(null);
   setCompletingNoteId(null);
   setNoteCompletionReply("");
@@ -1077,6 +1083,7 @@ function openStudentNotes(student: StudentListItem) {
 }
 
 function closeStudentNotes() {
+  if(noteSaving)return;
   window.requestAnimationFrame(() => window.scrollTo({ top: noteReturnScrollYRef.current, behavior: "auto" }));
   setCompletingNoteId(null);
   setNoteCompletionReply("");
@@ -1090,6 +1097,8 @@ function closeStudentNotes() {
 }
 
 function editStudentNote(note: StudentNoteItem) {
+  setNoteEditorOpen(true);
+  setNoteSuccess("");
   setEditingNoteId(note.id);
   setNoteBody(note.body || "");
   setNoteType(note.note_type || "general");
@@ -1124,19 +1133,10 @@ async function saveStudentNote() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Not kaydedilemedi.");
 
-    const returnScrollY = noteReturnScrollYRef.current;
-    closeStudentNotes();
+    await loadStudentNotes(noteStudent.id);
+    resetStudentNoteForm();
+    setNoteSuccess(editingNoteId ? "Not güncellendi." : "Not kaydedildi.");
     router.refresh();
-
-    // Not kaydı sonrası kullanıcıyı öğrenci listesindeki aynı çalışma noktasına döndür.
-    // Filtreler / arama / sıralama client state olarak korunur; scroll konumu da
-    // özellikle mobil Safari'de refresh sonrası ikinci kez sabitlenir.
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: returnScrollY, left: 0, behavior: "auto" });
-      window.setTimeout(() => {
-        window.scrollTo({ top: returnScrollY, left: 0, behavior: "auto" });
-      }, 80);
-    });
   } catch (error) {
     setNoteError(error instanceof Error ? error.message : "Not kaydedilemedi.");
   } finally {
@@ -1159,6 +1159,7 @@ async function completeStudentNote(noteId: string) {
     setCompletingNoteId(null);
     setNoteCompletionReply("");
     await loadStudentNotes(noteStudent.id);
+    setNoteSuccess("Not tamamlandı. Hatırlatma kapatıldı.");
     router.refresh();
   } catch (error) {
     setNoteError(error instanceof Error ? error.message : "Not tamamlanamadı.");
@@ -3481,11 +3482,13 @@ thead{display:table-header-group}tr{break-inside:avoid}
                   <h3>{noteStudent.first_name} {noteStudent.last_name}</h3>
                   <p>Kartta görünen notlar dijital kursiyer dosyasındaki Notlar bölümüne aynı anda işlenir.</p>
                 </div>
-                <button type="button" onClick={closeStudentNotes} aria-label="Geri dön" title="Öğrenci listesine geri dön">← Geri</button>
+                <button type="button" onClick={closeStudentNotes} disabled={noteSaving} aria-label="Geri dön" title="Notları kapat ve öğrenci listesine dön">← Geri</button>
               </div>
 
               <div className="notePanelBody">
                 <div className="noteEditor">
+                  <button type="button" className="noteSectionToggle" aria-expanded={noteEditorOpen} onClick={() => setNoteEditorOpen(value => !value)}>{noteEditorOpen ? "▾ Not yazma alanını kapat" : "▸ Yeni not / düzenleme alanını aç"}</button>
+                  {noteEditorOpen && <>
                   <label>
                     <span>Not Türü</span>
                     <select value={noteType} onChange={(event) => setNoteType(event.target.value)}>
@@ -3518,7 +3521,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     <small>Hatırlatma zamanı geldiğinde öğrenci kartındaki not ikazı yanıp söner.</small>
                   </label>
 
-                  {noteError && <div className="noteError">{noteError}</div>}
+                  {noteError && <div className="noteError" role="alert">{noteError}</div>}
+                  {noteSuccess && <div className="noteSuccess" role="status">{noteSuccess}</div>}
 
                   <div className="noteEditorActions">
                     {editingNoteId && (
@@ -3535,20 +3539,22 @@ thead{display:table-header-group}tr{break-inside:avoid}
                       {noteSaving ? "Kaydediliyor…" : editingNoteId ? "Notu Güncelle" : "Notu Kaydet"}
                     </button>
                   </div>
+                  </>}
                 </div>
 
                 <div className="noteHistory">
                   <div className="noteHistoryTitle">
                     <strong>Kayıtlı Notlar</strong>
-                    <span>{noteItems.length}</span>
+                    <span>{noteItems.filter(note => !note.completion).length} açık · {noteItems.filter(note => note.completion).length} tamamlandı</span>
                   </div>
+                  <button type="button" className="noteSectionToggle" onClick={() => setShowCompletedNotes(value => !value)}>{showCompletedNotes ? "Tamamlanan notları gizle" : "Tamamlanan notları göster"}</button>
 
                   {noteLoading ? (
                     <div className="noteEmpty">Notlar yükleniyor…</div>
                   ) : noteItems.length === 0 ? (
                     <div className="noteEmpty">Henüz not eklenmemiş.</div>
                   ) : (
-                    noteItems.map((note) => (
+                    noteItems.filter(note => showCompletedNotes || !note.completion).map((note) => (
                       <article
                         key={note.id}
                         className={`noteHistoryItem ${
@@ -3569,7 +3575,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                         )}
                         {completingNoteId === note.id && !note.completion && <div className="noteCompleteEditor"><label htmlFor={`completion-${note.id}`}>Nasıl tamamlandı? / İşlem sonucu</label><textarea id={`completion-${note.id}`} value={noteCompletionReply} onChange={(event) => setNoteCompletionReply(event.target.value)} placeholder="Örn. Veli arandı, kayıt yenileme görüşmesi yapıldı." maxLength={3000} rows={3} /><div><button type="button" onClick={() => {setCompletingNoteId(null);setNoteCompletionReply("");}}>Vazgeç</button><button type="button" className="finish" disabled={noteSaving || !noteCompletionReply.trim()} onClick={() => void completeStudentNote(note.id)}>{noteSaving ? "Kaydediliyor…" : "Kaydet ve Tamamla"}</button></div></div>}
                         <div className="noteHistoryActions">
-                          {!note.completion && <button type="button" className="finish" onClick={() => {setCompletingNoteId(note.id);setNoteCompletionReply("");setNoteError("");}}>✓ Tamamla / Cevapla</button>}
+                          {!note.completion && <button type="button" className="finish" onClick={() => {setCompletingNoteId(completingNoteId===note.id?null:note.id);setNoteCompletionReply("");setNoteError("");}}>✓ Tamamla / Cevapla</button>}
                           {!note.completion && <button type="button" onClick={() => editStudentNote(note)}>Düzenle</button>}
                           <button type="button" className="danger" onClick={() => void deleteStudentNote(note.id)}>Sil</button>
                         </div>
