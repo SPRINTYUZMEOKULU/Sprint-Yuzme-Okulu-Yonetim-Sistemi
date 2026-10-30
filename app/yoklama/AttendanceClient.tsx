@@ -2110,7 +2110,7 @@ export default function AttendanceClient({
                           />
 
                           <InfoBox
-                            title="Kullanılan"
+                            title="Takvime Göre İşlenen"
                             value={`${usage.used} / ${usage.total}`}
                           />
 
@@ -2736,7 +2736,7 @@ export default function AttendanceClient({
                   )}
 
                   <th style={thStyle}>
-                    Kullanılan
+                    Takvime Göre İşlenen
                   </th>
 
                   <th style={thStyle}>

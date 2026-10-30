@@ -280,7 +280,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const status = balance === null ? "Ücret kontrolü gerekli" : balance === 0 ? "Borcu yok" : overdue > 0 || (e.payment_due_date && e.payment_due_date < today) ? "Gecikmiş" : paid > 0 ? "Kısmi ödeme" : "Ödeme yapılmadı";
     if (balance === null) addNote(name,"Kayıt ücreti belirlenemedi veya birden fazla ödeme planı var.",`/ogrenciler/${student.id}`);
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
-    if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Kullanılan ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
+    if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Takvime göre işlenen ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
     if (!hasRenewal && !isWaiting(e) && e.status === "active" && student.status === "active" && ((rightsForEnrollment(rightsContext,e).compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rightsForEnrollment(rightsContext,e).total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
     if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
     const expiredActive = e.status === "active" && hasActiveStudent(e) && !isWaiting(e) && Boolean(e.planned_end_date && e.planned_end_date < today);
@@ -393,7 +393,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     financeSheet("Süresi dolanlar",financeRows.filter(r=>r.recordStatus === "Süresi doldu")),
     financeSheet("Ödeme yapılmayanlar",financeRows.filter(r=>r.paid === 0 && (r.balance || 0)>0)),
     financeSheet("Kısmi ödeme yapanlar",financeRows.filter(r=>r.paid > 0 && (r.balance || 0)>0)),
-    {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Kullanılan ders","Paket ders","Normal kalan","Telafi","Toplam kalan","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,r.normalRemaining,r.compensation,r.remaining,Math.round(r.attendance)])]},
+    {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Takvime göre işlenen ders","Paket ders","Kalan ders","Telafi","Toplam kalan","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,r.normalRemaining,r.compensation,r.remaining,Math.round(r.attendance)])]},
     {name:"Atamalar",rows:[["Öğrenci","Şube","Grup","Seans","Seans eğitmenleri","Öğrenci eğitmeni"],...assignmentRows.map(r=>[r.name,r.branch,r.group,r.session,r.planned,r.assigned])]},
     {name:"Gerçekleşen dersler",rows:[["Tarih","Saat","Öğrenci","Grup","Mevcut plan eğitmeni","Yoklamadaki eğitmen","Durum","Ders notu","Kayıt durumu"],...lessonRows.map(r=>[r.date,r.time,r.name,r.group,r.planned,r.actual,r.status,r.note,r.scope])]},
     {name:"Tahsilat hareketleri",rows:[["Öğrenci","Tarih","Tutar","Durum","Yöntem","Kasa teslimi","Kayıt durumu"],...paymentRows.map(r=>[r.name,r.date,r.amount,r.status,r.method,r.handover,r.scope])]},
@@ -481,7 +481,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">ÖĞRENCİ RAPORU</span><h2>Kursiyer ve kayıt özeti</h2></div><Link href="/ogrenciler">Öğrenci merkezini aç →</Link></div>
-            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Normal kalan</th><th>Telafi</th><th>Toplam kalan</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{row.normalRemaining}</td><td>+{row.compensation}</td><td>{row.remaining}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={10} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
+            <div className="tableScroll"><table><thead><tr><th>Öğrenci</th><th>Şube</th><th>Grup</th><th>Seçili günler</th><th>Ders kullanımı</th><th>Kalan ders</th><th>Telafi</th><th>Toplam kalan</th><th>Dönem katılımı</th><th></th></tr></thead><tbody>{studentRows.length ? studentRows.map((row) => <tr key={row.enrollmentId}><td><strong>{row.name || "İsimsiz öğrenci"}</strong></td><td>{row.branch}</td><td>{row.group}</td><td>{row.days}</td><td>{row.used}/{row.total || "—"}</td><td>{row.normalRemaining}</td><td>+{row.compensation}</td><td>{row.remaining}</td><td>{pct(row.attendance)}</td><td><Link className="detailLink" href={`/ogrenciler/${row.id}`}>Dosya →</Link></td></tr>) : <tr><td colSpan={10} className="emptyCell">Aktif öğrenci bulunamadı.</td></tr>}</tbody></table></div>
           </article>
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">YÖNETİCİ KONTROLÜ</span><h2>Eksik ve kontrol özeti</h2></div></div>

@@ -1,5 +1,7 @@
 "use client";
 
+import AttendanceSummary from "@/app/components/attendance-summary";
+
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { RENEWAL_WARNING_DAYS } from "@/lib/enrollment/dates";
 import { startsAfterToday } from "@/lib/students/start-status";
@@ -41,6 +43,7 @@ export type StudentListItem = {
 
   compensation_lessons?: number | null;
   used_lessons?: number | null;
+  attendance_summary?: { present: number; absent: number; excused: number };
   normal_remaining_lessons?: number | null;
   total_remaining_lessons?: number | null;
   remaining_lessons?: number | null;
@@ -355,7 +358,7 @@ function printStudentCard(student: StudentListItem) {
 
   popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${escapePrintText(fullName)} - Kursiyer Bilgi Kartı</title><style>
     @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#10233f;background:#fff}.sheet{width:100%;max-width:186mm;margin:0 auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #1268d6;padding-bottom:14px}.brand{font-size:22px;font-weight:900;color:#1268d6}.sub{font-size:11px;letter-spacing:.12em;color:#64748b;margin-top:4px}.status{border:1px solid #d7e5f7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}.name{font-size:28px;margin:22px 0 5px}.number{color:#64748b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.box{border:1px solid #dce5ef;border-radius:10px;padding:11px 12px;min-height:62px}.box span{display:block;font-size:9px;font-weight:800;letter-spacing:.08em;color:#7b8ca3;text-transform:uppercase;margin-bottom:6px}.box strong{font-size:13px;line-height:1.35}.wide{grid-column:1/-1}.rights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.rights .box{text-align:center}.rights strong{font-size:20px}.foot{margin-top:22px;padding-top:10px;border-top:1px solid #dce5ef;display:flex;justify-content:space-between;font-size:10px;color:#64748b}.sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:44px}.sign div{border-top:1px solid #94a3b8;padding-top:7px;text-align:center;font-size:10px;color:#64748b}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sheet{max-width:none}}
-  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Kullanılan</span><strong>${student.used_lessons ?? 0}</strong></div><div class="box"><span>Normal Kalan</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Kalan</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${formatDisplayDateTime(new Date())}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
+  </style></head><body><main class="sheet"><div class="head"><div><div class="brand">SPRİNT YÜZME OKULU</div><div class="sub">KURSİYER BİLGİ KARTI · SPRİNTOS</div></div><div class="status">${escapePrintText(statusLabels[student.status || ""] || student.status || "Kayıt")}</div></div><h1 class="name">${escapePrintText(fullName)}</h1><div class="number">Öğrenci No: ${escapePrintText(student.student_number)} · Yaş: ${escapePrintText(ageLabel(student.birth_date))}</div><section class="grid"><div class="box"><span>Şube / Havuz</span><strong>${escapePrintText(student.branch_name)}</strong></div><div class="box"><span>Grup</span><strong>${escapePrintText(student.group_name)}</strong></div><div class="box wide"><span>Ders Programı</span><strong>${escapePrintText(schedule)}</strong></div><div class="box"><span>Paket</span><strong>${escapePrintText(student.package_name)}</strong></div><div class="box"><span>Seviye</span><strong>${escapePrintText(student.swimming_level)}</strong></div><div class="box"><span>Başlangıç</span><strong>${escapePrintText(formatDate(student.start_date))}</strong></div><div class="box"><span>Bitiş</span><strong>${escapePrintText(formatDate(student.compensation_end_date || student.normal_end_date || student.end_date))}</strong></div><div class="box wide"><span>İletişim / Veli</span><strong>${escapePrintText(student.guardian_name)} · ${escapePrintText(phone)}</strong></div></section><section class="rights"><div class="box"><span>Paket Ders</span><strong>${student.package_lesson_count ?? 0}</strong></div><div class="box"><span>Yoklama</span><strong>Geldi: ${student.attendance_summary?.present ?? 0} · Gelmedi: ${student.attendance_summary?.absent ?? 0} · İzinli: ${student.attendance_summary?.excused ?? 0}</strong></div><div class="box"><span>Kalan Ders</span><strong>${student.normal_remaining_lessons ?? 0}</strong></div><div class="box"><span>Toplam Kalan</span><strong>${remaining}</strong></div></section><div class="sign"><div>Yönetici / Yetkili</div><div>Veli / Kursiyer</div></div><div class="foot"><span>SprintOS üzerinden oluşturulmuştur.</span><span>${formatDisplayDateTime(new Date())}</span></div></main><script>window.onload=()=>{window.print();}</script></body></html>`);
   popup.document.close();
 }
 
@@ -726,7 +729,7 @@ function buildMessage(
           : "için kayıt yenileme dönemi yaklaşmaktadır."
       }\n\n` +
       `📅 *Planlanan Bitiş:* ${endText}\n` +
-      `🏊 *Normal Kalan Ders:* ${normalRemaining}\n` +
+      `🏊 *Kalan Ders:* ${normalRemaining}\n` +
       `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
       `✅ *Toplam Kalan:* ${totalRemaining}\n\n` +
       `Ders planlamasının aksamaması için kayıt yenileme işleminizi zamanında tamamlamanızı rica ederiz.` +
@@ -841,7 +844,7 @@ function buildMessage(
       `${header}\n\n` +
       `_*DERS HAKKI BİTİYOR*_\n\n` +
       `${greeting}\n\n` +
-      `🏊 *Normal Kalan:* ${normalRemaining}\n` +
+      `🏊 *Kalan Ders:* ${normalRemaining}\n` +
       `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
       `✅ *Toplam Kalan:* ${totalRemaining}\n` +
       `📅 *Planlanan Bitiş:* ${endText}\n\n` +
@@ -2396,7 +2399,9 @@ function closeLessonAction() {
         "Normal Ders": normalLessons,
         "Telafi": compensation,
         "Toplam Kalan": totalRights,
-        "Kullanılan": numberValue(student.used_lessons),
+        "Geldi": student.attendance_summary?.present ?? 0,
+        "Gelmedi": student.attendance_summary?.absent ?? 0,
+        "İzinli": student.attendance_summary?.excused ?? 0,
         "Kalan": remaining,
         "Başlangıç": formatDate(student.start_date),
         "Bitiş": formatDate(student.compensation_end_date || student.normal_end_date || student.end_date),
@@ -2483,7 +2488,7 @@ function closeLessonAction() {
         <td class="num">${normalLessons}</td>
         <td class="num">${compensation}</td>
         <td class="num">${totalRights}</td>
-        <td class="num">${numberValue(student.used_lessons)}</td>
+        <td>Geldi: ${student.attendance_summary?.present ?? 0} · Gelmedi: ${student.attendance_summary?.absent ?? 0} · İzinli: ${student.attendance_summary?.excused ?? 0}</td>
         <td class="num">${remaining}</td>
         <td>${escape(formatDate(student.start_date))}</td>
         <td>${escape(formatDate(endDate))}</td>
@@ -2533,7 +2538,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 <thead><tr>
 <th>#</th><th>SPR No</th><th>Ad Soyad</th><th>Yaş</th><th>Doğum</th><th>Durum</th>
 <th>Şube</th><th>Grup</th><th>Program</th><th>Seviye</th><th>Paket</th>
-<th>Normal</th><th>Telafi</th><th>Toplam Kalan</th><th>Kull.</th><th>Kalan</th>
+<th>Normal</th><th>Telafi</th><th>Toplam Kalan</th><th>Yoklama</th><th>Kalan</th>
 <th>Başlangıç</th><th>Bitiş</th><th>Telefon</th><th>Veli</th><th>Veli Tel.</th><th>E-posta</th>
 <th>Ödeme Durumu</th><th>Ödenen</th><th>Paket Borcu</th><th>Ek Borç</th><th>Toplam Borç</th><th>Son Ödeme</th>
 </tr></thead>
@@ -3266,12 +3271,12 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 </div>
 
                 <div>
-                  <span>Kullanılan</span>
-                  <strong>{used}</strong>
+                  <span>Yoklama</span>
+                  <AttendanceSummary summary={student.attendance_summary} />
                 </div>
 
                 <div>
-                  <span>Normal Kalan</span>
+                  <span>Kalan Ders</span>
                   <strong>{normalRemaining}</strong>
                 </div>
 
@@ -3588,7 +3593,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                   <span>TOPLU GRUP / ŞUBE AKTARIMI</span>
                   <h3>{selectedStudents.length} öğrenci aktarılacak</h3>
                   <p>
-                    Geçmiş yoklamalar korunur. Kullanılan dersler
+                    Geçmiş yoklamalar korunur. Tamamlanan dersler
                     değişmez; yalnız kalan haklar yeni programa taşınır.
                   </p>
                 </div>
@@ -4463,7 +4468,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
               <div className="messageDataGrid">
                 <div>
-                  <span>Normal Kalan</span>
+                  <span>Kalan Ders</span>
                   <strong>
                     {numberValue(
                       messageStudent.normal_remaining_lessons ??

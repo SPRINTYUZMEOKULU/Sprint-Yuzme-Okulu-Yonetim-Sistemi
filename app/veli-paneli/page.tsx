@@ -1,3 +1,5 @@
+import AttendanceSummary from "@/app/components/attendance-summary";
+import {attendanceSummary as currentPeriodAttendanceSummary} from "@/lib/students/attendance-summary";
 import {loadGuardianPage} from "@/lib/guardian/page-context";
 import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl, currentDocumentConsent } from "@/lib/guardian/presentation";
 import PaymentReminder from "@/app/veli-paneli/payment-reminder";
@@ -34,7 +36,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
     <div className="guardianContent">
       <section className="guardianHero">
         <div className="guardianHeroMain"><small>ÖĞRENCİ PANELİ · GÜNCEL VERİ</small><h1>{data.selected.first_name} {data.selected.last_name}</h1><p>{data.branch?.name || "Şube belirlenmedi"} · {data.group?.name || "Grup belirlenmedi"}</p><div className="guardianHeroMeta"><span><i/> Panel açıldığında güncel kayıtlar gösterilir</span></div></div>
-        <div className="lessonRing"><b>{remaining}</b><span>Kalan ders</span><small>Normal {data.enrollment?.lesson_rights?.normal ?? remaining} · Telafi +{data.enrollment?.lesson_rights?.compensation ?? 0}</small></div>
+        <div className="lessonRing"><b>{remaining}</b><span>Toplam Kalan Ders</span><small>Normal {data.enrollment?.lesson_rights?.normal ?? remaining} · Telafi +{data.enrollment?.lesson_rights?.compensation ?? 0}</small></div>
       </section>
 
       {data.enrollment?.start_confirmation_required&&!data.enrollment?.actual_started_at?<div className="guardianFooterNote" role="status"><strong>Kurs başlangıcı bekleniyor</strong><p>Planlanan başlangıç: {formatDate(data.enrollment.start_date)}. Yönetim kursu başlattığında ders ve yoklama bilgileri bu ekranda güncellenecektir.</p></div>:null}
@@ -67,7 +69,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
             <div className="infoRow"><span>Eğitmen</span><strong>{data.coach?.full_name || "Atanmadı"}</strong></div>
             <div className="infoRow"><span>Paket</span><strong>{data.coursePackage?.name || `${total || 0} Ders`}</strong></div>
             <div className="infoRow"><span>Başlangıç</span><strong>{formatDate(data.enrollment?.start_date)}</strong></div>
-            <div className="infoRow"><span>Kullanılan / Toplam</span><strong>{used} / {total}</strong></div>
+            <div className="infoRow"><span>Yoklama</span><AttendanceSummary summary={currentPeriodAttendanceSummary(data.attendance,data.enrollment)} /></div>
           </div>
           {data.schedules.length ? <div className="scheduleChips">{data.schedules.map((schedule: any) => <span className="scheduleChip" key={schedule.id}>{weekdayLabel(Number(schedule.weekday))} · {String(schedule.start_time).slice(0,5)}</span>)}</div> : null}
         </article>

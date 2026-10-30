@@ -159,10 +159,10 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   }
   const attendance=()=>{
     if(!plan.attendance)return empty();
-    if(plan.attendanceHistory)return base("attendance_records","id,lesson_date,status,coach_note,enrollment_id").order("lesson_date",{ascending:false}).order("id").range((historyPage-1)*HISTORY_PAGE_SIZE,historyPage*HISTORY_PAGE_SIZE);
-    if(plan.full)return allRows("attendance_records","id,lesson_date,status,coach_note,enrollment_id",q=>q.order("lesson_date",{ascending:false}).order("id"));
+    if(plan.attendanceHistory)return base("attendance_records","id,student_id,group_id,schedule_id,lesson_date,status,coach_note,enrollment_id").order("lesson_date",{ascending:false}).order("id").range((historyPage-1)*HISTORY_PAGE_SIZE,historyPage*HISTORY_PAGE_SIZE);
+    if(plan.full)return allRows("attendance_records","id,student_id,group_id,schedule_id,lesson_date,status,coach_note,enrollment_id",q=>q.order("lesson_date",{ascending:false}).order("id"));
     if(!enrollment)return empty();
-    return allRows("attendance_records","id,lesson_date,status,coach_note,enrollment_id",q=>{
+    return allRows("attendance_records","id,student_id,group_id,schedule_id,lesson_date,status,coach_note,enrollment_id",q=>{
       if(!enrollment.start_date)return q.eq("enrollment_id",enrollment.id).order("lesson_date",{ascending:false}).order("id");
       const legacy=`and(enrollment_id.is.null,lesson_date.gte.${enrollment.start_date}${enrollment.planned_end_date?`,lesson_date.lte.${enrollment.planned_end_date}`:""})`;
       return q.or(`enrollment_id.eq.${enrollment.id},${legacy}`).order("lesson_date",{ascending:false}).order("id");

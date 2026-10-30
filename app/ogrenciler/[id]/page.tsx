@@ -1,3 +1,5 @@
+import AttendanceSummary from "@/app/components/attendance-summary";
+import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
 import PassiveStudentGuard from "@/app/components/passive-student-guard";
 import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
 import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
@@ -267,16 +269,7 @@ export default async function StudentFile({
       .order("created_at", { ascending: false })
       .limit(100),
 
-    supabase
-      .from("attendance_records")
-      .select(
-        "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at",
-      )
-      .eq("organization_id", profile.organization_id)
-      .eq("student_id", id)
-      .order("lesson_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(200),
+    loadStudentAttendance(supabase, profile.organization_id, [id], "id,organization_id,branch_id,student_id,enrollment_id,group_id,schedule_id,coach_id,lesson_date,status,coach_note,recorded_by,updated_by,edited_at,created_at,updated_at"),
 
     supabase
       .from("registration_consents")
@@ -319,6 +312,7 @@ export default async function StudentFile({
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
+  const currentAttendanceSummary = attendanceResult.error ? null : attendanceSummary(attendanceRecords, enrollment);
   const consent = consentResult.data;
 
   const [
@@ -900,17 +894,17 @@ export default async function StudentFile({
         </article>
 
         <article>
-          <span>Kullanılan</span>
-          <strong>{usedLessons}</strong>
+          <span>Yoklama</span>
+          <AttendanceSummary summary={currentAttendanceSummary} />
         </article>
 
         <article>
-          <span>Normal Kalan</span>
+          <span>Kalan Ders</span>
           <strong>{normalRemaining}</strong>
         </article>
 
         <article>
-          <span>Telafi</span>
+          <span>Telafi Kalan</span>
           <strong>+{compensationBalance}</strong>
         </article>
 
@@ -1752,22 +1746,22 @@ export default async function StudentFile({
             </div>
 
             <div>
-              <span>Kullanılan</span>
-              <strong>{usedLessons} ders</strong>
+              <span>Yoklama</span>
+              <AttendanceSummary summary={currentAttendanceSummary} />
             </div>
 
             <div>
-              <span>Normal Kalan</span>
+              <span>Kalan Ders</span>
               <strong>{normalRemaining} ders</strong>
             </div>
 
             <div>
-              <span>Telafi Hakkı</span>
+              <span>Telafi Kalan</span>
               <strong>{compensationBalance} ders</strong>
             </div>
 
             <div>
-              <span>Toplam Kullanılabilir</span>
+              <span>Toplam Kalan</span>
               <strong>{totalRights} ders</strong>
             </div>
 
