@@ -185,9 +185,10 @@ async function readJsonSafely(response: Response) {
   }
 }
 
-export default function ApprovalCenterClientV2() {
+export default function ApprovalCenterClientV2({initialStatus,initialRequestId,initialStudentId}:{initialStatus?:string;initialRequestId?:string;initialStudentId?:string}) {
+  const [focused,setFocused]=useState(Boolean(initialRequestId||initialStudentId));
   const [allRequests, setAllRequests] = useState<ApprovalRequest[]>([]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialRequestId||initialStudentId?"all":STATUS_OPTIONS.find(x=>x.key===initialStatus)?.key||"pending");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -197,7 +198,7 @@ export default function ApprovalCenterClientV2() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialRequestId||null);
 
   async function loadRequests() {
     setLoading(true);
@@ -246,6 +247,10 @@ export default function ApprovalCenterClientV2() {
   const visibleRequests = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("tr-TR");
     return statusRequests.filter((request) => {
+      if(focused){
+        if(initialRequestId)return request.id===initialRequestId;
+        if(initialStudentId)return request.student_id===initialStudentId;
+      }
       if (categoryFilter !== "all" && request.category !== categoryFilter) return false;
       if (criticalOnly && (request.priority || "").toLowerCase() !== "critical") return false;
       const date = request.requested_at || request.created_at;
@@ -258,7 +263,7 @@ export default function ApprovalCenterClientV2() {
         request.entity_type, request.entity_id, request.module, request.category,
       ].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR").includes(query);
     });
-  }, [statusRequests, categoryFilter, criticalOnly, dateFrom, dateTo, search]);
+  }, [statusRequests, categoryFilter, criticalOnly, dateFrom, dateTo, search,focused,initialRequestId,initialStudentId]);
 
   async function processRequest(request: ApprovalRequest, action: "approve" | "reject") {
     let reviewNote = "";
@@ -359,6 +364,7 @@ export default function ApprovalCenterClientV2() {
           {categoryCounts.critical > 0 ? <div className="criticalCount">⚠ {categoryCounts.critical} kritik işlem</div> : null}
         </section>
 
+        {focused?<div className="alert" role="status">Bildirimdeki işlem gösteriliyor. <button type="button" onClick={()=>{setFocused(false);setStatusFilter("pending")}}>Tüm Talepleri Göster</button></div>:null}
         {error ? <div className="alert error">{error}</div> : null}
         {successMessage ? <div className="alert success">{successMessage}</div> : null}
 

@@ -7,7 +7,7 @@ import "./approval-center-premium.css";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ permanentDelete?: string }>;
+type SearchParams = Promise<{ permanentDelete?: string; status?: string; archiveRequestId?: string; requestId?:string; studentId?:string }>;
 
 export default async function ApprovalCenterPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await requireProfile();
@@ -22,7 +22,7 @@ export default async function ApprovalCenterPage({ searchParams }: { searchParam
 
   return (
     <>
-      <ApprovalCenterClient />
+      <ApprovalCenterClient initialStatus={params.status} initialRequestId={params.archiveRequestId||params.requestId} initialStudentId={params.studentId} key={`${params.archiveRequestId||params.requestId||params.studentId||"all"}:${params.status||"pending"}`} />
 
       {canPermanentlyDelete ? (
         <div className="approvalDangerLauncher">
