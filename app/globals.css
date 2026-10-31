@@ -586,3 +586,21 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2FormPanel{display:block!important;flex:1 0 auto!important;min-height:0!important;height:auto!important;margin:0!important;padding:16px 14px max(26px,env(safe-area-inset-bottom))!important;background:#f4f7fb!important}
  .compactLogin .v2LoginCard{margin:0 auto!important;max-width:440px!important;overflow:hidden!important;padding:14px!important}
 }
+
+
+/* Mobile sign-in: constrain each nested layout to its viewport.
+   Prevent the role selector, form inputs and branding from widening the page. */
+@media(max-width:760px){
+ html,body{max-width:100%;overflow-x:clip}
+ .v2LoginPage.compactLogin{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:clip!important}
+ .compactLogin .v2BrandPanel,.compactLogin .v2FormPanel{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important}
+ .compactLogin .v2BrandContent{width:100%!important;max-width:100%!important;min-width:0!important}
+ .compactLogin .v2LoginCard{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important}
+ .compactLogin .v2LoginCard *{box-sizing:border-box}
+ .compactLogin .v2RoleTabs,.compactLogin .v2MethodTabs,.compactLogin .v2LoginForm,.compactLogin .v2Field,.compactLogin .v2InputWrap,.compactLogin .v2LoginOptions{min-width:0!important;max-width:100%!important}
+ .compactLogin .v2RoleTabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ .compactLogin .v2RoleTab{min-width:0!important;max-width:100%!important}
+ .compactLogin .v2RoleTab span{overflow-wrap:anywhere!important}
+ .compactLogin .v2InputWrap input{width:100%!important;min-width:0!important;max-width:100%!important}
+ .compactLogin .v2MethodTabs button{min-width:0!important;white-space:normal!important}
+}
