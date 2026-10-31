@@ -14,7 +14,7 @@ begin
   -- The caller must authenticate/authorize the acting manager; independently check stored role.
   if not exists (
     select 1 from public.profiles x where x.id=p_actor
-      and x.organization_id=p_org and x.role in ('owner','admin')
+      and x.organization_id=p_org and x.role in ('owner','admin') and x.is_active=true
   ) then raise exception 'authorized manager required'; end if;
   select * into d from public.payment_document_requests where id=p_request and organization_id=p_org for update;
   if not found or d.status <> 'payment_received' or d.document_status <> 'not_created'
