@@ -36,8 +36,13 @@ begin
   -- Full buyer/document fields must be bound to the approved payload hash by the application.
   insert into public.invoice_dispatch_controls
     (organization_id,request_id,payment_id,approved_by,approved_payload_hash,
-     payment_snapshot_hash,external_document_code,ettn)
-  values(p_org,p_request,p.id,p_actor,p_payload_hash,v_snapshot,p_external_code,p_ettn)
+     payment_snapshot_hash,recipient_snapshot_hash,external_document_code,ettn)
+  values(p_org,p_request,p.id,p_actor,p_payload_hash,v_snapshot,
+    encode(digest(concat_ws('|',d.recipient_type,coalesce(d.recipient_name,''),
+      coalesce(d.tax_identity_number,''),coalesce(d.tax_office,''),coalesce(d.address,''),
+      coalesce(d.email,''),coalesce(d.phone,''),d.document_type,
+      coalesce(d.customer_consent_at::text,''),coalesce(d.customer_completed_at::text,'')),'sha256'),'hex'),
+    p_external_code,p_ettn)
   returning id into v_id;
   return v_id;
 end $$;
@@ -74,6 +79,11 @@ begin
       p.student_id::text,coalesce(p.enrollment_id::text,''),p.amount::text,
       p.currency,p.payment_method,p.payment_status,coalesce(p.cancelled_at::text,'')), 'sha256'),'hex');
   if v_snapshot <> c.payment_snapshot_hash then return false; end if;
+  v_recipient := encode(digest(concat_ws('|',d.recipient_type,coalesce(d.recipient_name,''),
+    coalesce(d.tax_identity_number,''),coalesce(d.tax_office,''),coalesce(d.address,''),
+    coalesce(d.email,''),coalesce(d.phone,''),d.document_type,
+    coalesce(d.customer_consent_at::text,''),coalesce(d.customer_completed_at::text,'')),'sha256'),'hex');
+  if v_recipient <> c.recipient_snapshot_hash then return false; end if;
   update public.invoice_dispatch_controls set dispatch_state='dispatching',
     dispatch_started_at=now() where id=p_control;
   return true;
