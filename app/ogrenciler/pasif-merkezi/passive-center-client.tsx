@@ -9,19 +9,21 @@ export type PassiveCenterStudent={
   id:string;first_name:string;last_name:string;student_number:string|null;status:string;
   branch_id:string|null;branch_name:string|null;group_id:string|null;group_name:string|null;
   phone:string|null;guardian_phone:string|null;passive_reason:string|null;passive_description:string|null;
-  passive_at:string|null;request_status:string|null;portal_access:boolean|null;
+  passive_at:string|null;request_status:string|null;request_id?:string|null;portal_access:boolean|null;
 };
 
-type Props={students:PassiveCenterStudent[];canApprove:boolean};
+type Props={students:PassiveCenterStudent[];canApprove:boolean;initialStudentId?:string};
 const REASONS=["Kursa devam etmeyecek","Kayıt süresi sona erdi","Kursiyer / veli talebi","Şube veya şehir değişikliği","Sağlık / kişisel neden","Çift kayıt / mükerrer kayıt","Diğer"];
 function fmtDate(v?:string|null){if(!v)return"—";const d=new Date(v);return Number.isNaN(d.getTime())?v:formatDisplayDate(d)}
 function norm(v?:string|null){return String(v||"").toLocaleLowerCase("tr-TR")}
 
-export default function PassiveCenterClient({students,canApprove}:Props){
+export default function PassiveCenterClient({students,canApprove,initialStudentId=""}:Props){
   const router=useRouter();
-  const [tab,setTab]=useState<"passive"|"deactivate">("passive");
+  const targetStudent=students.find(s=>s.id===initialStudentId);
+  const [focusedId,setFocusedId]=useState(initialStudentId);
+  const [tab,setTab]=useState<"passive"|"deactivate">(targetStudent?.status==="active"?"deactivate":"passive");
   const [search,setSearch]=useState("");
-  const [selected,setSelected]=useState<string[]>([]);
+  const [selected,setSelected]=useState<string[]>(targetStudent?.status==="active"&&targetStudent.request_status!=="pending"?[targetStudent.id]:[]);
   const [reason,setReason]=useState(REASONS[0]);
   const [description,setDescription]=useState("");
   const [busy,setBusy]=useState(false);
@@ -30,13 +32,16 @@ export default function PassiveCenterClient({students,canApprove}:Props){
   const passive=useMemo(()=>students.filter(s=>s.status==="passive"),[students]);
   const active=useMemo(()=>students.filter(s=>s.status==="active"),[students]);
   const passivePortalCount=useMemo(()=>passive.filter(s=>s.portal_access===false).length,[passive]);
+  const focusedStudent=students.find(s=>s.id===focusedId);
+  const pendingFocused=focusedStudent?.request_status==="pending";
   const source=tab==="passive"?passive:active;
-  const visible=useMemo(()=>{const q=norm(search).trim();if(!q)return source;return source.filter(s=>norm(`${s.first_name} ${s.last_name} ${s.student_number||""} ${s.branch_name||""} ${s.group_name||""} ${s.phone||""} ${s.guardian_phone||""} ${s.passive_reason||""}`).includes(q))},[source,search]);
+  const visible=useMemo(()=>{const q=norm(search).trim();const scoped=focusedId?source.filter(s=>s.id===focusedId):source;if(!q)return scoped;return scoped.filter(s=>norm(`${s.first_name} ${s.last_name} ${s.student_number||""} ${s.branch_name||""} ${s.group_name||""} ${s.phone||""} ${s.guardian_phone||""} ${s.passive_reason||""}`).includes(q))},[source,search,focusedId]);
 
   function toggle(id:string){setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])}
-  function toggleAll(){const ids=visible.map(x=>x.id);setSelected(v=>ids.length&&ids.every(id=>v.includes(id))?v.filter(id=>!ids.includes(id)):Array.from(new Set([...v,...ids])))}
+  function toggleAll(){const ids=visible.filter(x=>x.request_status!=="pending").map(x=>x.id);setSelected(v=>ids.length&&ids.every(id=>v.includes(id))?v.filter(id=>!ids.includes(id)):Array.from(new Set([...v,...ids])))}
 
   async function deactivate(){
+    if(selected.some(id=>active.find(s=>s.id===id)?.request_status==="pending")){setMessage("Bu kursiyer için yönetici onayı bekleniyor. Yeni talep oluşturulmadı.");return}
     if(!selected.length){setMessage("En az bir öğrenci seçin.");return}
     if(!reason.trim()){setMessage("Pasife alma gerekçesi zorunludur.");return}
     if(!window.confirm(`${selected.length} öğrenci pasife alınacak. Portal erişimleri de otomatik pasife alınacaktır. Devam etmek istiyor musunuz?`))return;
@@ -61,9 +66,11 @@ export default function PassiveCenterClient({students,canApprove}:Props){
   return <main className="pcPage">
     <header className="pcHero"><div><span>SPRİNTOS · KURSİYER DURUM YÖNETİMİ</span><h1>Pasif Kursiyer Merkezi</h1><p>Pasif kursiyerleri, pasife alma gerekçelerini, portal durumunu ve yeniden başlatma işlemlerini tek ekrandan yönetin.</p></div><Link href="/ogrenciler">Öğrenci Merkezine Dön</Link></header>
 
+    {focusedId?<section className="pageMessage" role="status">{focusedStudent?<><strong>{focusedStudent.first_name} {focusedStudent.last_name}</strong> · {focusedStudent.student_number||"Kursiyer"}<p>{pendingFocused?"Bu kursiyer için yönetici onayı bekleniyor. Tekrar talep oluşturmanıza gerek yok.":focusedStudent.status==="active"?"Bildirimdeki kursiyer seçildi. Gerekçeyi kontrol ederek işlemi onaylayabilirsiniz.":"Bu kursiyer zaten pasif durumda. Geçmiş bilgilerini aşağıda görebilirsiniz."}</p>{pendingFocused&&canApprove?<Link href={`/onay-merkezi?status=pending&${focusedStudent.request_id?`archiveRequestId=${encodeURIComponent(focusedStudent.request_id)}`:`studentId=${encodeURIComponent(focusedId)}`}`}>İlgili Onay Talebini Aç</Link>:null}</>:<p>Bildirimdeki kursiyer bulunamadı veya bu işlem için erişilemiyor.</p>} <button type="button" onClick={()=>{setFocusedId("");setSelected([]);setSearch("")}}>Tüm Kursiyerleri Göster</button></section>:null}
+
     <section className="pcStats">
-      <button className={tab==="passive"?"active":""} onClick={()=>{setTab("passive");setSelected([]);setMessage("")}}><span>Pasif Kursiyer</span><strong>{passive.length}</strong><small>Geçmiş, gerekçe ve portal durumunu görüntüle</small></button>
-      <button className={tab==="deactivate"?"active":""} onClick={()=>{setTab("deactivate");setSelected([]);setMessage("")}}><span>Pasife Alınabilir Aktif</span><strong>{active.length}</strong><small>Tekli veya toplu işlem yap</small></button>
+      <button className={tab==="passive"?"active":""} onClick={()=>{setFocusedId("");setTab("passive");setSelected([]);setMessage("")}}><span>Pasif Kursiyer</span><strong>{passive.length}</strong><small>Geçmiş, gerekçe ve portal durumunu görüntüle</small></button>
+      <button className={tab==="deactivate"?"active":""} onClick={()=>{setFocusedId("");setTab("deactivate");setSelected([]);setMessage("")}}><span>Pasife Alınabilir Aktif</span><strong>{active.length}</strong><small>Tekli veya toplu işlem yap</small></button>
       <div><span>{tab==="passive"?"Portal Erişimi Pasif":"Seçili Kursiyer"}</span><strong>{tab==="passive"?passivePortalCount:selected.length}</strong><small>{tab==="passive"?"Pasif kursiyerlerle senkronize":"Pasife alma için seçildi"}</small></div>
     </section>
 
@@ -72,14 +79,14 @@ export default function PassiveCenterClient({students,canApprove}:Props){
     {tab==="passive"?<section className="reactivationInfo"><div><strong>Yeniden başlayan kursiyer</strong><span>“Aktife Al / Kaydı Yenile” ile önce öğrenci, veli, paket, şube, grup ve seans bilgilerini kontrol edin. Son onaydan sonra kursiyer ve portal erişimi birlikte aktif olur.</span></div><b>Geçmiş kayıtlar korunur</b></section>:null}
     {message?<div className="pageMessage">{message}</div>:null}
 
-    {tab==="deactivate"?<section className="bulkPanel"><div><span>TOPLU PASİFE ALMA</span><h2>{selected.length?`${selected.length} kursiyer için işlem hazır`:"Kursiyerleri seçin"}</h2><p>Aynı gerekçeyi seçili tüm kursiyerlere uygulayabilirsiniz. Onay tamamlandığında ilgili portal erişimleri de otomatik pasife alınır.</p></div><div className="bulkFields"><label>Gerekçe<select value={reason} onChange={e=>setReason(e.target.value)}>{REASONS.map(x=><option key={x}>{x}</option>)}</select></label><label>Açıklama / Not<textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="İsteğe bağlı detay..."/></label><button disabled={busy||!selected.length} onClick={deactivate}>{busy?"İşleniyor…":selected.length?`${selected.length} Kursiyeri Pasife Al`:"Kursiyer Seçin"}</button></div></section>:null}
+    {tab==="deactivate"&&!pendingFocused?<section className="bulkPanel"><div><span>TOPLU PASİFE ALMA</span><h2>{selected.length?`${selected.length} kursiyer için işlem hazır`:"Kursiyerleri seçin"}</h2><p>Aynı gerekçeyi seçili tüm kursiyerlere uygulayabilirsiniz. Onay tamamlandığında ilgili portal erişimleri de otomatik pasife alınır.</p></div><div className="bulkFields"><label>Gerekçe<select value={reason} onChange={e=>setReason(e.target.value)}>{REASONS.map(x=><option key={x}>{x}</option>)}</select></label><label>Açıklama / Not<textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="İsteğe bağlı detay..."/></label><button disabled={busy||!selected.length} onClick={deactivate}>{busy?"İşleniyor…":selected.length?`${selected.length} Kursiyeri Pasife Al`:"Kursiyer Seçin"}</button></div></section>:null}
 
     <section className="pcListHead"><div><strong>{visible.length}</strong><span>{tab==="passive"?"pasif kursiyer gösteriliyor":"aktif kursiyer pasife alınabilir"}</span></div></section>
     <section className="pcGrid">{visible.map(s=><article key={s.id} className={selected.includes(s.id)?"selected":""}>
-      <header>{tab==="deactivate"?<label className="check" onClick={e=>e.stopPropagation()}><input type="checkbox" checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></label>:<span className="archiveIcon">▣</span>}<div><small>{s.student_number||"KURSİYER NO YOK"}</small><h3>{s.first_name} {s.last_name}</h3></div><b className={s.status==="passive"?"passiveBadge":"activeBadge"}>{s.status==="passive"?"Pasif":"Aktif"}</b></header>
+      <header>{tab==="deactivate"?<label className="check" onClick={e=>e.stopPropagation()}><input type="checkbox" disabled={s.request_status==="pending"} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></label>:<span className="archiveIcon">▣</span>}<div><small>{s.student_number||"KURSİYER NO YOK"}</small><h3>{s.first_name} {s.last_name}</h3></div><b className={s.status==="passive"?"passiveBadge":"activeBadge"}>{s.status==="passive"?"Pasif":"Aktif"}</b></header>
       <div className="meta"><span>📍 {s.branch_name||"Şube yok"}</span><span>👥 {s.group_name||"Grup yok"}</span><span className={s.portal_access===true?"portalOn":s.portal_access===false?"portalOff":"portalNone"}>{s.portal_access===true?"● Portal Aktif":s.portal_access===false?"○ Portal Pasif":"— Portal Hesabı Yok"}</span></div>
       {tab==="passive"?<div className="reasonBox"><span>PASİFE ALMA GEREKÇESİ</span><strong>{s.passive_reason||"Gerekçe kaydı bulunamadı"}</strong>{s.passive_description?<p>{s.passive_description}</p>:null}<small>Pasife alınma: {fmtDate(s.passive_at)}</small><small>Portal: {s.portal_access===false?"kursiyerle birlikte pasife alındı":s.portal_access===true?"kontrol gerekli · erişim açık görünüyor":"bağlı portal hesabı bulunmuyor"}</small></div>:<div className="readyBox"><strong>Pasife alma işlemi için uygun</strong><small>Seçip yukarıdaki toplu işlem alanından gerekçe belirleyebilirsiniz.</small></div>}
-      <footer><Link href={`/ogrenciler/${s.id}`}>Dosyayı Aç</Link>{tab==="passive"?<Link data-reactivation-workflow="1" className="reactivate" href={`/ogrenciler/${s.id}?reactivate=1`}>Aktife Al / Kaydı Yenile</Link>:<button onClick={()=>{setSelected([s.id]);window.scrollTo({top:0,behavior:"smooth"})}}>Bu Kursiyeri Pasife Al</button>}</footer>
+      <footer><Link href={`/ogrenciler/${s.id}`}>Dosyayı Aç</Link>{tab==="passive"?<Link data-reactivation-workflow="1" className="reactivate" href={`/ogrenciler/${s.id}?reactivate=1`}>Aktife Al / Kaydı Yenile</Link>:<button disabled={s.request_status==="pending"} onClick={()=>{setSelected([s.id]);window.scrollTo({top:0,behavior:"smooth"})}}>{s.request_status==="pending"?"Yönetici Onayı Bekleniyor":"Bu Kursiyeri Pasife Al"}</button>}</footer>
     </article>)}</section>
     {!visible.length?<div className="empty">Bu filtreye uygun kursiyer bulunamadı.</div>:null}
 

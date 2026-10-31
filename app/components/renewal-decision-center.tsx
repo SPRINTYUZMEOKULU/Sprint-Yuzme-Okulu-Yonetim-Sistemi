@@ -56,23 +56,6 @@ export default function RenewalDecisionCenter() {
     return () => window.clearTimeout(timer);
   }, [pathname, searchParams]);
 
-  useEffect(() => {
-    if (pathname !== "/ogrenciler/pasif-merkezi") return;
-    const studentId = searchParams.get("studentId");
-    if (!studentId) return;
-    const run = () => {
-      const tab = Array.from(document.querySelectorAll<HTMLButtonElement>(".pcStats button")).find((b) => b.textContent?.includes("Pasife Alınabilir Aktif"));
-      tab?.click();
-      window.setTimeout(() => {
-        const link = document.querySelector<HTMLAnchorElement>(`.pcGrid a[href='/ogrenciler/${studentId}']`);
-        const card = link?.closest("article");
-        const button = Array.from(card?.querySelectorAll<HTMLButtonElement>("button") || []).find((b) => b.textContent?.includes("Bu Öğrenciyi Pasife Al"));
-        button?.click();
-      }, 250);
-    };
-    const timer = window.setTimeout(run, 350);
-    return () => window.clearTimeout(timer);
-  }, [pathname, searchParams]);
 
   function dismiss() {
     setDismissed(true);

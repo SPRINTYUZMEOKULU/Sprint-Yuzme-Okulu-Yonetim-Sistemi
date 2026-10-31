@@ -13,7 +13,8 @@ type RequestRow={
   requested_at:string|null; created_at:string|null; reviewed_at:string|null; applied_at:string|null;
 };
 
-export default async function PassiveCenterPage(){
+export default async function PassiveCenterPage({searchParams}:{searchParams:Promise<{studentId?:string}>}){
+  const params=await searchParams;
   const profile=await requireProfile(["owner","admin","branch_manager","registration_staff"]);
   const supabase=await createClient();
   const organizationId=profile.organization_id;
@@ -60,9 +61,10 @@ export default async function PassiveCenterPage(){
       passive_description:student.status==="passive"?(deactivateReq?.description||null):null,
       passive_at:student.status==="passive"?(deactivateReq?.applied_at||deactivateReq?.reviewed_at||deactivateReq?.created_at||null):null,
       request_status:latestReq?.status||null,
+      request_id:latestReq?.id||null,
       portal_access:portalMap.has(student.id)?Boolean(portalMap.get(student.id)):null,
     };
   });
 
-  return <PassiveCenterClient students={students} canApprove={["owner","admin"].includes(profile.role)} />;
+  return <PassiveCenterClient students={students} canApprove={["owner","admin"].includes(profile.role)} initialStudentId={params.studentId||""} key={params.studentId||"all"} />;
 }
