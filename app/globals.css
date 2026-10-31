@@ -613,3 +613,15 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2Slogan strong{font-size:clamp(14px,3.8vw,16px)!important;font-weight:700!important;line-height:1.3!important;margin-top:1px!important}
  .compactLogin .v2BrandContent{gap:3px!important}
 }
+
+
+/* Compact mobile brand header without overlapping the sign-in card. */
+@media(max-width:760px){
+ .compactLogin .v2BrandPanel{padding-top:16px!important;padding-bottom:17px!important}
+ .compactLogin .v2LogoFrame{width:100px!important;height:100px!important;margin:0 auto 0!important}
+ .compactLogin .v2BrandContent{gap:1px!important}
+ .compactLogin .cloudLabel{margin:0 0 2px!important;line-height:1.25!important}
+ .compactLogin .v2Slogan{gap:1px!important}
+ .compactLogin .v2Slogan strong{margin-top:0!important}
+ .compactLogin .v2FormPanel{padding-top:10px!important}
+}
