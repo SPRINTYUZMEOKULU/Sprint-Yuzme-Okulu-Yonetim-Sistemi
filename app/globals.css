@@ -625,3 +625,14 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2Slogan strong{margin-top:0!important}
  .compactLogin .v2FormPanel{padding-top:10px!important}
 }
+
+
+/* SprintOS mobile login: larger logo and subtle premium school-name glow. */
+@media(max-width:760px){
+ .compactLogin .v2LogoFrame{width:114px!important;height:114px!important;max-width:min(114px,40vw)!important;max-height:min(114px,40vw)!important;margin:0 auto 2px!important}
+ .compactLogin .cloudLabel{font-size:clamp(15px,4.1vw,18px)!important;font-weight:900!important;letter-spacing:.065em!important;line-height:1.28!important;margin:2px 0 4px!important;color:#fff!important;text-align:center!important;text-shadow:0 0 8px rgba(110,190,255,.35),0 2px 8px rgba(0,0,0,.22)!important}
+ .compactLogin .v2Slogan span{font-size:clamp(19px,4.8vw,22px)!important;font-weight:800!important;line-height:1.15!important;text-shadow:0 2px 8px rgba(0,0,0,.16)!important}
+ .compactLogin .v2Slogan strong{font-size:clamp(13px,3.5vw,15px)!important;font-weight:700!important;line-height:1.25!important;margin-top:0!important;color:#ff9b33!important;text-shadow:0 1px 4px rgba(0,0,0,.14)!important}
+ .compactLogin .v2BrandContent{gap:2px!important}
+ .compactLogin .v2FormPanel{padding-top:10px!important}
+}
