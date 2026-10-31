@@ -571,3 +571,18 @@ button,input,a{-webkit-tap-highlight-color:transparent}
 .v2RoleTabs .v2RoleTab span{font-size:12px!important;overflow-wrap:anywhere!important}
 .v2RoleTabs .v2RoleTab.active{border-color:#3482fa!important;background:#edf5ff!important;color:#145cc0!important;box-shadow:0 0 0 1px rgba(52,130,250,.22)!important}
 @media(max-width:390px){.v2RoleTabs{gap:5px!important}.v2RoleTabs .v2RoleTab{padding:8px 4px!important}.v2RoleTabs .v2RoleTab span{font-size:11px!important}}
+
+
+/* Mobile login header must occupy its own height: no card overlap/cropped title. */
+@media(max-width:760px){
+ .v2LoginPage.compactLogin{height:auto!important;min-height:100dvh!important;overflow:visible!important;background:#f4f7fb!important}
+ .compactLogin .v2BrandPanel{display:flex!important;flex:0 0 auto!important;min-height:0!important;height:auto!important;position:relative!important;overflow:visible!important;margin:0!important;padding:22px 18px 26px!important;background:linear-gradient(160deg,#061a42,#123c79)!important}
+ .compactLogin .v2BrandContent{transform:none!important;min-height:0!important;padding:0!important;gap:4px!important}
+ .compactLogin .v2LogoFrame{flex:0 0 auto!important;width:108px!important;height:108px!important;margin:0 auto 5px!important}
+ .compactLogin .cloudLabel{display:block!important;margin:0 0 3px!important;font-size:10px!important;letter-spacing:.2em!important;line-height:1.4!important}
+ .compactLogin .v2Slogan{display:flex!important;flex-direction:column!important;gap:3px!important;margin:0!important;line-height:1.2!important}
+ .compactLogin .v2Slogan span{font-size:25px!important;line-height:1.15!important}
+ .compactLogin .v2Slogan strong{display:block!important;margin:0!important;font-size:18px!important;line-height:1.3!important}
+ .compactLogin .v2FormPanel{display:block!important;flex:1 0 auto!important;min-height:0!important;height:auto!important;margin:0!important;padding:16px 14px max(26px,env(safe-area-inset-bottom))!important;background:#f4f7fb!important}
+ .compactLogin .v2LoginCard{margin:0 auto!important;max-width:440px!important;overflow:hidden!important;padding:14px!important}
+}
