@@ -41,7 +41,16 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
       const options = payments.filter(p => p.student_id === row.student_id && (!row.enrollment_id || p.enrollment_id === row.enrollment_id) && isReceivedBankPayment(p) && (row.expected_amount == null || Math.round(Number(row.expected_amount) * 100) === Math.round(Number(p.amount) * 100)));
       const missing = !hasDocumentDetails(row);
       const hasDocument = Boolean(row.document_number) || ["document_created", "document_sent"].includes(row.status);
+      const approvalIssues = [
+        row.status !== "payment_received" ? "Ödeme eşleştirme durumu tamamlanmalı" : null,
+        missing ? "Alıcı ve müşteri onayı bilgileri tamamlanmalı" : null,
+        !linked || !isReceivedBankPayment(linked) ? "Aktif ve alınmış havale/EFT ödemesi doğrulanmalı" : null,
+        linked && row.expected_amount != null && Math.round(Number(linked.amount)*100)!==Math.round(Number(row.expected_amount)*100) ? "Ödeme ve belge tutarları farklı" : null,
+        !["e_smm","e_invoice","e_archive"].includes(row.document_type) ? "Belge türü muhasebe tarafından belirlenmeli" : null,
+        hasDocument ? "Bu talebe zaten belge bağlanmış" : null,
+      ].filter(Boolean);
       return <article key={row.id}><div className="request-title"><Link href={`/ogrenciler/${row.student_id}`}>{names.get(row.student_id) || "Kursiyer Dosyası"}</Link><strong>{money(row.expected_amount)}</strong></div><p className="status">{labels[row.status] || "Kontrol gerekli"}</p><dl><dt>Talep tarihi</dt><dd>{date(row.created_at)}</dd><dt>Belge alıcısı</dt><dd>{row.recipient_name || "Henüz girilmedi"}</dd><dt>Belge bilgileri</dt><dd>{missing ? "Eksik / müşteri onayı bekleniyor" : "Tamamlandı"}</dd><dt>Ödeme kaydı</dt><dd>{row.payment_id ? (linked && isReceivedBankPayment(linked) ? `${money(linked.amount)} · ${date(linked.received_at)}` : "Bağlı ödeme kontrol edilmeli") : "Eşleştirilmedi"}</dd><dt>Belge numarası</dt><dd>{row.document_number || "Henüz oluşturulmadı"}</dd><dt>Belge türü</dt><dd>{row.document_type === "e_smm" && !hasDocument ? "Eski e-SMM varsayımı · Belge türü doğrulanmalı" : row.document_type === "pending_classification" ? "Alıcı sorgusu sonrası belirlenecek" : row.document_type}</dd></dl>
+        {row.status === "payment_received" && <p className="warning" role="status">{approvalIssues.length ? `Fatura gönderime hazır değil: ${approvalIssues.join(" · ")}` : "Ödeme ve alıcı ön kontrolleri uygun. Vergi profili, belge içeriği ve yönetici onayı tamamlanmadan gönderim yapılamaz."}</p>}
         {!hasDocument && !["cancelled", "error"].includes(row.status) && Date.parse(row.expires_at) <= Date.now() ? <p className="warning">Müşteri bağlantısının süresi dolmuş. Gerekirse kursiyer dosyasından yeni bağlantı oluşturunuz.</p> : null}
         {canMatch && row.status === "waiting_payment" && !row.payment_id && !missing ? (options.length ? <MatchPayment requestId={row.id} payments={options.map(p => ({ id: p.id, label: `${money(p.amount)} · ${date(p.received_at)}` }))} /> : <p className="warning">Bu kursiyer / dönem ve tutarla eşleşen alınmış havale/EFT kaydı yok. Ödeme Merkezini kontrol ediniz.</p>) : null}
       </article>;
