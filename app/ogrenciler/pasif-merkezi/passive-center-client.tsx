@@ -45,22 +45,42 @@ export default function PassiveCenterClient({students,canApprove,initialStudentI
     if(!selected.length){setMessage("En az bir öğrenci seçin.");return}
     if(!reason.trim()){setMessage("Pasife alma gerekçesi zorunludur.");return}
     if(!window.confirm(`${selected.length} öğrenci pasife alınacak. Portal erişimleri de otomatik pasife alınacaktır. Devam etmek istiyor musunuz?`))return;
-    setBusy(true);setMessage("");let approved=0,pending=0,failed=0;
+    setBusy(true);
+    setMessage("");
+    let approved=0,pending=0;
+    const failures:{id:string;name:string;error:string}[]=[];
+    const failure=(id:string,name:string,error:string)=>failures.push({id,name,error});
     try{
       for(const id of selected){
-        const student=active.find(s=>s.id===id);if(!student){failed++;continue}
-        const createRes=await fetch("/api/student-status-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_type:"deactivate",student_id:id,branch_id:student.branch_id,group_id:student.group_id,reason,description,old_status:"active",new_status:"passive"})});
-        const created=await createRes.json().catch(()=>({}));
-        if(!createRes.ok||!created?.ok){failed++;continue}
-        if(canApprove&&created?.request?.id){
-          const approveRes=await fetch("/api/approval-center",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:created.request.id,source:"student_status",action:"approve",review_note:"Pasif Öğrenci Merkezi üzerinden yönetici tarafından onaylandı."})});
-          const approvedResult=await approveRes.json().catch(()=>({}));
-          if(approveRes.ok&&approvedResult?.ok)approved++;else pending++;
-        }else pending++;
+        const student=active.find(s=>s.id===id);
+        if(!student){failure(id,"Kursiyer","Aktif kursiyer listesinde bulunamadı.");continue}
+        const name=`${student.first_name} ${student.last_name}`.trim();
+        try{
+          const createRes=await fetch("/api/student-status-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_type:"deactivate",student_id:id,branch_id:student.branch_id,group_id:student.group_id,reason,description,old_status:"active",new_status:"passive"})});
+          const created=await createRes.json().catch(()=>({}));
+          if(!createRes.ok||!created?.ok){
+            failure(id,name,created?.error||created?.details||`Talep oluşturulamadı (HTTP ${createRes.status}).`);
+            continue;
+          }
+          if(canApprove&&created?.request?.id){
+            const approveRes=await fetch("/api/approval-center",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:created.request.id,source:"student_status",action:"approve",review_note:"Pasif Öğrenci Merkezi üzerinden yönetici tarafından onaylandı."})});
+            const approvedResult=await approveRes.json().catch(()=>({}));
+            if(approveRes.ok&&approvedResult?.ok)approved++;
+            else{
+              pending++;
+              failure(id,name,`Talep oluşturuldu ancak otomatik onay başarısız: ${approvedResult?.error||approvedResult?.message||`HTTP ${approveRes.status}`}. Onay Merkezinden kontrol edin; yeniden talep oluşturmayın.`);
+            }
+          }else pending++;
+        }catch(error){
+          failure(id,name,error instanceof Error?error.message:"Bağlantı hatası oluştu.");
+        }
       }
-      setMessage(`${approved?`${approved} öğrenci pasife alındı; portal erişimleri kapatıldı. `:""}${pending?`${pending} talep yönetici onayına gönderildi. `:""}${failed?`${failed} işlem tamamlanamadı.`:""}`.trim());
-      setSelected([]);setDescription("");router.refresh();
-    }catch{setMessage("İşlem sırasında bağlantı hatası oluştu.")}finally{setBusy(false)}
+      const summary=[approved?`${approved} kursiyer pasife alındı.`:"",pending?`${pending} talep onay sürecinde.`:"",failures.length?`${failures.length} işlem kontrol gerektiriyor.`:""].filter(Boolean).join(" ");
+      setMessage([summary,...failures.map(item=>`${item.name}: ${item.error}`)].join(" | "));
+      setSelected(failures.filter(item=>!item.error.startsWith("Talep oluşturuldu")).map(item=>item.id));
+      if(!failures.length)setDescription("");
+      router.refresh();
+    }finally{setBusy(false)}
   }
 
   return <main className="pcPage">
