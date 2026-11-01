@@ -8,6 +8,7 @@ import { startsAfterToday } from "@/lib/students/start-status";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import EnrollmentStartControl from "./enrollment-start-control";
 import * as XLSX from "xlsx";
 
@@ -3487,7 +3488,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
             Seçtiğiniz filtrelere uygun öğrenci bulunamadı.
           </div>
         )}
-        {noteStudent && (
+        {noteStudent && typeof document !== "undefined" && createPortal(
           <div className="noteOverlay" onClick={closeStudentNotes}>
             <aside className="notePanel" onClick={(event) => event.stopPropagation()}>
               <div className="notePanelHeader">
@@ -3496,7 +3497,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                   <h3>{noteStudent.first_name} {noteStudent.last_name}</h3>
                   <p>Kartta görünen notlar dijital kursiyer dosyasındaki Notlar bölümüne aynı anda işlenir.</p>
                 </div>
-                <button type="button" onClick={closeStudentNotes} aria-label="Geri dön" title="Öğrenci listesine geri dön">← Geri</button>
+                <div className="notePanelNavigation"><button type="button" onClick={closeStudentNotes} aria-label="Öğrenci listesine geri dön">← Geri</button><button type="button" onClick={closeStudentNotes} aria-label="Notları kapat">✕ Kapat</button></div>
               </div>
 
               <div className="notePanelBody">
@@ -3595,7 +3596,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 </div>
               </div>
             </aside>
-          </div>
+          </div>, document.body
         )}
 
         {bulkMode === "transfer" && (
@@ -6607,7 +6608,24 @@ thead{display:table-header-group}tr{break-inside:avoid}
   }
   .studentCenter .dataPanelShell { margin-top:2px !important; }
 }
-      `}</style>
+      `}
+/* Student notes: independent mobile page, outside sticky dashboard stacking contexts. */
+.noteOverlay{z-index:2147483000;overflow:hidden;overscroll-behavior:contain}
+.notePanel{height:100dvh;max-height:100dvh;min-height:0;overflow:hidden}
+.notePanelHeader{position:relative;top:auto;z-index:3;flex-shrink:0}
+.notePanelBody{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.notePanelNavigation{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.notePanelNavigation button{padding:10px 12px;min-height:44px;border:1px solid #d7e2ef;border-radius:12px;background:#fff;color:#17345c;font-size:13px;font-weight:800;cursor:pointer}
+@media(max-width:760px){
+ .noteOverlay{inset:0;width:100vw;height:100dvh}
+ .notePanel{width:100vw;max-width:none;height:100dvh;padding-top:env(safe-area-inset-top);box-sizing:border-box}
+ .notePanelHeader{padding:12px 14px;flex-direction:column;gap:8px}
+ .notePanelNavigation{order:-1;justify-content:space-between;width:100%}
+ .notePanelHeader p{font-size:12px}
+ .notePanelBody{display:block;padding:12px;min-height:0}
+ .noteHistory{margin-top:12px}
+}
+</style>
     </div>
   );
 }
