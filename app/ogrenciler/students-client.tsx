@@ -1144,25 +1144,40 @@ async function saveStudentNote() {
   }
 }
 
-async function completeStudentNote(noteId: string) {
-  if (!noteStudent || !noteCompletionReply.trim() || noteSaving) return;
+async function completeStudentNote(noteId: string, quickComplete = false) {
+  if (!noteStudent || noteSaving) return;
+  const reply = quickComplete ? "Öğrenci kartından tamamlandı olarak işaretlendi." : noteCompletionReply.trim();
+  if (!reply) return;
+  if (quickComplete && !window.confirm("Bu not tamamlandı olarak işaretlensin mi? Bağlı hatırlatmalar ve bildirimler kapatılacaktır.")) return;
+  const studentId = noteStudent.id;
   setNoteSaving(true);
   setNoteError("");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
   try {
     const response = await fetch("/api/student-notes", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: noteId, student_id: noteStudent.id, reply: noteCompletionReply.trim() }),
+      body: JSON.stringify({ id: noteId, student_id: studentId, reply }),
+      signal: controller.signal,
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Not tamamlanamadı.");
+    if (!response.ok || !result.ok) throw new Error(result.error || "Not tamamlanamadı.");
+    // Tam sayfa refresh mobil Safari'de not panelini kilitleyebiliyor.
+    // Önce yalnızca ilgili kartı güncelle, ardından arka planda sunucuyla eşitle.
+    setNoteItems(items => items.map(item => item.id === noteId ? {
+      ...item, reminder_completed: true,
+      completion: { reply, completed_at: new Date().toISOString(), author: null },
+    } : item));
     window.dispatchEvent(new Event("sprintos-note-completed"));
     setCompletingNoteId(null);
     setNoteCompletionReply("");
-    await loadStudentNotes(noteStudent.id);
-    router.refresh();
+    void loadStudentNotes(studentId);
   } catch (error) {
-    setNoteError(error instanceof Error ? error.message : "Not tamamlanamadı.");
+    setNoteError(error instanceof Error && error.name === "AbortError"
+      ? "İşlem zaman aşımına uğradı. Tekrar işlem yapmadan önce not durumunu kontrol edin."
+      : error instanceof Error ? error.message : "Not tamamlanamadı.");
   } finally {
+    window.clearTimeout(timeout);
     setNoteSaving(false);
   }
 }
@@ -3569,7 +3584,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
                         )}
                         {completingNoteId === note.id && !note.completion && <div className="noteCompleteEditor"><label htmlFor={`completion-${note.id}`}>Nasıl tamamlandı? / İşlem sonucu</label><textarea id={`completion-${note.id}`} value={noteCompletionReply} onChange={(event) => setNoteCompletionReply(event.target.value)} placeholder="Örn. Veli arandı, kayıt yenileme görüşmesi yapıldı." maxLength={3000} rows={3} /><div><button type="button" onClick={() => {setCompletingNoteId(null);setNoteCompletionReply("");}}>Vazgeç</button><button type="button" className="finish" disabled={noteSaving || !noteCompletionReply.trim()} onClick={() => void completeStudentNote(note.id)}>{noteSaving ? "Kaydediliyor…" : "Kaydet ve Tamamla"}</button></div></div>}
                         <div className="noteHistoryActions">
-                          {!note.completion && <button type="button" className="finish" onClick={() => {setCompletingNoteId(note.id);setNoteCompletionReply("");setNoteError("");}}>✓ Tamamla / Cevapla</button>}
+                          {!note.completion && <button type="button" className="finish" disabled={noteSaving} title="Onay alarak tamamlandı olarak işaretle" onClick={() => void completeStudentNote(note.id, true)}>✓ Tamamla</button>}
+                          {!note.completion && <button type="button" disabled={noteSaving} onClick={() => {setCompletingNoteId(note.id);setNoteCompletionReply("");setNoteError("");}}>Cevapla / İşlem Sonucu</button>}
                           {!note.completion && <button type="button" onClick={() => editStudentNote(note)}>Düzenle</button>}
                           <button type="button" className="danger" onClick={() => void deleteStudentNote(note.id)}>Sil</button>
                         </div>
