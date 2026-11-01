@@ -48,6 +48,9 @@ export default function QuickAttendanceClient(p:Props){
  const [loadedKey,setLoadedKey]=useState("");
  const [storedStatuses,setStoredStatuses]=useState<Record<string,Status>>({});
  const [loadAttempt,setLoadAttempt]=useState(0);
+ const [refreshRequest,setRefreshRequest]=useState(0);
+ const [lastSyncedAt,setLastSyncedAt]=useState<string|null>(null);
+ const [syncing,setSyncing]=useState(false);
  const [legacyDraft,setLegacyDraft]=useState<Record<string,Status>>({});
  const [pending,startTransition]=useTransition();
  const [savedGroups,setSavedGroups]=useState<Record<string,boolean>>({});
@@ -102,7 +105,7 @@ export default function QuickAttendanceClient(p:Props){
      const allowedKeys=new Set(groups.flatMap(g=>g.students.map(s=>attendanceKey(g.schedule.id,s.id))));
      try{const raw=localStorage.getItem(draftKey);if(raw)next=mergeAttendanceDraft(next,JSON.parse(raw)?.statuses,allowedKeys)}catch{}
      try{const raw=localStorage.getItem(`sprintos:quick-attendance:${date}:${branchId}:${time}`);if(raw){const old=JSON.parse(raw)?.statuses||{};const recover:Record<string,Status>={};for(const g of groups)for(const student of g.students){const key=attendanceKey(g.schedule.id,student.id);if(!next[key]&&["present","absent","excused","compensation"].includes(old[key]))recover[key]=old[key]}setLegacyDraft(recover)}}catch{}
-     setStatuses(next);setLoadedKey(draftKey);setLoaded(true);
+     setStatuses(next);setLoadedKey(draftKey);setLoaded(true);setLastSyncedAt(new Date().toLocaleTimeString("tr-TR",{timeZone:"Europe/Istanbul",hour:"2-digit",minute:"2-digit"}));
      }catch{if(live)setMessage("Yoklama sunucudan yüklenemedi. Bağlantıyı kontrol edip Tekrar Yükle’ye basın.")}
    });
    return()=>{live=false}
@@ -125,6 +128,7 @@ export default function QuickAttendanceClient(p:Props){
      const snapshot=latest.current;
      if(!live||inFlight||snapshot.pending||!snapshot.ready||document.visibilityState!=="visible")return;
      inFlight=true;
+     setSyncing(true);
      const version=mutationVersion.current;
      try{
        const rows=await Promise.all(snapshot.groups.map(g=>getAttendanceForDate({groupId:g.group.id,scheduleId:g.schedule.id,lessonDate:date})));
@@ -137,20 +141,22 @@ export default function QuickAttendanceClient(p:Props){
        const merged=mergeRemoteAttendance(current.statuses,current.storedStatuses,remote,allowed);
        const dirty=Array.from(allowed).some(key=>merged[key]!==remote[key]);
        setStatuses(merged);setStoredStatuses(remote);
+       setLastSyncedAt(new Date().toLocaleTimeString("tr-TR",{timeZone:"Europe/Istanbul",hour:"2-digit",minute:"2-digit"}));
        setSavedGroups(Object.fromEntries(snapshot.groups.map(g=>[groupSaveKey(g.group.id,g.schedule.id),g.students.length>0&&g.students.every(s=>{const key=attendanceKey(g.schedule.id,s.id);return Boolean(remote[key])&&remote[key]===merged[key]})])));
        setSyncMessage(dirty?"Sunucu kayıtları güncellendi; kaydedilmemiş seçimleriniz korundu.":"Diğer hesapların kayıtlarıyla güncel.");
        // Refresh roster and counters only when there are no local edits.
        if(!dirty&&!document.activeElement?.matches("input,select,textarea"))router.refresh();
      }catch{if(live)setSyncMessage("Bağlantı kurulamadı. Mevcut seçimleriniz korunuyor.");}
-     finally{inFlight=false;}
+     finally{inFlight=false;setSyncing(false);}
    }
    const onReturn=()=>void refresh();
+   if(refreshRequest>0)void refresh();
    window.addEventListener("focus",onReturn);
    window.addEventListener("online",onReturn);
    document.addEventListener("visibilitychange",onReturn);
    const timer=window.setInterval(onReturn,30000);
    return()=>{live=false;window.clearInterval(timer);window.removeEventListener("focus",onReturn);window.removeEventListener("online",onReturn);document.removeEventListener("visibilitychange",onReturn)};
- },[date,branchId,time,rosterSignature,router]);
+ },[date,branchId,time,rosterSignature,router,refreshRequest]);
 
  const total=groups.reduce((n,g)=>n+g.students.length,0);
  const marked=groups.reduce((n,g)=>n+g.students.filter(s=>statuses[attendanceKey(g.schedule.id,s.id)]).length,0);
@@ -251,11 +257,11 @@ export default function QuickAttendanceClient(p:Props){
        <select key={`time:${date}:${branchId}:${time}`} autoComplete="off" aria-label="Ders saati" value={time} onChange={e=>setTime(e.target.value)} disabled={pending||!times.length}>{times.length?times.map(t=><option key={t} value={t}>{t} · {timeSummaries[t]}</option>):<option>Ders yok</option>}</select>
      </div>
      {date!==today()&&<p className="qaDateNotice">{date>today()?"İleri tarih seçili":"Geçmiş tarih seçili"}: {formatDisplayDate(date)}. Gösterilen yoklama yalnızca bu tarihe aittir. <button type="button" disabled={pending} onClick={()=>changeDate(today())}>Bugüne dön</button></p>}
-     <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>statuses[key]).length} sunucuda kayıtlı</span></div>
+     <div className="qaProgress"><b>{marked}/{total}</b><span>öğrenci işaretlendi · {Object.keys(storedStatuses).filter(key=>Boolean(storedStatuses[key])).length} sunucuda kayıtlı</span></div>
+     <div className="qaSyncRow"><span role="status">{syncing?"Senkronize ediliyor…":lastSyncedAt?`Son senkronizasyon ${lastSyncedAt}`:"Sunucu bağlantısı kontrol ediliyor"}</span><button type="button" className="qaSyncButton" disabled={pending||syncing||!ready} onClick={()=>setRefreshRequest(v=>v+1)} aria-label="Sunucudaki yoklamayı güncelle">↻ Yoklamayı Güncelle</button></div>
    </section>
 
    {ready&&Object.keys(legacyDraft).length>0&&<div className="qaMessage">Bu cihazda önceki sürümden {Object.keys(legacyDraft).length} kaydedilmemiş seçim bulundu. Seçimleri kontrol edip kaydedebilirsiniz. <button onClick={()=>{setStatuses(v=>({...v,...legacyDraft}));setLegacyDraft({});setMessage("Önceki taslak getirildi. Tarihi ve seçimleri kontrol edip Kaydet'e basın.")}}>Eski Taslağı Getir</button></div>}
-   <button type="button" disabled={pending} onClick={()=>setLoadAttempt(v=>v+1)}>Sunucudaki yoklamayı yeniden yükle</button>
    {ready&&marked>0&&groups.some(g=>g.students.some(s=>{const k=attendanceKey(g.schedule.id,s.id);return statuses[k]!==storedStatuses[k]}))&&<div className="qaMessage" role="status">Kaydedilmemiş seçimler var. Bu cihazdaki seçimler diğer hesaplarda görünmez. İlgili seansın Kaydet düğmesine basın ve sunucu doğrulamasını bekleyin.</div>}
    <AttendanceReminderPanel key={draftKey} students={p.students} context={`${formatDisplayDate(date)} · ${p.branches.find(b=>b.id===branchId)?.name||"Havuz"} · ${time||"Seans yok"}`} draftKey={`${draftKey}:note`}/>
 
@@ -284,6 +290,7 @@ export default function QuickAttendanceClient(p:Props){
      .qaRoot{max-width:900px;margin:0 auto;padding:12px 12px 90px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#10213a}
      .qaTop,.qaGroup{background:#fff;border:1px solid #dfe7f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,23,42,.04)}
      .qaTop{padding:14px;margin-bottom:10px}.qaTop small{font-size:9px;font-weight:900;color:#1769e0;letter-spacing:.12em}.qaTop h1{font-size:18px;margin:3px 0 10px}.qaSelectors{display:grid;grid-template-columns:1fr 1fr 240px;gap:7px}.qaSelectors input,.qaSelectors select{height:42px;border:1px solid #d7e2ed;border-radius:10px;background:#fff;padding:0 8px;font-size:12px}.qaProgress{display:flex;gap:6px;align-items:baseline;margin-top:9px}.qaProgress b{font-size:17px}.qaProgress span{font-size:10px;color:#72839a}
+     .qaSyncRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.qaSyncRow>span{font-size:10px;color:#64748b}.qaSyncButton{border:1px solid #cbdcf3;background:#f5f9ff;color:#245db6;border-radius:9px;padding:7px 11px;font-weight:750;font-size:11px;white-space:nowrap}.qaSyncButton:disabled{opacity:.55}
      .qaGroup{scroll-margin-top:110px;margin:10px 0;overflow:hidden}.qaGroup header{padding:11px 12px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center;gap:10px}.qaGroup header div{display:grid;gap:2px}.qaGroup header b{font-size:13px}.qaGroup header span{font-size:9px;color:#7a8a9c}.qaGroup header button{border:1px solid #bad5f4;background:#f4f9ff;color:#1769d2;border-radius:9px;min-height:36px;padding:0 10px;font-size:10px;font-weight:900}
      .qaGroup header>div{min-width:0;flex:1}.qaGroup header>button{flex-shrink:0}.qaGroup header .qaCounts{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.qaGroup header .qaCounts span{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid;border-radius:7px;font-size:10px;font-weight:750;line-height:1.3}.qaCounts strong{font-size:11px;font-variant-numeric:tabular-nums}.qaGroup header .qaCounts .present{background:#eaf9ef;border-color:#9bd8af;color:#14733a}.qaGroup header .qaCounts .absent{background:#fff0f2;border-color:#f1b6bf;color:#b42333}.qaGroup header .qaCounts .excused{background:#fff8e8;border-color:#ebd08b;color:#8a6200}.qaGroup header .qaCounts .unmarked{background:#f4f8fc;border-color:#d8e2ec;color:#53677e}
      .qaList{display:grid}.qaList article{padding:11px 12px;border-bottom:1px solid #edf1f5}.qaList article:last-child{border-bottom:0}.qaList article.last{background:#fffaf0}.qaList article.expired{background:#fff1f2}.qaStudent{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.qaStudent b{font-size:13px}.qaStudent span{font-size:9px;font-weight:850;color:#607287}.last .qaStudent span{color:#a56800}.expired .qaStudent span{color:#b42333}
