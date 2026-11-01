@@ -6608,7 +6608,6 @@ thead{display:table-header-group}tr{break-inside:avoid}
   }
   .studentCenter .dataPanelShell { margin-top:2px !important; }
 }
-      `}
 /* Student notes: independent mobile page, outside sticky dashboard stacking contexts. */
 .noteOverlay{z-index:2147483000;overflow:hidden;overscroll-behavior:contain}
 .notePanel{height:100dvh;max-height:100dvh;min-height:0;overflow:hidden}
@@ -6625,6 +6624,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
  .notePanelBody{display:block;padding:12px;min-height:0}
  .noteHistory{margin-top:12px}
 }
+      `}
 </style>
     </div>
   );
