@@ -45,21 +45,21 @@ export default function PassiveCenterClient({students,canApprove,initialStudentI
     if(!selected.length){setMessage("En az bir öğrenci seçin.");return}
     if(!reason.trim()){setMessage("Pasife alma gerekçesi zorunludur.");return}
     if(!window.confirm(`${selected.length} öğrenci pasife alınacak. Portal erişimleri de otomatik pasife alınacaktır. Devam etmek istiyor musunuz?`))return;
-    setBusy(true);setMessage("");let approved=0,pending=0,failed=0;
+    setBusy(true);setMessage("");let approved=0,pending=0,failed=0;const failedIds:string[]=[];const errors:string[]=[];
     try{
       for(const id of selected){
         const student=active.find(s=>s.id===id);if(!student){failed++;continue}
         const createRes=await fetch("/api/student-status-requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_type:"deactivate",student_id:id,branch_id:student.branch_id,group_id:student.group_id,reason,description,old_status:"active",new_status:"passive"})});
         const created=await createRes.json().catch(()=>({}));
-        if(!createRes.ok||!created?.ok){failed++;continue}
+        if(!createRes.ok||!created?.ok){failed++;failedIds.push(id);errors.push(`${student.first_name} ${student.last_name}: ${created?.error||"Talep oluşturulamadı."}${created?.details?` (${created.details})`:""}`);continue}
         if(canApprove&&created?.request?.id){
           const approveRes=await fetch("/api/approval-center",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:created.request.id,source:"student_status",action:"approve",review_note:"Pasif Öğrenci Merkezi üzerinden yönetici tarafından onaylandı."})});
           const approvedResult=await approveRes.json().catch(()=>({}));
-          if(approveRes.ok&&approvedResult?.ok)approved++;else pending++;
+          if(approveRes.ok&&approvedResult?.ok)approved++;else {pending++;errors.push(`${student.first_name} ${student.last_name}: Talep oluşturuldu ancak onay tamamlanamadı. ${approvedResult?.error||"Onay Merkezi üzerinden kontrol edin."}${approvedResult?.details?` (${approvedResult.details})`:""}`);}
         }else pending++;
       }
-      setMessage(`${approved?`${approved} öğrenci pasife alındı; portal erişimleri kapatıldı. `:""}${pending?`${pending} talep yönetici onayına gönderildi. `:""}${failed?`${failed} işlem tamamlanamadı.`:""}`.trim());
-      setSelected([]);setDescription("");router.refresh();
+      setMessage(`${approved?`${approved} öğrenci pasife alındı; portal erişimleri kapatıldı. `:""}${pending?`${pending} talep yönetici onayına gönderildi. `:""}${failed?`${failed} işlem tamamlanamadı. `:""}${errors.join(" ")}`.trim());
+      setSelected(failedIds);if(!failed)setDescription("");router.refresh();
     }catch{setMessage("İşlem sırasında bağlantı hatası oluştu.")}finally{setBusy(false)}
   }
 
@@ -77,7 +77,7 @@ export default function PassiveCenterClient({students,canApprove,initialStudentI
     <section className="pcToolbar"><div className="pcSearch"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Kursiyer, numara, şube, grup veya gerekçe ara..."/></div>{tab==="deactivate"?<button className="selectAll" onClick={toggleAll}>{visible.length&&visible.every(s=>selected.includes(s.id))?"Seçimi Kaldır":"Görünenlerin Tümünü Seç"}</button>:null}</section>
 
     {tab==="passive"?<section className="reactivationInfo"><div><strong>Yeniden başlayan kursiyer</strong><span>“Aktife Al / Kaydı Yenile” ile önce öğrenci, veli, paket, şube, grup ve seans bilgilerini kontrol edin. Son onaydan sonra kursiyer ve portal erişimi birlikte aktif olur.</span></div><b>Geçmiş kayıtlar korunur</b></section>:null}
-    {message?<div className="pageMessage">{message}</div>:null}
+    {message?<div className="pageMessage" role="status" aria-live="polite">{message}</div>:null}
 
     {tab==="deactivate"&&!pendingFocused?<section className="bulkPanel"><div><span>TOPLU PASİFE ALMA</span><h2>{selected.length?`${selected.length} kursiyer için işlem hazır`:"Kursiyerleri seçin"}</h2><p>Aynı gerekçeyi seçili tüm kursiyerlere uygulayabilirsiniz. Onay tamamlandığında ilgili portal erişimleri de otomatik pasife alınır.</p></div><div className="bulkFields"><label>Gerekçe<select value={reason} onChange={e=>setReason(e.target.value)}>{REASONS.map(x=><option key={x}>{x}</option>)}</select></label><label>Açıklama / Not<textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="İsteğe bağlı detay..."/></label><button disabled={busy||!selected.length} onClick={deactivate}>{busy?"İşleniyor…":selected.length?`${selected.length} Kursiyeri Pasife Al`:"Kursiyer Seçin"}</button></div></section>:null}
 
@@ -85,8 +85,8 @@ export default function PassiveCenterClient({students,canApprove,initialStudentI
     <section className="pcGrid">{visible.map(s=><article key={s.id} className={selected.includes(s.id)?"selected":""}>
       <header>{tab==="deactivate"?<label className="check" onClick={e=>e.stopPropagation()}><input type="checkbox" disabled={s.request_status==="pending"} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></label>:<span className="archiveIcon">▣</span>}<div><small>{s.student_number||"KURSİYER NO YOK"}</small><h3>{s.first_name} {s.last_name}</h3></div><b className={s.status==="passive"?"passiveBadge":"activeBadge"}>{s.status==="passive"?"Pasif":"Aktif"}</b></header>
       <div className="meta"><span>📍 {s.branch_name||"Şube yok"}</span><span>👥 {s.group_name||"Grup yok"}</span><span className={s.portal_access===true?"portalOn":s.portal_access===false?"portalOff":"portalNone"}>{s.portal_access===true?"● Portal Aktif":s.portal_access===false?"○ Portal Pasif":"— Portal Hesabı Yok"}</span></div>
-      {tab==="passive"?<div className="reasonBox"><span>PASİFE ALMA GEREKÇESİ</span><strong>{s.passive_reason||"Gerekçe kaydı bulunamadı"}</strong>{s.passive_description?<p>{s.passive_description}</p>:null}<small>Pasife alınma: {fmtDate(s.passive_at)}</small><small>Portal: {s.portal_access===false?"kursiyerle birlikte pasife alındı":s.portal_access===true?"kontrol gerekli · erişim açık görünüyor":"bağlı portal hesabı bulunmuyor"}</small></div>:<div className="readyBox"><strong>Pasife alma işlemi için uygun</strong><small>Seçip yukarıdaki toplu işlem alanından gerekçe belirleyebilirsiniz.</small></div>}
-      <footer><Link href={`/ogrenciler/${s.id}`}>Dosyayı Aç</Link>{tab==="passive"?<Link data-reactivation-workflow="1" className="reactivate" href={`/ogrenciler/${s.id}?reactivate=1`}>Aktife Al / Kaydı Yenile</Link>:<button disabled={s.request_status==="pending"} onClick={()=>{setSelected([s.id]);window.scrollTo({top:0,behavior:"smooth"})}}>{s.request_status==="pending"?"Yönetici Onayı Bekleniyor":"Bu Kursiyeri Pasife Al"}</button>}</footer>
+      {tab==="passive"?<div className="reasonBox"><span>PASİFE ALMA GEREKÇESİ</span><strong>{s.passive_reason||"Gerekçe kaydı bulunamadı"}</strong>{s.passive_description?<p>{s.passive_description}</p>:null}<small>Pasife alınma: {fmtDate(s.passive_at)}</small><small>Portal: {s.portal_access===false?"kursiyerle birlikte pasife alındı":s.portal_access===true?"kontrol gerekli · erişim açık görünüyor":"bağlı portal hesabı bulunmuyor"}</small></div>:<div className="readyBox"><strong>{s.request_status==="pending"?"Yönetici onayı bekleniyor":"Pasife alma işlemi için uygun"}</strong><small>{s.request_status==="pending"?"Mevcut talep Onay Merkezi üzerinden tamamlanabilir; yeniden talep oluşturulmaz.":"Seçip yukarıdaki toplu işlem alanından gerekçe belirleyebilirsiniz."}</small></div>}
+      <footer><Link href={`/ogrenciler/${s.id}`}>Dosyayı Aç</Link>{tab==="passive"?<Link data-reactivation-workflow="1" className="reactivate" href={`/ogrenciler/${s.id}?reactivate=1`}>Aktife Al / Kaydı Yenile</Link>:s.request_status==="pending"&&canApprove?<Link href={`/onay-merkezi?status=pending&archiveRequestId=${encodeURIComponent(s.request_id||"")}`}>İlgili Onay Talebini Aç</Link>:<button disabled={s.request_status==="pending"} onClick={()=>{setSelected([s.id]);window.scrollTo({top:0,behavior:"smooth"})}}>{s.request_status==="pending"?"Yönetici Onayı Bekleniyor":"Bu Kursiyeri Pasife Al"}</button>}</footer>
     </article>)}</section>
     {!visible.length?<div className="empty">Bu filtreye uygun kursiyer bulunamadı.</div>:null}
 

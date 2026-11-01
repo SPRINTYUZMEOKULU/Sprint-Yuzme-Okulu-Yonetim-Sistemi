@@ -10,7 +10,7 @@ type PortalLinkRow={student_id:string;portal_access:boolean|null};
 
 type RequestRow={
   id:string; student_id:string; request_type:string|null; reason:string|null; description:string|null; status:string|null;
-  requested_at:string|null; created_at:string|null; reviewed_at:string|null; applied_at:string|null;
+  requested_at:string|null; created_at:string|null; reviewed_at:string|null;
 };
 
 export default async function PassiveCenterPage({searchParams}:{searchParams:Promise<{studentId?:string}>}){
@@ -24,9 +24,12 @@ export default async function PassiveCenterPage({searchParams}:{searchParams:Pro
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
     supabase.from("student_group_memberships").select("student_id,group_id,started_at").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
-    supabase.from("student_status_change_requests").select("id,student_id,request_type,reason,description,status,requested_at,created_at,reviewed_at,applied_at").eq("organization_id",organizationId).in("request_type",["deactivate","activate"]).order("created_at",{ascending:false}),
+    supabase.from("student_status_change_requests").select("id,student_id,request_type,reason,description,status,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).in("request_type",["deactivate","activate"]).order("created_at",{ascending:false}),
     supabase.from("guardian_students").select("student_id,portal_access"),
   ]);
+
+  if(studentsRes.error)throw new Error("Kursiyer listesi alınamadı: "+studentsRes.error.message);
+  if(requestsRes.error)throw new Error("Durum talepleri alınamadı: "+requestsRes.error.message);
 
   const branchMap=new Map(((branchesRes.data||[]) as SimpleRow[]).map(x=>[x.id,x.name]));
   const groupMap=new Map(((groupsRes.data||[]) as SimpleRow[]).map(x=>[x.id,x.name]));
@@ -59,7 +62,7 @@ export default async function PassiveCenterPage({searchParams}:{searchParams:Pro
       guardian_phone:student.guardian_phone||null,
       passive_reason:student.status==="passive"?(deactivateReq?.reason||null):null,
       passive_description:student.status==="passive"?(deactivateReq?.description||null):null,
-      passive_at:student.status==="passive"?(deactivateReq?.applied_at||deactivateReq?.reviewed_at||deactivateReq?.created_at||null):null,
+      passive_at:student.status==="passive"?(deactivateReq?.reviewed_at||deactivateReq?.created_at||null):null,
       request_status:latestReq?.status||null,
       request_id:latestReq?.id||null,
       portal_access:portalMap.has(student.id)?Boolean(portalMap.get(student.id)):null,
