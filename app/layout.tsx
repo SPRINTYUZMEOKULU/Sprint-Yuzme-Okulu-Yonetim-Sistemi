@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./components/permission-ui-guard.css";
 
+import UiClickSound from "./components/ui-click-sound";
 import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
 import DashboardLiveOperations from "./components/dashboard-live-operations";
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="tr">
       <body>
+        <UiClickSound />
         <WhatsAppSafeOpen />
         <Suspense fallback={null}>
           <GlobalMobileNav />

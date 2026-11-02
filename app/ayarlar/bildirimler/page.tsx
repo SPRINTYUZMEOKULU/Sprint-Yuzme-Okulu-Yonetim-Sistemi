@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth/profile";
+import UiSoundSettings from "./ui-sound-settings";
 import NotificationSettingsClient from "./notification-settings-client";
 import NotificationRoutingClient from "./notification-routing-client";
 import NotificationRoutingTestClient from "./notification-routing-test-client";
@@ -65,6 +66,8 @@ export default async function NotificationSettingsPage() {
             <span>{profilesResult.error?.message || staffResult.error?.message || preferencesResult.error?.message || pushResult.error?.message}</span>
           </section>
         ) : null}
+
+        <UiSoundSettings />
 
         <NotificationRoutingClient profiles={profiles} preferences={(preferencesResult.data ?? []) as never[]} activePushProfileIds={activePushProfileIds} />
 
