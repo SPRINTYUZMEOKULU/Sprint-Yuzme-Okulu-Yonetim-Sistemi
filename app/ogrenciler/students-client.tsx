@@ -3296,11 +3296,6 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 </div>
 
                 <div>
-                  <span>Yoklama</span>
-                  <AttendanceSummary summary={student.attendance_summary} />
-                </div>
-
-                <div>
                   <span>Kalan Ders</span>
                   <strong>{normalRemaining}</strong>
                 </div>
@@ -3313,6 +3308,11 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 <div className="remaining">
                   <span>Toplam Kalan</span>
                   <strong>{totalRemaining}</strong>
+                </div>
+
+                <div className="attendanceMetric">
+                  <span>Bu Dönemin Yoklaması</span>
+                  <AttendanceSummary summary={student.attendance_summary} layout="cards" />
                 </div>
               </div>
 
@@ -6166,7 +6166,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
         .mainDetails span,
         .dateRow span,
-        .lessonStrip span {
+        .lessonStrip > div > span {
           display: block;
           color: #7a889d;
           font-size: 10px;
@@ -6181,21 +6181,12 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
         .lessonStrip {
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 8px;
           background: #f7f9fc;
           padding: 10px;
           border-radius: 14px;
           margin-bottom: 14px;
-        }
-
-        .lessonStrip div {
-          text-align: center;
-          border-right: 1px solid #e3e8f0;
-        }
-
-        .lessonStrip div:last-child {
-          border-right: 0;
         }
 
         .lessonStrip strong {
@@ -6210,6 +6201,29 @@ thead{display:table-header-group}tr{break-inside:avoid}
         .lessonStrip .remaining strong {
           color: #087443;
         }
+
+        .lessonStrip > div {
+          text-align: center;
+          min-width: 0;
+          padding: 10px 6px;
+          border: 1px solid #e3e8f0;
+          border-radius: 10px;
+          background: #fff;
+        }
+
+        .lessonStrip > div.attendanceMetric {
+          grid-column: 1 / -1;
+          padding: 10px;
+          border: 0;
+          background: transparent;
+          text-align: left;
+        }
+
+        .lessonStrip > .attendanceMetric > span {
+          margin-bottom: 8px;
+          font-weight: 600;
+        }
+
 
         .dateRow {
           display: grid;
@@ -6282,8 +6296,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
           }
 
           .lessonStrip {
-            grid-template-columns: repeat(6, minmax(72px, 1fr));
-            overflow-x: auto;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            overflow: visible;
           }
 
           .cardFooter {
@@ -6357,8 +6371,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
   .cardHeader { margin-bottom:10px !important; }
   .mainDetails { gap:7px !important; margin-bottom:9px !important; }
   .mainDetails div,.dateRow div { padding:8px 9px !important; }
-  .lessonStrip { grid-template-columns:repeat(3,minmax(0,1fr)) !important; overflow:visible !important; gap:6px !important; padding:8px !important; margin-bottom:9px !important; }
-  .lessonStrip div { border-right:0 !important; border-bottom:1px solid #e3e8f0; padding:5px 2px; }
+  .lessonStrip { grid-template-columns:repeat(2,minmax(0,1fr)) !important; overflow:visible !important; gap:6px !important; padding:8px !important; margin-bottom:9px !important; }
+  .lessonStrip > div { padding:8px 4px; }
   .dateRow { gap:7px !important; }
   .cardFooter { gap:9px !important; margin-top:10px !important; padding-top:10px !important; }
   .studentActions { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px !important; width:100%; }
