@@ -111,6 +111,7 @@ export default async function StudentsPage() {
 
   const [
     studentsResult,
+    passiveCountResult,
     branchesResult,
     groupsResult,
     packagesResult,
@@ -141,8 +142,16 @@ export default async function StudentsPage() {
       )
       .eq("organization_id", organizationId)
       .eq("is_deleted", false)
+      .or("status.neq.passive,status.is.null")
       .order("created_at", { ascending: false })
       .limit(2000),
+
+    // Only the count is needed here; archived profiles load in their own center.
+    supabase.from("students")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("is_deleted", false)
+      .eq("status", "passive"),
 
     supabase
       .from("branches")
@@ -182,18 +191,8 @@ export default async function StudentsPage() {
   const students = studentsResult.data || [];
   const studentIds = students.map((student) => student.id);
 
-  // Önce merkezi planlı ders sayacını güncelle. Bu RPC yoklamaya bakmaz;
-  // geçmiş gerçek seansları, seçili haftalık günleri ve kapanış istisnalarını kullanır.
-  const lessonSyncResult = studentIds.length
-    ? await supabase.rpc("sync_scheduled_used_lessons")
-    : { error: null };
-
-  if (lessonSyncResult.error) {
-    console.error(
-      "Merkezi ders bakiyesi senkronizasyonu başarısız:",
-      lessonSyncResult.error
-    );
-  }
+  // Read-only page: calculate only the loaded enrollments below.
+  // Do not run an organization-wide enrollment UPDATE on every list refresh.
 
   const [
     enrollmentsResult,
@@ -353,6 +352,18 @@ export default async function StudentsPage() {
     current.push(schedule);
     schedulesByGroup.set(schedule.group_id, current);
   }
+
+  // Keep the existing SQL consumption rules without updating archived students.
+  // Bound concurrency so a larger list cannot flood the database connection pool.
+  const currentEnrollments = (enrollmentsResult.data || []).filter((row: any) => row.status === "active");
+  for (let offset = 0; offset < currentEnrollments.length; offset += 8) {
+    await Promise.all(currentEnrollments.slice(offset, offset + 8).map(async (enrollment: any) => {
+      const result = await supabase.rpc("scheduled_used_lessons", { p_enrollment_id: enrollment.id });
+      if (result.error) throw new Error("Ders sayacı doğrulanamadı: " + result.error.message);
+      enrollment.used_lessons = result.data;
+    }));
+  }
+  if (passiveCountResult.error) throw new Error("Pasif öğrenci sayısı alınamadı.");
 
   const enrollmentMap = latestByStudent(
     (enrollmentsResult.data || []).filter((row:any) => row.status === "active") as any[]
@@ -713,6 +724,7 @@ export default async function StudentsPage() {
       ) : (
         <StudentsClient
           students={preparedStudents}
+          passiveCount={passiveCountResult.count ?? 0}
           canManageStart={["owner","admin","branch_manager","registration_staff","accounting"].includes(profile.role)}
           branches={branches}
           groups={groups}

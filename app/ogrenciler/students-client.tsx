@@ -135,6 +135,7 @@ type StudentNoteItem = {
 
 type Props = {
   students: StudentListItem[];
+  passiveCount?: number;
   canManageStart?: boolean;
   branches?: BranchOption[];
   groups?: GroupOption[];
@@ -922,6 +923,7 @@ function noteDateTimeLocal(value?: string | null) {
 
 export default function StudentsClient({
   students,
+  passiveCount = 0,
   branches: branchOptions = [],
   groups: groupOptions = [],
   schedules: scheduleOptions = [],
@@ -1659,10 +1661,10 @@ function closeLessonAction() {
 
   const counts = useMemo(() => {
     return {
-      total: students.length,
+      total: students.length + passiveCount,
       active: students.filter(isActiveStudent).length,
       starting: students.filter(isStartingStudent).length,
-      passive: students.filter((student) => student.status === "passive").length,
+      passive: passiveCount,
       preRegistration: students.filter(
         (student) => student.status === "pre_registration"
       ).length,
@@ -1697,7 +1699,7 @@ function closeLessonAction() {
         (student) => Boolean(informationNeed(student))
       ).length,
     };
-  }, [students, referenceDate]);
+  }, [students, referenceDate, passiveCount]);
 
   const filteredStudents = useMemo(() => {
     const query = normalizeText(search);
@@ -2793,7 +2795,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
           className={`summaryCard passiveSummaryCard ${
             status === "passive" ? "selected" : ""
           }`}
-          onClick={() => setStatus("passive")}
+          onClick={() => router.push("/ogrenciler/pasif-merkezi")}
           title="Pasif öğrencileri görüntüle"
         >
           <span>Pasif Öğrenci</span>
@@ -2843,10 +2845,10 @@ thead{display:table-header-group}tr{break-inside:avoid}
       </section>
 
       <nav className="studentStatusTabs" aria-label="Öğrenci durum filtreleri">
-        <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü <b>{status === "all" ? filteredStudents.length : counts.total}</b></button>
+        <button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>Tümü <b>{status === "all" ? filteredStudents.length : students.length}</b></button>
         <button className={status === "active" ? "active" : ""} onClick={() => setStatus("active")}>Aktif <b>{status === "active" ? filteredStudents.length : counts.active}</b></button>
         <button className={status === "starting" ? "active" : ""} onClick={() => setStatus("starting")}>Başlayacak <b>{status === "starting" ? filteredStudents.length : counts.starting}</b></button>
-        <button className={status === "passive" ? "active" : ""} onClick={() => setStatus("passive")}>Pasif <b>{status === "passive" ? filteredStudents.length : counts.passive}</b></button>
+        <button className={status === "passive" ? "active" : ""} onClick={() => router.push("/ogrenciler/pasif-merkezi")}>Pasif <b>{status === "passive" ? filteredStudents.length : counts.passive}</b></button>
         <button className={status === "pre_registration" ? "active" : ""} onClick={() => setStatus("pre_registration")}>Ön Kayıt <b>{status === "pre_registration" ? filteredStudents.length : counts.preRegistration}</b></button>
       </nav>
 
@@ -3228,7 +3230,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     openStudentNotes(student);
                   }}
                 >
-                  <span className="studentNoteIcon">📝</span>
+                  <span className="studentNoteIcon"><Icon name="file" size={20} /></span>
                   <span className="studentNoteCopy">
                     <strong>
                       Öğrenci Notu
@@ -6515,7 +6517,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
   border:1px solid #d7c9ff;border-radius:14px;background:#f8f5ff;color:#35236d;text-align:left;cursor:pointer;
 }
 .studentNotePreview:hover{border-color:#9f83ef;background:#f4efff}
-.studentNoteIcon{font-size:19px;flex:0 0 auto}
+.studentNoteIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;background:#ede9fe;color:#6d28d9;flex:0 0 auto}
 .studentNoteCopy{display:grid;gap:3px;min-width:0;flex:1}
 .studentNoteCopy strong{font-size:12px;color:#5b3cc4}
 .studentNoteCopy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4f5670;font-weight:650}
