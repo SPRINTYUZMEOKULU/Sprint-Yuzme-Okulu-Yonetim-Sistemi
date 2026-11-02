@@ -1,3 +1,4 @@
+import { resolveStartedRenewalNotifications } from "@/lib/enrollment/renewal-lifecycle";
 import { runRegistrationBackground } from "@/lib/notifications/registration-background";
 import {decorateNoteReminders} from "@/lib/notifications/note-reminder-state";
 import { readSettings } from "@/lib/settings/server";
@@ -151,6 +152,7 @@ export async function GET(){
   const profile=await requireProfile([...ROLES]); if(!profile.organization_id) return NextResponse.json({ok:true,notifications:[]});
   const supabase=await createClient(); const manager=["owner","admin"].includes(String((profile as any).role||""));
   await Promise.all([
+    resolveStartedRenewalNotifications(supabase, profile.organization_id),
     ...(["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)
       ? [runRegistrationBackground(supabase, profile.organization_id)] : []),
     syncPaymentDueNotifications(supabase,profile.organization_id),

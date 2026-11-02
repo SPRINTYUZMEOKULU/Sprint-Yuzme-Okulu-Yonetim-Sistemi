@@ -1,3 +1,4 @@
+import { renewalNoteTarget } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalNote } from "@/lib/enrollment/renewal-presentation";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -613,7 +614,7 @@ export async function POST(request: NextRequest) {
     const registrationNote = renewalNote(startDate, plannedEndDate, lessonCount);
     const optionalWrites = await Promise.allSettled([
       supabase.from("student_notes").insert({organization_id: organizationId, student_id: studentId,
-        author_id: profile.id, note_type: "general", body: registrationNote, is_guardian_visible: false}),
+        author_id: profile.id, note_type: "general", target: renewalNoteTarget(newEnrollment.id), body: registrationNote, is_guardian_visible: false}),
       supabase.from("system_notifications").insert({
         organization_id: organizationId,
         notification_type:"registration_renewed",

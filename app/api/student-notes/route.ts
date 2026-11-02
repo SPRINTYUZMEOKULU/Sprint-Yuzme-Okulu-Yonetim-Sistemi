@@ -1,3 +1,4 @@
+import { loadVisibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
 import {revalidatePath} from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
     await Promise.all([
       supabase
         .from("student_notes")
-        .select("id,note_type,body,is_guardian_visible,created_at,author_id")
+        .select("id,note_type,body,target,is_guardian_visible,created_at,author_id")
         .eq("organization_id", organizationId)
         .eq("student_id", studentId)
         .order("created_at", { ascending: false }),
@@ -148,7 +149,8 @@ export async function GET(request: NextRequest) {
     (reminders || []).map((item: any) => [String(item.source_id || ""), item]),
   );
 
-  const profileIds = Array.from(new Set([...(notes || []).map((n: any) => n.author_id), ...(completions || []).map((n: any) => n.created_by)].filter(Boolean)));
+  const visibleNotes = await loadVisibleRenewalNotes(supabase, organizationId, studentId, notes || []);
+  const profileIds = Array.from(new Set([...visibleNotes.map((n: any) => n.author_id), ...(completions || []).map((n: any) => n.created_by)].filter(Boolean)));
   const { data: authors, error: authorsError } = profileIds.length ? await supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId).in("id", profileIds) : { data: [], error: null };
   if (authorsError) return NextResponse.json({ error: authorsError.message }, { status: 500 });
   const authorMap = new Map((authors || []).map((person: any) => [String(person.id), { name: person.full_name || "İsim belirtilmemiş", role: person.role || "" }]));
@@ -159,7 +161,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    notes: (notes || []).map((note: any) => {
+    notes: visibleNotes.map((note: any) => {
       const reminder = reminderMap.get(String(note.id));
       return {
         ...note,
@@ -200,7 +202,7 @@ export async function POST(request: NextRequest) {
       body,
       is_guardian_visible: false,
     })
-    .select("id,note_type,body,is_guardian_visible,created_at,author_id")
+    .select("id,note_type,body,target,is_guardian_visible,created_at,author_id")
     .single();
 
   if (error || !note) {
@@ -254,7 +256,7 @@ export async function PATCH(request: NextRequest) {
     .eq("organization_id", organizationId)
     .eq("student_id", studentId)
     .eq("id", noteId)
-    .select("id,note_type,body,is_guardian_visible,created_at,author_id")
+    .select("id,note_type,body,target,is_guardian_visible,created_at,author_id")
     .single();
 
   if (error || !note) {

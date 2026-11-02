@@ -1,5 +1,7 @@
 "use server";
 
+import { renewalNote } from "@/lib/enrollment/renewal-presentation";
+import { renewalNoteTarget } from "@/lib/enrollment/renewal-lifecycle";
 import { correctionOverlapsRenewal } from "@/lib/enrollment/renewal-presentation";
 import { syncCorrectedPlan } from "@/lib/students/sync-corrected-plan";
 import { revalidatePath } from "next/cache";
@@ -658,6 +660,8 @@ export async function updateScheduledRenewalDate(formData: FormData) {
   const {data: saved, error} = await db.from("student_enrollments").update({start_date:start,planned_end_date:end,normal_end_date:end,compensation_end_date:end,updated_at:new Date().toISOString()})
     .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("id",enrollmentId).eq("status","scheduled").select("id").maybeSingle();
   if (error || !saved) redirect(`${back}?error=${encodeURIComponent("Planlanmış dönem değişti veya kaydedilemedi.")}`);
+  await db.from("student_notes").update({body:renewalNote(start,end,Number(next.data.total_lessons))})
+    .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("target",renewalNoteTarget(enrollmentId));
   const planResult = await db.from("student_attendance_plans").update({start_date:start,normal_planned_end_date:end,compensation_planned_end_date:end,updated_at:new Date().toISOString()})
     .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("enrollment_id",enrollmentId).eq("is_active",false);
   if (planResult.error) redirect(`${back}?error=${encodeURIComponent("Dönem tarihi kaydedildi; plan eşitlemesi doğrulanamadı.")}`);

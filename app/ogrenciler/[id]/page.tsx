@@ -1,3 +1,4 @@
+import { visibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
 import AttendanceSummary from "@/app/components/attendance-summary";
 import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
@@ -202,7 +203,7 @@ export default async function StudentFile({
 
     supabase
       .from("student_notes")
-      .select("id,note_type,body,is_guardian_visible,created_at,author_id")
+      .select("id,note_type,body,target,is_guardian_visible,created_at,author_id")
       .eq("student_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -297,7 +298,7 @@ export default async function StudentFile({
   const renewal = renewalPresentation(nextEnrollment);
   const lessonBalance = lessonBalanceResult.data;
 
-  const notes = notesResult.data ?? [];
+  const notes = visibleRenewalNotes(notesResult.data ?? [], new Set<string>((enrollmentHistoryResult.data || []).filter((row:any) => row.status === "scheduled").map((row:any) => row.id)));
   const oldTimeline = oldTimelineResult.data ?? [];
   const activityLogs = activityResult.data ?? [];
   const registrationNotes = activityLogs.filter(
