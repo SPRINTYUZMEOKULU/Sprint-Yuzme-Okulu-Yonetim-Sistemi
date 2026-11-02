@@ -1,3 +1,4 @@
+import PreRegistrationDisposition from "@/app/components/pre-registration-disposition";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { visibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
@@ -772,6 +773,7 @@ export default async function StudentFile({
         <p style={{margin:"6px 0 0"}}>{registrationPaymentHoldMessage(heldDebt)}</p>
       </aside>}
 
+      {["owner","admin"].includes(profile.role) && ["pre_registration","waiting_payment","waiting_approval","registration_declined"].includes(student.status) && <PreRegistrationDisposition studentId={student.id} name={`${student.first_name} ${student.last_name}`}/>}
       <header className="studentHero">
         <div className="avatar">
           {student.first_name?.[0]}

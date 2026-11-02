@@ -1,4 +1,5 @@
 "use client";
+import PreRegistrationDisposition from "@/app/components/pre-registration-disposition";
 
 import AttendanceSummary from "@/app/components/attendance-summary";
 
@@ -137,6 +138,7 @@ type Props = {
   students: StudentListItem[];
   passiveCount?: number;
   canManageStart?: boolean;
+  canDisposeCandidates?: boolean;
   branches?: BranchOption[];
   groups?: GroupOption[];
   schedules?: ScheduleOption[];
@@ -928,6 +930,7 @@ export default function StudentsClient({
   groups: groupOptions = [],
   schedules: scheduleOptions = [],
   canManageStart = false,
+  canDisposeCandidates = false,
 }: Props) {
   const router = useRouter();
   const [referenceDate, setReferenceDate] = useState(istanbulToday);
@@ -3147,6 +3150,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     "Durum Yok")}
                 </span>
               </header>
+              {canDisposeCandidates && ["pre_registration", "waiting_payment", "waiting_approval", "registration_declined"].includes(student.status || "") && <PreRegistrationDisposition studentId={student.id} name={`${student.first_name} ${student.last_name}`}/>}
 
               {isStartingStudent(student) && <EnrollmentStartControl
                 key={student.enrollment_id || student.id}
