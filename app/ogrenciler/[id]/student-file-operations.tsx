@@ -229,6 +229,7 @@ export default function StudentFileOperations({
 
   const [message, setMessage] = useState("");
   const [result, setResult] = useState("");
+  const [statusApprovalPath, setStatusApprovalPath] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteReason, setDeleteReason] = useState("");
@@ -513,7 +514,8 @@ export default function StudentFileOperations({
         return;
       }
 
-      setResult(data.message || "Silme talebi yönetici onayına gönderildi.");
+      setStatusApprovalPath(data.approvalPath || (data.request?.id ? `/onay-merkezi?status=pending&archiveRequestId=${encodeURIComponent(data.request.id)}` : ""));
+      setResult(data.message || "Pasife alma talebi yönetici onayına gönderildi.");
     } catch (error) {
       console.error(error);
       setResult("Silme talebi sırasında bağlantı hatası oluştu.");
@@ -996,7 +998,7 @@ export default function StudentFileOperations({
                 </>
               )}
 
-              {result && <div className="fileOpsResult">{result}</div>}
+              {result && <div className="fileOpsResult">{result}{panel === "delete" && statusApprovalPath ? <a href={statusApprovalPath} style={{display:"block",marginTop:8,fontWeight:700}}>Bekleyen Talebi Aç →</a> : null}</div>}
             </div>
 
             <footer>

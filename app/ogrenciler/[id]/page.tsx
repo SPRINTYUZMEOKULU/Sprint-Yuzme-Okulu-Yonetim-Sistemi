@@ -1,3 +1,4 @@
+import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { visibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
 import AttendanceSummary from "@/app/components/attendance-summary";
@@ -311,6 +312,7 @@ export default async function StudentFile({
   const contactLogs = contactLogsResult.data ?? [];
   const lessonLedger = lessonLedgerResult.data ?? [];
   const paymentSummary = paymentSummaryResult.data;
+  const heldDebt = student.registration_payment_hold ? await registrationPaymentDue(supabase, id) : 0;
   const payments = paymentsResult.data ?? [];
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
@@ -764,6 +766,11 @@ export default async function StudentFile({
       {/* =====================================================
           ÜST KART
           ===================================================== */}
+
+      {heldDebt > 0 && <aside role="alert" style={{padding:16,marginBottom:16,border:"1px solid #fecdd3",borderRadius:14,background:"#fff1f2",color:"#9f1239",lineHeight:1.6}}>
+        <strong>Yeniden Kayıt İçin Ödeme Gerekli</strong>
+        <p style={{margin:"6px 0 0"}}>{registrationPaymentHoldMessage(heldDebt)}</p>
+      </aside>}
 
       <header className="studentHero">
         <div className="avatar">

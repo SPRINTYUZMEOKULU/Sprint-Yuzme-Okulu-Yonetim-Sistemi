@@ -1,3 +1,4 @@
+import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification } from "@/lib/notifications/create-notification";
@@ -46,10 +47,15 @@ export async function POST(request: NextRequest) {
     }
 
     const organizationId = studentRecord.organization_id;
+    if (requestedType === "activate") {
+      const due = await registrationPaymentDue(supabase, studentId);
+      if (due > 0) return NextResponse.json({ok:false,error:registrationPaymentHoldMessage(due),paymentRequired:true,outstanding:due},{status:409});
+    }
+
     const { data: existingRequest, error: existingError } = await supabase
-      .from("student_status_change_requests").select("id").eq("student_id", studentId).eq("request_type", requestedType).eq("status", "pending").maybeSingle();
+      .from("student_status_change_requests").select("*").eq("organization_id", organizationId).eq("student_id", studentId).eq("request_type", requestedType).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (existingError) return NextResponse.json({ok:false,error:"Bekleyen talepler kontrol edilemedi.",details:existingError.message},{status:500});
-    if (existingRequest) return NextResponse.json({ok:false,error:"Bu öğrenci için aynı durum değişikliğine ait yönetici onayı bekleyen bir talep bulunmaktadır."},{status:409});
+    if (existingRequest) return NextResponse.json({ok:true,reused:true,request:existingRequest,message:"Mevcut pasif / aktif durum talebi açıldı. İşlem Onay Merkezi üzerinden tamamlanabilir.",approvalPath:`/onay-merkezi?status=pending&archiveRequestId=${encodeURIComponent(existingRequest.id)}`});
 
     const { data, error } = await supabase.from("student_status_change_requests").insert({
       request_type: requestedType, student_id: studentId, organization_id: organizationId,
