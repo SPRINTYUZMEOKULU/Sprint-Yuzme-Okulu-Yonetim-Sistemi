@@ -228,6 +228,8 @@ type Note = {
 };
 
 type Props = {
+  confirmedMessageAt?: string | null;
+  confirmedMessageBody?: string | null;
   student: Student;
 
   branches: Branch[];
@@ -687,6 +689,8 @@ function SaveDraftButton({ className = "saveDraftButton" }: { className?: string
  */
 
 export default function RegistrationWizard({
+  confirmedMessageAt,
+  confirmedMessageBody,
   student,
   branches,
   groups,
@@ -1036,18 +1040,42 @@ export default function RegistrationWizard({
   ] =
     useState(false);
 
+  const messageInteractionId = useRef<string | null>(null);
+  const [confirmedInSession, setConfirmedInSession] = useState<string | null>(null);
+  const [messageSaving, setMessageSaving] = useState(false);
+  const [messageSaveFeedback, setMessageSaveFeedback] = useState("");
+  async function recordRegistrationMessage(confirmed: boolean) {
+    if (!messageInteractionId.current) messageInteractionId.current = crypto.randomUUID();
+    const response = await fetch("/api/whatsapp-interactions", {
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({studentId:student.id,recipient:student.guardian_phone || student.phone,
+        message:message || generatedMessage,sourcePath:`/kayit-tamamlama/${student.id}`,
+        queueEvent:confirmed ? "confirmed" : "opened",interactionId:messageInteractionId.current,
+        templateKey:"registration",templateTitle:"Kayıt bilgilendirmesi"}),
+    });
+    const result=await response.json();
+    if (!response.ok || !result.ok || result.skipped) throw new Error(result.message || "Mesaj durumu kaydedilemedi. Tekrar deneyin.");
+  }
+  async function confirmRegistrationMessage() {
+    if (messageSaving || !whatsappOpened) return;
+    setMessageSaving(true);setMessageSaveFeedback("");
+    try { await recordRegistrationMessage(true);setConfirmedInSession(message || generatedMessage);setMessageSent(true);setMessageSaveFeedback("Gönderim onayınız kaydedildi. Kesin kaydı tamamlamak için son işlem düğmesini kullanın."); }
+    catch(error) {setMessageSaveFeedback(error instanceof Error ? error.message : "Gönderim onayı kaydedilemedi.");}
+    finally {setMessageSaving(false);}
+  }
+
   const initialWhatsappOpened =
-    draftUsesCurrentRegistrationTemplate &&
-    draftData.whatsapp_opened === true;
+    Boolean(confirmedMessageAt) || (draftUsesCurrentRegistrationTemplate &&
+    draftData.whatsapp_opened === true);
 
   const [
-    messageSent,
+    rawMessageSent,
     setMessageSent,
   ] =
     useState(
       Boolean(
-        draft?.message_sent &&
-        initialWhatsappOpened
+        confirmedMessageAt || (draft?.message_sent &&
+        initialWhatsappOpened)
       )
     );
 
@@ -1818,6 +1846,8 @@ _Antalya'nın En Köklü Yüzme Okulu_`
    * RENDER
    * ==========================================================
    */
+
+  const messageSent = rawMessageSent && ((confirmedInSession || confirmedMessageBody) ? (message || generatedMessage) === (confirmedInSession || confirmedMessageBody) : true);
 
   return (
     <form
@@ -3316,6 +3346,8 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               setMessageSent(false);
               setWhatsappOpening(true);
               setWhatsappOpened(true);
+              messageInteractionId.current = crypto.randomUUID();
+              void recordRegistrationMessage(false).catch(() => setMessageSaveFeedback("WhatsApp açıldı; açılış kaydı kaydedilemedi. Gönderimden sonra onaylayın."));
 
               window.setTimeout(() => {
                 setWhatsappOpening(false);
@@ -3336,6 +3368,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
 
           </a>
 
+          {messageSaveFeedback && <p role="status">{messageSaveFeedback}</p>}
           <label className="sentCheck">
 
             <input
@@ -3344,21 +3377,17 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               checked={
                 messageSent
               }
-              disabled={!whatsappOpened}
-              onChange={(
-                event
-              ) =>
-                setMessageSent(
-                  whatsappOpened &&
-                    event.target.checked
-                )
-              }
+              disabled={!whatsappOpened || messageSaving}
+              onChange={(event) => {
+                if(event.target.checked) void confirmRegistrationMessage();
+                else setMessageSent(false);
+              }}
             />
 
             <span>
 
               {messageSent
-                ? "Gönderildi ✓"
+                ? "Gönderim personel tarafından onaylandı ✓"
                 : whatsappOpened
                   ? "WhatsApp'ta gönderdiğimi onaylıyorum"
                   : "Önce WhatsApp'ta Aç butonuna basın"}

@@ -136,8 +136,13 @@ export async function POST(request: Request) {
     if (!data) studentId = "";
   }
 
+  // The registration wizard records explicit opening and staff confirmation separately.
+  if (/^\/kayit-tamamlama\/[^/]+$/.test(sourcePath) && !body?.queueEvent) {
+    return NextResponse.json({ok:true,skipped:true,reason:"registration_requires_explicit_confirmation"});
+  }
+
   // Ready-message queues always carry the student ID; never guess a sibling by phone.
-  if(sourcePath==="/hazir-mesajlar" && body?.queueEvent){
+  if((sourcePath==="/hazir-mesajlar" || /^\/kayit-tamamlama\/[^/]+$/.test(sourcePath)) && body?.queueEvent){
     if(!suppliedStudentId || !studentId || !/^[0-9a-f-]{36}$/i.test(body.interactionId||"") ||
        !["opened","confirmed"].includes(body.queueEvent) || !recipient){
       return NextResponse.json({ok:false,message:"Mesaj ve öğrenci bilgileri doğrulanamadı."},{status:400});
@@ -153,7 +158,7 @@ export async function POST(request: Request) {
     const kind=classify(hint[body.templateKey||""]||"","");
     const title=String(body.templateTitle||"WhatsApp Bilgilendirmesi").slice(0,180);
     const sentAt=existing?.sent_at||now;
-    const metadata={...existing?.metadata,source:"ready_message_queue",source_path:sourcePath,
+    const metadata={...existing?.metadata,source:sourcePath==="/hazir-mesajlar"?"ready_message_queue":"registration_wizard",source_path:sourcePath,
       interaction_id:body.interactionId,opened_at:existing?.metadata?.opened_at||now,
       delivery_confirmation:confirmed?"manual_confirmed":"whatsapp_opened",
       ...(confirmed?{confirmed_at:existing?.metadata?.confirmed_at||now,confirmed_by:profile.id}:{})};

@@ -45,6 +45,20 @@ export default async function DefinitiveRegistrationCenter({
     .limit(300);
 
   const allRows = data || [];
+  const ids=allRows.map(student=>student.id);
+  const {data:messageRows,error:messageError}=ids.length ? await supabase.from("message_logs")
+    .select("student_id,status,sent_at,prepared_at,sent_by,prepared_by,template_key,metadata")
+    .eq("organization_id",profile.organization_id).in("student_id",ids)
+    .order("prepared_at",{ascending:false}).limit(3000) : {data:[],error:null};
+  const messageByStudent=new Map<string,any>();
+  for(const row of messageRows || []) {
+    if(row.metadata?.source_path!==`/kayit-tamamlama/${row.student_id}`) continue;
+    if(!messageByStudent.has(row.student_id))messageByStudent.set(row.student_id,row);
+  }
+  const actorIds=Array.from(new Set((messageRows || []).flatMap(row=>[row.sent_by,row.prepared_by]).filter(Boolean)));
+  const {data:actors}=actorIds.length ? await supabase.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",actorIds) : {data:[]};
+  const actorNames=new Map((actors || []).map(actor=>[actor.id,actor.full_name]));
+
   const rows = allRows.filter((student: any) => {
     if (!search) return true;
     const haystack = [student.student_number,student.first_name,student.last_name,student.phone,student.guardian_name,student.guardian_phone]
@@ -98,6 +112,16 @@ export default async function DefinitiveRegistrationCenter({
                     <div className="registrationStudentTop">
                       <strong>{fullName}</strong>
                       <span className="registrationBadge">{statusLabels[student.status] || student.status}</span>
+                    </div>
+                    <div style={{margin:"8px 0",padding:10,borderRadius:10,background:"#f1f5f9",fontSize:12,lineHeight:1.6}}>
+                      <strong>Kesin kayıt: Tamamlanmadı</strong><br />
+                      {(() => {const log=messageByStudent.get(student.id);
+                        if(messageError)return "Mesaj durumu şu anda doğrulanamıyor.";
+                        if(!log)return "Kayıt mesajı: Gönderim onayı bulunmuyor.";
+                        const confirmed=log.metadata?.delivery_confirmation==="manual_confirmed";
+                        return <>{confirmed ? "Kayıt mesajı: Personel gönderimi onayladı" : "WhatsApp açıldı; gönderim onayı yok"}<br />
+                          {actorNames.get(log.sent_by || log.prepared_by) || "Personel"} · {new Date((confirmed ? log.sent_at : log.prepared_at) || log.prepared_at).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"})}</>;
+                      })()}
                     </div>
                     <div className="registrationMeta">
                       <span>No: {student.student_number || "Henüz yok"}</span>

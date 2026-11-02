@@ -40,6 +40,12 @@ export default async function RegistrationCompletionPage({ params, searchParams 
     supabase.from("student_activity_logs").select("id,student_id,activity_type,title,description,performed_at,reminder_at,reminder_completed,reminder_completed_at,performed_by").eq("organization_id", profile.organization_id).eq("student_id", id).eq("activity_type", "registration_note").order("performed_at", { ascending: false }).limit(50),
   ]);
   if (!student) notFound();
+  const {data:registrationMessages}=await supabase.from("message_logs")
+    .select("sent_at,metadata,message_body").eq("organization_id",profile.organization_id).eq("student_id",id)
+    .eq("template_key","welcome").eq("status","sent").order("sent_at",{ascending:false}).limit(20);
+  const confirmedRegistrationMessage=(registrationMessages || []).find(row=>row.metadata?.source_path===`/kayit-tamamlama/${id}` && row.metadata?.delivery_confirmation==="manual_confirmed") || null;
+  const confirmedMessageAt=confirmedRegistrationMessage?.sent_at || null;
+
   const groups = (rawGroups || []).map((group) => ({ ...group, schedules: (schedules || []).filter((item) => item.group_id === group.id) }));
   const fallbackTemplate = "🏊 SPRİNT YÜZME OKULU’NA HOŞ GELDİNİZ\n\nSayın {{veli_adi}},\n\n{{ogrenci_adi}} adına Sprint Yüzme Okulu kayıt işleminiz başarıyla tamamlanmıştır.\n\nÖğrenci No: {{ogrenci_no}}\nŞube: {{sube}}\nKurs Türü: {{kurs_turu}}\nGrup: {{grup}}\nGünler: {{gunler}}\nSaat: {{saat}}\nPaket: {{paket}}\nDers Sayısı: {{ders_sayisi}}\nBaşlangıç: {{baslangic}}\nPlanlanan Bitiş: {{bitis}}\nÖdeme Vadesi: {{vade_tarihi}}\n\n{{malzemeler}}\n\nKonum: {{konum}}\nİletişim: {{telefon}}\n\nKeyifli ve başarılı bir yüzme dönemi dileriz.\nSPRİNT YÜZME OKULU\nBilgilendirme Hattı: 0551 896 83 19";
   const missingElectronicConsent = !consent?.rules_accepted || !consent?.health_declaration;
@@ -55,7 +61,7 @@ export default async function RegistrationCompletionPage({ params, searchParams 
     {query.saved ? <div className="successBanner">Taslak bilgiler kaydedildi.</div> : null}
     {query.legacy_manager_confirmed ? <div className="successBanner">Yönetici teyidi kaydedildi. Aktarım kontrolleri yönetici onayıyla tamamlandı.</div> : null}
     {query.legacy_compensation_added ? <div className="successBanner">{query.legacy_compensation_added} adet aktarım telafisi öğrenciye eklendi.</div> : null}
-    <RegistrationWizard student={student} branches={branches || []} groups={groups} packages={packages || []} coaches={coaches || []} template={templateRow?.body || fallbackTemplate} consent={consent || null} draft={draft || null} activeEnrollment={activeEnrollment || null} payments={payments || []} notes={notes || []} />
+    <RegistrationWizard confirmedMessageBody={confirmedRegistrationMessage?.message_body} confirmedMessageAt={confirmedMessageAt} student={student} branches={branches || []} groups={groups} packages={packages || []} coaches={coaches || []} template={templateRow?.body || fallbackTemplate} consent={consent || null} draft={draft || null} activeEnrollment={activeEnrollment || null} payments={payments || []} notes={notes || []} />
     <LegacyTransferControls studentId={student.id} visible={missingElectronicConsent} canManagerConfirm={canManagerConfirm} />
   </main>;
 }
