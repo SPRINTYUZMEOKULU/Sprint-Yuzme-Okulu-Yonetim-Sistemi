@@ -38,6 +38,7 @@ function durumMetni(status?: string | null) {
     pasif: "Pasif Öğrenci",
     aktif: "Aktif Öğrenci",
     pre_registration: "Ön Kayıt",
+    registration_declined: "Kayıt Gerçekleşmedi",
     pending: "Bekliyor",
     cancelled: "İptal",
     completed: "Tamamlandı",

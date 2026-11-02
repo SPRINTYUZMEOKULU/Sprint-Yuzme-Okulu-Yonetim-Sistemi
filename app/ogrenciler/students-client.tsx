@@ -143,6 +143,7 @@ type StatusFilter =
   | "active"
   | "starting"
   | "passive"
+  | "registration_declined"
   | "pre_registration"
   | "ending_soon"
   | "information_pending"
@@ -182,6 +183,7 @@ const statusLabels: Record<string, string> = {
   active: "Aktif",
   passive: "Pasif",
   pre_registration: "Ön Kayıt",
+    registration_declined: "Kayıt Gerçekleşmedi",
   waiting_contact: "İletişim Bekliyor",
   trial_lesson: "Deneme Dersi",
   waiting_payment: "Ödeme Bekliyor",

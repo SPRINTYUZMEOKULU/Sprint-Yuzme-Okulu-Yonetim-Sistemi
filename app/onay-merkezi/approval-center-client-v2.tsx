@@ -105,6 +105,8 @@ function formatValue(value: unknown): string {
       return "—";
     }
   }
+  if (value === "registration_declined") return "Kayıt Gerçekleşmedi";
+  if (value === "pre_registration") return "Ön Kayıt";
   return String(value);
 }
 

@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
+import { requestPreRegistrationClosure } from "@/lib/registrations/close-pre-registration";
+import { createNotification } from "@/lib/notifications/create-notification";
+
 const ROLES = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 
 function text(value: FormDataEntryValue | null, max = 500) {
@@ -236,75 +239,30 @@ export async function updatePreRegistration(formData: FormData) {
   redirect(`/on-kayitlar?updated=1&student=${encodeURIComponent(studentId)}`);
 }
 
-async function changePreRegistrationStatus(
-  formData: FormData,
-  mode: "passive" | "archived"
-) {
-  const { profile, supabase, editor } = await getEditor();
-  const studentId = text(formData.get("student_id"), 80);
-
-  if (!studentId) throw new Error("Ön kayıt kimliği bulunamadı.");
-
-  const { data: student, error } = await supabase
-    .from("students")
-    .select("id,first_name,last_name,status")
-    .eq("id", studentId)
-    .eq("organization_id", profile.organization_id)
-    .single();
-
-  if (error || !student) throw new Error("Ön kayıt bulunamadı.");
-  if (student.status !== "pre_registration") {
-    throw new Error("Bu kayıt artık ön kayıt durumunda değil.");
-  }
-
-  const { error: updateError } = await supabase
-    .from("students")
-    .update({ status: "passive" })
-    .eq("id", studentId)
-    .eq("organization_id", profile.organization_id)
-    .eq("status", "pre_registration");
-
-  if (updateError) {
-    throw new Error(
-      mode === "passive"
-        ? `Ön kayıt pasife alınamadı: ${updateError.message}`
-        : `Ön kayıt listeden silinemedi: ${updateError.message}`
-    );
-  }
-
-  const isArchive = mode === "archived";
-
-  const { error: logError } = await supabase.from("student_activity_logs").insert({
-    organization_id: profile.organization_id,
-    student_id: studentId,
-    activity_type: isArchive
-      ? "pre_registration_archived"
-      : "pre_registration_deactivated",
-    title: isArchive ? "Ön kayıt listeden silindi" : "Ön kayıt pasife alındı",
-    description: isArchive
-      ? `${editor} tarafından ön kayıt yönetim listesinden kaldırıldı. Elektronik form ve denetim kayıtları korundu.`
-      : `${editor} tarafından ön kayıt pasife alındı.`,
-    new_value: {
-      performed_by: { profile_id: profile.id, name: editor },
-      previous_status: "pre_registration",
-      new_status: "passive",
-      archive_mode: isArchive,
-    },
-    source_type: "pre_registration_center",
-    source_id: studentId,
-    performed_at: new Date().toISOString(),
-  });
-
-  if (logError) console.error("pre-registration status log error:", logError);
-
-  revalidatePath("/on-kayitlar");
-  redirect(`/on-kayitlar?status=${isArchive ? "archived" : "passive"}`);
-}
-
-export async function deactivatePreRegistration(formData: FormData) {
-  return changePreRegistrationStatus(formData, "passive");
-}
-
 export async function archivePreRegistration(formData: FormData) {
-  return changePreRegistrationStatus(formData, "archived");
+  const {profile, supabase} = await getEditor();
+  if (!profile.organization_id) throw new Error("Kurum bilgisi bulunamadı.");
+  const studentId = text(formData.get("student_id"), 80);
+  let requestId = "";
+  try {
+    const result = await requestPreRegistrationClosure(supabase, {id: profile.id, organization_id: profile.organization_id}, studentId, text(formData.get("reason")), formData.get("closure_confirmed") === "on");
+    requestId = result.id;
+    if (!result.existing) {
+      try {
+        await createNotification({organizationId: profile.organization_id, category: "approvals", eventKey: "pre_registration_close_requested",
+          title: "Ön kayıt kapatma onayı bekliyor", body: "Kayıt gerçekleşmedi gerekçesiyle bir başvuru kapatma talebi oluşturuldu.",
+          studentId, sourceType: "approval_request", sourceId: requestId, entityType: "approval_request", entityId: requestId,
+          targetPath: `/onay-merkezi?status=pending&requestId=${requestId}`, push: true});
+      } catch (error) { console.error("Registration close approval notification failed", error); }
+    }
+  } catch (error) {
+    redirect(`/on-kayitlar?student=${encodeURIComponent(studentId)}&error=${encodeURIComponent(error instanceof Error ? error.message : "Talep oluşturulamadı.")}`);
+  }
+  revalidatePath("/onay-merkezi"); revalidatePath("/on-kayitlar");
+  redirect(`/on-kayitlar?student=${encodeURIComponent(studentId)}&status=closure_pending`);
+}
+
+// Legacy buttons must use the same guarded approval workflow.
+export async function deactivatePreRegistration(formData: FormData) {
+  return archivePreRegistration(formData);
 }

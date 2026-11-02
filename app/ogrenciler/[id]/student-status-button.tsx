@@ -57,7 +57,8 @@ export default function StudentStatusButton({ studentId, name, status, canApprov
 
   if (!supported) {
     const labels: Record<string, string> = {
-      pre_registration: "Ön Kayıt", waiting_payment: "Ödeme Bekliyor",
+      pre_registration: "Ön Kayıt",
+    registration_declined: "Kayıt Gerçekleşmedi", waiting_payment: "Ödeme Bekliyor",
       waiting_approval: "Onay Bekliyor", waiting_contact: "İletişim Bekliyor",
       trial_lesson: "Deneme Dersi", frozen: "Dondurulmuş", cancelled: "İptal",
     };

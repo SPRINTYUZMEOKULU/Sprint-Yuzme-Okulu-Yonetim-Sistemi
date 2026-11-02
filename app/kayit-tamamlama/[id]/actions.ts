@@ -1238,6 +1238,10 @@ export async function completeRegistration(
     );
   }
 
+  if (studentBefore.status === "registration_declined") {
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Bu ön kayıt yönetici onayıyla kapatılmıştır. Yeni kayıt için yeni başvuru oluşturunuz.")}`);
+  }
+
   /*
    * ----------------------------------------------------------
    * Kurallar kabul kaydı zorunlu
@@ -1602,6 +1606,7 @@ export async function completeRegistration(
         "organization_id",
         profile.organization_id
       )
+      .eq("status", studentBefore.status)
       .select(`
         id,
         student_number,

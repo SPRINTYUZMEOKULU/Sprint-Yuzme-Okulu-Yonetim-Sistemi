@@ -1,4 +1,5 @@
 import Link from "next/link";
+import RegistrationCloseRequest from "@/app/components/registration-close-request";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -107,18 +108,8 @@ export default async function DefinitiveRegistrationCenter({
 
                   <div className="registrationActions">
                     <Link data-action-feedback="open-registration" href={`/kayit-tamamlama/${student.id}`} className="registrationOpen">Kesin Kaydı Aç →</Link>
-                    <details className="passiveDetails">
-                      <summary>Kaydı Pasife Al</summary>
-                      <form action={deactivateRegistrationCandidate} className="passiveForm">
-                        <input type="hidden" name="student_id" value={student.id} />
-                        <label>
-                          <span>Pasife alma gerekçesi</span>
-                          <textarea name="reason" minLength={5} maxLength={500} required placeholder="Örn: Kursiyer kesin kayıttan vazgeçti." />
-                        </label>
-                        <small>Bu işlem kaydı silmez. Kursiyer geçmişi ve denetim kaydı korunur.</small>
-                        <button data-action-feedback="default" type="submit">Gerekçeyle Pasife Al</button>
-                      </form>
-                    </details>
+                    <RegistrationCloseRequest studentId={student.id} name={fullName} action={deactivateRegistrationCandidate}/>
+
                   </div>
                 </article>
               );

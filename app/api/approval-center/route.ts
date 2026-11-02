@@ -1,3 +1,4 @@
+import { applyPreRegistrationClosure } from "@/lib/registrations/close-pre-registration";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
 import {
   NextRequest,
@@ -543,6 +544,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        if (requestType === "pre_registration_close") await supabase.from("system_notifications")
+          .update({is_read:true,read_at:decidedAt}).eq("organization_id", organizationId).eq("source_id", id)
+          .eq("event_key", "pre_registration_close_requested");
+
         const { error: auditError } = await supabase
           .from("approval_audit_logs")
           .insert({
@@ -676,7 +681,12 @@ export async function POST(request: NextRequest) {
           ? approvalRequest.entity_id
           : null;
 
-      if (requestType === "payment_due_date_change") {
+      if (requestType === "pre_registration_close") {
+        if (!studentId) return NextResponse.json({ok:false,error:"Ön kayıt bulunamadı."},{status:400});
+        try { await applyPreRegistrationClosure(supabase, organizationId, studentId, id); }
+        catch (error) { return NextResponse.json({ok:false,error:error instanceof Error ? error.message : "Kayıt kapatılamadı."},{status:409}); }
+        appliedEntityType = "student"; appliedEntityId = studentId;
+      } else if (requestType === "payment_due_date_change") {
         const dueDate =
           typeof newValues.payment_due_date === "string"
             ? newValues.payment_due_date
@@ -972,6 +982,10 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      if (requestType === "pre_registration_close") await supabase.from("system_notifications")
+        .update({is_read:true,read_at:decidedAt}).eq("organization_id", organizationId).eq("source_id", id)
+        .eq("event_key", "pre_registration_close_requested");
 
       const { error: auditError } = await supabase
         .from("approval_audit_logs")

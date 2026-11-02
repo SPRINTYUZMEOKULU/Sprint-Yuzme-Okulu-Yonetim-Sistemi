@@ -2,11 +2,11 @@
 
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
+import RegistrationCloseRequest from "@/app/components/registration-close-request";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   archivePreRegistration,
-  deactivatePreRegistration,
   updatePreRegistration,
 } from "./actions";
 
@@ -737,49 +737,7 @@ export default function PreRegistrationCenter({
 
                   <div className="preActionFooter">
                     <div className="preDangerActions">
-                      <form
-                        action={deactivatePreRegistration}
-                        onSubmit={(event) => {
-                          if (
-                            !window.confirm(
-                              "Bu ön kayıt pasife alınacak. Devam etmek istiyor musunuz?"
-                            )
-                          ) {
-                            event.preventDefault();
-                          }
-                        }}
-                      >
-                        <input
-                          type="hidden"
-                          name="student_id"
-                          value={selected.id}
-                        />
-                        <SubmitButton className="warningPreAction">
-                          Pasife Al
-                        </SubmitButton>
-                      </form>
-
-                      <form
-                        action={archivePreRegistration}
-                        onSubmit={(event) => {
-                          if (
-                            !window.confirm(
-                              "Bu ön kayıt yönetim listesinden silinecek. Elektronik form ve işlem geçmişi korunacaktır. Devam edilsin mi?"
-                            )
-                          ) {
-                            event.preventDefault();
-                          }
-                        }}
-                      >
-                        <input
-                          type="hidden"
-                          name="student_id"
-                          value={selected.id}
-                        />
-                        <SubmitButton className="dangerPreAction">
-                          Sil
-                        </SubmitButton>
-                      </form>
+                      <RegistrationCloseRequest studentId={selected.id} name={`${selected.first_name} ${selected.last_name}`} action={archivePreRegistration}/>
                     </div>
 
                     <div className="prePrimaryActions">

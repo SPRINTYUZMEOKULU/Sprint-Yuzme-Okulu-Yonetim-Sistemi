@@ -719,7 +719,7 @@ export default async function StudentFile({
           target: "odeme",
         }
       : null,
-    enrollment && !registrationPending && normalRemaining <= 3
+    student.status !== "registration_declined" && enrollment && !registrationPending && normalRemaining <= 3
       ? {
           tone: normalRemaining <= 0 ? "danger" : "warning",
           title:
@@ -731,7 +731,7 @@ export default async function StudentFile({
           target: "ders-hareketleri",
         }
       : null,
-    !registrationPending && !groupInfo?.id
+    student.status !== "registration_declined" && !registrationPending && !groupInfo?.id
       ? {
           tone: "warning",
           title: "Grup ataması eksik",
