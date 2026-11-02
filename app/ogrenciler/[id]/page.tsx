@@ -696,6 +696,7 @@ export default async function StudentFile({
 
   const registrationPending = ["pre_registration", "waiting_payment", "waiting_approval"].includes(student.status || "") && !enrollment;
   const smartAlerts = [
+    renewal ? {tone: "info", title: "Yeni kayıt yapıldı", description: `${fmtDate(renewal.startDate)} – ${fmtDate(renewal.endDate)} · ${renewal.lessons} ders. Mevcut dönem tamamlandıktan sonra yeni kayıttan devam edilecek.`, target: "kurs-kaydi"} : null,
     registrationPending
       ? {
           tone: "warning",
@@ -799,7 +800,7 @@ export default async function StudentFile({
 
       {renewal ? <section role="status" className="panel" style={{border:"1px solid #bfdbfe", background:"#eff6ff"}}>
         <h2>{renewal.title}</h2><p><strong>{fmtDate(renewal.startDate)} – {fmtDate(renewal.endDate)} · {renewal.lessons} yeni ders</strong></p>
-        <p>Aşağıdaki mevcut dönem sayaçları geçmiş döneme aittir. Yeni dönem başlangıç tarihinde otomatik olarak aktifleşir; yeniden kayıt yenilemeniz gerekmez.</p>
+        <p>Mevcut dönem tamamlanana kadar mevcut kayıttan devam edilir. Ardından belirlenen başlangıç tarihinde yeni dönem otomatik devreye girer. Aşağıdaki sayaçlar mevcut döneme aittir.</p>
         <Link href={`/ogrenciler/${student.id}/duzeltme`}>Yeni Dönemi Gör →</Link>
       </section> : null}
 
@@ -861,8 +862,8 @@ export default async function StudentFile({
             <h2>Bildirimler ve yapılacak işlemler</h2>
           </div>
           <strong>
-            {smartAlerts.length
-              ? `${smartAlerts.length} işlem bekliyor`
+            {smartAlerts.some(alert => alert.tone !== "info")
+              ? `${smartAlerts.filter(alert => alert.tone !== "info").length} işlem bekliyor`
               : "✓ Her şey yolunda"}
           </strong>
         </div>

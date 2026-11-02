@@ -1,3 +1,4 @@
+import { renewalNote } from "@/lib/enrollment/renewal-presentation";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireProfile } from "@/lib/auth/profile";
@@ -609,16 +610,19 @@ export async function POST(request: NextRequest) {
       `Yeni döneminizin sağlıklı ve başarılı geçmesini dileriz.\n` +
       `*Sprint Yüzme Okulu*`;
 
+    const registrationNote = renewalNote(startDate, plannedEndDate, lessonCount);
     const optionalWrites = await Promise.allSettled([
+      supabase.from("student_notes").insert({organization_id: organizationId, student_id: studentId,
+        author_id: profile.id, note_type: "general", body: registrationNote, is_guardian_visible: false}),
       supabase.from("system_notifications").insert({
         organization_id: organizationId,
         notification_type:"registration_renewed",
-        body:`${studentName} için ${lessonCount} derslik yeni dönem oluşturuldu.`,
+        body:`${studentName}: ${registrationNote}`,
         student_id:studentId,
         category: "registration",
         event_key: "student_registration_renewed",
-        title: "Öğrenci kaydı yenilendi",
-        message: `${studentName} için ${lessonCount} derslik yeni dönem oluşturuldu.`,
+        title: "Yeni kayıt yapıldı",
+        message: `${studentName}: ${registrationNote}`,
         severity: "success",
         entity_type: "student",
         entity_id: studentId,
