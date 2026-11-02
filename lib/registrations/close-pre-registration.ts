@@ -26,7 +26,7 @@ export async function requestPreRegistrationClosure(client: any, profile: {id: s
   if (existing) return {id: existing.id, existing: true};
   const {data, error} = await client.from("approval_requests").insert({
     organization_id: profile.organization_id, student_id: studentId, branch_id: student.branch_id,
-    entity_type: "student", entity_id: studentId, module: "students", request_type: "pre_registration_close",
+    entity_type: "student", entity_id: studentId, module: "student", request_type: "pre_registration_close",
     request_label: "Ön Kayıt · Kayıt Gerçekleşmedi", status: "pending", priority: "normal", requested_by: profile.id,
     reason: reason.trim().slice(0,500), description: `${student.first_name} ${student.last_name} için ön kayıt kapatma talebi. Yönetici onayına kadar kayıt korunur.`,
     old_values: {status: student.status}, new_values: {status: CLOSED_REGISTRATION_STATUS, is_active: false},
