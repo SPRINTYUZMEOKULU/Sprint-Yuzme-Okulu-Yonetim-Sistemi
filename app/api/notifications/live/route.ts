@@ -1,3 +1,4 @@
+import { runRegistrationBackground } from "@/lib/notifications/registration-background";
 import {decorateNoteReminders} from "@/lib/notifications/note-reminder-state";
 import { readSettings } from "@/lib/settings/server";
 import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
@@ -150,13 +151,15 @@ export async function GET(){
   const profile=await requireProfile([...ROLES]); if(!profile.organization_id) return NextResponse.json({ok:true,notifications:[]});
   const supabase=await createClient(); const manager=["owner","admin"].includes(String((profile as any).role||""));
   await Promise.all([
+    ...(["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)
+      ? [runRegistrationBackground(supabase, profile.organization_id)] : []),
     syncPaymentDueNotifications(supabase,profile.organization_id),
     syncStartingStudentNotifications(supabase,profile.organization_id),
   ]);
   const recipientFilter=`recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
   const since=new Date(Date.now()-48*60*60*1000).toISOString(); const nowIso=new Date().toISOString();
   const [notificationResult,dueReminderResult]=await Promise.all([
-   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
+   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
    supabase.from("student_activity_logs").select("id,student_id,title,description,reminder_at,performed_by,source_type,source_id,new_value").eq("organization_id",profile.organization_id).in("activity_type",["registration_note","student_note_reminder"]).eq("reminder_completed",false).eq("performed_by",profile.id).not("reminder_at","is",null).lte("reminder_at",nowIso).order("reminder_at",{ascending:true}).limit(20),
   ]);
   const {data,error}=notificationResult; if(error) return NextResponse.json({ok:false,error:error.message},{status:500});

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { authorizedCron } from "@/lib/notifications/cron-auth";
 import { runAttendanceBackground } from "@/lib/notifications/attendance-background";
+import { runRegistrationBackground } from "@/lib/notifications/registration-background";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
 export async function GET(request:Request){
@@ -18,7 +19,7 @@ export async function GET(request:Request){
   const part=(t:string)=>clock.find(p=>p.type===t)?.value||'';
   const date=`${part('year')}-${part('month')}-${part('day')}`,minutes=Number(part('hour'))*60+Number(part('minute'));
   const results=[];
-  for(const org of new Set((profiles||[]).map(p=>p.organization_id).filter(Boolean))){results.push(await runAttendanceBackground(client,org,date,minutes));}
-  return NextResponse.json({ok:true,date,organizations:results.length,created:results.reduce((n,r)=>n+r.created,0),resolved:results.reduce((n,r)=>n+r.resolved,0),pushSent:results.reduce((n,r)=>n+r.pushSent,0),pushFailed:results.reduce((n,r)=>n+r.pushFailed,0)});
+  for(const org of new Set((profiles||[]).map(p=>p.organization_id).filter(Boolean))){results.push(await runAttendanceBackground(client,org,date,minutes));results.push(await runRegistrationBackground(client,org));}
+  return NextResponse.json({ok:true,date,organizations:new Set((profiles||[]).map(p=>p.organization_id).filter(Boolean)).size,created:results.reduce((n,r)=>n+r.created,0),resolved:results.reduce((n,r)=>n+r.resolved,0),pushSent:results.reduce((n,r)=>n+r.pushSent,0),pushFailed:results.reduce((n,r)=>n+r.pushFailed,0)});
  }catch(error){console.error('SprintOS background attendance failed:',error instanceof Error?error.message:'unknown');return NextResponse.json({ok:false,error:"Arka plan yoklama kontrolü tamamlanamadı."},{status:500});}
 }

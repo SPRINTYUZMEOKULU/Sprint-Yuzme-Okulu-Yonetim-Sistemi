@@ -1575,6 +1575,7 @@ export async function completeRegistration(
       .update({
         status:
           "active",
+        is_active: true,
 
         branch_id:
           branchId,
@@ -1619,6 +1620,19 @@ export async function completeRegistration(
           "Öğrenci aktif hale getirilemedi."
       )}`
     );
+  }
+
+  // Only announce completion after the persisted student, membership and plan agree.
+  const [confirmedStudent, confirmedEnrollment, confirmedMembership, confirmedPlan] = await Promise.all([
+    supabase.from("students").select("status,is_active").eq("organization_id", profile.organization_id).eq("id", studentId).single(),
+    supabase.from("student_enrollments").select("id").eq("organization_id", profile.organization_id).eq("id", enrollment.id).eq("student_id", studentId).eq("status", "active").single(),
+    supabase.from("student_group_memberships").select("id").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("group_id", groupId).eq("is_active", true).limit(1).maybeSingle(),
+    supabase.from("student_attendance_plans").select("id").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("enrollment_id", enrollment.id).eq("is_active", true).limit(1).maybeSingle(),
+  ]);
+  if (confirmedStudent.error || confirmedEnrollment.error || confirmedMembership.error || confirmedPlan.error ||
+      confirmedStudent.data?.status !== "active" || confirmedStudent.data?.is_active !== true ||
+      !confirmedEnrollment.data || !confirmedMembership.data || !confirmedPlan.data) {
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Kesin kayıt bütünlük kontrolü tamamlanamadı. Öğrenci, grup ve ders planını kontrol edin.")}`);
   }
 
   const now =
@@ -2010,6 +2024,10 @@ export async function completeRegistration(
             : null,
       });
   }
+
+  await supabase.from("system_notifications").update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("organization_id", profile.organization_id).eq("student_id", studentId)
+    .eq("event_key", "registration_completion_required").eq("is_read", false);
 
   /*
    * ==========================================================

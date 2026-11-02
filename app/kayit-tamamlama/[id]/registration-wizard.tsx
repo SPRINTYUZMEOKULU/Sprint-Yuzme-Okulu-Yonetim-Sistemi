@@ -3442,6 +3442,11 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           </div>
         ) : null}
 
+        {!activeEnrollment ? <p role="status" style={{ padding: "12px 16px", borderRadius: 12, background: "#fff7ed", color: "#9a3412" }}>
+          Kesin kayıt henüz tamamlanmadı. Mesajı göndermek veya taslağı kaydetmek kaydı aktifleştirmez.
+          “Kaydı Tamamla ve Öğrenciye Aktar” işlemi başarıyla bittiğinde öğrenci otomatik aktif olur.
+        </p> : null}
+
         <div className="finalButtons">
 
           <button

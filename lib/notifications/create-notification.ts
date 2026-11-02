@@ -1,5 +1,5 @@
 import { formatDatesInText } from "@/lib/dates/display";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -47,6 +47,7 @@ export type CreateNotificationInput = {
   createdBy?: string | null;
   recipientProfileIds?: string[];
   push?: boolean;
+  dedupeKey?: string;
 };
 
 export type CreateNotificationResult = {
@@ -79,6 +80,7 @@ type RecipientRoute = { profileId: string; pushEnabled: boolean };
 type InsertedNotification = { id: string; recipient_profile_id: string | null; push_required: boolean | null };
 
 type NotificationInsertRow = {
+  id?: string;
   organization_id: string;
   recipient_profile_id: string | null;
   recipient_user_id: string | null;
@@ -345,6 +347,11 @@ async function updatePushStatus(notificationId: string, sent: boolean) {
   if (error) console.error("SprintOS push status update:", error);
 }
 
+export function notificationDedupeId(organizationId: string, key: string, recipientId: string) {
+  const hash = createHash("sha256").update(JSON.stringify([organizationId, key, recipientId])).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
 export async function createNotification(input: CreateNotificationInput): Promise<CreateNotificationResult> {
   const admin = getAdminClient();
   if (!input.organizationId) throw new Error("organizationId zorunludur.");
@@ -370,6 +377,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   const body = input.body ?? input.message ?? null;
   const message = input.message ?? input.body ?? null;
   const rows: NotificationInsertRow[] = routes.map((route) => ({
+    ...(input.dedupeKey ? { id: notificationDedupeId(input.organizationId, input.dedupeKey, route.profileId) } : {}),
     organization_id: input.organizationId,
     recipient_profile_id: route.profileId,
     recipient_user_id: route.profileId,
@@ -404,10 +412,11 @@ export async function createNotification(input: CreateNotificationInput): Promis
     if(error?.code==="23505")return {ok:true,notificationIds:[],recipientCount:0,push:{requested:pushRequested,sent:0,failed:0},message:"Bu seans için bildirim zaten oluşturulmuş."};
     if(error)throw new Error("Yoklama bildirimi kilidi alınamadı.");
   }
-  const { data: insertedRows, error: insertError } = await admin
-    .from("system_notifications")
-    .insert(rows)
-    .select("id,recipient_profile_id,push_required");
+  const table = admin.from("system_notifications");
+  const insert = input.dedupeKey
+    ? table.upsert(rows, { onConflict: "id", ignoreDuplicates: true })
+    : table.insert(rows);
+  const { data: insertedRows, error: insertError } = await insert.select("id,recipient_profile_id,push_required");
 
   if(insertError){
     if(claim)await admin.from("attendance_notification_claims").delete().eq("organization_id",claim.organization_id).eq("schedule_id",claim.schedule_id).eq("lesson_date",claim.lesson_date).eq("claim_token",claim.claim_token);
