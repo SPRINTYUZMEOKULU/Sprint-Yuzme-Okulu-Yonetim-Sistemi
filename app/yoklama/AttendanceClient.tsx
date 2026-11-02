@@ -1,5 +1,6 @@
 "use client";
 
+import { playEventNotificationSound } from "@/lib/notifications/sound";
 import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import {
@@ -1268,6 +1269,7 @@ export default function AttendanceClient({
         setMessage(
           result.message
         );
+        void playEventNotificationSound(result.ok ? {eventKey:"attendance_saved"} : {severity:"error"});
 
         if (result.ok) {
           setHasSaved(true);

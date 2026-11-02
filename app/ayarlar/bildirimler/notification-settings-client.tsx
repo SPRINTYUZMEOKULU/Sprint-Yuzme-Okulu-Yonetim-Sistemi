@@ -1,5 +1,6 @@
 "use client";
 
+import EventSoundSettings from "./event-sound-settings";
 import { NOTIFICATION_TONES, getNotificationTone, setNotificationTone, getNotificationVolume, setNotificationVolume, type NotificationTone, notificationSoundEnabled, setNotificationSoundEnabled, unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
 import { useEffect, useMemo, useState } from "react";
 
@@ -180,8 +181,16 @@ export default function NotificationSettingsClient() {
     <section className="notificationSettingsCard">
       <div className="notificationStatusIcon">🔔</div>
       <div className="notificationSettingsCopy">
-        <div className="notificationTonePicker">
-          <h3>Bildirim sesini seçin</h3><p>Önce dinleyin, ardından beğendiğiniz sesi seçin. Seçiminiz bu cihazda saklanır.</p>
+        <div data-ui-sound="off">
+          <h3>Bildirim Sesleri</h3>
+          <div className="notificationActions">
+            <button type="button" className="notificationSecondary" aria-pressed={longSound} onClick={()=>{const enabled=!longSound;setLongSound(enabled);setNotificationSoundEnabled(enabled);void unlockNotificationAudio()}}>{longSound?"Bildirim sesleri açık":"Bildirim sesleri kapalı"}</button>
+          </div>
+          <label className="toneVolume">Bildirim ses düzeyi · %{Math.round(volume*100)}<input type="range" min="25" max="100" step="5" value={Math.round(volume*100)} onChange={event=>{const value=Number(event.target.value)/100;setVolume(value);setNotificationVolume(value)}}/></label>
+        </div>
+        <EventSoundSettings generalTone={tone} />
+        <div className="notificationTonePicker" data-ui-sound="off">
+          <h3>Genel bilgilendirme sesini seçin</h3><p>Önce dinleyin, ardından beğendiğiniz sesi seçin. Seçiminiz bu cihazda saklanır.</p>
           <div className="notificationToneGrid" role="radiogroup" aria-label="Bildirim sesi">
             {NOTIFICATION_TONES.map(option=><div className={tone===option.id?"toneCard selected":"toneCard"} key={option.id}>
               <label><input type="radio" name="notification-tone" value={option.id} checked={tone===option.id} onChange={()=>{setTone(option.id);setNotificationTone(option.id);setMessage(`${option.name} seçildi.`)}}/><strong>{option.name}</strong></label>
@@ -189,9 +198,7 @@ export default function NotificationSettingsClient() {
               <button type="button" onClick={()=>void preview(option.id)} aria-label={`${option.name} sesini dinle`}>▶ Dinle</button>
             </div>)}
           </div>
-          <label className="toneVolume">Uygulama içi ses düzeyi · %{Math.round(volume*100)}<input type="range" min="25" max="100" step="5" value={Math.round(volume*100)} onChange={event=>{const value=Number(event.target.value)/100;setVolume(value);setNotificationVolume(value)}}/></label>
           <div className="notificationActions">
-            <button type="button" className="notificationSecondary" aria-pressed={longSound} onClick={()=>{const enabled=!longSound;setLongSound(enabled);setNotificationSoundEnabled(enabled);void unlockNotificationAudio()}}>{longSound?"Uygulama içi ses açık":"Uygulama içi ses kapalı"}</button>
             <button type="button" className="notificationSecondary" onClick={()=>void preview(tone)}>Seçili sesi test et</button>
           </div>
         </div>

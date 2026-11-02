@@ -1,7 +1,7 @@
 "use client";
 import { formatDatesInText, formatDisplayDateTime } from "@/lib/dates/display";
 
-import { unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
+import { unlockNotificationAudio, playEventNotificationSound } from "@/lib/notifications/sound";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -99,7 +99,7 @@ export default function LiveNotificationCenter() {
       currentRef.current = next;
       setExpanded(false);
       setCurrent(next);
-      void playNotificationSound();
+      void playEventNotificationSound(next);
 
       if ("Notification" in window && Notification.permission === "granted") {
         try {
@@ -107,6 +107,7 @@ export default function LiveNotificationCenter() {
             body: `${next.authorName?`Yazan: ${next.authorName}\n`:""}${formatDatesInText(next.body)}`,
             icon: "/icons/icon-192.png",
             tag: `sprintos-live-${logicalKey(next)}`,
+            silent: true, // The application plays the selected event sound once.
           });
           n.onclick = () => {
             window.focus();
