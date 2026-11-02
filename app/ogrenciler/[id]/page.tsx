@@ -1206,10 +1206,11 @@ export default async function StudentFile({
           </div>
 
           <strong>
-            Toplam Tahsilat: {money(paymentSummary?.total_received)}
+            Toplam Tahsilat: {money(activeEnrollmentTotalReceived)}
           </strong>
         </div>
 
+        {activeEnrollmentTotalReceived > packagePrice ? <p>Paket tutarını aşan tahsilat: <strong>{money(activeEnrollmentTotalReceived - packagePrice)}</strong>. Çok dönemli ödeme açıklaması ödeme geçmişinde saklanır.</p> : null}
         <div className="list">
           {payments.map((payment: any) => (
             <article key={payment.id}>

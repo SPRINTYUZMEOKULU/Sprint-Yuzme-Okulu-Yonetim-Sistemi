@@ -1,5 +1,7 @@
 "use client";
 
+import { reviewCollection } from "@/lib/payments/collection-review";
+
 import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
@@ -359,12 +361,9 @@ export default function StudentFileOperations({
       return;
     }
 
-    if (remainingPayment > 0 && amount > remainingPayment) {
-      setResult(
-        `Girilen tutar kalan ödemeden fazla olamaz. Kalan ödeme: ${remainingPayment.toLocaleString("tr-TR")} TL`,
-      );
-      return;
-    }
+    const review = reviewCollection(amount, remainingPayment, paymentDescription);
+    if (review.error) { setResult(review.error); return; }
+    if (review.confirmation && !window.confirm(review.confirmation)) return;
 
     try {
       setSubmitting(true);
@@ -381,6 +380,7 @@ export default function StudentFileOperations({
       setResult(response.message);
 
       if (response.ok) {
+        window.dispatchEvent(new Event("sprint:payment-updated"));
         setPaymentAmount("");
         setPaymentDescription("");
         router.refresh();

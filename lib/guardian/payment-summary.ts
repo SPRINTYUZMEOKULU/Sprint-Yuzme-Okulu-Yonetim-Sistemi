@@ -3,9 +3,9 @@ export function isReceivedPayment(status: unknown) {
 }
 
 export function guardianPaymentSummary(enrollment: any, coursePackage: any, payments: any[], plan?: any) {
-  const paid = !enrollment?.id ? 0 : payments.filter(payment => payment.enrollment_id === enrollment?.id && isReceivedPayment(payment.payment_status)).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const paid = !enrollment?.id ? 0 : payments.filter(payment => payment.enrollment_id === enrollment?.id && !payment.cancelled_at && isReceivedPayment(payment.payment_status)).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const price = Number((plan?.status !== "cancelled" ? plan?.total_amount : undefined) ?? enrollment?.package_price ?? coursePackage?.price ?? 0);
-  return { paid, price, debt: Math.max(0, price - paid) };
+  return { paid, price, debt: Math.max(0, price - paid), excess: Math.max(0, paid - price) };
 }
 
 

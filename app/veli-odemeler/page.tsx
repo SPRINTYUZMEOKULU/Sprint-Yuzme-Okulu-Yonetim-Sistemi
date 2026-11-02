@@ -20,7 +20,7 @@ export default async function Page({
   const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme"));
   const planResult = {data:data.paymentPlan};
   const installments = data.paymentPlan?.status==="cancelled"?[]:data.paymentInstallments;
-  const {paid, price, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
+  const {paid, price, debt, excess} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   return (
     <main className="guardianShell">
       <GuardianHeader previewGuardian={previewGuardian}
@@ -52,6 +52,7 @@ export default async function Page({
             <strong>{financeReady?formatMoney(debt):"Bilgi alınamadı"}</strong>
           </article>
         </section>
+        {financeReady && excess > 0 ? <p className="guardianCard">Paket tutarını aşan tahsilat: <strong>{formatMoney(excess)}</strong>. Çok dönemli ödemenizin kapsamı için kayıt açıklamanızı kontrol edebilirsiniz.</p> : null}
         {planResult.data && planResult.data.status!=="cancelled" ? (
           <section className="guardianCard" style={{ marginTop: 18 }}>
             <p className="guardianEyebrow">ÖDEME PLANI</p>

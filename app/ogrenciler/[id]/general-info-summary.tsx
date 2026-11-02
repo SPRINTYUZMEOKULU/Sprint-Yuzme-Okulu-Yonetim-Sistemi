@@ -277,10 +277,10 @@ export default function GeneralInfoSummary() {
           remaining <= 0 ? "ÖDENDİ" : overdue ? "VADESİ GEÇTİ" : "ÖDEME BEKLİYOR";
         const statusMessage =
           remaining <= 0
-            ? `${periodText} tarihleri arasındaki ${packageText} ücreti ödendi.`
+            ? `${periodText} tarihleri arasındaki ${packageText} ücreti ödendi.${paid > total ? ` Paket tutarını aşan tahsilat: ${money(paid - total)}. Çok dönemli ödeme açıklamasını kontrol edin.` : ""}`
             : `${periodText} tarihleri arasındaki ${packageText} ücreti ödenmedi. Açık borç ${money(remaining)}${due ? ` · Vade ${dateText(due)}` : ""}.`;
 
-        const cardHtml = `<section class="studentFinanceStatusCard ${statusClass}"><div class="studentFinanceStatusHead"><div><span>AKTİF PAKET</span><strong>${escapeHtml(packageText)}</strong></div><div class="studentFinanceStatusBadge">${escapeHtml(statusLabel)}</div></div><div class="studentFinanceStatusMeta"><div><span>Dönem</span><b>${escapeHtml(periodText)}</b></div><div><span>Paket Ücreti</span><b>${escapeHtml(money(total))}</b></div><div><span>Ödenen</span><b>${escapeHtml(money(paid))}</b></div><div><span>Kalan Borç</span><b>${escapeHtml(money(remaining))}</b></div></div><div class="studentFinanceStatusMessage">${escapeHtml(statusMessage)}</div><div class="studentFinanceStatusActions">${remaining > 0 ? '<button type="button" class="primary" data-finance-action="collect">Ödeme Al</button><button type="button" class="secondary" data-finance-action="due">Vade Belirle</button>' : ""}<button type="button" class="secondary" data-finance-action="history">Ödeme Geçmişi</button></div></section>`;
+        const cardHtml = `<section class="studentFinanceStatusCard ${statusClass}"><div class="studentFinanceStatusHead"><div><span>AKTİF PAKET</span><strong>${escapeHtml(packageText)}</strong></div><div class="studentFinanceStatusBadge">${escapeHtml(statusLabel)}</div></div><div class="studentFinanceStatusMeta"><div><span>Dönem</span><b>${escapeHtml(periodText)}</b></div><div><span>Paket Ücreti</span><b>${escapeHtml(money(total))}</b></div><div><span>Ödenen</span><b>${escapeHtml(money(paid))}</b></div><div><span>Kalan Borç</span><b>${escapeHtml(money(remaining))}</b></div></div><div class="studentFinanceStatusMessage">${escapeHtml(statusMessage)}</div><div class="studentFinanceStatusActions"><button type="button" class="primary" data-finance-action="collect">Ödeme / Peşin Tahsilat</button>${remaining > 0 ? '<button type="button" class="secondary" data-finance-action="due">Vade Belirle</button>' : ""}<button type="button" class="secondary" data-finance-action="history">Ödeme Geçmişi</button></div></section>`;
 
         const financePanel = document.querySelector<HTMLElement>("#odeme");
         if (financePanel) {
@@ -314,6 +314,7 @@ export default function GeneralInfoSummary() {
     }
 
     void loadFinanceSummary();
+    window.addEventListener("sprint:payment-updated", loadFinanceSummary);
 
     const openProfileForMissingPhone = (event: MouseEvent) => {
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
@@ -353,6 +354,7 @@ export default function GeneralInfoSummary() {
       if(panel) delete panel.dataset.professionalSummary;
       if(form){form.hidden=false;form.removeAttribute("aria-hidden");}
       window.removeEventListener("student-profile-saved",syncSavedProfile);
+      window.removeEventListener("sprint:payment-updated", loadFinanceSummary);
       cancelled = true;
       window.clearTimeout(adultLabelTimer);
       document.removeEventListener("click", openProfileForMissingPhone, true);

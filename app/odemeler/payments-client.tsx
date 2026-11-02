@@ -1,5 +1,7 @@
 "use client";
 
+import { reviewCollection } from "@/lib/payments/collection-review";
+
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -988,19 +990,9 @@ export default function PaymentsClient({
       return;
     }
 
-    if (
-      selectedStudent.remaining_payment >
-        0 &&
-      amount >
-        selectedStudent.remaining_payment
-    ) {
-      setPaymentMessage(
-        `Girilen tutar kalan ödemeden fazla olamaz. Kalan ödeme: ${money(
-          selectedStudent.remaining_payment
-        )}`
-      );
-      return;
-    }
+    const review = reviewCollection(amount, selectedStudent.remaining_payment, paymentDescription);
+    if (review.error) { setPaymentMessage(review.error); return; }
+    if (review.confirmation && !window.confirm(review.confirmation)) return;
 
     setPaymentMessage("");
 
@@ -1637,6 +1629,7 @@ export default function PaymentsClient({
               </span>
             </div>
 
+            {selectedStudent.total_paid > selectedStudent.package_price ? <p className="paymentWarningBox">Paket tutarını aşan tahsilat: <strong>{money(selectedStudent.total_paid - selectedStudent.package_price)}</strong>. Çok dönemli ödeme açıklamasını kontrol edin.</p> : null}
             {!selectedStudent.enrollment_id ? (
               <div className="paymentWarningBox">
                 Bu öğrenci için aktif kayıt/paket bulunamadığı için ödeme alınamaz.

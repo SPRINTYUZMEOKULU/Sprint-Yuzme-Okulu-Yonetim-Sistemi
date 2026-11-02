@@ -1,5 +1,7 @@
 "use client";
 
+import { reviewCollection } from "@/lib/payments/collection-review";
+
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -212,16 +214,10 @@ export default function StudentPaymentCenter() {
       setMessageKind("error");
       return;
     }
-    if (
-      data.enrollment.remainingPayment > 0 &&
-      parsed > data.enrollment.remainingPayment
-    ) {
-      setMessage(
-        `Girilen tutar kalan borçtan fazla olamaz. Kalan: ${money(data.enrollment.remainingPayment)}`,
-      );
-      setMessageKind("error");
-      return;
-    }
+    const review = reviewCollection(parsed, data.enrollment.remainingPayment, description);
+    if (review.error) { setMessageKind("error"); setMessage(review.error); return; }
+    if (review.confirmation && !window.confirm(review.confirmation)) return;
+
     setSubmitting(true);
     setMessage("Ödeme kaydediliyor…");
     setMessageKind("");
@@ -237,6 +233,7 @@ export default function StudentPaymentCenter() {
       setMessage(result.message);
       setMessageKind(result.ok ? "success" : "error");
       if (result.ok) {
+        window.dispatchEvent(new Event("sprint:payment-updated"));
         setDescription("");
         setInstallmentId("");
         await load();
@@ -280,6 +277,7 @@ export default function StudentPaymentCenter() {
     setMessage(result.message);
     setMessageKind(result.ok ? "success" : "error");
     if (result.ok) {
+        window.dispatchEvent(new Event("sprint:payment-updated"));
       await load();
       router.refresh();
     }
@@ -354,6 +352,7 @@ export default function StudentPaymentCenter() {
                   </strong>
                 </article>
               </section>
+              {data.enrollment.totalReceived > data.enrollment.totalAmount ? <p className="paymentInfo">Paket tutarını aşan tahsilat: <strong>{money(data.enrollment.totalReceived - data.enrollment.totalAmount)}</strong>. Çok dönemli ödeme açıklaması ödeme geçmişinde korunur.</p> : null}
               <nav className="paymentTabs" aria-label="Ödeme işlemleri">
                 <button
                   className={tab === "collect" ? "active" : ""}
@@ -466,7 +465,7 @@ export default function StudentPaymentCenter() {
                   <button
                     className="primaryPaymentButton"
                     disabled={
-                      submitting || data.enrollment.remainingPayment <= 0
+                      submitting
                     }
                     onClick={submitPayment}
                   >

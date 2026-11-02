@@ -1,5 +1,7 @@
 "use client";
 
+import { reviewCollection } from "@/lib/payments/collection-review";
+
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -209,11 +211,9 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
       setMessage("Geçerli bir ödeme tutarı giriniz.");
       return;
     }
-    if (amount > Number(data.enrollment.remainingPayment || 0)) {
-      setError(true);
-      setMessage(`Tutar kalan paket borcundan fazla olamaz: ${money(data.enrollment.remainingPayment)}`);
-      return;
-    }
+    const review = reviewCollection(amount, Number(data.enrollment.remainingPayment || 0), paymentDescription);
+    if (review.error) { setError(true); setMessage(review.error); return; }
+    if (review.confirmation && !window.confirm(review.confirmation)) return;
 
     const periodText = `${dateText(data.enrollment.startDate)} - ${dateText(data.enrollment.plannedEndDate)}`;
     const autoDescription = `${periodText} tarihleri arasındaki ${data.enrollment.packageName || "kurs paketi"} ödemesi`;
@@ -231,6 +231,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     setError(!result.ok);
     setMessage(result.message);
     if (result.ok) {
+        window.dispatchEvent(new Event("sprint:payment-updated"));
       setPaymentDescription("");
       await load();
       setTab("history");
@@ -250,6 +251,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     setError(!result.ok);
     setMessage(result.message);
     if (result.ok) {
+        window.dispatchEvent(new Event("sprint:payment-updated"));
       setDueReason("");
       await load();
       router.refresh();
@@ -380,10 +382,11 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
         <div className="sfcBody">
           {loading ? <div className="sfcLoading">Finans dosyası hazırlanıyor…</div> : null}
 
+          {Number(data?.enrollment?.totalReceived || 0) > Number(data?.enrollment?.totalAmount || 0) ? <p className="sfcNotice">Paket tutarını aşan tahsilat: <b>{money(Number(data?.enrollment?.totalReceived || 0) - Number(data?.enrollment?.totalAmount || 0))}</b>. Çok dönemli ödeme açıklamasını ödeme geçmişinden kontrol edin.</p> : null}
           <section className="sfcHeroGrid">
             <article><span>Toplam Borç</span><strong>{money(totalDebt)}</strong><small>Paket + açık ek borçlar</small></article>
             <article><span>Paket Ücreti</span><strong>{money(Number(data?.enrollment?.totalAmount || 0))}</strong><small>{data?.enrollment?.packageName || "Aktif kayıt"}</small></article>
-            <article><span>Ödenen</span><strong>{money(Number(data?.enrollment?.totalReceived || 0))}</strong><small>Aktif kayıt dönemi</small></article>
+            <article><span>Toplam Tahsilat</span><strong>{money(Number(data?.enrollment?.totalReceived || 0))}</strong><small>Aktif kayıt dönemi</small></article>
             <article className={packageRemaining > 0 || extraRemaining > 0 ? "danger" : "success"}>
               <span>Durum</span>
               <strong>
@@ -438,7 +441,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
                     <div><span>Kalan</span><b>{money(data.enrollment.remainingPayment)}</b></div>
                     <div><span>Vade</span><b>{dateText(data.enrollment.paymentDueDate)}</b></div>
                   </div>
-                  {packageRemaining > 0 ? (
+                  {data.enrollment ? (
                     <div className="sfcFormGrid">
                       <label>Ödeme Tutarı<input value={amountValue} onChange={(e) => setAmountValue(e.target.value)} inputMode="decimal" /></label>
                       <label>Ödeme Yöntemi<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}><option value="cash">Nakit</option><option value="card">Kart</option><option value="bank_transfer">Banka Havalesi</option><option value="eft">EFT</option><option value="other">Diğer</option></select></label>
