@@ -1,3 +1,4 @@
+import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
 import AttendanceSummary from "@/app/components/attendance-summary";
 import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
 import PassiveStudentGuard from "@/app/components/passive-student-guard";
@@ -293,6 +294,7 @@ export default async function StudentFile({
   const membership = membershipResult.data;
   const attendancePlan = attendancePlanResult.data?.enrollment_id === enrollment?.id ? attendancePlanResult.data : null;
   const nextEnrollment = (enrollmentHistoryResult.data || []).find((row: any) => row.status === "scheduled");
+  const renewal = renewalPresentation(nextEnrollment);
   const lessonBalance = lessonBalanceResult.data;
 
   const notes = notesResult.data ?? [];
@@ -719,7 +721,7 @@ export default async function StudentFile({
           target: "odeme",
         }
       : null,
-    student.status !== "registration_declined" && enrollment && !registrationPending && normalRemaining <= 3
+    !renewal && student.status !== "registration_declined" && enrollment && !registrationPending && normalRemaining <= 3
       ? {
           tone: normalRemaining <= 0 ? "danger" : "warning",
           title:
@@ -794,6 +796,12 @@ export default async function StudentFile({
           ← Öğrencilere Dön
         </Link>
       </header>
+
+      {renewal ? <section role="status" className="panel" style={{border:"1px solid #bfdbfe", background:"#eff6ff"}}>
+        <h2>{renewal.title}</h2><p><strong>{fmtDate(renewal.startDate)} – {fmtDate(renewal.endDate)} · {renewal.lessons} yeni ders</strong></p>
+        <p>Aşağıdaki mevcut dönem sayaçları geçmiş döneme aittir. Yeni dönem başlangıç tarihinde otomatik olarak aktifleşir; yeniden kayıt yenilemeniz gerekmez.</p>
+        <Link href={`/ogrenciler/${student.id}/duzeltme`}>Yeni Dönemi Gör →</Link>
+      </section> : null}
 
       <StudentFileOperations
         student={{

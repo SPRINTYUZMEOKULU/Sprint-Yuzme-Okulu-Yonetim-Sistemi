@@ -42,6 +42,7 @@ async function decideRenewal(action, renewal=true){
  const route=load('app/api/approval-center/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/supabase/server':{createClient:async()=>db},
+  '@/lib/registrations/close-pre-registration':{applyPreRegistrationClosure:async()=>{throw Error('Unexpected closure in a renewal test')}},
   '@/lib/notifications/publish-event':{publishEventNotification:async n=>{notifications.push(n);return {error:null}}}
  });
  const response=await route.POST({json:async()=>({id:a,source:'approval_request',action})});

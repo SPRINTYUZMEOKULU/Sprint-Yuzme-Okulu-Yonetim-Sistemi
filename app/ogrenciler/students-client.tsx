@@ -27,6 +27,9 @@ export type StudentListItem = {
   status?: string | null;
   enrollment_id?: string | null;
   enrollment_start_date?: string | null;
+  renewal_start_date?: string | null;
+  renewal_end_date?: string | null;
+  renewal_lessons?: number | null;
   start_confirmation_required?: boolean;
   actual_started_at?: string | null;
   swimming_level?: string | null;
@@ -528,12 +531,12 @@ function informationNeed(student: StudentListItem) {
   }
 
   if (
-    remaining <= 3 ||
+    !student.renewal_start_date && (remaining <= 3 ||
     isEndingSoon(
       student.compensation_end_date ||
         student.normal_end_date ||
         student.end_date
-    )
+    ))
   ) {
     return {
       type: "renewal" as MessageType,
@@ -674,6 +677,7 @@ function buildMessage(
     `Ders başlangıç saatinden *en az 15 dakika önce* tesiste hazır bulunmanızı rica ederiz.`;
 
   if (type === "smart") {
+    if (student.renewal_start_date) return `${header}\n\n${greeting}\n\nKaydınız yenilenmiştir. Yeni dönem: ${formatDate(student.renewal_start_date)} – ${formatDate(student.renewal_end_date)}. ${student.renewal_lessons || ""} derslik yeni paketiniz başlangıç tarihinde aktif olacaktır.`;
     if (totalRemaining <= 0) {
       return buildMessage(student, "lesson_finished");
     }
@@ -1664,7 +1668,7 @@ function closeLessonAction() {
       ).length,
       endingSoon: students.filter(
         (student) =>
-          student.status === "active" &&
+          student.status === "active" && !student.renewal_start_date &&
           (
             isEndingSoon(
               student.compensation_end_date ||
@@ -1676,7 +1680,7 @@ function closeLessonAction() {
       ).length,
       lessonEnded: students.filter(
         (student) =>
-          student.status === "active" &&
+          student.status === "active" && !student.renewal_start_date &&
           numberValue(student.remaining_lessons) <= 0
       ).length,
       paymentWaiting: students.filter(hasOutstandingPayment).length,
@@ -1759,7 +1763,7 @@ function closeLessonAction() {
 
       if (status === "ending_soon") {
         statusMatch =
-          student.status === "active" && isEndingSoon(student.end_date);
+          student.status === "active" && !student.renewal_start_date && isEndingSoon(student.end_date);
       }
 
       if (status === "information_pending") {
@@ -1767,7 +1771,7 @@ function closeLessonAction() {
       }
 
       if (status === "lesson_ended") {
-        statusMatch = numberValue(student.total_remaining_lessons ?? student.remaining_lessons) <= 0;
+        statusMatch = student.status === "active" && !student.renewal_start_date && numberValue(student.total_remaining_lessons ?? student.remaining_lessons) <= 0;
       }
 
       if (status === "payment_waiting") {
@@ -2281,7 +2285,7 @@ function closeLessonAction() {
 
   function openMessageCenter(student: StudentListItem) {
     const suggestedType: MessageType =
-      numberValue(student.remaining_lessons) <= 0
+      student.renewal_start_date ? "smart" : numberValue(student.remaining_lessons) <= 0
         ? "lesson_finished"
         : numberValue(student.payment_outstanding) > 0
         ? "payment"
@@ -3151,6 +3155,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 canManage={canManageStart}
               />}
 
+              {student.renewal_start_date ? <p role="status" style={{color:"#1d4ed8",fontWeight:700}}>Kayıt yenilendi · {formatDate(student.renewal_start_date)} – {formatDate(student.renewal_end_date)} · {student.renewal_lessons} yeni ders</p> : null}
               <div className="studentProgramLine">
                 <span>📍 {student.branch_name || "Şube yok"}</span>
                 <span>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { updateScheduledRenewalDate } from "./actions";
 import CorrectionForm from "./correction-form";
 import CorrectionWhatsapp from "./correction-whatsapp";
 import "./duzeltme.css";
@@ -46,6 +47,23 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
   if (!studentResult.data) notFound();
   const student = studentResult.data;
   const studentAge = ageFromBirthDate(student.birth_date);
+  const {data: nextEnrollment, error: nextError} = await supabase.from("student_enrollments").select("*")
+    .eq("organization_id", organizationId).eq("student_id", id).eq("status", "scheduled").maybeSingle();
+  if (nextError) throw new Error("Planlanmış kayıt dönemi kontrol edilemedi.");
+  if (nextEnrollment && query.period !== "active") return <main className="correctionPage"><div className="correctionShell">
+    <nav className="correctionTopNav"><Link href={`/ogrenciler/${id}`}>← Kursiyer Dosyasına Dön</Link><Link href={`/ogrenciler/${id}/duzeltme?period=active`}>Mevcut / Eski Dönemi Düzenle</Link></nav>
+    <section className="correctionHero"><div><span>YÖNETİCİ DÜZELTME · PLANLANMIŞ YENİ DÖNEM</span><h1>{student.first_name} {student.last_name}</h1><p>Kayıt yenilendi. Yeni dönem başlangıç tarihinde otomatik aktifleşir. Bu ekran yeni dönemi gösterir; eski dönemin dersleri ve ödemeleri korunur.</p></div><aside><strong>{nextEnrollment.start_date.split("-").reverse().join("/")} – {nextEnrollment.planned_end_date.split("-").reverse().join("/")}</strong><span>{nextEnrollment.total_lessons} ders · Planlandı</span></aside></section>
+    {query.error ? <p role="alert" className="correctionNotice error">{query.error}</p> : null}
+    {query.scheduledSaved ? <p role="status" className="correctionNotice success">Yeni dönem tarihleri kaydedildi.</p> : null}
+    <form action={updateScheduledRenewalDate} className="correctionSection" style={{marginTop:20,display:"grid",gap:14}}>
+      <h2>Yeni dönem başlangıcını düzelt</h2><input type="hidden" name="student_id" value={id}/><input type="hidden" name="enrollment_id" value={nextEnrollment.id}/>
+      <label>Başlangıç tarihi <input type="date" name="start_date" required defaultValue={nextEnrollment.start_date}/></label>
+      <p>Bitiş tarihi kayıtlı {nextEnrollment.total_lessons} ders ve seçili ders günlerinden yeniden hesaplanır.</p>
+      <label>Düzeltme gerekçesi <textarea name="correction_reason" required minLength={5} maxLength={500}/></label>
+      <label><input type="checkbox" name="confirmed" required/>Yalnız planlanmış yeni dönemin tarihlerini düzelttiğimi onaylıyorum.</label>
+      <button type="submit">Yeni Dönem Tarihini Kaydet</button>
+    </form>
+  </div></main>;
   const savedEnrollment = enrollmentResult.data;
   // Yönetici düzeltmesinde yalnız aktif kayıt dönemine ait ödeme hareketini göster.
   // Eski dönem ödemesinin yanlışlıkla düzenlenmesini engeller.

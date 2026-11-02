@@ -209,6 +209,7 @@ export default function CorrectionForm({
   return (
     <form action={submitCorrection} className="correctionForm">
       <input type="hidden" name="student_id" value={student.id} />
+      <input type="hidden" name="enrollment_id" value={enrollment.id} />
 
       <section className="correctionSection">
         <div className="sectionHead">

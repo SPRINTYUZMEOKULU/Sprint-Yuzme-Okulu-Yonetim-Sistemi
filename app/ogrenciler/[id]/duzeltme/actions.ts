@@ -1,5 +1,6 @@
 "use server";
 
+import { correctionOverlapsRenewal } from "@/lib/enrollment/renewal-presentation";
 import { syncCorrectedPlan } from "@/lib/students/sync-corrected-plan";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -326,6 +327,13 @@ export async function applyManagerCorrection(formData: FormData) {
     );
   }
 
+  const submittedEnrollmentId = text(formData, "enrollment_id");
+  if (submittedEnrollmentId !== enrollment.id) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Dönem bilgisi değişti. Sayfayı yenileyip doğru dönemi seçiniz.")}`);
+  const {data: nextPeriod, error: nextPeriodError} = await supabase.from("student_enrollments").select("id,status,start_date")
+    .eq("organization_id", organizationId).eq("student_id", studentId).eq("status", "scheduled").maybeSingle();
+  if (nextPeriodError) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Yeni dönem kontrol edilemedi.")}`);
+  if (correctionOverlapsRenewal(startDate, plannedEndDate, nextPeriod)) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Mevcut dönem hazırlanmış yeni dönemle çakışamaz. Yeni dönem tarihlerini bu ekrandan düzenleyiniz.")}`);
+
   const oldSnapshot = {
     student: {
       first_name: student.first_name,
@@ -419,6 +427,8 @@ export async function applyManagerCorrection(formData: FormData) {
       package_id: packageId,
       start_date: startDate,
       planned_end_date: plannedEndDate,
+      normal_end_date: plannedEndDate,
+      compensation_end_date: [plannedEndDate, oldPlan?.compensation_planned_end_date].filter(Boolean).sort().at(-1),
       total_lessons: totalLessons,
       lesson_weekdays: isoWeekdays.map(isoToJsDay),
       updated_at: now,
@@ -628,4 +638,30 @@ export async function applyManagerCorrection(formData: FormData) {
   revalidatePath("/");
 
   redirect(`/ogrenciler/${studentId}/duzeltme?saved=1`);
+}
+
+export async function updateScheduledRenewalDate(formData: FormData) {
+  const profile = await requireProfile(["owner", "admin"]);
+  const studentId = text(formData, "student_id"), enrollmentId = text(formData, "enrollment_id");
+  const start = text(formData, "start_date"), reason = text(formData, "correction_reason");
+  const back = `/ogrenciler/${studentId}/duzeltme`;
+  if (!profile.organization_id || !studentId || !enrollmentId || !/^\d{4}-\d{2}-\d{2}$/.test(start) || reason.length < 5 || formData.get("confirmed") !== "on") redirect(`${back}?error=${encodeURIComponent("Geçerli tarih, gerekçe ve onay zorunludur.")}`);
+  const db = await createClient();
+  const [next, current] = await Promise.all([
+    db.from("student_enrollments").select("*").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("id", enrollmentId).eq("status", "scheduled").maybeSingle(),
+    db.from("student_enrollments").select("planned_end_date").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("status", "active").maybeSingle(),
+  ]);
+  const today = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  if (next.error || current.error || !next.data || start <= today || (current.data?.planned_end_date && start <= current.data.planned_end_date)) redirect(`${back}?error=${encodeURIComponent("Yeni başlangıç bugünden ve mevcut dönem bitişinden sonra olmalıdır. Dönem bilgilerini yenileyin.")}`);
+  const end = calculatePlannedEndDate(start, Number(next.data.total_lessons), (next.data.lesson_weekdays || []).map(normalizeIsoWeekday));
+  if (!end) redirect(`${back}?error=${encodeURIComponent("Ders günlerinden bitiş hesaplanamadı.")}`);
+  const {data: saved, error} = await db.from("student_enrollments").update({start_date:start,planned_end_date:end,normal_end_date:end,compensation_end_date:end,updated_at:new Date().toISOString()})
+    .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("id",enrollmentId).eq("status","scheduled").select("id").maybeSingle();
+  if (error || !saved) redirect(`${back}?error=${encodeURIComponent("Planlanmış dönem değişti veya kaydedilemedi.")}`);
+  const planResult = await db.from("student_attendance_plans").update({start_date:start,normal_planned_end_date:end,compensation_planned_end_date:end,updated_at:new Date().toISOString()})
+    .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("enrollment_id",enrollmentId).eq("is_active",false);
+  if (planResult.error) redirect(`${back}?error=${encodeURIComponent("Dönem tarihi kaydedildi; plan eşitlemesi doğrulanamadı.")}`);
+  await db.from("student_activity_logs").insert({organization_id:profile.organization_id,student_id:studentId,activity_type:"scheduled_renewal_corrected",title:"Planlanmış yenileme tarihleri düzeltildi",description:reason,old_value:next.data,new_value:{start_date:start,planned_end_date:end},source_type:"student_enrollments",source_id:enrollmentId,performed_by:profile.id,performed_at:new Date().toISOString()});
+  revalidatePath(`/ogrenciler/${studentId}`); revalidatePath(back); revalidatePath("/ogrenciler");
+  redirect(`${back}?scheduledSaved=1`);
 }

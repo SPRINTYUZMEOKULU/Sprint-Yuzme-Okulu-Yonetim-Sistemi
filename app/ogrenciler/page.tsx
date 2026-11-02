@@ -213,7 +213,7 @@ export default async function StudentsPage() {
           .from("student_enrollments")
           .select("*")
           .in("student_id", studentIds)
-          .eq("status", "active")
+          .in("status", ["active", "scheduled"])
           .order("created_at", { ascending: false }),
 
         supabase
@@ -355,8 +355,9 @@ export default async function StudentsPage() {
   }
 
   const enrollmentMap = latestByStudent(
-    (enrollmentsResult.data || []) as any[]
+    (enrollmentsResult.data || []).filter((row:any) => row.status === "active") as any[]
   );
+  const scheduledMap = latestByStudent((enrollmentsResult.data || []).filter((row:any) => row.status === "scheduled") as any[]);
 
   const membershipMap = latestByStudent(
     (membershipsResult.data || []) as any[]
@@ -595,6 +596,9 @@ export default async function StudentsPage() {
         last_name: student.last_name || "",
 
         status: student.status || null,
+        renewal_start_date: scheduledMap.get(student.id)?.start_date || null,
+        renewal_end_date: scheduledMap.get(student.id)?.planned_end_date || null,
+        renewal_lessons: scheduledMap.get(student.id)?.total_lessons || null,
         enrollment_id: enrollment?.id || null,
         enrollment_start_date: enrollment?.start_date || null,
         start_confirmation_required: Boolean(enrollment?.start_confirmation_required),
