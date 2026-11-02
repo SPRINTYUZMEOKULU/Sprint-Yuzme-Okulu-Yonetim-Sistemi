@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -52,6 +53,19 @@ export default function StudentStatusButton({ studentId, name, status, canApprov
       locked.current = false;
       setBusy(false);
     }
+  }
+
+  if (!supported) {
+    const labels: Record<string, string> = {
+      pre_registration: "Ön Kayıt", waiting_payment: "Ödeme Bekliyor",
+      waiting_approval: "Onay Bekliyor", waiting_contact: "İletişim Bekliyor",
+      trial_lesson: "Deneme Dersi", frozen: "Dondurulmuş", cancelled: "İptal",
+    };
+    const label = labels[(status || "").toLowerCase()] || "Durum Belirsiz";
+    const pendingRegistration = ["pre_registration", "waiting_payment", "waiting_approval"].includes(status || "");
+    return pendingRegistration
+      ? <Link className="studentStatusButton" href={`/kayit-tamamlama/${studentId}`} title="Kesin kaydı tamamla">{label} →</Link>
+      : <span className="studentStatusButton">{label}</span>;
   }
 
   return <>

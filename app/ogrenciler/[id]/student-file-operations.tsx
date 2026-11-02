@@ -548,6 +548,10 @@ export default function StudentFileOperations({
             type="button"
             className="payment"
             onClick={() => {
+              if (!enrollmentId && ["pre_registration", "waiting_payment", "waiting_approval"].includes(student.status || "")) {
+                router.push(`/kayit-tamamlama/${student.id}`);
+                return;
+              }
               setResult("");
               setPanel("payment");
             }}

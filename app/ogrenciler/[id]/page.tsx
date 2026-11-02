@@ -692,7 +692,16 @@ export default async function StudentFile({
     paymentDueTimestamp < Date.now(),
   );
 
+  const registrationPending = ["pre_registration", "waiting_payment", "waiting_approval"].includes(student.status || "") && !enrollment;
   const smartAlerts = [
+    registrationPending
+      ? {
+          tone: "warning",
+          title: "Kesin kayıt bekliyor",
+          description: "Paket, ders programı ve ödeme bilgilerini kesin kayıt ekranında tamamlayın.",
+          target: `/kayit-tamamlama/${student.id}`,
+        }
+      : null,
     paymentOverdue
       ? {
           tone: "danger",
@@ -710,7 +719,7 @@ export default async function StudentFile({
           target: "odeme",
         }
       : null,
-    normalRemaining <= 3
+    enrollment && !registrationPending && normalRemaining <= 3
       ? {
           tone: normalRemaining <= 0 ? "danger" : "warning",
           title:
@@ -722,7 +731,7 @@ export default async function StudentFile({
           target: "ders-hareketleri",
         }
       : null,
-    !groupInfo?.id
+    !registrationPending && !groupInfo?.id
       ? {
           tone: "warning",
           title: "Grup ataması eksik",
@@ -855,16 +864,16 @@ export default async function StudentFile({
             {smartAlerts.map((alert) => (
               <a
                 key={`${alert.title}-${alert.target}`}
-                href={`#${alert.target}`}
+                href={alert.target.startsWith("/") ? alert.target : `#${alert.target}`}
                 className={alert.tone}
                 data-open-file-tab={
-                  alert.target === "genel-bilgiler"
+                  alert.target.startsWith("/") ? undefined : alert.target === "genel-bilgiler"
                     ? "general"
                     : alert.target === "kurs-kaydi"
                       ? "registration"
                       : "lessons"
                 }
-                data-target-id={alert.target}
+                data-target-id={alert.target.startsWith("/") ? undefined : alert.target}
               >
                 <i>{alert.tone === "danger" ? "!" : "•"}</i>
                 <span>
