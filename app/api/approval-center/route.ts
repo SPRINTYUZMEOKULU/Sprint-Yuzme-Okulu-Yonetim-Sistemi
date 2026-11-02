@@ -1,3 +1,4 @@
+import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { applyPreRegistrationClosure } from "@/lib/registrations/close-pre-registration";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
 import {
@@ -1330,6 +1331,11 @@ export async function POST(request: NextRequest) {
           },
           { status: 404 }
         );
+      }
+
+      if (targetStatus === "active") {
+        const due = await registrationPaymentDue(supabase, studentId);
+        if (due > 0) return NextResponse.json({ok:false,error:registrationPaymentHoldMessage(due),paymentRequired:true,outstanding:due},{status:409});
       }
 
       const { error: studentUpdateError } = await supabase

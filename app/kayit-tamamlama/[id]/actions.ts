@@ -1,5 +1,7 @@
 "use server";
 
+import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -1012,6 +1014,9 @@ export async function completeRegistration(
       formData,
       "student_id"
     );
+
+  const heldDebt = await registrationPaymentDue(supabase, studentId);
+  if (heldDebt > 0) redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(registrationPaymentHoldMessage(heldDebt))}`);
 
   const branchId =
     text(

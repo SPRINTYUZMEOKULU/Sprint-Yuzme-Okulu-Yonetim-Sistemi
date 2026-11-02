@@ -1,3 +1,4 @@
+import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { renewalNoteTarget } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalNote } from "@/lib/enrollment/renewal-presentation";
 import { NextRequest, NextResponse } from "next/server";
@@ -244,6 +245,9 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
+
+    const heldDebt = await registrationPaymentDue(supabase, studentId);
+    if (heldDebt > 0) return NextResponse.json({ok:false,error:registrationPaymentHoldMessage(heldDebt),paymentRequired:true,outstanding:heldDebt},{status:409});
 
     const {data:existingScheduled,error:scheduledError}=await supabase.from("student_enrollments")
       .select("id,start_date,planned_end_date,total_lessons").eq("organization_id",organizationId)
