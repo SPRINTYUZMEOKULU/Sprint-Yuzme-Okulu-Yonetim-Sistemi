@@ -270,6 +270,24 @@ export function buildEsmmTestSearchByEttn(
     `<a:PagingRequest>${tag("PageNumber", "1")}${tag("RecordsPerPage", "2")}</a:PagingRequest><a:ResultSet xmlns:b="${dataModel}">${tag("IsDetailsIncluded", "true", "b")}${tag("IsPDFIncluded", String(includeFiles), "b")}${tag("IsXMLIncluded", String(includeFiles), "b")}</a:ResultSet>`
   );
 }
+// İşNet support supplied this read-only SearchESMM request on 3 November 2026.
+// Use the provider's document number AND ETTN for reconciliation; never SendESMM again.
+export function buildEsmmTestSearchByDocument(
+  companyTaxCode: string,
+  documentNumber: string,
+  ettn: string,
+  includeFiles = true,
+) {
+  identity(companyTaxCode);
+  if (!/^[A-Z0-9]{1,32}$/.test(documentNumber) || !uuid.test(ettn))
+    throw new IsnetEsmmError("not_sent", "Geçerli test makbuz numarası ve ETTN gerekli.");
+  return (
+    tag("CompanyTaxCode", companyTaxCode) +
+    tag("DocumentNumber", documentNumber) +
+    tag("Ettn", ettn) +
+    `<a:PagingRequest>${tag("PageNumber", "1")}${tag("RecordsPerPage", "50")}</a:PagingRequest><a:ResultSet xmlns:b="${dataModel}">${tag("IsDetailsIncluded", "true", "b")}${tag("IsPDFIncluded", String(includeFiles), "b")}${tag("IsXMLIncluded", String(includeFiles), "b")}</a:ResultSet>`
+  );
+}
 export function parseIsnetEsmmReply(
   xml: string,
   operation: "HealthCheck" | "SendESMM" | "SearchESMM",
@@ -386,6 +404,23 @@ export class IsnetEsmmTestClient {
       documentNumber: String(result.DocumentNumber),
       externalCode: String(result.ExternalESMMCode),
     };
+  }
+  async searchByDocumentNumber(documentNumber: string, ettn: string, includeFiles = true) {
+    const result = await this.call(
+      "SearchESMM",
+      buildEsmmTestSearchByDocument(this.companyTaxCode, documentNumber, ettn, includeFiles),
+    );
+    const raw = result.ESMM?.ESMM;
+    const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    // A partial match must NEVER be treated as verified or attached to a student.
+    if (rows.some((row: any) =>
+      (row.ETTN ?? row.Ettn) !== ettn || row.DocumentNumber !== documentNumber
+    ))
+      throw new IsnetEsmmError(
+        "uncertain",
+        "İşNet sorgusu istenen makbuz numarası ve ETTN ile eşleşmedi.",
+      );
+    return rows as Record<string, any>[];
   }
   async searchByEttn(ettn: string, includeFiles = false) {
     const result = await this.call(
