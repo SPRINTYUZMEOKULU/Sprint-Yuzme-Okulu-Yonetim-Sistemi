@@ -654,7 +654,7 @@ export async function updateScheduledRenewalDate(formData: FormData) {
     db.from("student_enrollments").select("planned_end_date").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("status", "active").maybeSingle(),
   ]);
   const today = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-  if (next.error || current.error || !next.data || start <= today || (current.data?.planned_end_date && start <= current.data.planned_end_date)) redirect(`${back}?error=${encodeURIComponent("Yeni başlangıç bugünden ve mevcut dönem bitişinden sonra olmalıdır. Dönem bilgilerini yenileyin.")}`);
+  if (next.error || current.error || !next.data || start < today || (current.data?.planned_end_date && start <= current.data.planned_end_date)) redirect(`${back}?error=${encodeURIComponent("Yeni başlangıç bugün veya ileri bir tarih olmalı ve mevcut dönemin normal bitişinden sonra gelmelidir. Dönem bilgilerini yenileyin.")}`);
   const end = calculatePlannedEndDate(start, Number(next.data.total_lessons), (next.data.lesson_weekdays || []).map(normalizeIsoWeekday));
   if (!end) redirect(`${back}?error=${encodeURIComponent("Ders günlerinden bitiş hesaplanamadı.")}`);
   const {data: saved, error} = await db.from("student_enrollments").update({start_date:start,planned_end_date:end,normal_end_date:end,compensation_end_date:end,updated_at:new Date().toISOString()})
@@ -666,6 +666,11 @@ export async function updateScheduledRenewalDate(formData: FormData) {
     .eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("enrollment_id",enrollmentId).eq("is_active",false);
   if (planResult.error) redirect(`${back}?error=${encodeURIComponent("Dönem tarihi kaydedildi; plan eşitlemesi doğrulanamadı.")}`);
   await db.from("student_activity_logs").insert({organization_id:profile.organization_id,student_id:studentId,activity_type:"scheduled_renewal_corrected",title:"Planlanmış yenileme tarihleri düzeltildi",description:reason,old_value:next.data,new_value:{start_date:start,planned_end_date:end},source_type:"student_enrollments",source_id:enrollmentId,performed_by:profile.id,performed_at:new Date().toISOString()});
+  if (start === today) {
+    const { error: activationError } = await db.rpc("sync_due_renewals");
+    if (activationError) redirect(`${back}?error=${encodeURIComponent("Tarih kaydedildi; yeni dönem başlatılamadı. Sayfayı yenileyin: " + activationError.message)}`);
+  }
+  revalidatePath("/yoklama"); revalidatePath("/yoklama/aylik"); revalidatePath("/kayit-yenilemeleri"); revalidatePath("/baslayacak-kursiyerler"); revalidatePath("/");
   revalidatePath(`/ogrenciler/${studentId}`); revalidatePath(back); revalidatePath("/ogrenciler");
   redirect(`${back}?scheduledSaved=1`);
 }
