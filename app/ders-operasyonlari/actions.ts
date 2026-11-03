@@ -326,6 +326,11 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         newCompensationEndDate = laterDate(currentCompensationEndDate, compensationDate);
       }
 
+      if (compensationDate && !targetScheduleId) {
+        skipped++;
+        outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:"Telafi tarihi için aktif seans bulunamadı. Önce grup programını kontrol edin."});
+        continue;
+      }
       if(compensationDate&&targetScheduleId){
         const {data:occupied,error:occupiedError}=await supabase.from("student_compensation_lessons").select("id")
           .eq("organization_id",organizationId).eq("student_id",student.id).eq("lesson_date",compensationDate)
