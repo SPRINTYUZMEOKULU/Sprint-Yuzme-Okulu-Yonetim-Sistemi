@@ -51,3 +51,23 @@ test('ETTN recovery is read-only, keeps empty results unresolved, and rejects a 
  assert.deepEqual(await client.searchByEttn(id,true),[]);assert.equal(calls,1);
  const wrong=new IsnetEsmmTestClient('0000000000',async()=>new Response(reply('SearchESMM','<Result>Success</Result><ESMM><ESMM><ETTN>other-document</ETTN></ESMM></ESMM>')));await assert.rejects(()=>wrong.searchByEttn(id),e=>e.outcome==='uncertain');
 });
+
+test('İşNet SearchESMM sample uses company, document number and ETTN in order without sending',async()=>{
+ const xml=m.exports.buildEsmmTestSearchByDocument('0000000000','AAB2026000000539',id,true);
+ assert.match(xml,/<a:CompanyTaxCode>0000000000<\/a:CompanyTaxCode><a:DocumentNumber>AAB2026000000539<\/a:DocumentNumber><a:Ettn>/);
+ assert.match(xml,/<a:RecordsPerPage>50<\/a:RecordsPerPage>/);
+ assert.match(xml,/<b:IsPDFIncluded>true<\/b:IsPDFIncluded>/);
+ assert.match(xml,/<b:IsXMLIncluded>true<\/b:IsXMLIncluded>/);
+ let calls=0;
+ const client=new IsnetEsmmTestClient('0000000000',async(_url,init)=>{
+   calls++;assert.match(init.body,/<SearchESMM xmlns=/);assert.doesNotMatch(init.body,/<SendESMM xmlns=/);
+   return new Response(reply('SearchESMM','<Result>Success</Result><ESMM><ESMM><DocumentNumber>AAB2026000000539</DocumentNumber><ETTN>'+id+'</ETTN></ESMM></ESMM>'));
+ });
+ const rows=await client.searchByDocumentNumber('AAB2026000000539',id);
+ assert.equal(rows.length,1);assert.equal(calls,1);
+});
+test('provider search result cannot be accepted for another receipt identity',async()=>{
+ const client=new IsnetEsmmTestClient('0000000000',async()=>new Response(reply('SearchESMM','<Result>Success</Result><ESMM><ESMM><DocumentNumber>WRONG202600000001</DocumentNumber><ETTN>'+id+'</ETTN></ESMM></ESMM>')));
+ await assert.rejects(()=>client.searchByDocumentNumber('AAB2026000000539',id),e=>e.outcome==='uncertain');
+ assert.throws(()=>m.exports.buildEsmmTestSearchByDocument('0000000000','../../bad',id),e=>e.outcome==='not_sent');
+});
