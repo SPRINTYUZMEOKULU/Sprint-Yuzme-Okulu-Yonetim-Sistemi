@@ -144,6 +144,9 @@ export async function autoProvisionGuardianPortal(studentIdValue: string) {
     }
   }
 
+  const { error: primaryError } = await admin.from("guardian_students").update({ is_primary: false })
+    .eq("student_id", studentId).eq("is_primary", true).neq("guardian_id", guardianId);
+  if (primaryError) return { ok: false as const, status: "error" as const, message: "Birincil veli bağlantısı güncellenemedi." };
   const { error: linkError } = await admin.from("guardian_students").upsert({
     guardian_id: guardianId,
     student_id: studentId,
