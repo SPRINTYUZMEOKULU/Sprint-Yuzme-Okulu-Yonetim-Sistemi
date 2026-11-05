@@ -129,3 +129,67 @@
 @media(prefers-reduced-motion:reduce){
   .dashboardContent .proStat.sprintPreRegGlow{animation:none}
 }
+
+
+/* SprintOS calendar refinement: compact controls, clearer date hierarchy, mobile-safe grid. */
+.dashboardContent .smartCalendar{
+  overflow:hidden;
+  border:1px solid #dbe6f5;
+  background:linear-gradient(155deg,#fff 0%,#fcfdff 65%,#f6faff 100%);
+  box-shadow:0 12px 35px rgba(23,55,101,.055);
+}
+.dashboardContent .smartCalendarTop{align-items:center;gap:12px;margin-bottom:20px}
+.dashboardContent .smartCalendarTop>div:first-child{min-width:0}
+.dashboardContent .smartCalendarTop h3{font-size:clamp(22px,2.7vw,30px);font-weight:850;letter-spacing:-.045em}
+.dashboardContent .smartCalendarActions{display:flex;gap:5px;flex:none;padding:3px;background:#f1f6fc;border:1px solid #e0e9f5;border-radius:13px}
+.dashboardContent .smartCalendarActions button{
+  min-height:36px;width:37px;min-width:0;padding:0;
+  border:0;border-radius:9px;background:transparent;box-shadow:none;
+  color:#28496e;font-size:19px;font-weight:800;
+}
+.dashboardContent .smartCalendarActions button:nth-child(2){
+  width:auto;min-width:63px;padding:0 9px;background:#fff;
+  box-shadow:0 2px 7px rgba(24,73,135,.07);font-size:11px;color:#176de9;
+}
+.dashboardContent .calendarWeekHead{gap:5px;margin:0 0 8px;padding:0 1px}
+.dashboardContent .calendarWeekHead span{font-size:11px;font-weight:850;color:#7087a4}
+.dashboardContent .calendarGrid{gap:6px}
+.dashboardContent .calendarDay{
+  min-width:0;min-height:56px;border:1px solid #e7edf7;border-radius:12px;
+  background:#fff;transition:background .15s,border-color .15s;
+}
+.dashboardContent .calendarDay b{font-size:14px;font-weight:850}
+.dashboardContent .calendarDay.today{border:2px solid #64a7f8;background:#eff7ff}
+.dashboardContent .calendarDay.active{
+  background:linear-gradient(145deg,#176de9,#1259c8);border-color:#176de9;
+  color:#fff;box-shadow:0 4px 12px rgba(28,104,217,.15),inset 0 0 0 1px rgba(255,255,255,.15)
+}
+.dashboardContent .calendarDots{gap:3px;bottom:6px}
+.dashboardContent .calendarDots em{height:5px;width:5px}
+.dashboardContent .calendarLegend{gap:7px;margin-top:16px}
+.dashboardContent .calendarLegend span{border-radius:9px;background:#f7faff;border:1px solid #e8eef7}
+.dashboardContent .selectedCalendarDay{border-top:1px solid #e6edf6;margin-top:18px;padding-top:18px}
+.dashboardContent .selectedCalendarHead strong{font-size:15px}
+.dashboardContent .calendarAgendaSlot{border-radius:15px}
+@media(max-width:640px){
+  .dashboardContent .smartCalendar{padding:16px;border-radius:20px}
+  .dashboardContent .smartCalendarTop{flex-direction:row;align-items:center;gap:8px;margin-bottom:14px}
+  .dashboardContent .smartCalendarTop h3{font-size:22px}
+  .dashboardContent .smartCalendarTop p{font-size:10px;line-height:1.35;max-width:220px}
+  .dashboardContent .smartCalendarActions{gap:2px;padding:2px;border-radius:12px}
+  .dashboardContent .smartCalendarActions button{width:29px;min-height:32px;font-size:17px}
+  .dashboardContent .smartCalendarActions button:nth-child(2){min-width:48px;padding:0 5px;font-size:10px}
+  .dashboardContent .calendarGrid{gap:4px}
+  .dashboardContent .calendarDay{min-height:46px;border-radius:10px}
+  .dashboardContent .calendarDay b{font-size:12px}
+  .dashboardContent .calendarWeekHead span{font-size:10px}
+  .dashboardContent .calendarBlank{min-height:46px}
+  .dashboardContent .calendarLegend{gap:5px}
+  .dashboardContent .calendarLegend span{padding:5px 6px;font-size:9px}
+}
+@media(max-width:370px){
+  .dashboardContent .smartCalendarTop{flex-wrap:wrap}
+  .dashboardContent .smartCalendarActions{margin-left:auto}
+  .dashboardContent .calendarDay{min-height:42px}
+}
+@media(prefers-reduced-motion:reduce){.dashboardContent .calendarDay{transition:none}}
