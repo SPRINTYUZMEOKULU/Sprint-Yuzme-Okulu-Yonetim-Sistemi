@@ -275,13 +275,13 @@ export async function GET() {
   if (canViewFinance) {
     const [installmentResult, obligationResult] = await Promise.all([
       supabase.from("student_payment_installments")
-        .select("id,student_id,plan_id,amount,paid_amount,status")
+        .select("id,student_id,enrollment_id,plan_id,amount,paid_amount,status")
         .eq("organization_id", profile.organization_id).eq("due_date", today.iso)
         .in("status", ["pending","partial","overdue"]).limit(500),
       supabase.from("student_financial_obligations")
-        .select("id,student_id,amount,paid_amount,status")
+        .select("id,student_id,enrollment_id,obligation_type,amount,paid_amount,status")
         .eq("organization_id", profile.organization_id).eq("due_date", today.iso)
-        .in("status", ["pending","partially_paid","overdue"]).limit(500),
+        .not("status","in","(paid,cancelled)").limit(500),
     ]);
     if (installmentResult.error || obligationResult.error) {
       console.error("Dashboard payment due read:", installmentResult.error || obligationResult.error);
@@ -295,7 +295,7 @@ export async function GET() {
         if (!validStudents.has(row.student_id) || remaining <= 0) continue;
         dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"installment"});
       }
-      for (const row of obligationResult.data || []) {
+      // When a period has a separate installment schedule, do not count its\n      // package-level installment obligation a second time.\n      const scheduledEnrollmentIds = new Set((installmentResult.data || []).map(row => row.enrollment_id).filter(Boolean));\n      for (const row of obligationResult.data || []) {\n        if (row.obligation_type === "installment" && row.enrollment_id && scheduledEnrollmentIds.has(row.enrollment_id)) continue;
         const remaining = Math.max(0, Number(row.amount || 0) - Number(row.paid_amount || 0));
         if (!validStudents.has(row.student_id) || remaining <= 0) continue;
         dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"obligation"});
