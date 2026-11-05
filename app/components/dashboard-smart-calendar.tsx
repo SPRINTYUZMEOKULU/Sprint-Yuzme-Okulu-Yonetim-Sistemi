@@ -290,6 +290,62 @@ export default function DashboardSmartCalendar() {
         .selectedCalendarDay{margin-top:13px;padding-top:12px;border-top:1px solid #edf1f6}.selectedCalendarHead{display:flex;justify-content:space-between;align-items:center;gap:10px}.selectedCalendarHead strong{color:#17304f;font-size:11px}.calendarItemList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.calendarItem{display:flex;align-items:flex-start;gap:7px;padding:9px;border:1px solid #e4ebf4;border-radius:11px;background:#fbfcfe}.calendarItem>i{width:7px;height:7px;border-radius:50%;margin-top:3px;background:#2678ec}.calendarItem.holiday>i{background:#ef4444}.calendarItem.birthday>i{background:#8b5cf6}.calendarItem.note>i,.calendarItem.event>i,.calendarItem.reminder>i{background:#f59e0b}.calendarItem b{display:block;color:#203653;font-size:9px}.calendarItem span{display:block;margin-top:2px;color:#8291a5;font-size:8px}.calendarEmpty{padding:11px 0;color:#91a0b2;font-size:9px}
         .calendarNoteForm{margin-top:12px;padding:12px;border:1px solid #dbe7f5;border-radius:14px;background:#f8fbff}.calendarNoteGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.calendarNoteGrid label{display:flex;flex-direction:column;gap:4px;color:#526a84;font-size:8px;font-weight:900}.calendarNoteGrid label.full{grid-column:1/-1}.calendarNoteGrid input,.calendarNoteGrid select,.calendarNoteGrid textarea{border:1px solid #d6e2ef;border-radius:9px;background:#fff;padding:8px;font:inherit;font-size:10px;color:#203653}.calendarNoteGrid .reminderToggle{flex-direction:row;align-items:center}.calendarNoteGrid .reminderToggle input{width:auto}.calendarFormActions{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:9px}.calendarFormActions span{margin-right:auto;color:#16875b;font-size:8px}
         @media(max-width:640px){.smartCalendar{padding:14px;border-radius:17px}.smartCalendarTop{flex-direction:column}.smartCalendarActions{width:100%}.smartCalendarActions button{flex:1}.calendarDay{min-height:40px}.calendarItemList{grid-template-columns:1fr}.selectedCalendarHead{align-items:flex-start;flex-direction:column}.calendarNoteGrid{grid-template-columns:1fr}.calendarNoteGrid label.full{grid-column:auto}}
+
+        /* Fixed mobile header layout: title and controls on separate rows. */
+        @media(max-width:760px){
+          .dashboardContent .smartCalendar .smartCalendarTop{
+            display:grid !important;
+            grid-template-columns:minmax(0,1fr) !important;
+            align-items:start !important;
+            row-gap:13px !important;
+            width:100% !important;
+            margin-bottom:18px !important;
+          }
+          .dashboardContent .smartCalendar .smartCalendarTop>div:first-child{
+            width:100% !important;
+            min-width:0 !important;
+            max-width:100% !important;
+          }
+          .dashboardContent .smartCalendar .smartCalendarTop h3{
+            margin:6px 0 5px !important;
+            font-size:clamp(23px,6vw,29px) !important;
+            line-height:1.15 !important;
+            white-space:normal !important;
+          }
+          .dashboardContent .smartCalendar .smartCalendarTop p{
+            max-width:100% !important;
+            width:100% !important;
+            margin:0 !important;
+            font-size:11px !important;
+            line-height:1.5 !important;
+            overflow-wrap:normal !important;
+          }
+          .dashboardContent .smartCalendar .smartCalendarActions{
+            display:grid !important;
+            grid-template-columns:42px minmax(0,1fr) 42px !important;
+            width:100% !important;
+            min-width:0 !important;
+            max-width:100% !important;
+            margin:0 !important;
+            padding:4px !important;
+            gap:5px !important;
+            box-sizing:border-box !important;
+          }
+          .dashboardContent .smartCalendar .smartCalendarActions button,
+          .dashboardContent .smartCalendar .smartCalendarActions button:nth-child(2){
+            width:100% !important;
+            min-width:0 !important;
+            min-height:40px !important;
+            box-sizing:border-box !important;
+            margin:0 !important;
+          }
+          .dashboardContent .smartCalendar .calendarGrid,
+          .dashboardContent .smartCalendar .calendarWeekHead{
+            width:100% !important;
+            min-width:0 !important;
+            grid-template-columns:repeat(7,minmax(0,1fr)) !important;
+          }
+        }
       `}</style>
     </article>
   );
