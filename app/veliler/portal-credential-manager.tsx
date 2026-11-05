@@ -34,6 +34,15 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
         window.addEventListener('portal-credential-changed', changed);
         return () => { live = false; window.removeEventListener('portal-credential-changed', changed); };
     }, [accountId, studentId, initialCredential]);
+    function generatePassword() {
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+        const random = new Uint32Array(20);
+        crypto.getRandomValues(random);
+        const generated = Array.from(random, (value) => alphabet[value % alphabet.length]).join('');
+        setPassword(generated);
+        setShow(true);
+        setStatus('Güçlü şifre oluşturuldu. Hesaba uygulamak için Yeni Şifreyi Kaydet seçeneğini kullanın.');
+    }
     async function save() {
         if (lock.current) return;
         if (password.length < 8) {
@@ -122,7 +131,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
     {!credential ? <p className="credentialHint">Mevcut şifre güvenlik nedeniyle okunamaz. Bu oturumda hazırlanan şifre varsa burada kullanılır; yoksa yeni şifre belirleyip kaydedin.</p> : null}
     <label>Yeni şifre<input type={show ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => { setPassword(e.target.value); if (status.startsWith('Şifre en az')) setStatus(''); }} minLength={8} maxLength={100} disabled={busy} aria-describedby="portalPasswordRules"/></label>
     <p id="portalPasswordRules" className="credentialHint">En az 8 karakter kullanın. Şifreyi kaydetmeden WhatsApp paylaşımı açılamaz. Mevcut veli şifresini değiştirmek istemiyorsanız yeniden kaydetmeyin.</p>
-    <div className="credentialButtons"><button type="button" onClick={() => setShow(v => !v)} aria-pressed={show}>{show ? 'Şifreyi gizle' : 'Şifreyi göster'}</button><button type="button" className="credentialPrimary" disabled={busy || password.length < 8} onClick={save}>{busy ? 'Kaydediliyor…' : 'Yeni Şifreyi Kaydet'}</button></div>
+    <div className="credentialButtons"><button type="button" onClick={generatePassword} disabled={busy}>Güçlü Şifre Oluştur</button><button type="button" onClick={() => setShow(v => !v)} aria-pressed={show}>{show ? 'Şifreyi gizle' : 'Şifreyi göster'}</button><button type="button" className="credentialPrimary" disabled={busy || password.length < 8} onClick={save}>{busy ? 'Kaydediliyor…' : 'Yeni Şifreyi Kaydet'}</button></div>
     {!credential ? <p className="credentialHint" role="status">WhatsApp paylaşımı için önce en az 8 karakterlik yeni şifreyi kaydedin.</p> : null}
     {credential ? <div className="credentialReady"><strong>{credential.fullName} · Giriş bilgileri hazır</strong><label>Giriş telefonu<input readOnly value={credential.phone} onFocus={e => e.target.select()}/></label><label>Kaydedilen şifre<input type={show ? 'text' : 'password'} readOnly value={credential.password} onFocus={e => e.target.select()}/></label><div className="credentialButtons"><button type="button" onClick={() => copy('phone')}>Telefonu Kopyala</button><button type="button" onClick={() => copy('password')}>Şifreyi Kopyala</button><button type="button" onClick={() => copy('message')}>Giriş Bilgilerini Kopyala</button><button type="button" className="credentialWhatsapp" onClick={share}>WhatsApp Mesajını Aç</button></div></div> : null}
     {fallbackText ? <label>Kopyalanacak metin<textarea readOnly rows={4} value={fallbackText} onFocus={event => event.target.select()}/></label> : null}
