@@ -40,6 +40,7 @@ type PastSlot = {date:string;branchId:string;branchName:string;time:string;missi
   historyAvailable?: boolean;
   historyDays?: number;
   paymentDue?: {available:boolean;count:number;total:number;preview:Array<{studentId:string;name:string}>};
+  registrationFollowups?: {endingToday:Array<{studentId:string;name:string}>;beginningToday:Array<{studentId:string;name:string}>;manualDueReview:Array<{studentId:string;name:string}>} | null;
   birthdays: Array<{
     id: string;
     name: string;
@@ -131,7 +132,7 @@ function OperationPanel() {
 
   const actionCount = useMemo(() => {
     if (!data) return 0;
-    return (data.pastAttendance?.length || 0) + data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents + data.summary.preRegistrations + (data.paymentDue?.available ? data.paymentDue.count : 0);
+    return (data.pastAttendance?.length || 0) + data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents + data.summary.preRegistrations + (data.paymentDue?.available ? data.paymentDue.count : 0) + (data.registrationFollowups?.endingToday.length || 0) + (data.registrationFollowups?.manualDueReview.length || 0);
   }, [data]);
 
   async function celebrateBirthday(birthday: LiveData["birthdays"][number]) {
@@ -259,10 +260,30 @@ function OperationPanel() {
         <div className="sprintTodayDueText">
           <span>BUGÜNÜN ÖDEME TAKİBİ</span>
           <strong>{data.paymentDue.count ? `${data.paymentDue.count} kursiyerin bugün ödemesi var` : "Bugün vadesi gelen ödeme yok"}</strong>
-          <small>{data.paymentDue.count ? `${data.paymentDue.total.toLocaleString("tr-TR", {style:"currency",currency:"TRY",maximumFractionDigits:2})} kalan tutar · ${data.paymentDue.preview.map(p => p.name).join(", ")}${data.paymentDue.count > data.paymentDue.preview.length ? ` ve ${data.paymentDue.count - data.paymentDue.preview.length} kişi daha` : ""}` : "Planlı taksit ve vadeli borçlar kontrol edildi."}</small>
+          <small>{data.paymentDue.count ? `${data.paymentDue.total.toLocaleString("tr-TR", {style:"currency",currency:"TRY",maximumFractionDigits:2})} kalan tutar · ${data.paymentDue.preview.map(p => p.name).join(", ")}${data.paymentDue.count > data.paymentDue.preview.length ? ` ve ${data.paymentDue.count - data.paymentDue.preview.length} kişi daha` : ""}` : "Bugün ödenmemiş planlı taksit veya açık vadeli borç bulunmuyor."}</small>
         </div>
         <Link href="/odemeler" className="sprintTodayDueLink">Ödemeleri Aç <Icons.arrow /></Link>
       </section>}
+
+      {data.registrationFollowups && (
+        <section className="sprintRenewalFollowups" aria-label="Bugünkü kayıt ve ödeme kontrolleri">
+          <div className="sprintRenewalFollowupsHeading">
+            <div><span>KAYIT VE VADE KONTROLÜ</span><strong>Bugünün kayıt hareketleri</strong><small>Kayıt bitişi tek başına ödeme borcu anlamına gelmez.</small></div>
+            <Link href="/ogrenciler">Öğrencilere Git <Icons.arrow /></Link>
+          </div>
+          <div className="sprintRenewalFollowupGrid">
+            {[
+              {label:"Bugün kaydı biten",items:data.registrationFollowups.endingToday, tone:"amber"},
+              {label:"Bugün yeni başlayan",items:data.registrationFollowups.beginningToday,tone:"blue"},
+              {label:"Ödeme vadesi kontrolü",items:data.registrationFollowups.manualDueReview,tone:"purple"}
+            ].map(group=><div className={`sprintRenewalFollowupCard ${group.tone}`} key={group.label}>
+              <div className="sprintRenewalFollowupTitle"><span>{group.label}</span><b>{group.items.length}</b></div>
+              <small>{group.items.length ? group.items.slice(0,3).map(item=>item.name).join(", ") : "Bugün kayıt bulunmuyor"}{group.items.length>3 ? ` +${group.items.length-3} kişi` : ""}</small>
+              {group.items.length>0 && <Link href={`/ogrenciler/${group.items[0].studentId}`}>Kursiyeri Aç <Icons.arrow /></Link>}
+            </div>)}
+          </div>
+        </section>
+      )}
 
       <DashboardSmartCalendar />
 
@@ -461,7 +482,26 @@ function OperationPanel() {
         .pastSlotBranch{display:block;margin-top:10px;color:#1b3153;font-size:13px;line-height:1.5;overflow-wrap:anywhere}.pastSlotMissing{display:inline-block;margin-top:7px;padding:5px 8px;border-radius:7px;background:#fff7e8;color:#a06413;font-size:10px;font-weight:700}
         .pastSlotActions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid #edf1f6}.pastSlotActions a,.pastSlotActions button,.pastClosedRow button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:36px;padding:7px 10px;border:1px solid #dbe5f2;border-radius:9px;font:inherit;font-size:10px;font-weight:800;cursor:pointer;text-decoration:none;background:#f8faff;color:#2765bb}.pastSlotActions svg{width:14px;height:14px}.pastSlotActions a{margin-right:auto;background:#eaf2ff;border-color:#d0e2fc}.pastSlotActions .pastComplete{color:#17835c;background:#effbf5;border-color:#ceeedc}.pastSlotActions .pastRemove{color:#7b5360;background:#fff8f9;border-color:#f0dfe3}.pastSlotActions button:disabled,.pastClosedRow button:disabled{opacity:.5;cursor:wait}
         .pastAttendanceCard>small{display:block;margin-top:7px;color:#6d85a8;font-size:10px}.pastHistoryHelp{margin:0;padding:0 15px 14px;color:#7a8ba4;font-size:10px;line-height:1.7}.pastClosedDetails{border-top:1px solid #e0e8f3;background:#fbfcfe}.pastClosedDetails>summary{display:flex;align-items:center;gap:7px;padding:12px 15px;font-size:11px;font-weight:800;color:#73839b;cursor:pointer;list-style:none}.pastClosedDetails>summary span{background:#edf1f6;border-radius:6px;padding:2px 6px}.pastClosedList{padding:0 12px 12px;display:grid;gap:7px}.pastClosedRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid #e4eaf3;border-radius:10px;background:#fff}.pastClosedRow>div{min-width:0}.pastClosedRow strong{display:block;color:#4d6587;font-size:11px}.pastClosedRow span{display:block;margin-top:4px;color:#7a8ba4;font-size:10px;overflow-wrap:anywhere}.pastClosedRow small{display:inline-block;margin-top:6px;font-size:9px;color:#17835c}.pastClosedRow small.removed{color:#8a7180}.pastClosedRow button{flex-shrink:0}.pastAllDone{display:flex;align-items:center;gap:7px;color:#17835c;font-size:11px}.pastAllDone svg{width:16px;height:16px}.pastHistoryMessage{margin:0;padding:10px 12px;border-radius:10px;background:#f0f5ff;color:#35557c;font-size:11px;line-height:1.5}
-.sprintTodayDue{display:flex;align-items:center;gap:15px;margin:12px 0 20px;padding:16px 19px;border:1px solid #dbe8f8;border-radius:18px;background:linear-gradient(105deg,#eff7ff,#fff 67%,#f1faff);box-shadow:0 9px 26px rgba(25,82,140,.055)}
+.sprintRenewalFollowups{margin:0 0 18px;padding:17px;border:1px solid #dce8f7;border-radius:19px;background:linear-gradient(140deg,#fff,#f9fbff)}
+        .sprintRenewalFollowupsHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+        .sprintRenewalFollowupsHeading>div{display:grid;gap:4px}
+        .sprintRenewalFollowupsHeading span{font-size:10px;font-weight:900;letter-spacing:.12em;color:#6b85a6}
+        .sprintRenewalFollowupsHeading strong{font-size:15px;color:#17365d}
+        .sprintRenewalFollowupsHeading small{font-size:10px;color:#8191a6}
+        .sprintRenewalFollowupsHeading>a{flex:none;display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#1b68cb;text-decoration:none}
+        .sprintRenewalFollowupsHeading svg,.sprintRenewalFollowupCard a svg{width:13px;height:13px}
+        .sprintRenewalFollowupGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+        .sprintRenewalFollowupCard{min-width:0;padding:13px;border:1px solid #e1e9f4;border-radius:13px;background:#fff;display:grid;align-content:start;gap:8px}
+        .sprintRenewalFollowupCard.amber{border-left:3px solid #e6a44f}
+        .sprintRenewalFollowupCard.blue{border-left:3px solid #479bee}
+        .sprintRenewalFollowupCard.purple{border-left:3px solid #9b7bea}
+        .sprintRenewalFollowupTitle{display:flex;align-items:center;justify-content:space-between;gap:6px}
+        .sprintRenewalFollowupTitle span{font-size:10px;font-weight:800;color:#5b718b}
+        .sprintRenewalFollowupTitle b{font-size:19px;color:#163964}
+        .sprintRenewalFollowupCard small{font-size:10px;color:#7b8ea5;line-height:1.5;overflow-wrap:anywhere}
+        .sprintRenewalFollowupCard a{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#176de9;text-decoration:none}
+        @media(max-width:600px){.sprintRenewalFollowupGrid{grid-template-columns:1fr}.sprintRenewalFollowups{padding:13px}.sprintRenewalFollowupsHeading{align-items:flex-start}.sprintRenewalFollowupsHeading>a{max-width:100px;text-align:right}.sprintRenewalFollowupCard{grid-template-columns:1fr auto;align-items:center}.sprintRenewalFollowupCard small{grid-column:1/-1}}
+        .sprintTodayDue{display:flex;align-items:center;gap:15px;margin:12px 0 20px;padding:16px 19px;border:1px solid #dbe8f8;border-radius:18px;background:linear-gradient(105deg,#eff7ff,#fff 67%,#f1faff);box-shadow:0 9px 26px rgba(25,82,140,.055)}
         .sprintTodayDueIcon{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:14px;color:#176be0;background:#dfeeff}
         .sprintTodayDueIcon svg{width:23px;height:23px}
         .sprintTodayDueText{min-width:0;flex:1;display:grid;gap:4px}
