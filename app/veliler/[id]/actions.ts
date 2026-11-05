@@ -82,6 +82,11 @@ export async function linkGuardianStudentCanonical(formData: FormData) {
     .maybeSingle();
   if (studentError || !student) back(authProfileId, "error", studentError?.message || "Öğrenci bulunamadı.");
 
+  if (formData.get("is_primary") === "on") {
+    const { error: primaryError } = await admin.from("guardian_students").update({ is_primary: false })
+      .eq("student_id", studentId).eq("is_primary", true).neq("guardian_id", resolved.guardianId);
+    if (primaryError) back(authProfileId, "error", "Birincil veli bağlantısı güncellenemedi.");
+  }
   const { error } = await admin.from("guardian_students").upsert({
     guardian_id: resolved.guardianId,
     student_id: studentId,
