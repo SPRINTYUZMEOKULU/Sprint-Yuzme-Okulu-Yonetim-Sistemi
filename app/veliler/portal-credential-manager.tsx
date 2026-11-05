@@ -107,7 +107,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
                 setStatus('WhatsApp için kayıtlı telefon ekleyin. Giriş bilgilerini kopyalayabilirsiniz.');
                 return;
             }
-            const href = `https://wa.me/${value.phone.replace(/\\D/g, '')}?text=${encodeURIComponent(portalMessage(value, window.location.origin))}`;
+            const href = `https://wa.me/${value.phone.replace(/\D/g, '')}?text=${encodeURIComponent(portalMessage(value, window.location.origin))}`;
             if (target) target.location.replace(href);
             else window.location.assign(href);
             setStatus('WhatsApp mesajı açıldı. Gönderimi WhatsApp üzerinden onaylayın.');
