@@ -39,6 +39,7 @@ type PastSlot = {date:string;branchId:string;branchName:string;time:string;missi
   canManagePastAttendance?: boolean;
   historyAvailable?: boolean;
   historyDays?: number;
+  paymentDue?: {available:boolean;count:number;total:number;preview:Array<{studentId:string;name:string}>};
   birthdays: Array<{
     id: string;
     name: string;
@@ -130,7 +131,7 @@ function OperationPanel() {
 
   const actionCount = useMemo(() => {
     if (!data) return 0;
-    return (data.pastAttendance?.length || 0) + data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents;
+    return (data.pastAttendance?.length || 0) + data.summary.pendingAttendance + data.summary.pendingApprovals + data.summary.pendingCash + data.summary.openAlerts + data.summary.todayStartingStudents + data.summary.preRegistrations + (data.paymentDue?.available ? data.paymentDue.count : 0);
   }, [data]);
 
   async function celebrateBirthday(birthday: LiveData["birthdays"][number]) {
@@ -253,6 +254,16 @@ function OperationPanel() {
         </a>
       </div>
 
+      {data.paymentDue?.available && <section className="sprintTodayDue" aria-label="Bugünkü ödeme hatırlatmaları">
+        <div className="sprintTodayDueIcon"><Icons.wallet /></div>
+        <div className="sprintTodayDueText">
+          <span>BUGÜNÜN ÖDEME TAKİBİ</span>
+          <strong>{data.paymentDue.count ? `${data.paymentDue.count} kursiyerin bugün ödemesi var` : "Bugün vadesi gelen ödeme yok"}</strong>
+          <small>{data.paymentDue.count ? `${data.paymentDue.total.toLocaleString("tr-TR", {style:"currency",currency:"TRY",maximumFractionDigits:2})} kalan tutar · ${data.paymentDue.preview.map(p => p.name).join(", ")}${data.paymentDue.count > data.paymentDue.preview.length ? ` ve ${data.paymentDue.count - data.paymentDue.preview.length} kişi daha` : ""}` : "Planlı taksit ve vadeli borçlar kontrol edildi."}</small>
+        </div>
+        <Link href="/odemeler" className="sprintTodayDueLink">Ödemeleri Aç <Icons.arrow /></Link>
+      </section>}
+
       <DashboardSmartCalendar />
 
       <div className="liveOpsSummary">
@@ -334,6 +345,8 @@ function OperationPanel() {
         <article className="livePanel prioritiesPanel">
           <div className="livePanelHead"><div><span>ÖNCELİKLER</span><h3>Yapılacak İşlemler</h3></div><a href="/bildirimler">Bildirimler <Icons.arrow /></a></div>
           <div className="priorityRows">
+            {data.paymentDue?.available && data.paymentDue.count > 0 && <Link href="/odemeler" className="priorityRow warning"><i><Icons.wallet /></i><div><strong>{data.paymentDue.count} kursiyerin bugün ödeme vadesi var</strong><span>Ödenmemiş taksit ve vadeli borçları kontrol edin.</span></div><b>Ödemeler <Icons.arrow /></b></Link>}
+
             {data.summary.pendingAttendance > 0 && <a href={pendingAttendanceUrl} className="priorityRow urgent"><i><Icons.bell /></i><div><strong>{data.summary.pendingAttendance} yoklama bekliyor</strong><span>Bugünkü seansları tamamlayın.</span></div><b>İşleme Git <Icons.arrow /></b></a>}
             {(Boolean(data.pastAttendance?.length) || Boolean(data.closedPastAttendance?.length)) && <section className="pastAttendancePanel" aria-label="Geçmiş yoklama takibi">
               <details className="pastAttendanceDetails">
@@ -448,7 +461,17 @@ function OperationPanel() {
         .pastSlotBranch{display:block;margin-top:10px;color:#1b3153;font-size:13px;line-height:1.5;overflow-wrap:anywhere}.pastSlotMissing{display:inline-block;margin-top:7px;padding:5px 8px;border-radius:7px;background:#fff7e8;color:#a06413;font-size:10px;font-weight:700}
         .pastSlotActions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid #edf1f6}.pastSlotActions a,.pastSlotActions button,.pastClosedRow button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:36px;padding:7px 10px;border:1px solid #dbe5f2;border-radius:9px;font:inherit;font-size:10px;font-weight:800;cursor:pointer;text-decoration:none;background:#f8faff;color:#2765bb}.pastSlotActions svg{width:14px;height:14px}.pastSlotActions a{margin-right:auto;background:#eaf2ff;border-color:#d0e2fc}.pastSlotActions .pastComplete{color:#17835c;background:#effbf5;border-color:#ceeedc}.pastSlotActions .pastRemove{color:#7b5360;background:#fff8f9;border-color:#f0dfe3}.pastSlotActions button:disabled,.pastClosedRow button:disabled{opacity:.5;cursor:wait}
         .pastAttendanceCard>small{display:block;margin-top:7px;color:#6d85a8;font-size:10px}.pastHistoryHelp{margin:0;padding:0 15px 14px;color:#7a8ba4;font-size:10px;line-height:1.7}.pastClosedDetails{border-top:1px solid #e0e8f3;background:#fbfcfe}.pastClosedDetails>summary{display:flex;align-items:center;gap:7px;padding:12px 15px;font-size:11px;font-weight:800;color:#73839b;cursor:pointer;list-style:none}.pastClosedDetails>summary span{background:#edf1f6;border-radius:6px;padding:2px 6px}.pastClosedList{padding:0 12px 12px;display:grid;gap:7px}.pastClosedRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid #e4eaf3;border-radius:10px;background:#fff}.pastClosedRow>div{min-width:0}.pastClosedRow strong{display:block;color:#4d6587;font-size:11px}.pastClosedRow span{display:block;margin-top:4px;color:#7a8ba4;font-size:10px;overflow-wrap:anywhere}.pastClosedRow small{display:inline-block;margin-top:6px;font-size:9px;color:#17835c}.pastClosedRow small.removed{color:#8a7180}.pastClosedRow button{flex-shrink:0}.pastAllDone{display:flex;align-items:center;gap:7px;color:#17835c;font-size:11px}.pastAllDone svg{width:16px;height:16px}.pastHistoryMessage{margin:0;padding:10px 12px;border-radius:10px;background:#f0f5ff;color:#35557c;font-size:11px;line-height:1.5}
-        .pastAttendancePanel summary:focus-visible,.pastSlotActions a:focus-visible,.pastSlotActions button:focus-visible,.pastClosedRow button:focus-visible{outline:3px solid #176de9;outline-offset:2px}
+.sprintTodayDue{display:flex;align-items:center;gap:15px;margin:12px 0 20px;padding:16px 19px;border:1px solid #dbe8f8;border-radius:18px;background:linear-gradient(105deg,#eff7ff,#fff 67%,#f1faff);box-shadow:0 9px 26px rgba(25,82,140,.055)}
+        .sprintTodayDueIcon{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:14px;color:#176be0;background:#dfeeff}
+        .sprintTodayDueIcon svg{width:23px;height:23px}
+        .sprintTodayDueText{min-width:0;flex:1;display:grid;gap:4px}
+        .sprintTodayDueText>span{font-size:10px;font-weight:900;letter-spacing:.11em;color:#6781a3}
+        .sprintTodayDueText>strong{font-size:16px;color:#183b65;line-height:1.3}
+        .sprintTodayDueText>small{font-size:11px;color:#66809c;line-height:1.5;overflow-wrap:anywhere}
+        .sprintTodayDueLink{flex:none;display:flex;align-items:center;gap:7px;padding:10px 12px;border-radius:11px;background:#126adf;color:#fff;text-decoration:none;font-size:11px;font-weight:800}
+        .sprintTodayDueLink svg{width:14px;height:14px}
+        @media(max-width:560px){.sprintTodayDue{flex-wrap:wrap;gap:10px;padding:14px}.sprintTodayDueIcon{width:40px;height:40px}.sprintTodayDueText{flex:1 1 calc(100% - 60px)}.sprintTodayDueText>strong{font-size:14px}.sprintTodayDueLink{margin-left:auto}}
+                .pastAttendancePanel summary:focus-visible,.pastSlotActions a:focus-visible,.pastSlotActions button:focus-visible,.pastClosedRow button:focus-visible{outline:3px solid #176de9;outline-offset:2px}
         @media(max-width:400px){.pastAttendanceDetails>summary{padding:12px;gap:8px}.pastHistoryTitle strong{font-size:12px}.pastHistoryIcon{width:32px;height:32px}.pastSlotActions a{flex-basis:100%;margin-right:0}.pastSlotActions button{flex:1}}
       `}</style>
     </section>
