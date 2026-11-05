@@ -295,7 +295,11 @@ export async function GET() {
         if (!validStudents.has(row.student_id) || remaining <= 0) continue;
         dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"installment"});
       }
-      // When a period has a separate installment schedule, do not count its\n      // package-level installment obligation a second time.\n      const scheduledEnrollmentIds = new Set((installmentResult.data || []).map(row => row.enrollment_id).filter(Boolean));\n      for (const row of obligationResult.data || []) {\n        if (row.obligation_type === "installment" && row.enrollment_id && scheduledEnrollmentIds.has(row.enrollment_id)) continue;
+      // When a period has a separate installment schedule, do not count its
+      // package-level installment obligation a second time.
+      const scheduledEnrollmentIds = new Set((installmentResult.data || []).map(row => row.enrollment_id).filter(Boolean));
+      for (const row of obligationResult.data || []) {
+        if (row.obligation_type === "installment" && row.enrollment_id && scheduledEnrollmentIds.has(row.enrollment_id)) continue;
         const remaining = Math.max(0, Number(row.amount || 0) - Number(row.paid_amount || 0));
         if (!validStudents.has(row.student_id) || remaining <= 0) continue;
         dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"obligation"});
