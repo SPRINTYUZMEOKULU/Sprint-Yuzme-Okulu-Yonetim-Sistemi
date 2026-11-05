@@ -125,6 +125,23 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
             setStatus('Giriş bilgileri doğrulanamadı. Tekrar deneyin.');
         }
     }
+    async function sharePasswordOnly() {
+        // A standalone WhatsApp bubble allows the recipient to copy the full password
+        // using the standard message Copy command, without selecting part of a long message.
+        const target = window.open('about:blank', '_blank');
+        try {
+            const value = await current();
+            if (!value) { target?.close(); return; }
+            if (!value.phone) { target?.close(); setStatus('WhatsApp paylaşımı için telefon bulunamadı.'); return; }
+            const href = `https://wa.me/${value.phone.replace(/\D/g, '')}?text=${encodeURIComponent(value.password)}`;
+            if (target) target.location.replace(href);
+            else window.location.assign(href);
+            setStatus('Yalnızca şifreyi içeren WhatsApp mesajı açıldı. Gönderimi WhatsApp üzerinden onaylayın.');
+        } catch {
+            target?.close();
+            setStatus('Şifre doğrulanamadı. Yeniden kaydedip deneyin.');
+        }
+    }
     return <section className="portalCredentialManager" aria-label="Portal giriş bilgileri">
     <h3>Portal şifresi ve giriş bilgileri</h3>
     <p>Mesajı açmak şifreyi değiştirmez. Aynı veli hesabına bağlı tüm kursiyerler aynı şifreyi kullanır.</p>
@@ -133,7 +150,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
     <p id="portalPasswordRules" className="credentialHint">En az 8 karakter kullanın. Şifreyi kaydetmeden WhatsApp paylaşımı açılamaz. Mevcut veli şifresini değiştirmek istemiyorsanız yeniden kaydetmeyin.</p>
     <div className="credentialButtons"><button type="button" onClick={generatePassword} disabled={busy}>Güçlü Şifre Oluştur</button><button type="button" onClick={() => setShow(v => !v)} aria-pressed={show}>{show ? 'Şifreyi gizle' : 'Şifreyi göster'}</button><button type="button" className="credentialPrimary" disabled={busy || password.length < 8} onClick={save}>{busy ? 'Kaydediliyor…' : 'Yeni Şifreyi Kaydet'}</button></div>
     {!credential ? <p className="credentialHint" role="status">WhatsApp paylaşımı için önce en az 8 karakterlik yeni şifreyi kaydedin.</p> : null}
-    {credential ? <div className="credentialReady"><strong>{credential.fullName} · Giriş bilgileri hazır</strong><label>Giriş telefonu<input readOnly value={credential.phone} onFocus={e => e.target.select()}/></label><label>Kaydedilen şifre<input type={show ? 'text' : 'password'} readOnly value={credential.password} onFocus={e => e.target.select()}/></label><div className="credentialButtons"><button type="button" onClick={() => copy('phone')}>Telefonu Kopyala</button><button type="button" onClick={() => copy('password')}>Şifreyi Kopyala</button><button type="button" onClick={() => copy('message')}>Giriş Bilgilerini Kopyala</button><button type="button" className="credentialWhatsapp" onClick={share}>WhatsApp Mesajını Aç</button></div></div> : null}
+    {credential ? <div className="credentialReady"><strong>{credential.fullName} · Giriş bilgileri hazır</strong><label>Giriş telefonu<input readOnly value={credential.phone} onFocus={e => e.target.select()}/></label><label>Kaydedilen şifre<input type={show ? 'text' : 'password'} readOnly value={credential.password} onFocus={e => e.target.select()}/></label><div className="credentialButtons"><button type="button" onClick={() => copy('phone')}>Telefonu Kopyala</button><button type="button" onClick={() => copy('password')}>Şifreyi Kopyala</button><button type="button" onClick={() => copy('message')}>Giriş Bilgilerini Kopyala</button><button type="button" className="credentialWhatsapp" onClick={share}>WhatsApp Mesajını Aç</button><button type="button" className="credentialWhatsapp" onClick={sharePasswordOnly}>Şifreyi Ayrı Mesaj Olarak Gönder</button></div></div> : null}
     {fallbackText ? <label>Kopyalanacak metin<textarea readOnly rows={4} value={fallbackText} onFocus={event => event.target.select()}/></label> : null}
     {status ? <p role="status" aria-live="polite">{status}</p> : null}
   </section>;
