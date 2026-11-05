@@ -636,34 +636,3 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2BrandContent{gap:2px!important}
  .compactLogin .v2FormPanel{padding-top:10px!important}
 }
-
-/* SprintOS 2026: lightweight branded login glow; no GIF, JS loop or network calls. */
-.compactLogin .v2LogoFrame{
-  overflow:visible;
-  border:1px solid rgba(218,236,255,.95);
-  box-shadow:0 16px 40px rgba(0,0,0,.25),0 0 0 2px rgba(56,164,255,.22),0 0 13px rgba(39,151,255,.24),inset 0 1px rgba(255,255,255,.95);
-  animation:sprintLoginFrameGlow 3.6s ease-in-out infinite;
-}
-.compactLogin .v2LogoFrame::before{
-  inset:-3px;
-  border-radius:inherit;
-  background:linear-gradient(135deg,#f6c76b 0%,#7bd7ff 36%,#1675e9 66%,#f6c76b 100%);
-  animation:none;
-  opacity:.8;
-}
-.compactLogin .v2LogoFrame::after{border-radius:inherit;inset:3px}
-.compactLogin .v2LogoHalo{
-  pointer-events:none;
-  animation:sprintLoginHaloGlow 3.6s ease-in-out infinite;
-}
-@keyframes sprintLoginFrameGlow{
-  0%,100%{box-shadow:0 16px 40px rgba(0,0,0,.25),0 0 0 2px rgba(56,164,255,.16),0 0 9px rgba(39,151,255,.18)}
-  50%{box-shadow:0 16px 40px rgba(0,0,0,.25),0 0 0 2px rgba(123,215,255,.66),0 0 22px rgba(41,166,255,.75),0 0 38px rgba(41,166,255,.26)}
-}
-@keyframes sprintLoginHaloGlow{
-  0%,100%{opacity:.4;transform:scale(.97)}
-  50%{opacity:.85;transform:scale(1.04)}
-}
-@media(prefers-reduced-motion:reduce){
-  .compactLogin .v2LogoFrame,.compactLogin .v2LogoHalo{animation:none}
-}
