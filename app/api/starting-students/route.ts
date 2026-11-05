@@ -39,8 +39,18 @@ export async function GET(){
     const attendanceByEnrollment=new Map<string,any[]>();
     for(const row of attendanceResult.data||[]){if(!row.enrollment_id)continue;const rows=attendanceByEnrollment.get(row.enrollment_id)||[];rows.push(row);attendanceByEnrollment.set(row.enrollment_id,rows);}
     const transferStarted=new Set((transferStartedResult.data||[]).map((r:any)=>String(r.student_id||"")).filter(Boolean));
+    // A scheduled renewal takes precedence over a still-active expired period.
+    // Do not depend on row creation order: legacy renewals can be backfilled.
     const enrollmentMap=new Map<string,any>();
-    for(const row of enrollmentsResult.data||[]){if(row.student_id&&!enrollmentMap.has(row.student_id))enrollmentMap.set(row.student_id,row);}
+    for(const row of enrollmentsResult.data||[]){
+      if(!row.student_id)continue;
+      const previous=enrollmentMap.get(row.student_id);
+      if(!previous||
+        (row.status==="scheduled"&&previous.status!=="scheduled")||
+        (row.status===previous.status&&String(row.start_date||"")>String(previous.start_date||""))){
+        enrollmentMap.set(row.student_id,row);
+      }
+    }
     const groupMap=new Map((groupsResult.data||[]).map((r:any)=>[String(r.id),r]));
     const branchMap=new Map((branchesResult.data||[]).map((r:any)=>[String(r.id),r.name||"Şube"]));
     const schedulesByGroup=new Map<string,any[]>();
