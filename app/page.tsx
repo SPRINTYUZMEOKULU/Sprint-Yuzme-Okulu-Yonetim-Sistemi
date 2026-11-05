@@ -1002,7 +1002,7 @@ export default async function HomePage() {
                     href={
                       stat.href
                     }
-                    className={`proStat ${stat.tone}`}
+                    className={`proStat ${stat.tone}${stat.label === "Bekleyen Ön Kayıt" && typeof stat.value === "number" && stat.value > 0 ? " sprintPreRegGlow" : ""}`}
                     key={
                       stat.label
                     }
