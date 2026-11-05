@@ -1,4 +1,4 @@
-type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;created_at?:string|null;updated_at?:string|null};
+type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Student={id:string;status?:string|null;first_name?:string|null;last_name?:string|null};
 type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolean|null};
 type Compensation={enrollment_id?:string|null;student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
@@ -8,7 +8,7 @@ function newestEnrollment(rows:Enrollment[]){return [...rows].sort((a,b)=>enroll
 
 // Shared by the daily attendance screen and dashboard counters.
 export function attendanceRoster<S extends Student,E extends Enrollment>(p:{students:S[];enrollments:E[];memberships:Membership[];compensationLessons:Compensation[]},groupId:string,scheduleId:string,date:string,day:number){
-   const enrollmentRows=p.enrollments.filter(e=>e.group_id===groupId&&["active","scheduled"].includes(e.status||"")&&(!e.start_date||e.start_date<=date));
+   const enrollmentRows=p.enrollments.filter(e=>e.group_id===groupId&&["active","scheduled"].includes(e.status||"")&&(!e.start_date||e.start_date<=date)&&(!e.planned_end_date||date<=e.planned_end_date));
    const enrollmentByStudent=new Map<string,E>();
    for(const enrollment of enrollmentRows){const studentId=enrollment.student_id||"";if(!studentId)continue;const current=enrollmentByStudent.get(studentId);enrollmentByStudent.set(studentId,current?newestEnrollment([current,enrollment]) as E:enrollment)}
 
