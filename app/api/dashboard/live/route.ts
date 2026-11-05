@@ -53,7 +53,7 @@ export async function GET() {
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).in("weekday", scheduleWeekdaysForDate(today.iso)).eq("is_active", true).order("start_time"),
-    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,created_at,updated_at,lesson_weekdays,total_lessons,used_lessons,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
+    supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,payment_due_date,created_at,updated_at,lesson_weekdays,total_lessons,used_lessons,status,start_confirmation_required,actual_started_at").eq("organization_id", profile.organization_id).eq("status", "active").order("created_at", { ascending: false }),
     supabase.from("attendance_records").select("id,student_id,group_id,schedule_id,status,lesson_date,coach_note").eq("organization_id", profile.organization_id).eq("lesson_date", today.iso),
     supabase.from("attendance_records").select("student_id").eq("organization_id", profile.organization_id),
     supabase.from("student_activity_logs").select("student_id").eq("organization_id", profile.organization_id).eq("activity_type", "legacy_transfer_manager_confirmed"),
@@ -306,6 +306,29 @@ export async function GET() {
       }
     }
   }
+  // Enrollment dates are operational follow-ups, NOT proof of an unpaid invoice.
+  // Use the latest active period per student to avoid counting old renewed periods.
+  const activeStudentNames = new Map((studentsResult.data || [])
+    .filter(student => student.status === "active")
+    .map(student => [String(student.id), [student.first_name, student.last_name].filter(Boolean).join(" ")]));
+  const endingToday: Array<{studentId:string;name:string}> = [];
+  const beginningToday: Array<{studentId:string;name:string}> = [];
+  for (const [studentId, enrollment] of latestEnrollmentByStudent) {
+    const name = activeStudentNames.get(studentId);
+    if (!name) continue;
+    if (enrollment.planned_end_date === today.iso) endingToday.push({studentId,name});
+    if (enrollment.start_date === today.iso && !enrollment.actual_started_at) beginningToday.push({studentId,name});
+  }
+  // Payment deadline on the enrollment may be tracked without a separate installment.
+  // Keep it in a review queue rather than assigning a fabricated amount or debt.
+  const dueIds = new Set(dueItems.map(item => item.studentId));
+  const manualDueReview: Array<{studentId:string;name:string}> = [];
+  for (const [studentId, enrollment] of latestEnrollmentByStudent) {
+    const name = activeStudentNames.get(studentId);
+    if (name && enrollment.payment_due_date === today.iso && !dueIds.has(studentId)) {
+      manualDueReview.push({studentId,name});
+    }
+  }
   const dueStudentCount = new Set(dueItems.map(item => item.studentId)).size;
   const dueTotal = dueItems.reduce((sum, item) => sum + item.amount, 0);
   const duePreview = Array.from(new Map(dueItems.map(item => [item.studentId, {studentId:item.studentId,name:item.name}])).values()).slice(0, 3);
@@ -317,6 +340,7 @@ export async function GET() {
     cancellationMessagesAvailable: !cancellationMessagesResult.error,
     birthdays,
     paymentDue: {available:paymentDueAvailable,count:dueStudentCount,total:dueTotal,preview:duePreview},
+    registrationFollowups: canViewFinance ? {endingToday,beginningToday,manualDueReview} : null,
     pastAttendance: history.pending,
     closedPastAttendance: history.closed,
     canManagePastAttendance: ["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role) || profile.is_super_user,
