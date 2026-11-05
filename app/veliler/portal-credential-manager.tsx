@@ -96,20 +96,26 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
             }
         }
     }
-    async function share() { try {
-        const value = await current();
-        if (!value)
-            return;
-        if (!value.phone) {
-            setStatus('WhatsApp için kayıtlı telefon ekleyin. Giriş bilgilerini kopyalayabilirsiniz.');
-            return;
+    async function share() {
+        // Open a tab synchronously on the tap: iOS Safari blocks popups opened after awaits.
+        const target = window.open('about:blank', '_blank');
+        try {
+            const value = await current();
+            if (!value) { target?.close(); return; }
+            if (!value.phone) {
+                target?.close();
+                setStatus('WhatsApp için kayıtlı telefon ekleyin. Giriş bilgilerini kopyalayabilirsiniz.');
+                return;
+            }
+            const href = `https://wa.me/${value.phone.replace(/\\D/g, '')}?text=${encodeURIComponent(portalMessage(value, window.location.origin))}`;
+            if (target) target.location.replace(href);
+            else window.location.assign(href);
+            setStatus('WhatsApp mesajı açıldı. Gönderimi WhatsApp üzerinden onaylayın.');
+        } catch {
+            target?.close();
+            setStatus('Giriş bilgileri doğrulanamadı. Tekrar deneyin.');
         }
-        const href = `https://wa.me/${value.phone.replace(/\D/g, '')}?text=${encodeURIComponent(portalMessage(value, window.location.origin))}`;
-        window.location.assign(href);
     }
-    catch {
-        setStatus('Giriş bilgileri doğrulanamadı. Tekrar deneyin.');
-    } }
     return <section className="portalCredentialManager" aria-label="Portal giriş bilgileri">
     <h3>Portal şifresi ve giriş bilgileri</h3>
     <p>Mesajı açmak şifreyi değiştirmez. Aynı veli hesabına bağlı tüm kursiyerler aynı şifreyi kullanır.</p>
