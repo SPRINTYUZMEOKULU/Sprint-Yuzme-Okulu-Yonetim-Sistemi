@@ -267,12 +267,52 @@ export async function GET() {
       records:historyRecords.data||[],cancellations:cancellationsResult.data,closures:(historyClosures.data||[]).filter(row=>row.event_type==="pool_closure"&&row.status!=="cancelled"),branches,groups}) : [],
     (historyFollowups.data || []).map(row => ({ date: row.lesson_date, branchId: row.branch_id, time: String(row.start_time).slice(0, 5), status: row.status, updatedAt: row.updated_at })));
 
+  // Financial reminders share this already-polled dashboard response; no new endpoint or cron.
+  // Finance records must never be disclosed to coach-only profiles.
+  const canViewFinance = ["owner", "admin", "branch_manager", "registration_staff", "accounting"].includes(profile.role);
+  const dueItems: Array<{id:string;studentId:string;name:string;amount:number;kind:"installment"|"obligation"}> = [];
+  let paymentDueAvailable = canViewFinance;
+  if (canViewFinance) {
+    const [installmentResult, obligationResult] = await Promise.all([
+      supabase.from("student_payment_installments")
+        .select("id,student_id,plan_id,amount,paid_amount,status")
+        .eq("organization_id", profile.organization_id).eq("due_date", today.iso)
+        .in("status", ["pending","partial","overdue"]).limit(500),
+      supabase.from("student_financial_obligations")
+        .select("id,student_id,amount,paid_amount,status")
+        .eq("organization_id", profile.organization_id).eq("due_date", today.iso)
+        .in("status", ["pending","partially_paid","overdue"]).limit(500),
+    ]);
+    if (installmentResult.error || obligationResult.error) {
+      console.error("Dashboard payment due read:", installmentResult.error || obligationResult.error);
+      paymentDueAvailable = false;
+    } else {
+      const validStudents = new Map((studentsResult.data || [])
+        .filter(student => student.status === "active")
+        .map(student => [student.id, [student.first_name, student.last_name].filter(Boolean).join(" ")]));
+      for (const row of installmentResult.data || []) {
+        const remaining = Math.max(0, Number(row.amount || 0) - Number(row.paid_amount || 0));
+        if (!validStudents.has(row.student_id) || remaining <= 0) continue;
+        dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"installment"});
+      }
+      for (const row of obligationResult.data || []) {
+        const remaining = Math.max(0, Number(row.amount || 0) - Number(row.paid_amount || 0));
+        if (!validStudents.has(row.student_id) || remaining <= 0) continue;
+        dueItems.push({id:row.id,studentId:row.student_id,name:validStudents.get(row.student_id) || "Kursiyer",amount:remaining,kind:"obligation"});
+      }
+    }
+  }
+  const dueStudentCount = new Set(dueItems.map(item => item.studentId)).size;
+  const dueTotal = dueItems.reduce((sum, item) => sum + item.amount, 0);
+  const duePreview = Array.from(new Map(dueItems.map(item => [item.studentId, {studentId:item.studentId,name:item.name}])).values()).slice(0, 3);
+
   return NextResponse.json({
     ok: true,
     date: today.iso,
     sessions,
     cancellationMessagesAvailable: !cancellationMessagesResult.error,
     birthdays,
+    paymentDue: {available:paymentDueAvailable,count:dueStudentCount,total:dueTotal,preview:duePreview},
     pastAttendance: history.pending,
     closedPastAttendance: history.closed,
     canManagePastAttendance: ["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role) || profile.is_super_user,
