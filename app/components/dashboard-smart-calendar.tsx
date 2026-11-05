@@ -62,6 +62,7 @@ export default function DashboardSmartCalendar() {
   const [month, setMonth] = useState(monthOf(today));
   const [data, setData] = useState<CalendarPayload | null>(null);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [expanded, setExpanded] = useState(true);
   const [openForm, setOpenForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
@@ -70,6 +71,24 @@ export default function DashboardSmartCalendar() {
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState("09:00");
   const [message, setMessage] = useState("");
+
+  // Respect each device's saved preference. Mobile starts compact by default.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("sprintos:dashboard-calendar-expanded");
+      setExpanded(saved === null ? !window.matchMedia("(max-width: 760px)").matches : saved === "true");
+    } catch {
+      setExpanded(!window.matchMedia("(max-width: 760px)").matches);
+    }
+  }, []);
+
+  function toggleCalendar() {
+    setExpanded(previous => {
+      const next = !previous;
+      try { window.localStorage.setItem("sprintos:dashboard-calendar-expanded", String(next)); } catch {}
+      return next;
+    });
+  }
 
   const loadVersion=useRef(0);
   async function load(targetMonth = month) {
@@ -157,6 +176,18 @@ export default function DashboardSmartCalendar() {
 
   return (
     <article className="smartCalendar">
+      <div className="sprintCalendarDisclosure">
+        <div className="sprintCalendarDisclosureText">
+          <span>SPRİNTOS TAKVİM</span>
+          <strong>{trMonths[monthNumber - 1]} {year}</strong>
+          <small>{expanded ? "Dersler, özel günler ve hatırlatmalar" : "Takvim ve günlük programı görmek için açın"}</small>
+        </div>
+        <button type="button" className="sprintCalendarToggle" aria-expanded={expanded} aria-controls="sprintCalendarDetails" onClick={toggleCalendar}>
+          {expanded ? "Takvimi Kapat" : "Takvimi Aç"}
+          <span aria-hidden="true" className={expanded ? "isExpanded" : ""}>⌄</span>
+        </button>
+      </div>
+      {expanded && <div id="sprintCalendarDetails" className="sprintCalendarExpanded">
       <div className="smartCalendarTop">
         <div>
           <span>SPRİNTOS TAKVİM</span>
@@ -272,6 +303,8 @@ export default function DashboardSmartCalendar() {
         </div>
       ) : null}
 
+      </div>}
+
       <style jsx global>{`
         .dashboardContent .calendarAgendaLabel{display:block;font-size:10px;font-weight:900;letter-spacing:1.2px;color:#7387a3;margin-bottom:6px}
         .dashboardContent .calendarAgendaSummary{display:block;margin-top:6px;font-size:11px;color:#778ba4}
@@ -291,6 +324,24 @@ export default function DashboardSmartCalendar() {
         .calendarNoteForm{margin-top:12px;padding:12px;border:1px solid #dbe7f5;border-radius:14px;background:#f8fbff}.calendarNoteGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.calendarNoteGrid label{display:flex;flex-direction:column;gap:4px;color:#526a84;font-size:8px;font-weight:900}.calendarNoteGrid label.full{grid-column:1/-1}.calendarNoteGrid input,.calendarNoteGrid select,.calendarNoteGrid textarea{border:1px solid #d6e2ef;border-radius:9px;background:#fff;padding:8px;font:inherit;font-size:10px;color:#203653}.calendarNoteGrid .reminderToggle{flex-direction:row;align-items:center}.calendarNoteGrid .reminderToggle input{width:auto}.calendarFormActions{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:9px}.calendarFormActions span{margin-right:auto;color:#16875b;font-size:8px}
         @media(max-width:640px){.smartCalendar{padding:14px;border-radius:17px}.smartCalendarTop{flex-direction:column}.smartCalendarActions{width:100%}.smartCalendarActions button{flex:1}.calendarDay{min-height:40px}.calendarItemList{grid-template-columns:1fr}.selectedCalendarHead{align-items:flex-start;flex-direction:column}.calendarNoteGrid{grid-template-columns:1fr}.calendarNoteGrid label.full{grid-column:auto}}
 
+        .dashboardContent .smartCalendar .sprintCalendarDisclosure{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:2px 0}
+        .dashboardContent .smartCalendar .sprintCalendarDisclosureText{display:grid;gap:4px;min-width:0}
+        .dashboardContent .smartCalendar .sprintCalendarDisclosureText>span{font-size:10px;font-weight:900;letter-spacing:.12em;color:#6c86a6}
+        .dashboardContent .smartCalendar .sprintCalendarDisclosureText>strong{font-size:21px;letter-spacing:-.025em;color:#17385d}
+        .dashboardContent .smartCalendar .sprintCalendarDisclosureText>small{font-size:11px;color:#8193ab;line-height:1.35}
+        .dashboardContent .smartCalendar .sprintCalendarToggle{display:flex;gap:10px;align-items:center;justify-content:center;flex-shrink:0;padding:10px 13px;min-height:42px;border:1px solid #cfe0f8;border-radius:12px;background:#eff6ff;color:#1763c9;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+        .dashboardContent .smartCalendar .sprintCalendarToggle span{font-size:18px;line-height:1;transition:transform .18s}
+        .dashboardContent .smartCalendar .sprintCalendarToggle span.isExpanded{transform:rotate(180deg)}
+        .dashboardContent .smartCalendar .sprintCalendarToggle:focus-visible{outline:3px solid #176de9;outline-offset:2px}
+        .dashboardContent .smartCalendar .sprintCalendarExpanded{margin-top:16px;padding-top:15px;border-top:1px solid #e7edf6}
+        .dashboardContent .smartCalendar .sprintCalendarExpanded .smartCalendarTop>div:first-child{display:none}
+        .dashboardContent .smartCalendar .sprintCalendarExpanded .smartCalendarTop{justify-content:flex-end}
+        @media(max-width:760px){
+          .dashboardContent .smartCalendar .sprintCalendarDisclosureText>strong{font-size:19px}
+          .dashboardContent .smartCalendar .sprintCalendarToggle{font-size:11px;padding:9px 10px;min-height:40px}
+          .dashboardContent .smartCalendar .sprintCalendarExpanded .smartCalendarTop{display:block !important;margin-bottom:13px !important}
+        }
+        @media(prefers-reduced-motion:reduce){.dashboardContent .smartCalendar .sprintCalendarToggle span{transition:none}}
         /* Fixed mobile header layout: title and controls on separate rows. */
         @media(max-width:760px){
           .dashboardContent .smartCalendar .smartCalendarTop{
