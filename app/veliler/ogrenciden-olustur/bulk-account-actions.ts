@@ -153,6 +153,13 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[], res
       }
 
       for (const student of group.students) {
+        // Keep additional guardian links, but guarantee one primary account per student.
+        const { error: primaryError } = await admin.from("guardian_students")
+          .update({ is_primary: false })
+          .eq("student_id", student.id)
+          .eq("is_primary", true)
+          .neq("guardian_id", guardianRecord.id);
+        if (primaryError) throw primaryError;
         const { error: linkError } = await admin.from("guardian_students").upsert({ guardian_id: guardianRecord.id, student_id: student.id, relationship: group.relationship, is_primary: true, is_payment_contact: true, receives_messages: true, portal_access: true }, { onConflict: "guardian_id,student_id" });
         if (linkError) throw linkError;
         const selfAccount = group.relationship === "Kendisi";
