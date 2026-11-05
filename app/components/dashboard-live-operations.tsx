@@ -110,7 +110,7 @@ function OperationPanel() {
     const refresh = () => { if (document.visibilityState === "visible") void load(); };
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
-    const timer = window.setInterval(refresh, 30000);
+    const timer = window.setInterval(refresh, 60000);
     return () => {
       active = false;
       controller?.abort();
