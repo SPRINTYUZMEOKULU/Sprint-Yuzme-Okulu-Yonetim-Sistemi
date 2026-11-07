@@ -2,11 +2,10 @@
 
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
-import RegistrationCloseRequest from "@/app/components/registration-close-request";
+import PreRegistrationDisposition from "@/app/components/pre-registration-disposition";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  archivePreRegistration,
   updatePreRegistration,
 } from "./actions";
 
@@ -244,6 +243,7 @@ export default function PreRegistrationCenter({
   initialSelectedId,
   initialMainTab,
   initialFilter,
+  canDisposeCandidates = false,
 }: {
   students: Student[];
   branches: Branch[];
@@ -254,6 +254,7 @@ export default function PreRegistrationCenter({
   initialSelectedId: string | null;
   initialMainTab: MainTab;
   initialFilter: ListFilter;
+  canDisposeCandidates?: boolean;
 }) {
   const [mainTab, setMainTab] = useState<MainTab>(initialMainTab);
   const [listFilter, setListFilter] = useState<ListFilter>(initialFilter);
@@ -737,7 +738,7 @@ export default function PreRegistrationCenter({
 
                   <div className="preActionFooter">
                     <div className="preDangerActions">
-                      <RegistrationCloseRequest studentId={selected.id} name={`${selected.first_name} ${selected.last_name}`} action={archivePreRegistration}/>
+                      {canDisposeCandidates && <PreRegistrationDisposition key={selected.id} studentId={selected.id} name={`${selected.first_name} ${selected.last_name}`}/>}
                     </div>
 
                     <div className="prePrimaryActions">

@@ -725,6 +725,7 @@ export default async function StudentsPage() {
         <StudentsClient
           students={preparedStudents}
           passiveCount={passiveCountResult.count ?? 0}
+          canDisposeCandidates={["owner","admin"].includes(profile.role)}
           canManageStart={["owner","admin","branch_manager","registration_staff","accounting"].includes(profile.role)}
           branches={branches}
           groups={groups}

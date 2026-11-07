@@ -18,7 +18,7 @@ type ActivityRow = { student_id:string; activity_type:string|null; title:string|
 export default async function PreRegistrationsPage({searchParams}:{searchParams?:SearchParams}){
  const profile=await requireProfile(["owner","admin","branch_manager","registration_staff"]); const supabase=await createClient(); const params=searchParams?await searchParams:{}; const initialSelectedId=params.student||null; const selectedGroupId=params.group||null; const initialMainTab=params.view==="archive"?"archive":"pending"; const initialFilter=params.filter==="today"?"today":params.filter==="health"?"health":"all";
  const [{data:students},{data:branches},{data:groups},{data:packages},{data:consents},{data:activities}]=await Promise.all([
-  supabase.from("students").select("id,student_number,first_name,last_name,birth_date,phone,guardian_name,guardian_phone,preferred_days,preferred_time,swimming_level,registration_source,registration_note,created_at,branch_id,preferred_group_id,preferred_package_id,status").eq("organization_id",profile.organization_id).eq("status","pre_registration").order("created_at",{ascending:false}).limit(250),
+  supabase.from("students").select("id,student_number,first_name,last_name,birth_date,phone,guardian_name,guardian_phone,preferred_days,preferred_time,swimming_level,registration_source,registration_note,created_at,branch_id,preferred_group_id,preferred_package_id,status").eq("organization_id",profile.organization_id).eq("status","pre_registration").eq("is_deleted",false).order("created_at",{ascending:false}).limit(250),
   supabase.from("branches").select("id,name").eq("organization_id",profile.organization_id).order("name"),
   supabase.from("training_groups").select("id,name,branch_id,course_type,is_active").eq("organization_id",profile.organization_id).order("name"),
   supabase.from("course_packages").select("id,name,lesson_count,price,is_active,course_type").eq("organization_id",profile.organization_id).order("name"),
@@ -40,6 +40,6 @@ export default async function PreRegistrationsPage({searchParams}:{searchParams?
   {params.updated==="1"&&<div className="preRegistrationFlash" role="status"><strong>✓ Değişiklikler kaydedildi.</strong><span>Ön kayıt güncellendi ve işlem geçmişine eklendi.</span></div>}
   {params.status==="passive"&&<div className="preRegistrationFlash warning" role="status"><strong>Ön kayıt pasife alındı.</strong><span>Kayıt ve elektronik form geçmişi korunuyor.</span></div>}
   {params.status==="archived"&&<div className="preRegistrationFlash danger" role="status"><strong>Ön kayıt listeden silindi.</strong><span>Denetim ve form kayıtları güvenlik amacıyla korunuyor.</span></div>}
-  <PreRegistrationCenter students={list} branches={branches||[]} groups={groups||[]} packages={packages||[]} consents={consentList} activities={activityList} initialSelectedId={initialSelectedId} initialMainTab={initialMainTab} initialFilter={initialFilter}/>
+  <PreRegistrationCenter canDisposeCandidates={["owner","admin"].includes(profile.role)} students={list} branches={branches||[]} groups={groups||[]} packages={packages||[]} consents={consentList} activities={activityList} initialSelectedId={initialSelectedId} initialMainTab={initialMainTab} initialFilter={initialFilter}/>
  </main>;
 }
