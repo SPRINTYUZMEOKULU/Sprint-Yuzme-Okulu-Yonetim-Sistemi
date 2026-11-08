@@ -1,6 +1,6 @@
 "use client";
 
-import { currentRecipient } from "@/lib/messaging/current-recipient";
+import { currentRecipient, navigateWhatsapp } from "@/lib/messaging/current-recipient";
 import { useEffect } from "react";
 
 function sanitizeWhatsAppText(value: string) {
@@ -113,20 +113,24 @@ export default function WhatsAppSafeOpen() {
       const studentId=extractStudentId();
       if(safeUrl&&isWhatsAppUrl(safeUrl)&&studentId&&!/şifre|sifre|doğrulama|otp|giriş bilg|giris bilg/i.test(extractWhatsAppPayload(safeUrl).message)){
         const popup=originalOpen.call(window,"about:blank","_blank");
-        if(!popup)return null;
-        popup.opener=null;
+        if(popup)popup.opener=null;
         const payload=extractWhatsAppPayload(safeUrl);
         void currentRecipient(studentId,payload.recipient).then(recipient=>{
           const resolved=`https://wa.me/${recipient}?text=${encodeURIComponent(payload.message)}`;
-          popup.location.href=resolved;
           logWhatsAppInteraction(resolved);
-        }).catch(error=>{popup.close();window.alert(error.message);});
+          navigateWhatsapp(popup,resolved);
+        }).catch(error=>{popup?.close();window.alert(error.message);});
         return popup;
       }
       if (safeUrl && isWhatsAppUrl(safeUrl)) {
+        // noopener can return null even for an opened tab. Reserve a tab with
+        // a usable handle, then sever its opener before navigation.
+        const popup=originalOpen.call(window,"about:blank","_blank");
+        if(popup)popup.opener=null;
         logWhatsAppInteraction(safeUrl);
+        navigateWhatsapp(popup,String(safeUrl));
+        return popup;
       }
-
       return originalOpen.call(window, safeUrl as string | URL | undefined, target, features);
     }) as typeof window.open;
 
