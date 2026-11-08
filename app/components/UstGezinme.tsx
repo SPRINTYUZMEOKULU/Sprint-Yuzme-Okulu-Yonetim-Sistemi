@@ -97,7 +97,7 @@ export default function UstGezinme() {
 
           <Link href="/" className="navBrand">
             <span className="navLogo">
-              <Image src="/icons/icon-192.png" alt="Sprint Yüzme Okulu" width={38} height={38} priority />
+              <Image src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" width={38} height={38} priority />
             </span>
             <span className="navBrandText">
               <strong>SPRİNT YÜZME OKULU</strong>
