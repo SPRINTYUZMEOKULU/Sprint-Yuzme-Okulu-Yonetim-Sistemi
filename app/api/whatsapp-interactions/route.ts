@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       .eq("organization_id", organizationId)
       .eq("id", studentId)
       .maybeSingle();
-    if (!data) studentId = "";
+    if (!data) return NextResponse.json({ok:false,message:"Kursiyer doğrulanamadı."},{status:400});
   }
 
   // The registration wizard records explicit opening and staff confirmation separately.
@@ -198,9 +198,9 @@ export async function POST(request: Request) {
       .select("id")
       .eq("organization_id", organizationId)
       .or(`phone.eq.${recipient},phone.eq.${local},guardian_phone.eq.${recipient},guardian_phone.eq.${local}`)
-      .limit(1)
-      .maybeSingle();
-    studentId = data?.id || "";
+      .limit(2);
+    // Shared family numbers cannot identify one specific student.
+    studentId = data?.length === 1 ? data[0].id : "";
   }
 
   if (!studentId) {
@@ -230,7 +230,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const sentAt = new Date().toISOString();
+  const openedAt = new Date().toISOString();
   const recentCutoff = new Date(Date.now() - 20_000).toISOString();
 
   const { data: duplicate } = await supabase
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
     .eq("student_id", studentId)
     .eq("channel", "whatsapp")
     .eq("message_body", message)
-    .gte("sent_at", recentCutoff)
+    .gte("prepared_at", recentCutoff)
     .limit(1)
     .maybeSingle();
 
@@ -252,59 +252,45 @@ export async function POST(request: Request) {
   const metadata = {
     source: "global_whatsapp_capture",
     source_path: sourcePath || null,
+    opened_at: openedAt,
     delivery_confirmation: "whatsapp_opened",
   };
 
-  const [messageLog, contactLog, activityLog] = await Promise.all([
+  const [messageLog, activityLog] = await Promise.all([
     supabase.from("message_logs").insert({
       organization_id: organizationId,
       student_id: studentId,
       template_key: kind.templateKey,
       channel: "whatsapp",
       recipient: recipient || null,
-      subject: kind.title,
+      subject: kind.title.replace(/gönderildi/g, "WhatsApp’ta açıldı"),
       message_body: message,
-      status: "sent",
+      status: "opened",
       prepared_by: profile.id,
-      sent_by: profile.id,
-      prepared_at: sentAt,
-      sent_at: sentAt,
+      prepared_at: openedAt,
       metadata,
-    }),
-    supabase.from("student_contact_logs").insert({
-      organization_id: organizationId,
-      student_id: studentId,
-      contact_type: kind.contactType,
-      channel: "whatsapp",
-      recipient_phone: recipient || null,
-      message_text: message,
-      status: "sent",
-      handled_by: profile.id,
-      prepared_at: sentAt,
-      sent_at: sentAt,
-      confirmed_at: sentAt,
     }),
     supabase.from("student_activity_logs").insert({
       organization_id: organizationId,
       student_id: studentId,
-      activity_type: kind.activityType,
-      title: kind.title,
-      description: `WhatsApp üzerinden bilgilendirme gönderildi.${recipient ? ` Alıcı: ${recipient}` : ""}`,
+      activity_type: "whatsapp_message_opened",
+      title: kind.title.replace(/gönderildi/g, "WhatsApp’ta açıldı"),
+      description: `WhatsApp mesajı açıldı; gönderim onayı alınmadı.${recipient ? ` Alıcı: ${recipient}` : ""}`,
       new_value: {
         channel: "whatsapp",
         template_key: kind.templateKey,
         recipient: recipient || null,
-        sent_at: sentAt,
+        opened_at: openedAt,
         source_path: sourcePath || null,
       },
       source_type: "whatsapp",
       source_id: studentId,
       performed_by: profile.id,
-      performed_at: sentAt,
+      performed_at: openedAt,
     }),
   ]);
 
-  const error = messageLog.error || contactLog.error || activityLog.error;
+  const error = messageLog.error || activityLog.error;
   if (error) {
     return NextResponse.json(
       { ok: false, message: `WhatsApp geçmişi kaydedilemedi: ${error.message}` },
@@ -312,5 +298,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, studentId, sentAt, type: kind.contactType });
+  return NextResponse.json({ ok: true, studentId, openedAt, type: kind.contactType });
 }

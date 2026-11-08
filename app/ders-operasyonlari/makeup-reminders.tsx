@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { currentRecipient } from "@/lib/messaging/current-recipient";
+import { currentRecipient, navigateWhatsapp } from "@/lib/messaging/current-recipient";
 import { loadTodayMakeupReminders, makeupReminderAction, type MakeupReminder } from "./reminder-actions";
 
 export default function MakeupReminders(){
@@ -12,14 +12,13 @@ export default function MakeupReminders(){
     if(confirm&&!window.confirm(`${row.name} için hatırlatmayı WhatsApp’tan gönderdiniz mi?`))return;
     await run(async()=>{
       const popup=confirm?null:window.open("about:blank","_blank");
-      if(!confirm&&!popup)throw new Error("WhatsApp penceresi açılamadı. Açılır pencere iznini kontrol edin.");
       if(popup)popup.opener=null;
       try{
       const fresh=await makeupReminderAction(row.id,confirm?"confirm":"prepare");
       setRows(items=>items.map(item=>item.id===fresh.id?fresh:item));
       if(fresh.sent){popup?.close();setStatus(`${fresh.name}: Gönderildi olarak kayıtlı.`);return;}
       const phone=await currentRecipient(fresh.studentId,fresh.recipient);
-      if(popup)popup.location.href=`https://wa.me/${phone}?text=${encodeURIComponent(fresh.message)}`;
+      navigateWhatsapp(popup,`https://wa.me/${phone}?text=${encodeURIComponent(fresh.message)}`);
       setOpened(ids=>ids.includes(fresh.messageId)?ids:[...ids,fresh.messageId]);
       setStatus(`${fresh.name}: Mesajı WhatsApp’ta gönderip ardından gönderimi onaylayın.`);
       }catch(e){popup?.close();throw e;}

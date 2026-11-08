@@ -17,14 +17,14 @@ export async function openCurrentWhatsapp(studentId: string, previousRecipient: 
   if (popup) popup.opener = null;
   try {
     const recipient = await currentRecipient(studentId, previousRecipient);
-    const url = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
-    // Mobile browsers/PWAs can block or close a reserved tab. Navigate the
-    // current tab only after the saved recipient has been verified.
-    if (!popup || popup.closed) window.location.assign(url);
-    else {
-      try { popup.location.href = url; }
-      catch { popup.close(); window.location.assign(url); }
-    }
+    navigateWhatsapp(popup, `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`);
     return recipient;
   } catch (error) { popup?.close(); throw error; }
+}
+
+// Call only with a verified WhatsApp destination. Used by explicit queues too.
+export function navigateWhatsapp(popup: Window | null, url: string) {
+  if (!popup || popup.closed) { window.location.assign(url); return; }
+  try { popup.location.href = url; }
+  catch { popup.close(); window.location.assign(url); }
 }
