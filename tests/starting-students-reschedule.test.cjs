@@ -54,3 +54,10 @@ test('old package, pre-start attendance and cancellation do not block',async()=>
 test('RPC conflict is reported without changing the enrollment',async()=>{
   const s=setup({},[],'Başlangıç tarihi değişmiş.');const r=await s.post();assert.equal(r.status,400);assert.equal(s.enrollment.start_date,'2026-10-07');
 });
+
+ test('legacy unstarted dates use the atomic RPC instead of a standalone enrollment update',async()=>{
+  const s=setup({start_confirmation_required:false});assert.equal((await s.post()).status,200);assert.equal(s.rpcCalls.length,1);assert.equal(s.rpcCalls[0].name,'manage_enrollment_start');assert.equal(s.enrollment.planned_end_date,'2026-11-20');
+ });
+ test('scheduled renewal can be rescheduled without changing its status',async()=>{
+  const s=setup({status:'scheduled',start_confirmation_required:false});assert.equal((await s.post()).status,200);assert.equal(s.enrollment.status,'scheduled');assert.equal(s.rpcCalls.length,1);
+ });

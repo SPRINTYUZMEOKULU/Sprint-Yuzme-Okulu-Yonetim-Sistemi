@@ -2,7 +2,10 @@ type StartEnrollment = {id?:string;status?:string|null;start_date?:string|null;s
 type Attendance = {enrollment_id?:string|null;lesson_date?:string|null;status?:string|null};
 
 export function awaitingEnrollmentStart(enrollment:StartEnrollment|undefined,today:string,attendance:Attendance[],legacyStarted=false){
-  if(!enrollment||enrollment.actual_started_at)return false;
+  if(!enrollment)return false;
+  // A stale confirmation cannot hide a period whose new start is still in the future.
+  if(enrollment.start_date&&enrollment.start_date>today)return true;
+  if(enrollment.actual_started_at)return false;
   if(enrollment.status==="scheduled"||enrollment.start_confirmation_required||Boolean(enrollment.start_date&&enrollment.start_date>today))return true;
   const attended=attendance.some(row=>row.enrollment_id===enrollment.id&&!!enrollment.start_date&&!!row.lesson_date&&row.lesson_date>=enrollment.start_date&&["present","absent","excused"].includes(row.status||""));
   return !attended&&!legacyStarted;
