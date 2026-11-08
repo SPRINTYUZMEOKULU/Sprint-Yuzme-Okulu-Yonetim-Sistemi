@@ -40,3 +40,16 @@ test('iPhone popup is reserved synchronously and closes if fresh lookup fails',a
  if(ok){assert.equal(await promise,'905050001122');assert.match(popup.location.href,/wa.me\/905050001122/);}else{await assert.rejects(promise,/offline/);assert.equal(closed,true);assert.equal(popup.location.href,'about:blank');}
  }
 });
+
+test('blocked or closed popup falls back in the current tab only after recipient verification',async()=>{
+ const source=ts.transpileModule(fs.readFileSync('lib/messaging/current-recipient.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+ for(const popup of [null,{closed:true,close(){}}])for(const ok of [true,false]){
+  const destinations=[];let finish;
+  const response=new Promise(resolve=>{finish=resolve});const m={exports:{}};
+  new Function('module','exports','window','fetch',source)(m,m.exports,{open:()=>popup,location:{assign:url=>destinations.push(url)}},()=>response);
+  const pending=m.exports.openCurrentWhatsapp('student','old','Güncel mesaj');assert.equal(destinations.length,0);
+  finish({ok,json:async()=>ok?{ok:true,recipient:'905050001122'}:{ok:false,message:'Doğrulanamadı'}});
+  if(ok){await pending;assert.equal(destinations.length,1);assert.match(destinations[0],/wa.me\/905050001122/);assert.ok(destinations[0].includes(encodeURIComponent('Güncel mesaj')));}
+  else{await assert.rejects(pending,/Doğrulanamadı/);assert.equal(destinations.length,0);}
+ }
+});
