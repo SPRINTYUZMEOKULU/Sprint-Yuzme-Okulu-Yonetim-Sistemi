@@ -41,3 +41,17 @@ test('completed Sunday makeup remains visible and editable without becoming a ne
  assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-25',7).students,[]);
  p.compensationLessons[0].status='cancelled';assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-10-18',7).students,[]);
 });
+
+
+test('future or unconfirmed renewal cannot enter a cross-group makeup session',()=>{
+ const e={id:'new',student_id:'a',group_id:'team',status:'active',start_date:'2026-11-24',start_confirmation_required:true,actual_started_at:null};
+ const p={students:[{id:'a',status:'active'}],memberships:[],enrollments:[e],compensationLessons:[{student_id:'a',enrollment_id:'new',target_group_id:'sunday',target_schedule_id:'sun19',lesson_date:'2026-11-08',status:'completed'}]};
+ assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-11-08',7).students,[]);
+ e.start_date='2026-11-01';
+ assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-11-08',7).students,[]);
+ e.actual_started_at='2026-11-01T12:00:00Z';
+ assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-11-08',7).students.map(s=>s.id),['a']);
+ // An independent, earned makeup from the old period still remains valid.
+ e.start_date='2026-11-24';e.actual_started_at=null;p.compensationLessons[0].enrollment_id='old';
+ assert.deepEqual(attendanceRoster(p,'sunday','sun19','2026-11-08',7).students.map(s=>s.id),['a']);
+});
