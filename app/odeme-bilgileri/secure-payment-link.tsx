@@ -56,7 +56,7 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
       const data = await response.json().catch(() => ({}));
       if (!response.ok || typeof data?.url !== "string" || !data.url.startsWith("https://"))
         throw new Error(data?.message || "Bağlantı oluşturulamadı.");
-      const message = `SPRİNT YÜZME OKULU | ÖDEME BİLGİLERİ\n\n${studentName ? `${studentName} için ` : ""}IBAN/Havale ödeme bilgileri bağlantınız:\n\n${data.url}\n\nBelge bilgilerinizi tamamladıktan sonra IBAN ve QR bilgilerini görüntüleyebilirsiniz.\n\nBilgilendirme: 0551 896 83 19`;
+      const message = `🏊 *SPRİNT YÜZME OKULU*\n_Güvenli Ödeme ve Belge Bilgileri_\n\nSayın Veli / Kursiyer,\n\n${studentName ? `*${studentName.replace(/[\\*_~`]/g, "")}* için ` : ""}ödeme bilgilerinize güvenli bağlantımızdan ulaşabilirsiniz.\n\n🔗 *Ödeme ve Belge Bilgileri*\n${data.url}\n\n📋 _Önce belge bilgilerinizi tamamlayınız. Ardından VakıfBank IBAN ve QR ödeme bilgileri görüntülenecektir._\n\n☎️ Bilgi Hattı: 0551 896 83 19\n\n_SPRINT Yüzme Okulu · Resmî bilgilendirme_`;
       setPrepared({ url: data.url, message, recipient: phone, expiresAt: data.expiresAt });
       setStatus("Güvenli bağlantı hazır. WhatsApp'ta paylaşmak için aşağıdaki düğmeye dokunun. Gönderimi WhatsApp içinde onaylayın.");
     } catch (error) {
