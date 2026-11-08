@@ -336,6 +336,16 @@ export async function applyManagerCorrection(formData: FormData) {
   if (nextPeriodError) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Yeni dönem kontrol edilemedi.")}`);
   if (correctionOverlapsRenewal(startDate, plannedEndDate, nextPeriod)) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent("Mevcut dönem hazırlanmış yeni dönemle çakışamaz. Yeni dönem tarihlerini bu ekrandan düzenleyiniz.")}`);
 
+  // Explicitly postponing a period resets the old start confirmation as well.
+  const today = new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const postponingStart = startDate !== enrollment.start_date && startDate > today;
+  if (postponingStart) {
+    const attended = await supabase.from("attendance_records").select("id")
+      .eq("organization_id",organizationId).eq("student_id",studentId).eq("enrollment_id",enrollment.id)
+      .gte("lesson_date",enrollment.start_date).eq("status","present").limit(1);
+    if (attended.error || attended.data?.length) redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(attended.error ? "Katılım kayıtları doğrulanamadı. Tarih değiştirilmedi." : "Bu dönemde katılım kaydı var. Başlangıcı ertelemeden önce ilgili yoklamayı kontrol edin.")}`);
+  }
+
   const oldSnapshot = {
     student: {
       first_name: student.first_name,
@@ -427,6 +437,7 @@ export async function applyManagerCorrection(formData: FormData) {
     .update({
       group_id: groupId,
       package_id: packageId,
+      ...(postponingStart ? {start_confirmation_required:true,actual_started_at:null,used_lessons:0} : {}),
       start_date: startDate,
       planned_end_date: plannedEndDate,
       normal_end_date: plannedEndDate,
@@ -467,6 +478,15 @@ export async function applyManagerCorrection(formData: FormData) {
       );
     }
   }
+
+  const planSync=await syncCorrectedPlan(supabase,{
+    organizationId,studentId,enrollmentId:enrollment.id,groupId,weekdays:isoWeekdays,
+    totalLessons,startDate,normalEnd:plannedEndDate,actorId:profile.id,now,
+  });
+  if(!planSync.ok){
+    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt güncellendi; ders planı doğrulanamadı: ${planSync.error}`)}`);
+  }
+
 
   // Kullanılan ders sayısı, paket/program düzeltmesinden sonra eski paketin
   // sayacına göre doğrulanmamalı. Merkezi tüketim motoru yeni başlangıç tarihi,
@@ -535,14 +555,6 @@ export async function applyManagerCorrection(formData: FormData) {
     redirect(
       `/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Öğrenci bilgileri düzeltilemedi: ${studentUpdate.error.message}`)}`,
     );
-  }
-
-  const planSync=await syncCorrectedPlan(supabase,{
-    organizationId,studentId,enrollmentId:updatedEnrollment.id,groupId,weekdays:isoWeekdays,
-    totalLessons,startDate,normalEnd:updatedEnrollment.planned_end_date||null,actorId:profile.id,now,
-  });
-  if(!planSync.ok){
-    redirect(`/ogrenciler/${studentId}/duzeltme?error=${encodeURIComponent(`Kayıt güncellendi; ders planı doğrulanamadı: ${planSync.error}`)}`);
   }
 
   let oldPaymentSnapshot: any = null;
@@ -635,6 +647,7 @@ export async function applyManagerCorrection(formData: FormData) {
   revalidatePath("/ogrenciler");
   revalidatePath("/odemeler");
   revalidatePath("/yoklama");
+  revalidatePath("/baslayacak-kursiyerler");
   revalidatePath("/operasyon-plani");
   revalidatePath("/yoklama/aylik");
   revalidatePath("/");

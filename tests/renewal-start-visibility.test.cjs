@@ -13,3 +13,7 @@ test('starting page shows the renewed student even with old attendance',async()=
 test('next lesson respects individual days and normalizes Sunday zero',()=>{const schedules=[{id:'mon',weekday:1,start_time:'19:00'},{id:'wed',weekday:3,start_time:'20:00'},{id:'sun',weekday:0,start_time:'19:00'}];assert.equal(helpers.nextRegisteredLesson(schedules,'2026-11-02','2026-10-30',[3,5]).date,'2026-11-04');assert.equal(helpers.nextRegisteredLesson(schedules,'2026-11-01','2026-10-30',[7]).scheduleId,'sun');});
 const {attendanceRoster}=load('lib/attendance/roster.ts');
 test('future renewal does not replace old period before start; selected start date previews eight new lessons',()=>{const p={students:[{id:'student',status:'active'}],memberships:[{student_id:'student',group_id:'group',is_active:true}],enrollments:[{...next,total_lessons:8,used_lessons:0},{...old,total_lessons:8,used_lessons:8}],compensationLessons:[]};assert.equal(attendanceRoster(p,'group','fri','2026-10-30',5).enrollmentByStudent.get('student').id,'old');const preview=attendanceRoster(p,'group','wed','2026-11-04',3);assert.equal(preview.students.length,1);assert.equal(preview.enrollmentByStudent.get('student').id,'new');assert.equal(preview.enrollmentByStudent.get('student').used_lessons,0);});
+
+ test('future start remains in starting center despite a stale prior confirmation',()=>{
+  assert.equal(helpers.awaitingEnrollmentStart({...next,status:'active',actual_started_at:'2026-10-29T12:00:00Z'},'2026-10-30',attendance,true),true);
+ });

@@ -9,7 +9,7 @@ function cleanPhone(v?:string|null){const d=String(v||"").replace(/\D/g,"");if(!
 function trDate(v?:string|null){if(!v)return"-";const[y,m,d]=v.split("-");return y&&m&&d?`${d}.${m}.${y}`:v}
 function isAdultCourse(v?:string|null){const s=String(v||"").toLocaleLowerCase("tr-TR");return s.includes("yetişkin")||s.includes("yetiskin")||s.includes("adult")||s.includes("master")}
 export async function POST(request:Request){try{const profile=await requireProfile(["owner","admin","branch_manager","registration_staff"]);const organizationId=profile.organization_id;const body=await request.json().catch(()=>({}));const studentId=String(body?.studentId||"").trim(),startDate=String(body?.startDate||"").trim(),reason=String(body?.reason||"Kursiyer talebiyle başlangıç tarihi değiştirildi.").trim().slice(0,500);if(!studentId||!validDate(startDate))return NextResponse.json({ok:false,error:"Öğrenci veya yeni başlangıç tarihi geçersiz."},{status:400});const pastStart=startDate<todayTR();if(pastStart&&body?.confirmPastStart!==true)return NextResponse.json({ok:false,error:"Geçmiş tarihte başlatmak için başlangıcı onaylayın."},{status:400});
-const supabase=await createClient();const[{data:student},{data:enrollment,error:enrollmentError}]=await Promise.all([supabase.from("students").select("id,first_name,last_name,phone,guardian_phone").eq("organization_id",organizationId).eq("id",studentId).maybeSingle(),supabase.from("student_enrollments").select("id,student_id,start_date,planned_end_date,status,created_at,group_id,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("student_id",studentId).eq("status","active").order("created_at",{ascending:false}).limit(1).maybeSingle()]);if(enrollmentError||!enrollment)return NextResponse.json({ok:false,error:"Aktif öğrenci kaydı bulunamadı."},{status:404});
+const supabase=await createClient();const[{data:student},{data:enrollment,error:enrollmentError}]=await Promise.all([supabase.from("students").select("id,first_name,last_name,phone,guardian_phone").eq("organization_id",organizationId).eq("id",studentId).maybeSingle(),supabase.from("student_enrollments").select("id,student_id,start_date,planned_end_date,status,created_at,group_id,start_confirmation_required,actual_started_at").eq("organization_id",organizationId).eq("student_id",studentId).in("status",["active","scheduled"]).order("status",{ascending:false}).order("created_at",{ascending:false}).limit(1).maybeSingle()]);if(enrollmentError||!enrollment)return NextResponse.json({ok:false,error:"Aktif öğrenci kaydı bulunamadı."},{status:404});
 const pendingStart = enrollment.start_confirmation_required && !enrollment.actual_started_at;
 const [{data:attendance,error:attendanceError},{data:group}] = await Promise.all([
   pendingStart ? Promise.resolve({data:[],error:null}) : supabase.from("attendance_records").select("id")
@@ -21,16 +21,11 @@ if(attendanceError)return NextResponse.json({ok:false,error:"Yoklama bilgisi do�
 if(enrollment.actual_started_at || attendance?.length)return NextResponse.json({ok:false,error:"Bu paket başlatılmış. Başlangıç tarihi artık bu ekrandan değiştirilemez."},{status:400});
 const oldDate=enrollment.start_date||null;
 if(pastStart&&!pendingStart)return NextResponse.json({ok:false,error:"Bu kayıt başlangıç onayı beklemiyor. Öğrenci dosyasından kontrol edin."},{status:400});
-if(pendingStart){
-  const {data:result,error:startError}=await supabase.rpc("manage_enrollment_start",{
-    p_enrollment_id:enrollment.id,p_expected_start_date:oldDate,p_start_date:startDate,p_confirm:pastStart
-  });
-  if(startError||!result?.ok)return NextResponse.json({ok:false,error:startError?.message||"Başlangıç tarihi güncellenemedi."},{status:400});
-}else{
-  const {error:updateError}=await supabase.from("student_enrollments").update({start_date:startDate,updated_at:new Date().toISOString()})
-    .eq("id",enrollment.id).eq("organization_id",organizationId).is("actual_started_at",null).select("id").single();
-  if(updateError)return NextResponse.json({ok:false,error:`Başlangıç tarihi güncellenemedi: ${updateError.message}`},{status:500});
-}
+// One transaction updates the exact period, its plan, dates and audit record.
+const {data:result,error:startError}=await supabase.rpc("manage_enrollment_start",{
+  p_enrollment_id:enrollment.id,p_expected_start_date:oldDate,p_start_date:startDate,p_confirm:pastStart
+});
+if(startError||!result?.ok)return NextResponse.json({ok:false,error:startError?.message||"Başlangıç tarihi güncellenemedi."},{status:400});
 const {data:updated,error:readError}=await supabase.from("student_enrollments").select("start_date,planned_end_date")
   .eq("id",enrollment.id).eq("organization_id",organizationId).single();
 if(readError||updated?.start_date!==startDate)return NextResponse.json({ok:false,error:"Güncelleme sonucu doğrulanamadı. Sayfayı yenileyip kontrol edin."},{status:500});
