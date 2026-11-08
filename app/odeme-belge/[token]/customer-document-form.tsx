@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { saveCustomerDocumentInfo } from "./actions";
 
 export default function CustomerDocumentForm({ token }: { token: string }) {
+  const router = useRouter();
   const [type, setType] = useState("individual");
   const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  return <form className="doc-form" action={(fd) => startTransition(async () => { const r = await saveCustomerDocumentInfo(token, fd); setMessage(r.message); setDone(r.ok); })}>
+  return <form className="doc-form" action={(fd) => startTransition(async () => { try { const r = await saveCustomerDocumentInfo(token, fd); setMessage(r.message); setDone(r.ok); if (r.ok) router.refresh(); } catch { setDone(false); setMessage("Bağlantı kontrol edilemedi. Tekrar deneyiniz."); } })}>
     <div className="type-grid">
       <label className={type === "individual" ? "selected" : ""}><input type="radio" name="recipient_type" value="individual" checked={type === "individual"} onChange={() => setType("individual")} /> Bireysel</label>
       <label className={type === "company" ? "selected" : ""}><input type="radio" name="recipient_type" value="company" checked={type === "company"} onChange={() => setType("company")} /> Kurumsal</label>
