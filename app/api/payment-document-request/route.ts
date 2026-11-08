@@ -29,6 +29,35 @@ export async function POST(request: Request) {
 
   const { data: enrollment } = await admin.from("student_enrollments").select("id").eq("student_id", studentId).eq("organization_id", profile.organization_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
 
+  // Repeated clicks must not create multiple active requests for the same
+  // student and amount. This is a convenience safeguard; the UI also blocks
+  // overlapping clicks. Never reuse a completed or linked request.
+  const { data: activeRequests, error: activeError } = await admin
+    .from("payment_document_requests")
+    .select("public_token,expires_at,expected_amount")
+    .eq("organization_id", profile.organization_id)
+    .eq("student_id", studentId)
+    .eq("status", "waiting_customer")
+    .eq("document_status", "not_created")
+    .is("payment_id", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (activeError) return NextResponse.json({ message: "Mevcut ödeme bağlantıları kontrol edilemedi." }, { status: 500 });
+  const matching = (activeRequests || []).find(row =>
+    (row.expected_amount == null && expectedAmount == null) ||
+    (row.expected_amount != null && expectedAmount != null &&
+      Math.round(Number(row.expected_amount) * 100) === Math.round(expectedAmount * 100))
+  );
+  if (matching) {
+    const origin = new URL(request.url).origin;
+    return NextResponse.json({
+      url: `${origin}/odeme-belge/${matching.public_token}`,
+      expiresAt: matching.expires_at,
+      reused: true,
+    });
+  }
+
   const { data: row, error } = await admin.from("payment_document_requests").insert({
     organization_id: profile.organization_id,
     student_id: studentId,
