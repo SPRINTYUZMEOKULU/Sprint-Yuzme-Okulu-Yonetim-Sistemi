@@ -88,12 +88,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     }
   }
 
-  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, paymentsResult, profilesResult, schedulesResult, staffResult, assignmentsResult, packagesResult, plansResult, installmentsResult] = await Promise.all([
+  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, periodAttendanceResult, paymentsResult, profilesResult, schedulesResult, staffResult, assignmentsResult, packagesResult, plansResult, installmentsResult] = await Promise.all([
     readAll(supabase.from("branches").select("id,name,is_active").eq("organization_id", organizationId).order("name")),
     readAll(supabase.from("training_groups").select("id,branch_id,name,is_active,primary_coach_id").eq("organization_id", organizationId).order("name")),
     readAll(supabase.from("students").select("id,first_name,last_name,status,branch_id,birth_date,created_at").eq("organization_id", organizationId).eq("is_deleted", false)),
     readAll(supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status,created_at,lesson_weekdays,package_id,payment_due_date,start_confirmation_required,actual_started_at").eq("organization_id", organizationId)),
     readAll(supabase.from("attendance_records").select("id,enrollment_id,student_id,group_id,schedule_id,coach_id,lesson_date,status,branch_id,coach_note").eq("organization_id", organizationId).gte("lesson_date", from).lte("lesson_date", to)),
+    readAll(supabase.from("attendance_records").select("id,enrollment_id,student_id,status,lesson_date").eq("organization_id", organizationId)),
     readAll(supabase.from("student_payments").select("id,student_id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at,cash_handover_status").eq("organization_id", organizationId)),
     readAll(supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId)),
     readAll(supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,is_active").eq("organization_id", organizationId).eq("is_active", true)),
@@ -104,7 +105,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     readAll(supabase.from("student_payment_installments").select("id,plan_id,enrollment_id,due_date,amount,paid_amount,status").eq("organization_id", organizationId)),
   ]);
 
-  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error || staffResult.error || assignmentsResult.error || packagesResult.error || plansResult.error || installmentsResult.error;
+  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || periodAttendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error || staffResult.error || assignmentsResult.error || packagesResult.error || plansResult.error || installmentsResult.error;
   if (loadError) {
     return <main className="reportsShell"><div className="reportsError"><strong>Rapor verileri yüklenemedi.</strong><span>{loadError.message}</span><Link href="/">Yönetim paneline dön</Link></div></main>;
   }
@@ -114,6 +115,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const students = (studentsResult.data || []) as Student[];
   const enrollments = (enrollmentsResult.data || []) as Enrollment[];
   const attendance = (attendanceResult.data || []) as Attendance[];
+  const periodAttendance = (periodAttendanceResult.data || []) as Pick<Attendance, 'id' | 'enrollment_id' | 'student_id' | 'status' | 'lesson_date'>[];
   const payments = (paymentsResult.data || []) as Payment[];
   const coaches = (profilesResult.data || []) as Profile[];
   const schedules = (schedulesResult.data || []) as Schedule[];
@@ -312,9 +314,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const coachNames = [...new Set(studentAssignments.map(a => coachMap.get(a.coach_id) || "").filter(Boolean))];
     const groupCoach = groupMap.get(e.group_id || "")?.primary_coach_id;
     if (!coachNames.length && groupCoach) coachNames.push(coachMap.get(groupCoach) || "");
-    const periodAttendance = filteredAttendance.filter(a => a.enrollment_id === e.id);
-    const present = periodAttendance.filter(a => statusIsPresent(a.status)).length;
-    const absent = periodAttendance.filter(a => statusIsAbsent(a.status)).length;
+    const enrollmentAttendance = periodAttendance.filter(a => a.enrollment_id === e.id);
+    const present = enrollmentAttendance.filter(a => statusIsPresent(a.status)).length;
+    const absent = enrollmentAttendance.filter(a => statusIsAbsent(a.status)).length;
     return {age:ageOf(student.birth_date),branch:branchMap.get(enrollmentBranch(e) || "") || "—",group:groupMap.get(e.group_id || "")?.name || "—",coach:coachNames.filter(Boolean).join(", ") || "Atama yok",present,absent,normalRemaining:rights.normal,compensation:rights.compensation,studentId:student.id,id:e.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
   });
   financeRows.sort((a,b) => a.endIso.localeCompare(b.endIso) || a.name.localeCompare(b.name,"tr") || a.id.localeCompare(b.id));
