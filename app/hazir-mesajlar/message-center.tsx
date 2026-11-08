@@ -20,6 +20,13 @@ type AttendancePlan = { student_id:string; group_id?:string|null; selected_weekd
 type Props = { templates?:SprintMessageTemplate[]; branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
 type QueueItem = { interactionId?:string; templateKey?:string; templateTitle?:string; studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
 
+const STATUS_LABELS:Record<string,string>={sent:"Gönderildi",confirmed:"Gönderim onaylandı",opened:"WhatsApp açıldı · Onay bekliyor",failed:"Gönderilemedi",prepared:"Hazırlandı"};
+const CATEGORY_LABELS:Record<string,string>={registration:"Kayıt ve yenileme",lesson:"Ders ve katılım",payment:"Ödeme ve banka",operation:"Program ve duyurular",gift:"Hediye ders",general:"Genel iletişim"};
+function TemplateIcon({category}:{category:string}){
+  const paths:Record<string,string>={registration:"M8 4h8v4H8z M6 6H4v15h16V6h-2 M8 13h8 M8 17h5",lesson:"M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 15l2 2 5-5",payment:"M3 6h18v13H3z M3 10h18 M6 15h4",operation:"M12 3v3 M12 18v3 M3 12h3 M18 12h3 M16 8a6 6 0 1 0 0 8 M12 9v4l3 2",gift:"M3 8h18v4H3z M5 12v9h14v-9 M12 8v13 M12 8C4 8 5 1 9 3l3 5 M12 8c8 0 7-7 3-5z",general:"M3 4h18v13H8l-5 4z M7 8h10 M7 12h7"};
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[category]||paths.general}/></svg>;
+}
+
 const DAYS:Record<number,string> = {1:"Pzt",2:"Sal",3:"Çar",4:"Per",5:"Cum",6:"Cmt",7:"Paz"};
 
 function studentName(s:Student){ return `${s.first_name||""} ${s.last_name||""}`.trim(); }
@@ -34,6 +41,23 @@ function cleanPhone(v?:string|null){
 
 export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branches,groups,schedules,students,memberships,attendancePlans,whatsappApiReady=false}:Props){
   const [tab,setTab] = useState<"compose"|"templates"|"media"|"history"|"gift">("compose");
+  const [templateSearch,setTemplateSearch]=useState("");
+  const [category,setCategory]=useState("");
+  const [fieldValues,setFieldValues]=useState<Record<string,string>>({});
+  const [historyStudentId,setHistoryStudentId]=useState("");
+  const [history,setHistory]=useState<any[]>([]);
+  const [historyState,setHistoryState]=useState("");
+  const [historyVersion,setHistoryVersion]=useState(0);
+  useEffect(()=>{
+    if(tab!=="history"||!historyStudentId)return;
+    const controller=new AbortController();
+    setHistory([]);setHistoryState("Mesaj geçmişi yükleniyor…");
+    fetch(`/api/student-message-history?studentId=${encodeURIComponent(historyStudentId)}`,{cache:"no-store",signal:controller.signal})
+      .then(async res=>{if(!res.ok)throw new Error();const data=await res.json();if(!data.ok)throw new Error();setHistory(data.timeline||[]);setHistoryState("");})
+      .catch(()=>{if(!controller.signal.aborted)setHistoryState("Mesaj geçmişi yüklenemedi. Yenile düğmesiyle tekrar deneyin.");});
+    return ()=>controller.abort();
+  },[tab,historyStudentId,historyVersion]);
+  const filteredTemplates=templates.filter(t=>(!category||t.category===category)&&`${t.title} ${CATEGORY_LABELS[t.category]}`.toLocaleLowerCase("tr").includes(templateSearch.toLocaleLowerCase("tr")));
   const [branchId,setBranchId] = useState("");
   const [groupId,setGroupId] = useState("");
   const [scheduleId,setScheduleId] = useState("");
@@ -122,11 +146,13 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
     : visibleSchedules.map(s=>`${DAYS[s.weekday]} ${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}`).join(" / ") || "Program seçilmedi";
 
   function variablesFor(student?:Student){
+    const ownBranch=branches.find(b=>b.id===student?.branch_id);
+    const ownGroup=groups.find(g=>g.id===(attendancePlanMap.get(student?.id||"")?.group_id||membershipMap.get(student?.id||"")?.[0]||student?.preferred_group_id));
     return {
       ogrenci_adi: student ? studentName(student) : "Kursiyer Adı",
-      sube: selectedBranch?.name || "Şube",
-      grup: selectedGroup?.name || "Grup",
-      program: programText,
+      sube: selectedBranch?.name || ownBranch?.name || "Şube",
+      grup: selectedGroup?.name || ownGroup?.name || "Grup",
+      program: selectedSchedule || groupId ? programText : schedules.filter(s=>s.group_id===ownGroup?.id && (!attendancePlanMap.get(student?.id||"")?.selected_weekdays?.length || attendancePlanMap.get(student?.id||"")?.selected_weekdays?.includes(Number(s.weekday)))).map(s=>`${DAYS[s.weekday]} ${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}`).join(" / ") || "Program belirtilmedi",
       baslangic_tarihi: "—",
       bitis_tarihi: "—",
       normal_bitis_tarihi: "—",
@@ -139,10 +165,18 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       son_devamsizlik_tarihi: "—",
       gecis_tarihi: "—",
       hediye_ders: giftCount,
-      mesaj: "Duyuru metniniz burada görüntülenir.",
+      mesaj: "",
+      ...fieldValues,
     };
   }
 
+  const requiredFields=Array.from(new Set(Array.from(message.matchAll(/\{([a-z_]+)\}/g),m=>m[1]))).filter(key=>!["ogrenci_adi","sube","grup","program","hediye_ders","telafi_grubu","telafi_saati"].includes(key));
+  const incompleteFields=requiredFields.filter(key=>!fieldValues[key]?.trim());
+  function validateMessage(){
+    if(!message.trim()){window.alert("Mesaj içeriği boş olamaz.");return false;}
+    if(incompleteFields.length){window.alert("Gönderimden önce mesajdaki bilgi alanlarını doldurun: "+incompleteFields.map(k=>k.replaceAll("_"," ")).join(", "));return false;}
+    return true;
+  }
   const preview = renderSprintMessage(message, variablesFor(activeStudents[0]));
   const sendableCount = activeStudents.filter(s=>cleanPhone(s.guardian_phone)||cleanPhone(s.phone)).length;
   const missingPhoneCount = Math.max(0,activeStudents.length-sendableCount);
@@ -155,6 +189,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   function toggleStudent(id:string){ setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]); setQueue([]); }
 
   function buildQueue(){
+    if(!validateMessage())return;
     const previous=queueRef.current;
     if(previous.length){
       const confirmed=previous.filter(q=>q.status==="sent").length;
@@ -227,6 +262,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
   }
 
   async function sendViaApi(){
+    if(!validateMessage())return;
     if(!whatsappApiReady){ buildQueue(); return; }
     const payload = activeStudents.map(s=>({
       studentId:s.id,
@@ -251,7 +287,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       const response = await addGiftLessons({studentIds:activeIds,lessonCount:giftCount,targetGroupId:groupId,targetScheduleId:scheduleId||null,note:giftNote});
       setResult(response);
       if(response?.messages?.length){
-        const prepared=response.messages.map((m:any)=>({studentId:m.studentId,studentName:m.studentName,phone:cleanPhone(m.recipient),message:m.message,status:"waiting" as const})).filter((q:QueueItem)=>Boolean(q.phone));
+        const prepared=response.messages.map((m:any)=>({interactionId:crypto.randomUUID(),templateKey:"gift",templateTitle:"Hediye Ders",studentId:m.studentId,studentName:m.studentName,phone:cleanPhone(m.recipient),message:m.message,status:"waiting" as const})).filter((q:QueueItem)=>Boolean(q.phone));
         setQueue(prepared); setTemplateKey("gift");
       }
     });
@@ -283,20 +319,32 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
           </div>
         </div>
 
-        {tab==="templates" ? <div className={styles.card}><div className={styles.cardHead}><div><span>2</span><h2>Merkezi Akıllı Mesaj Kütüphanesi</h2></div><strong>{templates.length} şablon</strong></div><p className={styles.muted}>Öğrenci, ödeme, ders operasyonu ve Hazır Mesajlar ekranlarında aynı durum için aynı mesaj dili kullanılacak merkezi katalog budur.</p><div className={styles.templateGrid}>{templates.map(t=><button key={t.key} className={styles.templateCard} onClick={()=>chooseTemplate(t.key)}><i>{t.icon}</i><b>{t.title}</b><small>{t.category} · şablonu aç ve düzenle</small></button>)}</div></div> : null}
+        {tab==="history" && <div className={styles.card}>
+          <div className={styles.cardHead}><div><span>2</span><h2>Mesaj Geçmişi</h2></div><button onClick={()=>setHistoryVersion(v=>v+1)}>Yenile</button></div>
+          <label className={styles.mediaField}>Kursiyer<select value={historyStudentId} onChange={e=>setHistoryStudentId(e.target.value)}><option value="">Kursiyer seçin</option>{students.map(s=><option key={s.id} value={s.id}>{studentName(s)}</option>)}</select></label>
+          {historyStudentId&&<a className={styles.fileLink} href={`/ogrenciler/${historyStudentId}#mesajlar`}>Dijital kursiyer dosyasını aç →</a>}
+          <p role="status" className={styles.muted}>{historyState||(!historyStudentId?"Geçmişini görmek istediğiniz kursiyeri seçin.":!history.length?"Henüz mesaj kaydı yok.":`${history.length} iletişim kaydı`)}</p>
+          {history.map(item=><article className={styles.historyCard} key={item.id}><header><b>{item.title||"WhatsApp mesajı"}</b><span>{STATUS_LABELS[item.status]||item.status}</span></header><small>{item.recipient} · {item.sentAt?new Date(item.sentAt).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"}):"—"}</small><details><summary>Mesaj içeriğini göster</summary><p>{item.body}</p></details></article>)}
+        </div>}
+        {tab==="templates" ? <div className={styles.card}><div className={styles.cardHead}><div><span>2</span><h2>Merkezi Akıllı Mesaj Kütüphanesi</h2></div><strong>{templates.length} şablon</strong></div><p className={styles.muted}>Öğrenci, ödeme, ders operasyonu ve Hazır Mesajlar ekranlarında aynı durum için aynı mesaj dili kullanılacak merkezi katalog budur.</p><div className={styles.templateGrid}>{templates.map(t=><button key={t.key} className={styles.templateCard} onClick={()=>chooseTemplate(t.key)}><i><TemplateIcon category={t.category}/></i><b>{t.title}</b><small>{CATEGORY_LABELS[t.category]} · şablonu aç ve düzenle</small></button>)}</div></div> : null}
 
         {tab==="gift" ? <div className={styles.card}><div className={styles.cardHead}><div><span>🎁</span><h2>SPRİNT Hediye Ders Merkezi</h2></div></div><div className={styles.giftBanner}><div className={styles.giftIcon}>🎁</div><div><b>Kursiyerinize özel hediye ders tanımlayın</b><p>Ders hakkı otomatik artar, planlanan bitiş tarihi seçilen grup/seans düzenine göre uzar ve kursiyer işlem geçmişine kaydedilir.</p></div></div><div className={styles.filters}><label>Hediye ders sayısı<select value={giftCount} onChange={e=>setGiftCount(Number(e.target.value))}>{[1,2,3,4,5,6,8,10,12].map(n=><option key={n} value={n}>{n} ders</option>)}</select></label><label className={styles.wide}>Özel not<input value={giftNote} onChange={e=>setGiftNote(e.target.value)} placeholder="Örn. SPRİNT tarafından başarı hediyesi"/></label></div><div className={styles.summaryBox}><span>Seçili kursiyer <b>{activeIds.length}</b></span><span>Grup <b>{selectedGroup?.name||"Seçilmedi"}</b></span><span>Seans <b>{programText}</b></span></div><button className={styles.primary} disabled={pending||!activeIds.length||!groupId} onClick={applyGift}>{pending?"Hediye dersler işleniyor…":`${activeIds.length} Kişiye Hediye Ders Ekle`}</button>{result&&<div className={result.ok?styles.success:styles.error}>{result.message}</div>}</div> : null}
 
-        {tab!=="templates" && tab!=="gift" ? <div className={styles.card}>
+        {tab!=="templates" && tab!=="gift" && tab!=="history" ? <div className={styles.card}>
           <div className={styles.cardHead}><div><span>2</span><h2>Mesaj İçeriği</h2></div></div>
-          <div className={styles.quickTemplates}>{templates.map(t=><button key={t.key} className={templateKey===t.key?styles.chipActive:""} onClick={()=>chooseTemplate(t.key)}>{t.icon} {t.title}</button>)}</div>
-          <textarea className={styles.textarea} value={message} onChange={e=>{setMessage(e.target.value);setQueue([]);}} rows={13}/>
+          <p className={styles.sectionHint}>Hazır bir mesaj seçin, bilgileri tamamlayın ve alıcıya özel önizlemeyi kontrol edin.</p>
+          <div className={styles.templateTools}><input aria-label="Hazır mesaj ara" placeholder="Mesaj şablonu ara…" value={templateSearch} onChange={e=>setTemplateSearch(e.target.value)}/><select aria-label="Mesaj kategorisi" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Tüm kategoriler</option>{Object.entries(CATEGORY_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></div>
+          <div className={styles.quickTemplates}>{filteredTemplates.map(t=><button key={t.key} aria-pressed={templateKey===t.key} className={templateKey===t.key?styles.chipActive:""} onClick={()=>chooseTemplate(t.key)}><i><TemplateIcon category={t.category}/></i><span><b>{t.title}</b><small>{CATEGORY_LABELS[t.category]}</small></span></button>)}</div>
+          {!filteredTemplates.length&&<p className={styles.muted}>Aramanıza uygun şablon bulunamadı.</p>}
+          <label className={styles.editorLabel} htmlFor="ready-message-body">Mesaj metni <small>{message.length} karakter</small></label>
+          <textarea id="ready-message-body" className={styles.textarea} value={message} onChange={e=>{setMessage(e.target.value);setQueue([]);}} rows={13}/>
+          {requiredFields.length>0&&<div className={styles.messageFields}>{requiredFields.map(key=><label key={key}>{key.replaceAll("_"," ")}<input value={fieldValues[key]||""} onChange={e=>{setFieldValues(prev=>({...prev,[key]:e.target.value}));setQueue([]);}} placeholder="Gönderim için doldurun"/></label>)}</div>}
           <div className={styles.variables}><b>Akıllı alanlar:</b> <code>{`{ogrenci_adi}`}</code> <code>{`{sube}`}</code> <code>{`{grup}`}</code> <code>{`{program}`}</code> <code>{`{bitis_tarihi}`}</code> <code>{`{kalan_ders}`}</code></div>
           <label className={styles.mediaField}>Afiş / görsel bağlantısı<input value={mediaUrl} onChange={e=>{setMediaUrl(e.target.value);setQueue([]);}} placeholder="https://... görsel bağlantısı"/></label>
         </div> : null}
 
         {queue.length>0 && <div className={styles.card}>
-          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu · v2.2</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
+          <div className={styles.cardHead}><div><span>3</span><h2>WhatsApp Gönderim Kuyruğu</h2></div><strong>{queue.filter(q=>q.status==="sent").length}/{queue.length}</strong></div>
           <div className={styles.summaryBox}><span>Sıradaki <b>{currentQueueItem?.studentName||"—"}</b></span><span>Telefon <b>{currentQueueItem?.phone||"—"}</b></span><span>Durum <b>{currentQueueItem?.status==="opened"?"Gönderim onayı bekleniyor":currentQueueItem?.status==="error"?"Tekrar deneyin":queueComplete?"Tamamlandı":"Hazır"}</b></span></div>
           <progress className={styles.queueProgress} value={sentCount} max={queue.length} aria-label="Onaylanan gönderimler" />
           {queueComplete && <p className={styles.success} role="status">✓ {sentCount} kişinin gönderimi onaylandı. Liste başa dönmeyecek; bu mesajlar yeniden açılmayacak.</p>}

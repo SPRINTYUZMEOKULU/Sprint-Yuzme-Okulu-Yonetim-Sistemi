@@ -159,12 +159,12 @@ export async function POST(request: Request) {
     const title=String(body.templateTitle||"WhatsApp Bilgilendirmesi").slice(0,180);
     const sentAt=existing?.sent_at||now;
     const metadata={...existing?.metadata,source:sourcePath==="/hazir-mesajlar"?"ready_message_queue":"registration_wizard",source_path:sourcePath,
-      interaction_id:body.interactionId,opened_at:existing?.metadata?.opened_at||now,
+      interaction_id:body.interactionId,template_key:body.templateKey||kind.templateKey,template_title:title,opened_at:existing?.metadata?.opened_at||now,
       delivery_confirmation:confirmed?"manual_confirmed":"whatsapp_opened",
       ...(confirmed?{confirmed_at:existing?.metadata?.confirmed_at||now,confirmed_by:profile.id}:{})};
     // An opened request arriving late cannot downgrade a confirmed row.
     const log=await supabase.from("message_logs").upsert({
-      id,organization_id:organizationId,student_id:studentId,template_key:kind.templateKey,
+      id,organization_id:organizationId,student_id:studentId,template_key:body.templateKey||kind.templateKey,
       channel:"whatsapp",recipient,subject:title,message_body:message,
       status:confirmed?"sent":"opened",prepared_by:profile.id,prepared_at:existing?.prepared_at||now,
       ...(confirmed?{sent_by:profile.id,sent_at:sentAt}:{}),metadata,
@@ -181,8 +181,8 @@ export async function POST(request: Request) {
         supabase.from("student_activity_logs").upsert({
           id,organization_id:organizationId,student_id:studentId,activity_type:kind.activityType,
           title:`${title} · Gönderim onaylandı`,
-          description:"WhatsApp gönderimi kullanıcı tarafından onaylandı.",
-          new_value:{channel:"whatsapp",recipient,sent_at:sentAt,source_path:sourcePath,delivery_confirmation:"manual_confirmed",message_log_id:id},
+          description:message,
+          new_value:{channel:"whatsapp",recipient,sent_at:sentAt,source_path:sourcePath,delivery_confirmation:"manual_confirmed",message_body:message,template_key:body.templateKey||kind.templateKey,message_log_id:id},
           source_type:"whatsapp",source_id:id,performed_by:profile.id,performed_at:sentAt,
         },{onConflict:"id",ignoreDuplicates:true}),
       ]);

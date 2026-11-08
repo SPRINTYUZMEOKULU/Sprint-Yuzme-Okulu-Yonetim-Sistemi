@@ -35,6 +35,9 @@ test('queue logs opened separately, confirms once, and never downgrades sent',as
  assert.equal(db.tables.message_logs.length,1);assert.equal(db.tables.message_logs[0].status,'sent');
  assert.equal(db.tables.message_logs[0].metadata.delivery_confirmation,'manual_confirmed');
  assert.equal(db.tables.student_contact_logs.length,1);assert.equal(db.tables.student_activity_logs.length,1);
+ assert.equal(db.tables.message_logs[0].template_key,'payment');
+ assert.equal(db.tables.student_activity_logs[0].description,payload.message);
+ assert.equal(db.tables.student_activity_logs[0].new_value.message_body,payload.message);
  // Shared family phone numbers must still target the explicitly chosen student.
  await send({...payload,studentId:'student-b',queueEvent:'confirmed'});
  assert.equal(db.tables.message_logs.length,2);assert.equal(db.tables.message_logs[1].student_id,'student-b');
