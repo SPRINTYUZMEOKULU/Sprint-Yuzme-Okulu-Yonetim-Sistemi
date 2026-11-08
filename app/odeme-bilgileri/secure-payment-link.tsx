@@ -14,12 +14,21 @@ function normalizePhone(value?: string | null) {
   return "";
 }
 function parseAmount(raw: string): number | null {
-  const cleaned = raw.trim().replace(/\s/g, "");
-  if (!cleaned) return null;
-  const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return NaN;
+  const text = raw.trim().replace(/\s/g, "");
+  if (!text) return null;
+  // Accept Turkish grouping (4.000 / 4.000,50) and decimal notation
+  // (4000.50 / 4000,50) without interpreting 4.000 as four lira.
+  let normalized: string;
+  if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(text))
+    normalized = text.replace(/\./g, "").replace(",", ".");
+  else if (/^\d+(?:,\d{1,2})?$/.test(text))
+    normalized = text.replace(",", ".");
+  else if (/^\d+(?:\.\d{1,2})?$/.test(text))
+    normalized = text;
+  else return NaN;
   const value = Number(normalized);
-  return Number.isFinite(value) && value > 0 && value <= 10000000 ? value : NaN;
+  return Number.isFinite(value) && value > 0 && value <= 10000000
+    ? Math.round(value * 100) / 100 : NaN;
 }
 
 export default function SecurePaymentLink({ studentId, studentName, phoneCandidates = [] }: {
