@@ -154,6 +154,10 @@ export async function GET(request: NextRequest) {
   // A card can refer to a renewal that has since started. Keep the explicit
   // selected note available for review, without reviving old reminder banners.
   const visibleIds = new Set(currentNotes.map((note: any) => note.id));
+  for (const event of completions || []) {
+    const match = /^SPRINT_NOTE_COMPLETED:([a-f0-9-]{36})\n/i.exec(event.description || "");
+    if (match) visibleIds.add(match[1]);
+  }
   const visibleNotes = (notes || []).filter((note: any) => visibleIds.has(note.id) || note.id === selectedNoteId)
     .sort((a: any,b: any) => Number(b.id === selectedNoteId) - Number(a.id === selectedNoteId));
   const profileIds = Array.from(new Set([...visibleNotes.map((n: any) => n.author_id), ...(completions || []).map((n: any) => n.created_by)].filter(Boolean)));
@@ -365,17 +369,19 @@ export async function PUT(request: NextRequest) {
   const { data: note } = await supabase.from("student_notes").select("id")
     .eq("organization_id", organizationId).eq("student_id", studentId).eq("id", noteId).maybeSingle();
   if (!note) return NextResponse.json({ error: "Not bulunamadı." }, { status: 404 });
-  const { data: existing, error: existingError } = await supabase.from("student_timeline_events").select("id,description")
+  const { data: existing, error: existingError } = await supabase.from("student_timeline_events").select("id,description,created_at,created_by")
     .eq("organization_id", organizationId).eq("student_id", studentId)
     .eq("title", "Öğrenci notu tamamlandı");
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
-  if ((existing || []).some((row: any) => (row.description || "").startsWith(`SPRINT_NOTE_COMPLETED:${noteId}\n`))) {
+  const previousCompletion = (existing || []).find((row: any) => (row.description || "").startsWith(`SPRINT_NOTE_COMPLETED:${noteId}\n`));
+  const completedAt = previousCompletion?.created_at || new Date().toISOString();
+  if (previousCompletion) {
     // Retrying a saved completion must also repair its reminder state.
   } else {
   const { error } = await supabase.from("student_timeline_events").insert({
     organization_id: organizationId, student_id: studentId,
     event_type: "note_updated", title: "Öğrenci notu tamamlandı",
-    description: `SPRINT_NOTE_COMPLETED:${noteId}\n${reply}`, created_by: profile.id,
+    description: `SPRINT_NOTE_COMPLETED:${noteId}\n${reply}`, created_by: profile.id, created_at: completedAt,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -393,6 +399,14 @@ export async function PUT(request: NextRequest) {
     .in("notification_type", ["student_note_reminder","registration_note_reminder"])
     .or(`source_id.in.(${sourceIds.join(",")}),entity_id.eq.${noteId}`);
   if (notificationError) return NextResponse.json({ error: notificationError.message }, { status: 500 });
-  revalidatePath(`/ogrenciler/${studentId}`);revalidatePath("/bildirimler");
-  return NextResponse.json({ ok: true });
+  let author = {name: profile.full_name || profile.email || "İsim belirtilmemiş", role: profile.role};
+  if (previousCompletion?.created_by && previousCompletion.created_by !== profile.id) {
+    const {data: person} = await supabase.from("profiles").select("full_name,role").eq("organization_id",organizationId).eq("id",previousCompletion.created_by).maybeSingle();
+    author = {name: person?.full_name || "Kullanıcı bilgisi bulunamadı", role: person?.role || ""};
+  }
+  revalidatePath("/notlar");revalidatePath("/ogrenciler");revalidatePath(`/ogrenciler/${studentId}`);revalidatePath("/bildirimler");
+  return NextResponse.json({ ok: true, message: "İşlem tamamlanmıştır.", completion: {
+    reply: previousCompletion ? previousCompletion.description.split("\n").slice(1).join("\n") : reply,
+    completed_at: completedAt, author,
+  } });
 }

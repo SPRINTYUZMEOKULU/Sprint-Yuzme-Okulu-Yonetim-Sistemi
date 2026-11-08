@@ -1045,6 +1045,8 @@ const [messageText, setMessageText] = useState("");
 
 const [noteStudent, setNoteStudent] = useState<StudentListItem | null>(null);
 const [noteItems, setNoteItems] = useState<StudentNoteItem[]>([]);
+const [completedCardNoteIds,setCompletedCardNoteIds] = useState<string[]>([]);
+const [noteSuccess,setNoteSuccess] = useState("");
 const [noteLoading, setNoteLoading] = useState(false);
 const [noteSaving, setNoteSaving] = useState(false);
 const [noteError, setNoteError] = useState("");
@@ -1191,17 +1193,12 @@ async function completeStudentNote(noteId: string, quickComplete = false) {
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || "Not tamamlanamadı.");
-    // Tam sayfa refresh mobil Safari'de not panelini kilitleyebiliyor.
-    // Önce yalnızca ilgili kartı güncelle, ardından arka planda sunucuyla eşitle.
-    setNoteItems(items => items.map(item => item.id === noteId ? {
-      ...item, reminder_completed: true,
-      completion: { reply, completed_at: new Date().toISOString(), author: null },
-    } : item));
-    if (editingNoteId === noteId) resetStudentNoteForm();
+    setCompletedCardNoteIds(ids => ids.includes(noteId) ? ids : [...ids,noteId]);
+    const author = result.completion?.author?.name || "Kullanıcı bilgisi bulunamadı";
+    setNoteSuccess(`✓ Not tamamlandı olarak işaretlendi. İşlem tamamlanmıştır. İşaretleyen: ${author}`);
     window.dispatchEvent(new Event("sprintos-note-completed"));
-    setCompletingNoteId(null);
-    setNoteCompletionReply("");
-    void loadStudentNotes(studentId);
+    closeStudentNotes();
+    router.refresh();
   } catch (error) {
     setNoteError(error instanceof Error && error.name === "AbortError"
       ? "İşlem zaman aşımına uğradı. Tekrar işlem yapmadan önce not durumunu kontrol edin."
@@ -3062,6 +3059,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
         )}
       </section>
 
+      {noteSuccess && <div role="status" aria-live="polite" style={{margin:"12px 0",padding:16,borderRadius:12,background:"#eaf8ef",color:"#166534",display:"flex",justifyContent:"space-between",gap:12}}><strong>{noteSuccess}</strong><button type="button" aria-label="Tamamlanma bildirimini kapat" onClick={()=>setNoteSuccess("")}>✕</button></div>}
+
       <div className="resultInfo">
         <strong>{filteredStudents.length}</strong> öğrenci gösteriliyor
       </div>
@@ -3240,7 +3239,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                 </div>
               )}
 
-              {student.latest_note_body && (
+              {student.latest_note_body && !completedCardNoteIds.includes(student.active_note_reminder_note_id || student.latest_note_id || "") && (
                 <button
                   type="button"
                   className={`studentNotePreview ${
