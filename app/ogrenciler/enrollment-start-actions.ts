@@ -24,6 +24,6 @@ export async function manageEnrollmentStart(input: {
   });
   if (error) return { ok:false, message:error.message };
   if (!data?.ok) return { ok:false, message:"Başlangıç işlemi tamamlanamadı." };
-  ["/ogrenciler",`/ogrenciler/${input.studentId}`,"/yoklama","/"].forEach(path=>revalidatePath(path));
+  ["/baslayacak-kursiyerler","/ogrenciler",`/ogrenciler/${input.studentId}`,`/ogrenciler/${input.studentId}/duzeltme`,"/yoklama","/"].forEach(path=>revalidatePath(path));
   return { ok:true, message:String(data.message || "Başlangıç işlemi tamamlandı.") };
 }

@@ -27,6 +27,7 @@ function setup(overrides = {}, attendance = [], rpcError = null) {
   const source = ts.transpileModule(fs.readFileSync('app/api/starting-students/reschedule/route.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
   const mod={exports:{}};
   new Function('require','module','exports',source)(name=>{
+    if(name==='next/cache')return {revalidatePath:()=>{}};
     if(name==='next/server')return {NextResponse:{json:(body,opts)=>({body,status:opts?.status||200})}};
     if(name==='@/lib/auth/profile')return {requireProfile:async()=>({id:'admin',organization_id:'org'})};
     if(name==='@/lib/supabase/server')return {createClient:async()=>client};
