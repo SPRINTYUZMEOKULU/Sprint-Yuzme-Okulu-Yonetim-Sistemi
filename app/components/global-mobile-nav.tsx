@@ -267,7 +267,10 @@ export default function GlobalMobileNav() {
           <button className="globalMobileDrawerOverlay" onClick={() => setOpen(false)} aria-label="Menüyü kapat" />
           <aside className="globalMobileDrawer" aria-label="SPRİNT Yüzme Okulu ana menü">
             <div className="globalMobileDrawerHead">
-              <div><small>SPRİNT YÜZME OKULU</small><strong>SprintOS Ana Menü</strong></div>
+              <Link href="/" className="sprintDrawerBrand" aria-label="Sprint Yüzme Okulu ana sayfa">
+                <img src="/sprint-logo.png?v=6" alt="" width={48} height={48} />
+                <span><strong>SPRİNT YÜZME OKULU</strong><small>SprintOS Yönetim Paneli</small></span>
+              </Link>
               <button type="button" onClick={() => setOpen(false)} aria-label="Menüyü kapat">×</button>
             </div>
             <nav>

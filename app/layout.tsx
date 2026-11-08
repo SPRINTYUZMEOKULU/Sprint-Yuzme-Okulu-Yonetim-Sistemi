@@ -5,6 +5,7 @@ import type {
 import { Suspense } from "react";
 
 import "./globals.css";
+import "./components/navigation-brand.css";
 import "./components/permission-ui-guard.css";
 
 import UiClickSound from "./components/ui-click-sound";
