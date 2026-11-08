@@ -623,7 +623,7 @@ export async function confirmCancellationMessageSent(input: {studentId:string;me
     metadata:{...(row.metadata||{}),delivery_confirmation:"user_confirmed",confirmed_at:now,confirmed_by:profile.id}})
     .eq("organization_id",profile.organization_id).eq("id",row.id).eq("status","prepared").select("id");
   if(updateError||!updated?.length)return {ok:false,message:"Gönderim kaydı güncellenemedi. Sayfayı yenileyip kontrol edin."};
-  revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath("/ders-operasyonlari/gecmis");revalidatePath(`/ogrenciler/${input.studentId}`);
+  revalidatePath("/");revalidatePath("/ders-operasyonlari");revalidatePath("/ders-operasyonlari/gecmis");revalidatePath("/hazir-mesajlar");revalidatePath("/operasyon-plani");revalidatePath(`/ogrenciler/${input.studentId}`);
   return {ok:true,message:"Mesaj gönderildi olarak kaydedildi."};
 }
 
