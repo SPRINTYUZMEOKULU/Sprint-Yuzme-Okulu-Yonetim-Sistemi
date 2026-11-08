@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
   const profile = await requireProfile([...staffRoles]);
   const organizationId = profile.organization_id;
   const studentId = text(request.nextUrl.searchParams.get("studentId"), 100);
+  const selectedNoteId = text(request.nextUrl.searchParams.get("noteId"), 100);
 
   if (!organizationId || !studentId) {
     return NextResponse.json({ error: "Öğrenci bilgisi eksik." }, { status: 400 });
@@ -149,7 +150,12 @@ export async function GET(request: NextRequest) {
     (reminders || []).map((item: any) => [String(item.source_id || ""), item]),
   );
 
-  const visibleNotes = await loadVisibleRenewalNotes(supabase, organizationId, studentId, notes || []);
+  const currentNotes = await loadVisibleRenewalNotes(supabase, organizationId, studentId, notes || []);
+  // A card can refer to a renewal that has since started. Keep the explicit
+  // selected note available for review, without reviving old reminder banners.
+  const visibleIds = new Set(currentNotes.map((note: any) => note.id));
+  const visibleNotes = (notes || []).filter((note: any) => visibleIds.has(note.id) || note.id === selectedNoteId)
+    .sort((a: any,b: any) => Number(b.id === selectedNoteId) - Number(a.id === selectedNoteId));
   const profileIds = Array.from(new Set([...visibleNotes.map((n: any) => n.author_id), ...(completions || []).map((n: any) => n.created_by)].filter(Boolean)));
   const { data: authors, error: authorsError } = profileIds.length ? await supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId).in("id", profileIds) : { data: [], error: null };
   if (authorsError) return NextResponse.json({ error: authorsError.message }, { status: 500 });

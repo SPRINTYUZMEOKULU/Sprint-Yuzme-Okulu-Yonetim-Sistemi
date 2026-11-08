@@ -82,6 +82,7 @@ export type StudentListItem = {
   next_compensation_end_time?: string | null;
 
   latest_note_id?: string | null;
+  active_note_reminder_note_id?: string | null;
   latest_note_body?: string | null;
   latest_note_type?: string | null;
   latest_note_created_at?: string | null;
@@ -1054,26 +1055,41 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 const [completingNoteId, setCompletingNoteId] = useState<string | null>(null);
 const [noteCompletionReply, setNoteCompletionReply] = useState("");
 const noteReturnScrollYRef = useRef(0);
+const noteRequestRef = useRef(0);
+const selectedNoteRef = useRef<string | null>(null);
+const openNoteStudentRef = useRef<string | null>(null);
 
-async function loadStudentNotes(studentId: string) {
+async function loadStudentNotes(studentId: string, selectForEditing = false) {
+  const requestId = ++noteRequestRef.current;
   setNoteLoading(true);
   setNoteError("");
   try {
-    const response = await fetch(`/api/student-notes?studentId=${encodeURIComponent(studentId)}`, {
+    const response = await fetch(`/api/student-notes?studentId=${encodeURIComponent(studentId)}${selectedNoteRef.current ? `&noteId=${encodeURIComponent(selectedNoteRef.current)}` : ""}`, {
       cache: "no-store",
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Notlar yüklenemedi.");
-    setNoteItems((result.notes || []) as StudentNoteItem[]);
+    if (requestId !== noteRequestRef.current || openNoteStudentRef.current !== studentId) return;
+    const items = (result.notes || []) as StudentNoteItem[];
+    setNoteItems(items);
+    if (selectForEditing && selectedNoteRef.current) {
+      const selected = items.find(note => note.id === selectedNoteRef.current);
+      if (selected && !selected.completion) editStudentNote(selected);
+      else if (!selected) setNoteError("Seçilen not bulunamadı. Listeyi yenileyip tekrar deneyin.");
+    }
   } catch (error) {
-    setNoteError(error instanceof Error ? error.message : "Notlar yüklenemedi.");
+    if (requestId === noteRequestRef.current) setNoteError(error instanceof Error ? error.message : "Notlar yüklenemedi.");
   } finally {
-    setNoteLoading(false);
+    if (requestId === noteRequestRef.current) setNoteLoading(false);
   }
 }
 
 function openStudentNotes(student: StudentListItem) {
   noteReturnScrollYRef.current = window.scrollY;
+  openNoteStudentRef.current = student.id;
+  selectedNoteRef.current = student.active_note_reminder_at && student.active_note_reminder_note_id
+    ? student.active_note_reminder_note_id : student.latest_note_id || null;
+  setNoteItems([]);
   setNoteStudent(student);
   setEditingNoteId(null);
   setCompletingNoteId(null);
@@ -1082,10 +1098,14 @@ function openStudentNotes(student: StudentListItem) {
   setNoteType("general");
   setNoteReminderAt("");
   setNoteError("");
-  void loadStudentNotes(student.id);
+  void loadStudentNotes(student.id, true);
 }
 
 function closeStudentNotes() {
+  ++noteRequestRef.current;
+  openNoteStudentRef.current = null;
+  selectedNoteRef.current = null;
+  setNoteLoading(false);
   window.requestAnimationFrame(() => window.scrollTo({ top: noteReturnScrollYRef.current, behavior: "auto" }));
   setCompletingNoteId(null);
   setNoteCompletionReply("");
@@ -1101,7 +1121,7 @@ function closeStudentNotes() {
 function editStudentNote(note: StudentNoteItem) {
   setEditingNoteId(note.id);
   setNoteBody(note.body || "");
-  setNoteType(note.note_type || "general");
+  setNoteType(note.note_type === "crm" ? "registration" : note.note_type === "finance" ? "payment" : note.note_type || "general");
   setNoteReminderAt(noteDateTimeLocal(note.reminder_at));
   setNoteError("");
 }
@@ -1177,6 +1197,7 @@ async function completeStudentNote(noteId: string, quickComplete = false) {
       ...item, reminder_completed: true,
       completion: { reply, completed_at: new Date().toISOString(), author: null },
     } : item));
+    if (editingNoteId === noteId) resetStudentNoteForm();
     window.dispatchEvent(new Event("sprintos-note-completed"));
     setCompletingNoteId(null);
     setNoteCompletionReply("");
@@ -3519,6 +3540,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                       <option value="coach">Antrenör Notu</option>
                       <option value="registration">Kayıt Notu</option>
                       <option value="payment">Ödeme Notu</option>
+                      <option value="health">Sağlık Notu</option>
                     </select>
                   </label>
 
@@ -3554,7 +3576,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
                     <button
                       type="button"
                       className="primary"
-                      disabled={noteSaving || !noteBody.trim()}
+                      disabled={noteSaving || noteLoading || !noteBody.trim()}
                       onClick={() => void saveStudentNote()}
                     >
                       {noteSaving ? "Kaydediliyor…" : editingNoteId ? "Notu Güncelle" : "Notu Kaydet"}
@@ -3570,6 +3592,8 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
                   {noteLoading ? (
                     <div className="noteEmpty">Notlar yükleniyor…</div>
+                  ) : noteError && noteItems.length === 0 ? (
+                    <div className="noteEmpty" role="alert">{noteError}<button type="button" onClick={() => void loadStudentNotes(noteStudent.id, true)}>Yeniden dene</button></div>
                   ) : noteItems.length === 0 ? (
                     <div className="noteEmpty">Henüz not eklenmemiş.</div>
                   ) : (
@@ -3581,11 +3605,12 @@ thead{display:table-header-group}tr{break-inside:avoid}
                         }`}
                       >
                         <div>
-                          <strong>{note.note_type === "management" ? "Yönetici Notu" : note.note_type === "coach" ? "Antrenör Notu" : note.note_type === "registration" ? "Kayıt Notu" : note.note_type === "payment" ? "Ödeme Notu" : "Genel Not"}</strong>
+                          <strong>{note.note_type === "management" ? "Yönetici Notu" : note.note_type === "coach" ? "Antrenör Notu" : ["registration","crm"].includes(note.note_type || "") ? "Kayıt Notu" : ["payment","finance"].includes(note.note_type || "") ? "Ödeme Notu" : note.note_type === "health" ? "Sağlık Notu" : "Genel Not"}</strong>
                           <small>{note.created_at ? formatDisplayDateTime(new Date(note.created_at)) : ""}</small>
                         </div>
                         <div className="noteAuthor">Yazan: <strong>{note.author?.name || "Kullanıcı bilgisi bulunamadı"}</strong><span>{note.author?.role === "owner" ? "Sahip" : note.author?.role === "admin" ? "Yönetici" : note.author?.role === "coach" ? "Antrenör" : note.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"}</span></div>
-                        <p>{note.body}</p>
+                        {note.id === selectedNoteRef.current && <strong>Seçilen Not</strong>}
+                        <p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{note.body}</p>
                         {note.completion && <div className="noteCompletionInfo"><strong>✓ Tamamlandı</strong><span>{note.completion.reply}</span><small>Tamamlayan: {note.completion.author?.name || "Kullanıcı bilgisi bulunamadı"} · {note.completion.author?.role === "owner" ? "Sahip" : note.completion.author?.role === "admin" ? "Yönetici" : note.completion.author?.role === "coach" ? "Antrenör" : note.completion.author?.role === "branch_manager" ? "Şube Yöneticisi" : note.completion.author?.role === "registration_staff" ? "Kayıt Yetkilisi" : note.completion.author?.role === "accounting" ? "Muhasebe" : "Rol bilgisi yok"} · {formatDisplayDateTime(new Date(note.completion.completed_at))}</small></div>}
                         {note.reminder_at && !note.completion && !note.reminder_completed && (
                           <div className="noteReminderLine">

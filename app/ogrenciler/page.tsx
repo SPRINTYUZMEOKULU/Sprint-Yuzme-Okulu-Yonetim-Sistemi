@@ -694,6 +694,7 @@ export default async function StudentsPage() {
         active_note_reminder_at: activeNoteReminder?.reminder_at ?? null,
         active_note_reminder_id: activeNoteReminder?.id ?? null,
         active_note_reminder_note_body: reminderNote?.body ?? null,
+        active_note_reminder_note_id: reminderNote?.id ?? null,
 
         created_at: student.created_at || null,
       };
