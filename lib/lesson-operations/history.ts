@@ -1,6 +1,6 @@
 export type HistoryStudent = {studentId:string;name:string;status:"processed"|"skipped";reason:string;compensationDate:string|null;message:string|null;recipient:string|null;messageStatus:string;sentAt:string|null};
 export type HistorySession = {key:string;date:string;scheduleId:string;groupName:string;time:string;performedAt:string;hasSkippedRecords:boolean;students:HistoryStudent[]};
-export function buildCancellationHistory(logs:any[],messages:any[],names:Map<string,string>,schedules:Map<string,any>,groups:Map<string,string>):HistorySession[]{
+export function buildCancellationHistory(logs:any[],messages:any[],names:Map<string,string>,schedules:Map<string,any>,groups:Map<string,string>,changes:any[]=[]):HistorySession[]{
  const sessions=new Map<string,HistorySession>();
  for(const log of [...logs].sort((a,b)=>String(b.performed_at).localeCompare(String(a.performed_at)))){
   const date=log.old_value?.cancelled_lesson_date,scheduleId=log.source_id||log.old_value?.schedule_id;
@@ -11,8 +11,24 @@ export function buildCancellationHistory(logs:any[],messages:any[],names:Map<str
   if(log.activity_type==="lesson_cancellation_skipped")session.hasSkippedRecords=true;
   if(session.students.some(s=>s.studentId===log.student_id))continue;
   const matches=messages.filter(m=>m.student_id===log.student_id&&m.metadata?.cancelled_date===date&&m.metadata?.source_schedule_id===scheduleId).sort((a,b)=>String(b.prepared_at).localeCompare(String(a.prepared_at)));
-  const message=matches[0];
-  session.students.push({studentId:log.student_id,name:names.get(log.student_id)||"Kursiyer",status:log.activity_type==="lesson_cancellation_skipped"?"skipped":"processed",reason:log.description||log.new_value?.reason||"",compensationDate:log.new_value?.compensation_date||null,message:message?.message_body||null,recipient:message?.recipient||null,messageStatus:message?.status||"none",sentAt:message?.sent_at||null});
+  let compensationDate=log.new_value?.compensation_date||null;
+  let targetSchedule=log.new_value?.target_schedule_id||null;
+  let compensationId:string|null=null;
+  // Replay exact plan changes; another cancellation for this student must not move this one.
+  for(const change of [...changes].sort((a,b)=>String(a.performed_at).localeCompare(String(b.performed_at)))){
+   if(change.student_id!==log.student_id)continue;
+   const matchesPlan=compensationId ? change.source_id===compensationId :
+    compensationDate && targetSchedule && change.old_value?.lesson_date===compensationDate && change.old_value?.target_schedule_id===targetSchedule;
+   if(!matchesPlan)continue;
+   compensationId=change.source_id;
+   compensationDate=change.new_value?.status==="cancelled"?null:(change.new_value?.lesson_date||compensationDate);
+   targetSchedule=change.new_value?.target_schedule_id||targetSchedule;
+  }
+  // The saved message metadata also covers older bulk date corrections.
+  if(!compensationId && matches[0]?.metadata?.compensation_date)compensationDate=matches[0].metadata.compensation_date;
+  const message=matches.find(m=>m.status!=="cancelled" && (m.metadata?.compensation_date===compensationDate || (!compensationId && !m.metadata?.compensation_date)));
+
+  session.students.push({studentId:log.student_id,name:names.get(log.student_id)||"Kursiyer",status:log.activity_type==="lesson_cancellation_skipped"?"skipped":"processed",reason:log.description||log.new_value?.reason||"",compensationDate,message:message?.message_body||null,recipient:message?.recipient||null,messageStatus:message?.status||"none",sentAt:message?.sent_at||null});
  }
  return [...sessions.values()].sort((a,b)=>b.date.localeCompare(a.date)||b.performedAt.localeCompare(a.performedAt));
 }
