@@ -8,8 +8,9 @@ import "./globals.css";
 import "./components/navigation-brand.css";
 import "./components/permission-ui-guard.css";
 
+import StartupLoading from "./components/startup-loading";
+
 import UiClickSound from "./components/ui-click-sound";
-import SprintLaunchSplash from "./components/sprint-launch-splash";
 import PWARegister from "./components/pwa-register";
 import LiveNotificationCenter from "./components/live-notification-center";
 import DashboardLiveOperations from "./components/dashboard-live-operations";
@@ -54,33 +55,34 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="tr">
       <body>
-        <SprintLaunchSplash />
-        <UiClickSound />
-        <WhatsAppSafeOpen />
-        <Suspense fallback={null}>
-          <GlobalMobileNav />
-          <GlobalDesktopNav />
+        <Suspense fallback={<StartupLoading />}>
+          <UiClickSound />
+          <WhatsAppSafeOpen />
+          <Suspense fallback={null}>
+            <GlobalMobileNav />
+            <GlobalDesktopNav />
+          </Suspense>
+          {children}
+          <PersonelNavEnhancer />
+          <DashboardHomeEnhancer />
+          <DashboardHomeCleanup />
+          <DashboardLiveOperations />
+          <DashboardAttendanceLinks />
+          <ModuleNavigationFeedback />
+          <SidebarBranchClickFix />
+          <AttendanceAutomationCenter />
+          <PaymentInfoShortcut />
+          <StudentPaymentStatusEnhancer />
+          <StudentMessageHistoryEnhancer />
+          <FirstLessonStartEnhancer />
+          <FutureStartStudentEnhancer />
+          <PassiveCenterNavEnhancer />
+          <PassiveReactivationWorkflow />
+          <Suspense fallback={null}><RenewalDecisionCenter /></Suspense>
+          <Suspense fallback={null}><PermissionUiGuard /></Suspense>
+          <PWARegister />
+          <LiveNotificationCenter />
         </Suspense>
-        {children}
-        <PersonelNavEnhancer />
-        <DashboardHomeEnhancer />
-        <DashboardHomeCleanup />
-        <DashboardLiveOperations />
-        <DashboardAttendanceLinks />
-        <ModuleNavigationFeedback />
-        <SidebarBranchClickFix />
-        <AttendanceAutomationCenter />
-        <PaymentInfoShortcut />
-        <StudentPaymentStatusEnhancer />
-        <StudentMessageHistoryEnhancer />
-        <FirstLessonStartEnhancer />
-        <FutureStartStudentEnhancer />
-        <PassiveCenterNavEnhancer />
-        <PassiveReactivationWorkflow />
-        <Suspense fallback={null}><RenewalDecisionCenter /></Suspense>
-        <Suspense fallback={null}><PermissionUiGuard /></Suspense>
-        <PWARegister />
-        <LiveNotificationCenter />
       </body>
     </html>
   );
