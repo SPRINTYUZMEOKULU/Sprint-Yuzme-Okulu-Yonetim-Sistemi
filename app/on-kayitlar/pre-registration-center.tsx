@@ -1,7 +1,9 @@
 "use client";
 
+import { packageMatchesCourse } from "@/lib/registrations/course-type";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
+import { CONTACT_LABELS, contactResolved } from "@/lib/registrations/follow-up";
 import RegistrationCloseRequest from "@/app/components/registration-close-request";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -377,19 +379,19 @@ export default function PreRegistrationCenter({
     return branchMatches && (group.is_active !== false || isCurrent);
   });
 
+  const [showOtherPackages, setShowOtherPackages] = useState(false);
   const editPackages = packages.filter((pack) => {
     const isCurrent = pack.id === selected?.preferred_package_id;
     const activeOk = pack.is_active !== false || isCurrent;
     const courseTypeOk =
-      !selectedEditGroup?.course_type ||
-      !pack.course_type ||
-      pack.course_type === selectedEditGroup.course_type;
-    return activeOk && courseTypeOk;
+      packageMatchesCourse(pack.course_type, selectedEditGroup?.course_type);
+    return activeOk && (courseTypeOk || showOtherPackages || isCurrent);
   });
 
   function openStudent(id: string) {
     const student = students.find((item) => item.id === id);
     setSelectedId(id);
+    setShowOtherPackages(false);
     setEditBranchId(student?.branch_id || "");
     setEditGroupId(student?.preferred_group_id || "");
     setEditPackageId(student?.preferred_package_id || "");
@@ -525,6 +527,8 @@ export default function PreRegistrationCenter({
                     </div>
 
                     <div className="preCardBadges">
+                      {!contactResolved(consent, activities.filter(a=>a.student_id === student.id && a.activity_type === "contact_request_resolved")) ? <span className="preFollowUpBadge">{CONTACT_LABELS[consent!.contact_request!]}</span> : null}
+                      {activities.find(a=>a.student_id === student.id && a.activity_type === "trial_lesson")?.new_value && (activities.find(a=>a.student_id === student.id && a.activity_type === "trial_lesson")!.new_value as {status?:string}).status === "planned" ? <span className="preFollowUpBadge">Deneme dersi planlandı</span> : null}
                       {hasHealthNote && (
                         <span className="preHealthBadge">Sağlık Notu</span>
                       )}
@@ -957,6 +961,7 @@ export default function PreRegistrationCenter({
                         )}
                       </label>
 
+                      <label><input type="checkbox" name="allow_cross_course_package" checked={showOtherPackages} onChange={event=>{setShowOtherPackages(event.target.checked);if(!event.target.checked)setEditPackageId("");}}/> Diğer kurs türü paketlerini göster · ders ve ücret kontrolü yaptım</label>
                       <label>
                         <span>Paket</span>
                         <select
@@ -977,6 +982,7 @@ export default function PreRegistrationCenter({
                             </option>
                           ))}
                         </select>
+                        {!editPackages.length ? <small role="status">Uygun paket tanımlı değil. Diğer kurs türü paketlerini gösterebilir veya Paketler sayfasından yeni paket ekleyebilirsiniz.</small> : null}
                         {selectedEditGroup?.course_type && (
                           <small>
                             Paketler “{selectedEditGroup.course_type}” kurs
