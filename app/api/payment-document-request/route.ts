@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   // overlapping clicks. Never reuse a completed or linked request.
   const { data: activeRequests, error: activeError } = await admin
     .from("payment_document_requests")
-    .select("public_token,expires_at,expected_amount")
+    .select("id,public_token,expires_at,expected_amount")
     .eq("organization_id", profile.organization_id)
     .eq("student_id", studentId)
     .eq("status", "waiting_customer")
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
     return NextResponse.json({
       url: `${origin}/odeme-belge/${matching.public_token}`,
+      requestId: matching.id,
       expiresAt: matching.expires_at,
       reused: true,
     });
@@ -68,9 +69,9 @@ export async function POST(request: Request) {
     document_provider: "nettefatura",
     document_type: "pending_classification",
     created_by: user.id,
-  }).select("public_token,expires_at").single();
+  }).select("id,public_token,expires_at").single();
   if (error || !row) return NextResponse.json({ message: "Güvenli ödeme bağlantısı oluşturulamadı." }, { status: 500 });
 
   const origin = new URL(request.url).origin;
-  return NextResponse.json({ url: `${origin}/odeme-belge/${row.public_token}`, expiresAt: row.expires_at });
+  return NextResponse.json({ url: `${origin}/odeme-belge/${row.public_token}`, requestId: row.id, expiresAt: row.expires_at });
 }
