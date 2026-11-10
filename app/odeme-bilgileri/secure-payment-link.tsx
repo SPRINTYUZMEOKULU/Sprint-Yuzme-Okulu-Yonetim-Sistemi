@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 type PhoneCandidate = { phone: string; label: string; source: string };
-type PreparedLink = { url: string; message: string; recipient: string; expiresAt?: string };
+type PreparedLink = { url: string; requestId: string; message: string; recipient: string; expiresAt?: string };
 
 function normalizePhone(value?: string | null) {
   let digits = String(value || "").replace(/\D/g, "");
@@ -47,7 +47,7 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [prepared, setPrepared] = useState<PreparedLink | null>(null);
+  const [prepared, setPrepared] = useState<PreparedLink | null>(null);\n  const [confirming, setConfirming] = useState(false);\n  const [confirmed, setConfirmed] = useState(false);
 
   async function prepare() {
     if (!studentId) return setStatus("Önce kursiyer seçiniz.");
@@ -63,10 +63,10 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
         body: JSON.stringify({ studentId, expectedAmount: parsedAmount }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || typeof data?.url !== "string" || !data.url.startsWith("https://"))
+      if (!response.ok || typeof data?.url !== "string" || !data.url.startsWith("https://") || typeof data?.requestId !== "string")
         throw new Error(data?.message || "Bağlantı oluşturulamadı.");
       const message = `🏊 *SPRİNT YÜZME OKULU*\n_Güvenli Ödeme ve Belge Bilgileri_\n\nSayın Veli / Kursiyer,\n\n${studentName ? `*${studentName.replace(/[\\*_~`]/g, "")}* için ` : ""}ödeme bilgilerinize güvenli bağlantımızdan ulaşabilirsiniz.\n\n🔗 *Ödeme ve Belge Bilgileri*\n${data.url}\n\n📋 _Önce belge bilgilerinizi tamamlayınız. Ardından VakıfBank IBAN ve QR ödeme bilgileri görüntülenecektir._\n\n☎️ Bilgi Hattı: 0551 896 83 19\n\n_SPRINT Yüzme Okulu · Resmî bilgilendirme_`;
-      setPrepared({ url: data.url, message, recipient: phone, expiresAt: data.expiresAt });
+      setPrepared({ url: data.url, requestId: data.requestId, message, recipient: phone, expiresAt: data.expiresAt });
       setStatus("Güvenli bağlantı hazır. WhatsApp'ta paylaşmak için aşağıdaki düğmeye dokunun. Gönderimi WhatsApp içinde onaylayın.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Bağlantı oluşturulamadı.");
@@ -82,6 +82,25 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
       setStatus("Otomatik kopyalama başarısız. Bağlantıya uzun basarak kopyalayabilirsiniz.");
     }
   }
+  async function confirmSent() {
+    if (!prepared?.requestId || !prepared.recipient || confirming || confirmed) return;
+    setConfirming(true);
+    try {
+      const response = await fetch("/api/secure-payment-share-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: prepared.requestId, recipient: prepared.recipient }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) throw new Error(data?.message || "Gönderim kaydedilemedi.");
+      setConfirmed(true);
+      setStatus("Personel gönderim onayı mesaj geçmişine kaydedildi. WhatsApp teslimat/onay bilgisi alınmadı.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Gönderim kaydedilemedi.");
+    } finally {
+      setConfirming(false);
+    }
+  }
   const whatsappUrl = prepared?.recipient
     ? `https://wa.me/${prepared.recipient}?text=${encodeURIComponent(prepared.message)}`
     : "";
@@ -95,13 +114,13 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
     <div style={{ display: "grid", gap: 10 }}>
       <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 800, color: "#173a59" }}>
         WhatsApp alıcısı
-        {phones.length > 0 ? <select value={phone} disabled={busy} onChange={e => { setPhone(e.target.value); setPrepared(null); }} style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }}>
+        {phones.length > 0 ? <select value={phone} disabled={busy} onChange={e => { setPhone(e.target.value); setPrepared(null); setConfirmed(false); }} style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }}>
           {phones.map(x => <option key={normalizePhone(x.phone)} value={normalizePhone(x.phone)}>{x.label} · {x.phone}</option>)}
         </select> : <span style={{ color: "#a53b35" }}>Kayıtlı geçerli telefon yok. Bağlantıyı oluşturup manuel kopyalayabilirsiniz.</span>}
       </label>
       <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 800, color: "#173a59" }}>
         Ödenecek tutar (isteğe bağlı)
-        <input value={amount} disabled={busy} onChange={e => { setAmount(e.target.value); setPrepared(null); }} inputMode="decimal" placeholder="Örn. 4.000,00" style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }} />
+        <input value={amount} disabled={busy} onChange={e => { setAmount(e.target.value); setPrepared(null); setConfirmed(false); }} inputMode="decimal" placeholder="Örn. 4.000,00" style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }} />
       </label>
       <button type="button" onClick={prepare} disabled={busy} style={{ minHeight: 48, padding: 14, border: 0, borderRadius: 12, background: "#0a5da8", color: "#fff", fontWeight: 900, cursor: busy ? "wait" : "pointer" }}>
         {busy ? "Bağlantı hazırlanıyor…" : "Güvenli Ödeme Bağlantısı Oluştur"}
@@ -113,6 +132,7 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
       <input readOnly aria-label="Güvenli ödeme bağlantısı" value={prepared.url} onFocus={e => e.currentTarget.select()} style={{ minWidth: 0, padding: 10, border: "1px solid #d9e5ed", borderRadius: 8 }} />
       {prepared.expiresAt ? <small style={{ color: "#61788d" }}>Son geçerlilik: {new Date(prepared.expiresAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })}</small> : null}
       {whatsappUrl ? <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" style={{ padding: 14, borderRadius: 10, background: "#16743d", color: "white", fontWeight: 900, textAlign: "center", textDecoration: "none" }}>WhatsApp'ta Aç ve Gönder</a> : null}
+      {whatsappUrl ? <button type="button" onClick={confirmSent} disabled={confirming || confirmed} style={{ padding: 12, borderRadius: 10, border: "1px solid #a0c3ab", color: "#216a3f", background: confirmed ? "#eaf7ed" : "#fff", fontWeight: 800 }}>{confirming ? "Kaydediliyor…" : confirmed ? "✓ Gönderim kayda alındı" : "WhatsApp'ta Gönderdim · Kayda Al"}</button> : null}
       <button type="button" onClick={() => copy(prepared.url, "Bağlantı")} style={{ padding: 12, borderRadius: 10, border: "1px solid #a7c4d9", color: "#17456b", background: "#fff", fontWeight: 800 }}>Bağlantıyı Kopyala</button>
       <button type="button" onClick={() => copy(prepared.message, "Hazır mesaj")} style={{ padding: 12, borderRadius: 10, border: "1px solid #a7c4d9", color: "#17456b", background: "#fff", fontWeight: 800 }}>Mesaj Metnini Kopyala</button>
       <small style={{ color: "#63778a" }}>WhatsApp'ın açılması mesajın iletildiği anlamına gelmez. Gönderimi WhatsApp içinde tamamlayın.</small>
