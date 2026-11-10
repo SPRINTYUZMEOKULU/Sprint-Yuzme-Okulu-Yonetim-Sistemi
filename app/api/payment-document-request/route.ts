@@ -52,7 +52,8 @@ export async function POST(request: Request) {
   if (matching) {
     const origin = new URL(request.url).origin;
     return NextResponse.json({
-      url: `${origin}/odeme-belge/${matching.public_token}`,\n      requestId: matching.id,
+      url: `${origin}/odeme-belge/${matching.public_token}`,
+      requestId: matching.id,
       expiresAt: matching.expires_at,
       reused: true,
     });
