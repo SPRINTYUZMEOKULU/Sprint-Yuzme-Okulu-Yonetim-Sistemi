@@ -22,6 +22,16 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
   const [requestsResult, bankResult] = await Promise.all([query, bankQuery]);
   const rows = requestsResult.data || [];
   const bankRows = bankResult.data || [];
+  // Reuse the same document-request ID for both VakıfBank review and secure-link flows.
+  const requestIds = rows.map(row => row.id);
+  const bankEntryResult = requestIds.length
+    ? await db.from("invoice_bank_entries")
+        .select("id,document_request_id,amount,currency,occurred_at,status,reviewed_at")
+        .eq("organization_id", profile.organization_id)
+        .in("document_request_id", requestIds)
+    : { data: [], error: null };
+  const bankEntries = bankEntryResult.data || [];
+
   const ids = [...new Set([...rows, ...bankRows].map(r => r.student_id))];
   const [studentsResult, paymentsResult] = ids.length ? await Promise.all([
     db.from("students").select("id,first_name,last_name").eq("organization_id", profile.organization_id).in("id", ids),
@@ -29,7 +39,7 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
   ]) : [{ data: [], error: null }, { data: [], error: null }];
   const payments = paymentsResult.data || [];
   const names = new Map((studentsResult.data || []).map(s => [s.id, `${s.first_name || ""} ${s.last_name || ""}`.trim()]));
-  const error = requestsResult.error || bankResult.error || studentsResult.error || paymentsResult.error;
+  const error = requestsResult.error || bankResult.error || studentsResult.error || paymentsResult.error || bankEntryResult.error;
   const canMatch = ["owner", "admin"].includes(profile.role);
   return <main className="document-review"><header><Link href={studentId ? `/odeme-bilgileri?studentId=${encodeURIComponent(studentId)}` : "/odeme-bilgileri"}>← Ödeme Bilgilerine Dön</Link><p>SPRİNT · YÖNETİCİ KONTROLÜ</p><h1>Havale / EFT ve Fatura Takibi</h1><span>Mevcut ödeme kaydı, müşteri bilgileri ve belge durumu birlikte kontrol edilir.</span></header>
     <nav style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:18}}><Link href="/fatura-merkezi">Fatura Merkezi</Link><Link href="/fatura-merkezi?tab=issued">Kesilen Faturalar</Link><Link href="/fatura-merkezi/banka">VakıfBank Excel Yükle</Link></nav><section className="integration-notice"><h2>NetteFatura bağlantısı hazırlanıyor</h2><p>Fatura, e-Arşiv ve adres defteri test servisleri belirlendi. Test firma bilgileri, başarılı test faturası ve canlı IP/VKN yetkilendirmesi tamamlanmadan sistem fatura göndermez.</p><p><b>Banka bağlantısı kurulmadı.</b> Aşağıdaki liste SprintOS'a kaydedilen ödemelerdir. VakıfBank IBAN hareketleri otomatik okunmuyor.</p></section>
@@ -37,11 +47,11 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
     <section><h2>Güvenli Ödeme Talepleri</h2><p>{requestsResult.count || 0} talep · En yeni {rows.length} kayıt gösteriliyor.</p>{payments.length === 500 ? <p>Ödeme seçeneklerinde son 500 kayıt gösteriliyor. Eski kayıtlar için kursiyer filtresini kullanınız.</p> : null}
     {!rows.length ? <div className="empty">Henüz güvenli ödeme talebi bulunmuyor. Kursiyer dosyasından güvenli bağlantı oluşturulduğunda burada görünecek.</div> : null}
     <div className="request-list">{rows.map(row => {
-      const linked = payments.find(p => p.id === row.payment_id);
+      const linked = payments.find(p => p.id === row.payment_id);\n      const importedBank = bankEntries.filter(entry => entry.document_request_id === row.id);
       const options = payments.filter(p => p.student_id === row.student_id && (!row.enrollment_id || p.enrollment_id === row.enrollment_id) && isReceivedBankPayment(p) && (row.expected_amount == null || Math.round(Number(row.expected_amount) * 100) === Math.round(Number(p.amount) * 100)));
       const missing = !hasDocumentDetails(row);
       const hasDocument = Boolean(row.document_number) || ["document_created", "document_sent"].includes(row.status);
-      return <article key={row.id}><div className="request-title"><Link href={`/ogrenciler/${row.student_id}`}>{names.get(row.student_id) || "Kursiyer Dosyası"}</Link><strong>{money(row.expected_amount)}</strong></div><p className="status">{labels[row.status] || "Kontrol gerekli"}</p><dl><dt>Talep tarihi</dt><dd>{date(row.created_at)}</dd><dt>Belge alıcısı</dt><dd>{row.recipient_name || "Henüz girilmedi"}</dd><dt>Belge bilgileri</dt><dd>{missing ? "Eksik / müşteri onayı bekleniyor" : "Tamamlandı"}</dd><dt>Ödeme kaydı</dt><dd>{row.payment_id ? (linked && isReceivedBankPayment(linked) ? `${money(linked.amount)} · ${date(linked.received_at)}` : "Bağlı ödeme kontrol edilmeli") : "Eşleştirilmedi"}</dd><dt>Belge numarası</dt><dd>{row.document_number || "Henüz oluşturulmadı"}</dd><dt>Belge türü</dt><dd>{row.document_type === "e_smm" && !hasDocument ? "Eski e-SMM varsayımı · Belge türü doğrulanmalı" : row.document_type === "pending_classification" ? "Alıcı sorgusu sonrası belirlenecek" : row.document_type}</dd></dl>
+      return <article key={row.id}><div className="request-title"><Link href={`/ogrenciler/${row.student_id}`}>{names.get(row.student_id) || "Kursiyer Dosyası"}</Link><strong>{money(row.expected_amount)}</strong></div><p className="status">{labels[row.status] || "Kontrol gerekli"}</p><dl><dt>Talep tarihi</dt><dd>{date(row.created_at)}</dd><dt>Belge alıcısı</dt><dd>{row.recipient_name || "Henüz girilmedi"}</dd><dt>Belge bilgileri</dt><dd>{missing ? "Eksik / müşteri onayı bekleniyor" : "Tamamlandı"}</dd><dt>VakıfBank Excel</dt><dd>{importedBank.length ? importedBank.map(entry => `${money(entry.amount)} · ${date(entry.occurred_at)} · Kursiyer bankada onaylandı, tahsilat ayrıca kontrol edilecek`).join(" | ") : "Banka hareketi belge talebine bağlanmadı"}</dd><dt>Ödeme kaydı</dt><dd>{row.payment_id ? (linked && isReceivedBankPayment(linked) ? `${money(linked.amount)} · ${date(linked.received_at)}` : "Bağlı ödeme kontrol edilmeli") : "SprintOS tahsilatı henüz eşleştirilmedi"}</dd><dt>Belge numarası</dt><dd>{row.document_number || "Henüz oluşturulmadı"}</dd><dt>Belge türü</dt><dd>{row.document_type === "e_smm" && !hasDocument ? "Eski e-SMM varsayımı · Belge türü doğrulanmalı" : row.document_type === "pending_classification" ? "Alıcı sorgusu sonrası belirlenecek" : row.document_type}</dd></dl>
         {!hasDocument && !["cancelled", "error"].includes(row.status) && Date.parse(row.expires_at) <= Date.now() ? <p className="warning">Müşteri bağlantısının süresi dolmuş. Gerekirse kursiyer dosyasından yeni bağlantı oluşturunuz.</p> : null}
         {canMatch && row.status === "waiting_payment" && !row.payment_id && !missing ? (options.length ? <MatchPayment requestId={row.id} payments={options.map(p => ({ id: p.id, label: `${money(p.amount)} · ${date(p.received_at)}` }))} /> : <p className="warning">Bu kursiyer / dönem ve tutarla eşleşen alınmış havale/EFT kaydı yok. Ödeme Merkezini kontrol ediniz.</p>) : null}
       </article>;
