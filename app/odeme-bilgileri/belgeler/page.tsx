@@ -47,7 +47,8 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
     <section><h2>Güvenli Ödeme Talepleri</h2><p>{requestsResult.count || 0} talep · En yeni {rows.length} kayıt gösteriliyor.</p>{payments.length === 500 ? <p>Ödeme seçeneklerinde son 500 kayıt gösteriliyor. Eski kayıtlar için kursiyer filtresini kullanınız.</p> : null}
     {!rows.length ? <div className="empty">Henüz güvenli ödeme talebi bulunmuyor. Kursiyer dosyasından güvenli bağlantı oluşturulduğunda burada görünecek.</div> : null}
     <div className="request-list">{rows.map(row => {
-      const linked = payments.find(p => p.id === row.payment_id);\n      const importedBank = bankEntries.filter(entry => entry.document_request_id === row.id);
+      const linked = payments.find(p => p.id === row.payment_id);
+      const importedBank = bankEntries.filter(entry => entry.document_request_id === row.id);
       const options = payments.filter(p => p.student_id === row.student_id && (!row.enrollment_id || p.enrollment_id === row.enrollment_id) && isReceivedBankPayment(p) && (row.expected_amount == null || Math.round(Number(row.expected_amount) * 100) === Math.round(Number(p.amount) * 100)));
       const missing = !hasDocumentDetails(row);
       const hasDocument = Boolean(row.document_number) || ["document_created", "document_sent"].includes(row.status);
