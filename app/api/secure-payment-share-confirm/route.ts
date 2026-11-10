@@ -32,6 +32,36 @@ export async function POST(request: Request) {
   if (docError || !doc || !["waiting_customer", "waiting_payment"].includes(doc.status))
     return NextResponse.json({ message: "Aktif belge talebi bulunamadı." }, { status: 404 });
 
+  if (new Date(doc.expires_at).getTime() <= Date.now())
+    return NextResponse.json({ message: "Güvenli ödeme bağlantısının süresi dolmuş." }, { status: 400 });
+
+  // The recipient must belong to the same student's permitted contact sources.
+  // A client-supplied phone is never sufficient for a delivery-history claim.
+  const [{ data: student, error: studentError }, { data: links, error: linksError },
+    { data: previousContacts, error: preError }] = await Promise.all([
+      db.from("students").select("phone,guardian_phone")
+        .eq("organization_id", profile.organization_id).eq("id", doc.student_id).maybeSingle(),
+      db.from("guardian_students").select("guardian_id").eq("student_id", doc.student_id),
+      db.from("pre_registrations").select("phone,whatsapp_phone")
+        .eq("organization_id", profile.organization_id)
+        .eq("converted_student_id", doc.student_id).limit(20),
+    ]);
+  if (studentError || linksError || preError || !student)
+    return NextResponse.json({ message: "Kursiyer iletişim bilgileri kontrol edilemedi." }, { status: 500 });
+  const guardianIds = (links || []).map(link => link.guardian_id).filter(Boolean);
+  const { data: guardians, error: guardiansError } = guardianIds.length
+    ? await db.from("guardians").select("phone,is_active")
+        .eq("organization_id", profile.organization_id).in("id", guardianIds)
+    : { data: [], error: null };
+  if (guardiansError) return NextResponse.json({ message: "Veli iletişim kayıtları kontrol edilemedi." }, { status: 500 });
+  const contacts = [
+    student.phone, student.guardian_phone,
+    ...(guardians || []).filter(g => g.is_active !== false).map(g => g.phone),
+    ...(previousContacts || []).flatMap(p => [p.phone,p.whatsapp_phone]),
+  ];
+  if (!contacts.some(contact => phone(contact) === recipient))
+    return NextResponse.json({ message: "Alıcı numarası kursiyerin kayıtlı iletişim kişileriyle eşleşmiyor." }, { status: 400 });
+
   // A short retry protection for the same request/recipient; does not falsely confirm a delivery.
   const { data: recent, error: recentError } = await db.from("message_logs")
     .select("id,sent_at")
