@@ -1,5 +1,6 @@
 "use client";
 
+import { packageMatchesCourse } from "@/lib/registrations/course-type";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import {
@@ -777,17 +778,8 @@ export default function RegistrationWizard({
         initialPackageId
     );
 
-  /*
-   * Ön kayıttan gelen paket seçili kurs türüyle uyuşmuyorsa
-   * yanlış çocuk/yetişkin paketini taşımıyoruz.
-   */
-  const initialPackage =
-    initialPackageCandidate &&
-    initialGroup?.course_type &&
-    initialPackageCandidate.course_type &&
-    initialPackageCandidate.course_type !== initialGroup.course_type
-      ? undefined
-      : initialPackageCandidate;
+  // Keep the stored selection visible; cross-course selections require explicit review.
+  const initialPackage = initialPackageCandidate;
 
   const safeInitialPackageId =
     initialPackage?.id || "";
@@ -1244,27 +1236,9 @@ export default function RegistrationWizard({
    * ==========================================================
    */
 
-  const availablePackages =
-    packages.filter(
-      (item) => {
-        if (
-          !selectedGroup?.course_type
-        ) {
-          return true;
-        }
-
-        if (
-          !item.course_type
-        ) {
-          return true;
-        }
-
-        return (
-          item.course_type ===
-          selectedGroup.course_type
-        );
-      }
-    );
+  const [showOtherPackages, setShowOtherPackages] = useState(Boolean(initialPackage && !packageMatchesCourse(initialPackage.course_type, initialGroup?.course_type)));
+  const compatiblePackages = packages.filter(item=>packageMatchesCourse(item.course_type, selectedGroup?.course_type));
+  const availablePackages = showOtherPackages ? packages : compatiblePackages;
 
   /*
    * ==========================================================
@@ -1694,10 +1668,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
       );
 
     if (
-      currentPackage
-        ?.course_type &&
-      currentPackage.course_type !==
-        group.course_type
+      currentPackage && !packageMatchesCourse(currentPackage.course_type, group.course_type)
     ) {
       setPackageId("");
     }
@@ -2178,6 +2149,10 @@ _Antalya'nın En Köklü Yüzme Okulu_`
             </div>
           ) : null}
 
+          <div style={{gridColumn:"1 / -1"}}>
+            {!compatiblePackages.length ? <p role="status">Bu kurs türüne uygun aktif paket tanımlı değil. Paketler sayfasından paket ekleyebilir veya aşağıdaki seçeneği açarak mevcut bir paketi bilinçli olarak seçebilirsiniz.</p> : null}
+            <label><input type="checkbox" name="allow_cross_course_package" checked={showOtherPackages} onChange={event=>{setShowOtherPackages(event.target.checked);if(!event.target.checked && !compatiblePackages.some(p=>p.id === packageId))setPackageId("");}}/> Diğer kurs türü paketlerini de göster · seçtiğim paketin ders ve ücretini kontrol ettim</label>
+          </div>
           <label>
 
             <span>

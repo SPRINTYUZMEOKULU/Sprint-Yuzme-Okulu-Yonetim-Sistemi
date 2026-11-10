@@ -2,6 +2,8 @@
 
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 
+import { packageMatchesCourse } from "@/lib/registrations/course-type";
+import { contactResolved } from "@/lib/registrations/follow-up";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -1209,6 +1211,7 @@ export async function completeRegistration(
           health_declaration,
           health_note,
           rules_accepted,
+          contact_request,
           accepted_at,
           rules_version
         `)
@@ -1243,8 +1246,34 @@ export async function completeRegistration(
     );
   }
 
+  if (packageId) {
+    const [{data: chosenPackage, error: packageError},{data: chosenGroup, error: groupError}] = await Promise.all([
+      supabase.from("course_packages").select("id,course_type,is_active").eq("organization_id",profile.organization_id).eq("id",packageId).maybeSingle(),
+      supabase.from("training_groups").select("id,course_type").eq("organization_id",profile.organization_id).eq("id",groupId).maybeSingle(),
+    ]);
+    if (packageError || groupError || !chosenPackage || !chosenGroup || chosenPackage.is_active === false ||
+        (!packageMatchesCourse(chosenPackage.course_type,chosenGroup.course_type) && !bool(formData,"allow_cross_course_package"))) {
+      redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Paket ve grup seçimini kontrol ediniz. Farklı kurs türü paketi için açık seçim gerekir.")}`);
+    }
+  }
+
   if (studentBefore.status === "registration_declined") {
     redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent("Bu ön kayıt yönetici onayıyla kapatılmıştır. Yeni kayıt için yeni başvuru oluşturunuz.")}`);
+  }
+
+  if (studentBefore.status === "pre_registration") {
+    const { data: followUps, error: followUpError } = await supabase.from("student_activity_logs")
+      .select("activity_type,new_value,performed_at").eq("organization_id", profile.organization_id)
+      .eq("student_id", studentId).in("activity_type", ["contact_request_resolved", "trial_lesson"])
+      .order("performed_at", {ascending:false}).limit(100);
+    const latestTrial = (followUps || []).find(row=>row.activity_type === "trial_lesson");
+    const unresolved = !contactResolved(consent, (followUps || []).filter(row=>row.activity_type === "contact_request_resolved"));
+    if (followUpError || unresolved || latestTrial?.new_value?.status === "planned") {
+      const message = followUpError ? "Ön kayıt takip bilgileri doğrulanamadı." : unresolved
+        ? "Önce iletişim talebini karşılayıp görüşme sonucunu kaydediniz."
+        : "Önce planlanan deneme dersinin sonucunu kaydediniz veya denemeyi iptal ediniz.";
+      redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(message)}`);
+    }
   }
 
   /*

@@ -1,5 +1,6 @@
 "use server";
 
+import { packageMatchesCourse } from "@/lib/registrations/course-type";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -126,9 +127,8 @@ export async function updatePreRegistration(formData: FormData) {
     }
 
     if (
-      selectedGroup?.course_type &&
-      coursePackage.course_type &&
-      selectedGroup.course_type !== coursePackage.course_type
+      !packageMatchesCourse(coursePackage.course_type, selectedGroup?.course_type) &&
+      formData.get("allow_cross_course_package") !== "on" && !keepingCurrent
     ) {
       throw new Error("Seçilen paket, seçilen grubun kurs türüyle uyumlu değil.");
     }
