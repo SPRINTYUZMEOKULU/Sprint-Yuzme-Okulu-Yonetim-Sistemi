@@ -1,4 +1,5 @@
 "use server";
+import { generatePortalPassword } from "@/lib/guardian/password";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { portalCredentialContact, savePortalCredential } from "@/app/veliler/portal-credential-actions";
 
@@ -200,7 +201,7 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
   const email = clean(payload.email, 200).toLowerCase();
   const phone = normalizePhone(payload.phone);
   const relationship = clean(payload.relationship, 50) || "Veli";
-  const temporaryPassword = String(payload.temporaryPassword || "");
+  let temporaryPassword = String(payload.temporaryPassword || "");
   if(temporaryPassword && (temporaryPassword.length<8 || temporaryPassword.length>100 || /[\r\n`]/.test(temporaryPassword) || temporaryPassword!==temporaryPassword.trim())) return {ok:false as const,message:"Şifre 8–100 karakter olmalı; başında/sonunda boşluk, satır sonu veya ters tırnak içermemelidir."};
 
   if (!fullName) return { ok: false as const, message: "Veli adı soyadı zorunludur." };
@@ -215,23 +216,22 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     .maybeSingle();
   if (!student) return { ok: false as const, message: "Öğrenci bulunamadı." };
 
-  let query = admin
-    .from("profiles")
+  const lookup = (field: "email" | "phone", value: string) => admin.from("profiles")
     .select("id,role,is_active,organization_id,full_name,email,phone")
-    .eq("organization_id", organizationId)
-    .eq("role", "guardian");
-
-  if (email) query = query.eq("email", email);
-  else query = query.eq("phone", phone);
-
-  const { data: existing } = await query.limit(1).maybeSingle();
+    .eq("organization_id", organizationId).eq("role", "guardian").eq(field, value).maybeSingle();
+  const [byEmail, byPhone] = await Promise.all([
+    email ? lookup("email", email) : Promise.resolve({data:null,error:null}),
+    phone ? lookup("phone", phone) : Promise.resolve({data:null,error:null}),
+  ]);
+  if (byEmail.error || byPhone.error) return {ok:false as const,message:"Veli hesabı eşleşmesi doğrulanamadı. İletişim bilgilerini kontrol ediniz."};
+  if (byEmail.data && byPhone.data && byEmail.data.id !== byPhone.data.id) return {ok:false as const,message:"Telefon ve e-posta farklı veli hesaplarına ait. Bağlantı kurulmadı; bilgileri kontrol ediniz."};
+  const existing = byEmail.data || byPhone.data;
+  if (existing && !existing.is_active) return {ok:false as const,message:"Eşleşen veli hesabı pasif. Veli merkezinden erişim durumunu kontrol ediniz."};
   let guardianId = existing?.id || "";
   let createdAuthUser = false;
 
   if (!guardianId) {
-    if (temporaryPassword.length < 8) {
-      return { ok: false as const, message: "Yeni veli hesabı için geçici şifre en az 8 karakter olmalıdır." };
-    }
+    if (!temporaryPassword) temporaryPassword = generatePortalPassword();
 
     const authPayload: any = {
       password: temporaryPassword,
@@ -304,6 +304,7 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     organization_id: organizationId,
     student_id: studentId,
     activity_type: "guardian_portal_linked",
+    performed_by: profile.id,
     title: createdAuthUser ? "Veli portal hesabı oluşturuldu" : "Veli portal hesabı bağlandı",
     description: `${fullName} veli portalına ${relationship} olarak bağlandı.`,
     source_type: "guardian_profile",
@@ -311,14 +312,20 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     performed_at: new Date().toISOString(),
   });
 
+  const {error: studentSyncError} = await admin.from("students").update({
+    guardian_name: existing?.full_name || fullName,
+    guardian_phone: existing?.phone || phone || null,
+    guardian_email: existing?.email || email || null,
+    updated_at: new Date().toISOString(),
+  }).eq("organization_id",organizationId).eq("id",studentId);
   const contact = createdAuthUser ? await portalCredentialContact({accountId:guardianId}) : null;
-  const credential = createdAuthUser && contact?.ok ? {...contact,password:temporaryPassword} : temporaryPassword ? await savePortalCredential({accountId:guardianId},temporaryPassword) : null;
-  if (credential && !credential.ok) return credential;
+  const credential = createdAuthUser && contact?.ok ? {...contact,password:temporaryPassword} : null;
   revalidateGuardianConnection(guardianId, studentId);
+  revalidateStudentSurfaces(studentId);
   return {
     credential: credential?.ok ? credential : undefined,
     ok: true as const,
-    message: createdAuthUser ? "Veli portal hesabı oluşturuldu ve öğrenciye bağlandı." : "Mevcut veli hesabı öğrenciye bağlandı.",
+    message: studentSyncError ? "Portal hesabı bağlandı; öğrenci iletişim bilgileri eşitlenemedi. Bilgileri Düzenle alanından kontrol ediniz." : createdAuthUser ? "Veli hesabı ve güvenli şifresi hazır. Giriş bilgilerini aşağıdan kopyalayabilir veya WhatsApp mesajını açabilirsiniz." : "Mevcut veli hesabı bağlandı; şifresi korundu. Şifre yenilemek isterseniz aşağıdaki alanı kullanınız.",
     guardianPortal: await guardianPortalState(studentId, organizationId),
   };
 }

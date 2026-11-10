@@ -4,6 +4,7 @@ import { reviewCollection } from "@/lib/payments/collection-review";
 
 import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { portalCredentialContact } from "@/app/veliler/portal-credential-actions";
 import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
 import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
 import { useRouter } from "next/navigation";
@@ -184,6 +185,20 @@ export default function StudentFileOperations({
   const [portalAccess, setPortalAccess] = useState<GuardianBulkResult | null>(null);
   const portalLock = useRef(false);
 
+
+  useEffect(() => {
+    let live = true;
+    const changed = (event: Event) => {
+      if ((event as CustomEvent).detail?.studentId !== student.id) return;
+      void portalCredentialContact({studentId:student.id}).then(contact=>{
+        if (!live || !contact.ok) return;
+        setPortalAccess({...contact,key:student.id,studentNames:[`${student.first_name} ${student.last_name}`],status:"linked",message:"Veli hesabı bağlantısı güncellendi."});
+        setPortalStatus("Hesap bağlantısı güncellendi. Kaydedilen şifre ortak paylaşım alanında kullanılabilir.");
+      }).catch(()=>{if(live)setPortalStatus("Portal bağlantısını yeniden kontrol ediniz.");});
+    };
+    window.addEventListener("guardian-portal-linked",changed);
+    return ()=>{live=false;window.removeEventListener("guardian-portal-linked",changed);};
+  }, [student.id,student.first_name,student.last_name]);
 
   async function preparePortalAccess() {
     if (portalLock.current || portalAccess) return;
