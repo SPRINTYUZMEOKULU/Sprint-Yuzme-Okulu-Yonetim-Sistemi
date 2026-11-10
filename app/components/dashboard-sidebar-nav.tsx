@@ -22,6 +22,7 @@ const branches: Record<string, ChildItem[]> = {
   "/on-kayitlar": [
     { label: "Yeni Ön Kayıt", href: "/on-kayit" },
     { label: "Ön Kayıt Listesi", href: "/on-kayitlar" },
+    { label: "Deneme Dersleri", href: "/deneme-dersleri" },
   ],
   "/ogrenciler": [
     { label: "Öğrenci Merkezi", href: "/ogrenciler" },

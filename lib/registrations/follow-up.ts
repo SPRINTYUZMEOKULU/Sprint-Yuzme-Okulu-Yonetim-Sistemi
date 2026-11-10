@@ -1,9 +1,9 @@
 export const CONTACT_LABELS: Record<string, string> = {
   call_me: "Aranmak istiyor", whatsapp_info: "WhatsApp üzerinden bilgi istiyor",
-  need_information: "Detaylı bilgi istiyor",
+  need_information: "Detaylı bilgi istiyor", trial_lesson: "Deneme dersi istiyor",
 };
 export function contactNeedsFollowUp(value?: string | null) {
-  return Boolean(value && CONTACT_LABELS[value]);
+  return Boolean(value && ["call_me","whatsapp_info","need_information"].includes(value));
 }
 export function contactResolved(consent: {contact_request?: string | null; accepted_at?: string | null} | null | undefined, logs: {new_value?: unknown; performed_at?: string | null}[]) {
   if (!contactNeedsFollowUp(consent?.contact_request)) return true;

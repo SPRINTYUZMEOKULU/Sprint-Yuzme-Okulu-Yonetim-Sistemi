@@ -20,6 +20,7 @@ const groups: NavGroup[] = [
         children: [
           { label: "Yeni Ön Kayıt", href: "/on-kayit" },
           { label: "Ön Kayıt Merkezi", href: "/on-kayitlar" },
+    { label: "Deneme Dersleri", href: "/deneme-dersleri" },
           { label: "Kesin Kayıt Merkezi", href: "/kesin-kayit-merkezi" },
           { label: "Ön Kayıt Form Ayarları", href: "/ayarlar/on-kayit-formu" },
         ],
