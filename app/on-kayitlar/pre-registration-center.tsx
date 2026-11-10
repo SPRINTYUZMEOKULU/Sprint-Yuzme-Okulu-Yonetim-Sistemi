@@ -166,6 +166,8 @@ function formatMoney(value: unknown) {
 
 function contactLabel(value: string | null | undefined) {
   switch (value) {
+    case "trial_lesson":
+      return "Deneme dersi istiyor";
     case "call_me":
       return "Beni arayın";
     case "whatsapp_info":
@@ -527,6 +529,7 @@ export default function PreRegistrationCenter({
                     </div>
 
                     <div className="preCardBadges">
+                      {consent?.contact_request === "trial_lesson" ? <span className="preFollowUpBadge">Deneme dersi talebi</span> : null}
                       {!contactResolved(consent, activities.filter(a=>a.student_id === student.id && a.activity_type === "contact_request_resolved")) ? <span className="preFollowUpBadge">{CONTACT_LABELS[consent!.contact_request!]}</span> : null}
                       {activities.find(a=>a.student_id === student.id && a.activity_type === "trial_lesson")?.new_value && (activities.find(a=>a.student_id === student.id && a.activity_type === "trial_lesson")!.new_value as {status?:string}).status === "planned" ? <span className="preFollowUpBadge">Deneme dersi planlandı</span> : null}
                       {hasHealthNote && (

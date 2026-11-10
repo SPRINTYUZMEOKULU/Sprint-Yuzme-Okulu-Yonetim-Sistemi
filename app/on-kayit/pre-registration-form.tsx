@@ -98,6 +98,8 @@ export default function PreRegistrationForm() {
       "child"
     );
 
+  const [contactRequest, setContactRequest] = useState("");
+
   const [courseType, setCourseType] =
     useState("");
 
@@ -261,7 +263,7 @@ export default function PreRegistrationForm() {
   ) {
     event.preventDefault();
 
-    if (selectedSchedules.length && selectedDays.length < Math.min(2, new Set(selectedSchedules.map((s) => s.weekday)).size)) {
+    if (contactRequest !== "trial_lesson" && selectedSchedules.length && selectedDays.length < Math.min(2, new Set(selectedSchedules.map((s) => s.weekday)).size)) {
       setStatus("error");
       setMessage("Lütfen en az iki ders günü seçin.");
       return;
@@ -1160,7 +1162,7 @@ export default function PreRegistrationForm() {
               <select
                 name="packageId"
                 defaultValue=""
-                required
+                required={contactRequest !== "trial_lesson"}
               >
                 <option value="">
                   Paket seçin
@@ -1221,7 +1223,7 @@ export default function PreRegistrationForm() {
             </div>
 
             <div className="scheduleChoiceHeading">
-              <div><b>Ders günlerinizi seçin</b><p>Programınıza uygun iki veya üç günü işaretleyin.</p></div>
+              <div><b>Ders günlerinizi seçin</b><p>{contactRequest === "trial_lesson" ? "Tercih ettiğiniz günü işaretleyebilirsiniz; deneme saati sizinle görüşülerek belirlenir." : "Programınıza uygun iki veya üç günü işaretleyin."}</p></div>
               <span>{selectedDays.length} gün seçildi</span>
             </div>
             <div className="selectedSchedule">
@@ -1325,7 +1327,8 @@ export default function PreRegistrationForm() {
           </div>
         </div>
 
-        <div className="requestOptions">
+        <div className="requestOptions" onChange={event=>setContactRequest((event.target as HTMLInputElement).value)}>
+          <label><input type="radio" name="contactRequest" value="trial_lesson"/>Önce deneme dersi yapmak istiyorum</label>
           <label>
             <input
               type="radio"
@@ -1366,6 +1369,7 @@ export default function PreRegistrationForm() {
             bilgi almak istiyorum
           </label>
         </div>
+        {contactRequest === "trial_lesson" ? <p role="status">Deneme talebiniz ekibimize iletilir. Paket seçmeniz gerekmez. Tarih ve saat sizinle görüşülerek kesinleştirilir.</p> : null}
       </section>
 
       <section className="formSection">

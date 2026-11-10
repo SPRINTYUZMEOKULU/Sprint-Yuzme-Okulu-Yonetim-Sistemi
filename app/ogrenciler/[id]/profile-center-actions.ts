@@ -1,4 +1,5 @@
 "use server";
+import { isSelfRegistration } from "@/lib/guardian/registration-owner";
 import { generatePortalPassword } from "@/lib/guardian/password";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { portalCredentialContact, savePortalCredential } from "@/app/veliler/portal-credential-actions";
@@ -138,7 +139,10 @@ export async function getStudentProfileForCenter(studentId: string) {
     console.error("guardian portal state error", error);
   }
 
-  return { ok: true as const, message: "", student: data, guardianPortal };
+  const {data: consent, error: consentError} = await supabase.from("registration_consents").select("registration_for")
+    .eq("organization_id",profile.organization_id).eq("student_id",studentId).order("accepted_at",{ascending:false}).limit(1).maybeSingle();
+  if (consentError) return {ok:false as const,message:"Kayıt sahibi bilgisi okunamadı. Tekrar deneyiniz.",student:null,guardianPortal:null};
+  return { ok: true as const, message: "", student: data, guardianPortal, portalOwner:isSelfRegistration(consent?.registration_for,data.birth_date) ? "self" : "guardian" };
 }
 
 export async function saveStudentProfileFromCenter(payload: ProfileCenterPayload) {
@@ -197,24 +201,35 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
   const studentId = clean(payload.studentId, 100);
   if (!organizationId || !studentId) return { ok: false as const, message: "Öğrenci bulunamadı." };
 
-  const fullName = clean(payload.fullName, 200);
-  const email = clean(payload.email, 200).toLowerCase();
-  const phone = normalizePhone(payload.phone);
-  const relationship = clean(payload.relationship, 50) || "Veli";
+  let fullName = clean(payload.fullName, 200);
+  let email = clean(payload.email, 200).toLowerCase();
+  let phone = normalizePhone(payload.phone);
+  let relationship = clean(payload.relationship, 50) || "Veli";
   let temporaryPassword = String(payload.temporaryPassword || "");
   if(temporaryPassword && (temporaryPassword.length<8 || temporaryPassword.length>100 || /[\r\n`]/.test(temporaryPassword) || temporaryPassword!==temporaryPassword.trim())) return {ok:false as const,message:"Şifre 8–100 karakter olmalı; başında/sonunda boşluk, satır sonu veya ters tırnak içermemelidir."};
 
-  if (!fullName) return { ok: false as const, message: "Veli adı soyadı zorunludur." };
-  if (!email && !phone) return { ok: false as const, message: "Veli için telefon veya e-posta zorunludur." };
 
   const admin = adminClient();
   const { data: student } = await admin
     .from("students")
-    .select("id")
+    .select("id,first_name,last_name,birth_date,phone,email")
     .eq("organization_id", organizationId)
     .eq("id", studentId)
     .maybeSingle();
   if (!student) return { ok: false as const, message: "Öğrenci bulunamadı." };
+  const {data: ownerConsent, error: ownerError} = await admin.from("registration_consents").select("registration_for")
+    .eq("organization_id",organizationId).eq("student_id",studentId).order("accepted_at",{ascending:false}).limit(1).maybeSingle();
+  if (ownerError) return {ok:false as const,message:"Kayıt sahibi doğrulanamadı. İşlem yapılmadı."};
+  const self = isSelfRegistration(ownerConsent?.registration_for,student.birth_date);
+  if (self) {
+    fullName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    phone = phone || normalizePhone(student.phone);
+    email = email || clean(student.email,200).toLowerCase();
+    relationship = "Kendisi";
+  }
+  if (!fullName) return {ok:false as const,message:self ? "Kursiyer adı soyadı zorunludur." : "Veli adı soyadı zorunludur."};
+  if (!email && !phone) return {ok:false as const,message:"Portal için telefon veya e-posta zorunludur."};
+
 
   const lookup = (field: "email" | "phone", value: string) => admin.from("profiles")
     .select("id,role,is_active,organization_id,full_name,email,phone")
@@ -305,17 +320,19 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
     student_id: studentId,
     activity_type: "guardian_portal_linked",
     performed_by: profile.id,
-    title: createdAuthUser ? "Veli portal hesabı oluşturuldu" : "Veli portal hesabı bağlandı",
-    description: `${fullName} veli portalına ${relationship} olarak bağlandı.`,
+    title: createdAuthUser ? `${self ? "Kursiyer" : "Veli"} portal hesabı oluşturuldu` : `${self ? "Kursiyer" : "Veli"} portal hesabı bağlandı`,
+    description: `${fullName} portala ${relationship} olarak bağlandı.`,
     source_type: "guardian_profile",
     source_id: guardianId,
     performed_at: new Date().toISOString(),
   });
 
   const {error: studentSyncError} = await admin.from("students").update({
-    guardian_name: existing?.full_name || fullName,
-    guardian_phone: existing?.phone || phone || null,
-    guardian_email: existing?.email || email || null,
+    ...(self ? {phone:existing?.phone || phone || null,email:existing?.email || email || null} : {
+      guardian_name: existing?.full_name || fullName,
+      guardian_phone: existing?.phone || phone || null,
+      guardian_email: existing?.email || email || null,
+    }),
     updated_at: new Date().toISOString(),
   }).eq("organization_id",organizationId).eq("id",studentId);
   const contact = createdAuthUser ? await portalCredentialContact({accountId:guardianId}) : null;
@@ -325,7 +342,7 @@ export async function createOrLinkGuardianPortal(payload: GuardianPortalPayload)
   return {
     credential: credential?.ok ? credential : undefined,
     ok: true as const,
-    message: studentSyncError ? "Portal hesabı bağlandı; öğrenci iletişim bilgileri eşitlenemedi. Bilgileri Düzenle alanından kontrol ediniz." : createdAuthUser ? "Veli hesabı ve güvenli şifresi hazır. Giriş bilgilerini aşağıdan kopyalayabilir veya WhatsApp mesajını açabilirsiniz." : "Mevcut veli hesabı bağlandı; şifresi korundu. Şifre yenilemek isterseniz aşağıdaki alanı kullanınız.",
+    message: studentSyncError ? "Portal hesabı bağlandı; öğrenci iletişim bilgileri eşitlenemedi. Bilgileri Düzenle alanından kontrol ediniz." : createdAuthUser ? `${self ? "Kursiyer" : "Veli"} hesabı ve güvenli şifresi hazır. Giriş bilgilerini aşağıdan kopyalayabilir veya WhatsApp mesajını açabilirsiniz.` : `Mevcut ${self ? "kursiyer" : "veli"} hesabı bağlandı; şifresi korundu. Şifre yenilemek isterseniz aşağıdaki alanı kullanınız.`,
     guardianPortal: await guardianPortalState(studentId, organizationId),
   };
 }

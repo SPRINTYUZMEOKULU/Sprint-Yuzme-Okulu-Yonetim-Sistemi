@@ -494,6 +494,7 @@ export async function POST(
         "package",
         true
       ) &&
+      contactRequest !== "trial_lesson" &&
       !packageId
     ) {
       return NextResponse.json(
@@ -761,7 +762,7 @@ export async function POST(
       const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
       const requested = Array.from(new Set((preferredDays || "").split(/\s*[-,]\s*/).filter(Boolean)));
       const available = new Set((schedules || []).map((s) => dayNames[s.weekday]));
-      if (available.size && (requested.length < Math.min(2, available.size) || requested.some((day) => !available.has(day)))) {
+      if (available.size && (requested.length < Math.min(contactRequest === "trial_lesson" ? 0 : 2, available.size) || requested.some((day) => !available.has(day)))) {
         return NextResponse.json({ error: "Lütfen grubun programından en az iki geçerli ders günü seçin." }, { status: 400 });
       }
       if (available.size) {
@@ -1363,6 +1364,7 @@ export async function POST(
      */
 
     const requestText =
+      contactRequest === "trial_lesson" ? " · Deneme dersi talebi / planlama bekliyor" :
       contactRequest ===
       "call_me"
         ? " · Aranmak istiyor"
