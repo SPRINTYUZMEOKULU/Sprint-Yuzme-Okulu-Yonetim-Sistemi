@@ -47,7 +47,9 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [prepared, setPrepared] = useState<PreparedLink | null>(null);\n  const [confirming, setConfirming] = useState(false);\n  const [confirmed, setConfirmed] = useState(false);
+  const [prepared, setPrepared] = useState<PreparedLink | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   async function prepare() {
     if (!studentId) return setStatus("Önce kursiyer seçiniz.");
