@@ -1,4 +1,5 @@
 "use client";
+import { generatePortalPassword } from "@/lib/guardian/password";
 import { useEffect, useRef, useState } from 'react';
 import { portalCredentialContact, savePortalCredential } from './portal-credential-actions';
 import { portalCredentialDraft, rememberPortalCredential } from '@/lib/guardian/credential-draft';
@@ -35,10 +36,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
         return () => { live = false; window.removeEventListener('portal-credential-changed', changed); };
     }, [accountId, studentId, initialCredential]);
     function generatePassword() {
-        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-        const random = new Uint32Array(20);
-        crypto.getRandomValues(random);
-        const generated = Array.from(random, (value) => alphabet[value % alphabet.length]).join('');
+        const generated = generatePortalPassword();
         setPassword(generated);
         setShow(true);
         setStatus('Güçlü şifre oluşturuldu. Hesaba uygulamak için Yeni Şifreyi Kaydet seçeneğini kullanın.');
