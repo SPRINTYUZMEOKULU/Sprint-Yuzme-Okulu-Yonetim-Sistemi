@@ -18,3 +18,23 @@ export async function excludeBankEntry(entryId:string,note:string) {
   revalidatePath("/fatura-merkezi/banka");revalidatePath("/fatura-merkezi");
   return {ok:true,message:"Hareket gerekçesiyle birlikte kapsam dışında bırakıldı; silinmedi."};
 }
+
+export async function attachExistingBankDocument(entryId: string, requestId: string, duplicateNote: string = "") {
+  const profile = await requireProfile(["owner", "admin"]);
+  if (!profile.organization_id) return { ok: false, message: "Kurum bilgisi eksik." };
+  const { error } = await documentAdmin().rpc("attach_invoice_bank_to_existing_request", {
+    p_organization: profile.organization_id,
+    p_entry: entryId,
+    p_request: requestId,
+    p_actor: profile.id,
+    p_duplicate_note: duplicateNote.trim().slice(0, 500),
+  });
+  if (error) return {
+    ok: false,
+    message: "Mevcut belge talebine eşleştirme yapılamadı. Tutar, kursiyer, banka hareketi ve benzer kayıtları kontrol ediniz."
+  };
+  revalidatePath("/fatura-merkezi");
+  revalidatePath("/fatura-merkezi/banka");
+  revalidatePath("/odeme-bilgileri/belgeler");
+  return { ok: true, message: "VakıfBank hareketi mevcut güvenli belge talebine bağlandı. Tahsilat henüz kesinleştirilmedi, fatura kesilmedi." };
+}
