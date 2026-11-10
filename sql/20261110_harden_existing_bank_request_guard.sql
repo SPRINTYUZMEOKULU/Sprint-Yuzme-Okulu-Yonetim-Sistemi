@@ -56,7 +56,7 @@ begin
    select 1 from public.invoice_bank_entries b
    where b.organization_id=p_organization and b.content_key=bank_row.content_key
     and b.id<>p_entry and b.status<>'excluded'
- ) and pg_catalog.length(pg_catalog.trim(pg_catalog.coalesce(p_duplicate_note,'')))<10 then
+ ) and pg_catalog.length(pg_catalog.btrim(coalesce(p_duplicate_note,'')))<10 then
    raise exception 'Resolve similar bank entries first';
  end if;
  insert into public.payment_document_requests
@@ -69,7 +69,7 @@ begin
  update public.invoice_bank_entries set document_request_id=request_id,
    matched_student_id=p_student,status='linked',reviewed_by=p_actor,
    reviewed_at=pg_catalog.now(),
-   review_note=nullif(pg_catalog.trim(p_duplicate_note),'')
+   review_note=nullif(pg_catalog.btrim(p_duplicate_note),'')
  where id=p_entry and organization_id=p_organization
    and status='review' and document_request_id is null;
  if not found then raise exception 'Bank entry changed during review'; end if;
