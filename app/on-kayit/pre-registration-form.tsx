@@ -320,10 +320,11 @@ export default function PreRegistrationForm() {
       setStatus("success");
 
       setMessage(
-        "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
+        payload.contactRequest === "trial_lesson" ? "Deneme dersi talebiniz alındı ve okul onayı bekliyor. Başvurunuz henüz kabul edilmiş değildir. SPRİNT YÜZME OKULU onayından sonra bilgilendirme yapılacaktır." : "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
       );
 
       formElement.reset();
+      setContactRequest("");
 
       setRegistrationFor(
         "child"
@@ -462,7 +463,7 @@ export default function PreRegistrationForm() {
                   marginBottom: 7,
                 }}
               >
-                🎉 Ön Kaydınız Başarıyla Alındı!
+                {message.startsWith("Deneme dersi") ? "Deneme Talebiniz Alındı · Onay Bekliyor" : "🎉 Ön Kaydınız Başarıyla Alındı!"}
               </strong>
               <span
                 style={{
@@ -472,8 +473,7 @@ export default function PreRegistrationForm() {
                   opacity: .92,
                 }}
               >
-                Başvurunuz kayıt ekibimize ulaştı. En kısa sürede
-                sizinle iletişime geçeceğiz.
+                {message}
               </span>
             </div>
 
@@ -605,7 +605,7 @@ export default function PreRegistrationForm() {
                   fontWeight: 1000,
                 }}
               >
-                Ön Kaydınız Alındı! 🎉
+                {message.startsWith("Deneme dersi") ? "Deneme Talebiniz Alındı" : "Ön Kaydınız Alındı! 🎉"}
               </h1>
 
               <p
