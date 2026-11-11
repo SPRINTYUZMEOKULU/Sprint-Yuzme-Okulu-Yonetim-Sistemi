@@ -6,26 +6,25 @@ import { redirect } from "next/navigation";
 import { TRIAL_POLICY_VERSION } from "@/lib/registrations/trial-policy";
 import { assertTrialAvailable } from "@/lib/registrations/trial-availability";
 import { isSelfRegistration } from "@/lib/guardian/registration-owner";
-import { contactNeedsFollowUp, TRIAL_STATUS } from "@/lib/registrations/follow-up";
+import { resolveContactRequest } from "@/lib/registrations/contact-request";
+import { TRIAL_STATUS } from "@/lib/registrations/follow-up";
 const ROLES = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 function text(form: FormData, key: string, max = 1000) { return String(form.get(key) || "").trim().slice(0, max); }
 export async function recordCandidateFollowUp(form: FormData) {
   const profile = await requireProfile([...ROLES]);
   const supabase = await createClient();
   const studentId = text(form, "student_id", 80);
-  const { data: student, error } = await supabase.from("students").select("id,status,first_name,last_name,birth_date").eq("organization_id", profile.organization_id).eq("id", studentId).single();
-  if (error || !student || student.status !== "pre_registration") throw new Error("Bekleyen ön kayıt bulunamadı.");
-  function fail(message:string):never { redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(message)}`); }
   const kind = text(form, "kind", 30);
+  const { data: student, error } = await supabase.from("students").select("id,status,first_name,last_name,birth_date").eq("organization_id", profile.organization_id).eq("id", studentId).single();
+  if (error || !student || (student.status !== "pre_registration" && !(kind === "contact" && student.status === "active"))) throw new Error("Bekleyen ön kayıt bulunamadı.");
+  function fail(message:string):never { redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(message)}`); }
   let value: Record<string, unknown>;
   let title: string;
   const note = text(form, "note");
   if (kind === "contact") {
-    const {data: consent, error: consentError} = await supabase.from("registration_consents").select("contact_request,accepted_at").eq("organization_id", profile.organization_id).eq("student_id", studentId).order("accepted_at", {ascending:false}).limit(1).maybeSingle();
-    if (consentError || !contactNeedsFollowUp(consent?.contact_request)) throw new Error("İletişim talebi doğrulanamadı.");
-    if (note.length < 5) throw new Error("Görüşme sonucunu en az 5 karakterle yazınız.");
-    value = {contact_request:consent!.contact_request, consent_accepted_at:consent!.accepted_at, resolution:note};
-    title = "İletişim talebi karşılandı";
+    await resolveContactRequest(supabase,profile,studentId,note);
+    revalidatePath("/on-kayitlar");revalidatePath(`/kayit-tamamlama/${studentId}`);revalidatePath(`/ogrenciler/${studentId}`);
+    redirect(`/kayit-tamamlama/${studentId}?follow_up_saved=1`);
   } else if (kind === "trial") {
     const status = text(form, "trial_status", 30);
     if (!TRIAL_STATUS[status]) fail("Deneme durumu geçersiz.");
@@ -51,7 +50,7 @@ export async function recordCandidateFollowUp(form: FormData) {
     }
     title = status === "planned" ? "Deneme dersi okul tarafından onaylandı" : `Deneme dersi · ${TRIAL_STATUS[status]}`;
   } else throw new Error("İşlem türü geçersiz.");
-  const {error:writeError} = await supabase.from("student_activity_logs").insert({organization_id:profile.organization_id,student_id:studentId,activity_type:kind === "contact" ? "contact_request_resolved" : "trial_lesson",title,description:note || title,new_value:value,source_type:"pre_registration_center",source_id:studentId,performed_by:profile.id,performed_at:new Date().toISOString()});
+  const {error:writeError} = await supabase.from("student_activity_logs").insert({organization_id:profile.organization_id,student_id:studentId,activity_type:"trial_lesson",title,description:note || title,new_value:value,source_type:"pre_registration_center",source_id:studentId,performed_by:profile.id,performed_at:new Date().toISOString()});
   if (writeError) throw new Error("İşlem kaydedilemedi: " + writeError.message);
   revalidatePath("/on-kayitlar"); revalidatePath("/deneme-dersleri"); revalidatePath(`/kayit-tamamlama/${studentId}`); revalidatePath(`/ogrenciler/${studentId}`);
   redirect(`/kayit-tamamlama/${studentId}?follow_up_saved=1`);
@@ -79,4 +78,14 @@ export async function approvedTrialMessage(studentId: string) {
   const {formatDisplayDateTime}=await import("@/lib/dates/display");
   const message=`*SPRİNT YÜZME OKULU*\n\n${ownAccount ? "Değerli Kursiyerimiz" : "Sayın Velimiz"},\n\n${student.first_name} ${student.last_name} için deneme dersi başvurunuz okulumuz tarafından *onaylanmıştır*.\n\nGrup: ${trial.new_value.group_name}\nTarih ve saat: ${formatDisplayDateTime(new Date(trial.new_value.scheduled_at))}\n\nDeneme dersi kişi başına bir kez uygulanır. Katılımınızla ilgili değişiklik varsa lütfen bize bildiriniz.\n\nBilgilendirme Hattı: 0551 896 83 19`;
   return {ok:true as const,studentId,interactionId:trial.id,recipient:phone,message,sent:log?.status === "sent",opened:log?.status === "opened"};
+}
+
+export async function markContactRequestResolved(studentId:string) {
+  const profile=await requireProfile([...ROLES]);
+  const supabase=await createClient();
+  try {
+    const result=await resolveContactRequest(supabase,profile,studentId);
+    revalidatePath("/on-kayitlar");revalidatePath(`/kayit-tamamlama/${studentId}`);revalidatePath(`/ogrenciler/${studentId}`);
+    return result;
+  } catch(error) {return {ok:false as const,message:error instanceof Error?error.message:"İletişim talebi kaydedilemedi."};}
 }

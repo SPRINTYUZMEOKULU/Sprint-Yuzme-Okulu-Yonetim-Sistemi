@@ -1,5 +1,7 @@
 import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
+import { REGISTRATION_MESSAGE_KEYS, confirmedRegistrationMessage as findConfirmedRegistrationMessage } from "@/lib/registrations/registration-messages";
+import { contactNeedsFollowUp } from "@/lib/registrations/follow-up";
 import CandidateFollowUp from "@/app/deneme-dersleri/candidate-follow-up";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
@@ -42,13 +44,13 @@ export default async function RegistrationCompletionPage({ params, searchParams 
   ]);
   if (!student) notFound();
   const {data:registrationMessages}=await supabase.from("message_logs")
-    .select("sent_at,metadata,message_body").eq("organization_id",profile.organization_id).eq("student_id",id)
-    .eq("template_key","welcome").eq("status","sent").order("sent_at",{ascending:false}).limit(20);
-  const confirmedRegistrationMessage=(registrationMessages || []).find(row=>row.metadata?.source_path===`/kayit-tamamlama/${id}` && row.metadata?.delivery_confirmation==="manual_confirmed") || null;
+    .select("template_key,status,sent_at,metadata,message_body").eq("organization_id",profile.organization_id).eq("student_id",id)
+    .in("template_key",REGISTRATION_MESSAGE_KEYS).eq("status","sent").order("sent_at",{ascending:false}).limit(20);
+  const confirmedRegistrationMessage=findConfirmedRegistrationMessage(registrationMessages || [],id);
   const confirmedMessageAt=confirmedRegistrationMessage?.sent_at || null;
 
   const {data: followUps, error: followUpError} = await supabase.from("student_activity_logs").select("activity_type,new_value,performed_at").eq("organization_id",profile.organization_id).eq("student_id",id).in("activity_type",["contact_request_resolved","trial_lesson"]).order("performed_at",{ascending:false}).limit(100);
-  if (followUpError) throw new Error("Ön kayıt takip bilgileri okunamadı.");
+
   const trial = (followUps || []).find(row=>row.activity_type === "trial_lesson")?.new_value || null;
   const groups = (rawGroups || []).map((group) => ({ ...group, schedules: (schedules || []).filter((item) => item.group_id === group.id) }));
   const fallbackTemplate = "🏊 SPRİNT YÜZME OKULU’NA HOŞ GELDİNİZ\n\nSayın {{veli_adi}},\n\n{{ogrenci_adi}} adına Sprint Yüzme Okulu kayıt işleminiz başarıyla tamamlanmıştır.\n\nÖğrenci No: {{ogrenci_no}}\nŞube: {{sube}}\nKurs Türü: {{kurs_turu}}\nGrup: {{grup}}\nGünler: {{gunler}}\nSaat: {{saat}}\nPaket: {{paket}}\nDers Sayısı: {{ders_sayisi}}\nBaşlangıç: {{baslangic}}\nPlanlanan Bitiş: {{bitis}}\nÖdeme Vadesi: {{vade_tarihi}}\n\n{{malzemeler}}\n\nKonum: {{konum}}\nİletişim: {{telefon}}\n\nKeyifli ve başarılı bir yüzme dönemi dileriz.\nSPRİNT YÜZME OKULU\nBilgilendirme Hattı: 0551 896 83 19";
@@ -58,7 +60,7 @@ export default async function RegistrationCompletionPage({ params, searchParams 
   const studentAge = ageFromBirthDate(student.birth_date);
   return <main className="completionPage" data-note-saved={query.note_saved === "1" ? "true" : "false"}>
     <header className="completionHeader"><div className="headerIdentity"><div className="headerKicker">SPRİNTOS · KESİN KAYIT OPERASYONU</div><h1>Kesin Kayıt Merkezi</h1><p><strong>{student.first_name} {student.last_name}</strong>{" · "}{student.student_number || "Öğrenci numarası kayıt tamamlandığında hazır olacak"}{student.birth_date ? <>{" · Doğum Tarihi: "}{formatDisplayDate(new Date(`${student.birth_date}T12:00:00`))}{studentAge !== null ? ` · Yaş: ${studentAge}` : ""}</> : null}</p></div>
-      <div className="headerLinks">{query.arrival === "1" ? <Link href={attendanceHref}>✓ Öğrenci Geldi · Yoklama</Link> : null}<Link href={`/ogrenciler/${student.id}?portal=1&returnTo=${encodeURIComponent(`/kayit-tamamlama/${student.id}`)}`}>Portal Şifresi + WhatsApp</Link><Link href="/">Ana Sayfa</Link><Link href={`/on-kayitlar?student=${student.id}`}>Ön Kaydı Gör</Link><Link href="/on-kayitlar">Ön Kayıtlara Dön</Link></div></header>
+      <div className="headerLinks">{query.arrival === "1" ? <Link href={attendanceHref}>✓ Öğrenci Geldi · Yoklama</Link> : null}<Link href={`/ogrenciler/${student.id}?portal=1&returnTo=${encodeURIComponent(`/kayit-tamamlama/${student.id}`)}`}>Portal Şifresi + WhatsApp</Link><Link href={`/ogrenciler/${student.id}`}>Öğrenci Dosyasını Aç</Link><Link href="/">Ana Sayfa</Link><Link href={`/on-kayitlar?student=${student.id}`}>Ön Kaydı Gör</Link><Link href="/on-kayitlar">Ön Kayıtlara Dön</Link></div></header>
     {query.note_saved === "1" ? <style>{`.completionPage[data-note-saved="true"] .notesCard .noteComposer::after{content:"✓ Notunuz kaydedildi.";display:flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid #bfe5cf;border-radius:12px;background:#edf9f2;color:#167442;font-size:13px;font-weight:900;box-sizing:border-box}.completionPage[data-note-saved="true"] .notesCard{scroll-margin-top:112px}@media(max-width:720px){.completionPage[data-note-saved="true"] .notesCard .noteComposer::after{width:100%;justify-content:center}}`}</style> : null}
     {query.arrival === "1" ? <div className="successBanner">İlk ders karşılama akışı açık. Kayıt mesajını WhatsApp’tan gönderebilir, portal şifresini hazırlayabilir ve öğrenciyi yoklamada “Geldi” olarak işleyebilirsiniz.</div> : null}
     {query.error ? <div className="errorBanner">{query.error}</div> : null}
@@ -66,7 +68,8 @@ export default async function RegistrationCompletionPage({ params, searchParams 
     {query.legacy_manager_confirmed ? <div className="successBanner">Yönetici teyidi kaydedildi. Aktarım kontrolleri yönetici onayıyla tamamlandı.</div> : null}
     {query.legacy_compensation_added ? <div className="successBanner">{query.legacy_compensation_added} adet aktarım telafisi öğrenciye eklendi.</div> : null}
     {query.follow_up_saved === "1" ? <div className="successBanner" role="status">Takip işlemi kaydedildi.</div> : null}
-    {student.status === "pre_registration" ? <CandidateFollowUp studentId={id} consent={consent || null} contacts={(followUps || []).filter(row=>row.activity_type === "contact_request_resolved")} trial={trial} groups={groups}/> : null}
+    {followUpError ? <div className="successBanner" role="status">İletişim takip bilgileri yüklenemedi. Kayıt işlemine devam edebilirsiniz.</div> : null}
+    {student.status === "pre_registration" || contactNeedsFollowUp(consent?.contact_request) ? <CandidateFollowUp canManageTrial={student.status === "pre_registration" && !followUpError} studentId={id} consent={consent || null} contacts={(followUps || []).filter(row=>row.activity_type === "contact_request_resolved")} trial={trial} groups={groups}/> : null}
     <RegistrationWizard confirmedMessageBody={confirmedRegistrationMessage?.message_body} confirmedMessageAt={confirmedMessageAt} student={student} branches={branches || []} groups={groups} packages={packages || []} coaches={coaches || []} template={templateRow?.body || fallbackTemplate} consent={consent || null} draft={draft || null} activeEnrollment={activeEnrollment || null} payments={payments || []} notes={notes || []} />
     <LegacyTransferControls studentId={student.id} visible={missingElectronicConsent} canManagerConfirm={canManagerConfirm} />
   </main>;

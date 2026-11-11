@@ -4,6 +4,7 @@ import { packageMatchesCourse } from "@/lib/registrations/course-type";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -678,7 +679,7 @@ function SaveDraftButton({ className = "saveDraftButton" }: { className?: string
       aria-busy={pending}
     >
       <Icon name={pending ? "clock" : "save"} size={18} />
-      {pending ? "Kaydediliyor…" : "Kaydet"}
+      {pending ? "Kaydediliyor…" : "Taslağı Kaydet"}
     </button>
   );
 }
@@ -688,6 +689,98 @@ function SaveDraftButton({ className = "saveDraftButton" }: { className?: string
  * COMPONENT
  * ============================================================
  */
+
+function RegistrationFinalActions({requiresManagerApproval,customApprovalApproved,customApprovalPending,customApprovalRejected,messageSent,rulesAccepted,hasActiveEnrollment}:{requiresManagerApproval:boolean;customApprovalApproved:boolean;customApprovalPending:boolean;customApprovalRejected:boolean;messageSent:boolean;rulesAccepted:boolean;hasActiveEnrollment:boolean}) {
+  const {pending}=useFormStatus();
+  return <>        {pending ? (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              margin: "14px 0 4px",
+              padding: "14px 16px",
+              borderRadius: 14,
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              color: "#1e3a8a",
+              fontWeight: 800,
+              lineHeight: 1.5,
+            }}
+          >
+            İşleminiz kaydediliyor. Kayıt, grup ve ders planı kontrol ediliyor.
+            Lütfen bu işlem tamamlanana kadar sayfayı kapatmayın.
+          </div>
+        ) : null}
+
+        {!hasActiveEnrollment ? <p role="status" style={{ padding: "12px 16px", borderRadius: 12, background: "#fff7ed", color: "#9a3412" }}>
+          Kesin kayıt henüz tamamlanmadı. Mesajı göndermek veya taslağı kaydetmek kaydı aktifleştirmez.
+          “Kaydı Tamamla ve Öğrenciye Aktar” işlemi başarıyla bittiğinde öğrenci otomatik aktif olur.
+        </p> : null}
+
+        <div className="finalButtons">
+
+          <button
+            type="submit"
+            formAction={
+              saveRegistrationDraft
+            }
+            className="outlineSave"
+            disabled={pending}
+          >
+
+            <Icon
+              name="save"
+              size={18}
+            />
+
+            Taslağı Kaydet
+
+          </button>
+
+          <button
+            type="submit"
+            formAction={
+              requiresManagerApproval && !customApprovalApproved
+                ? requestCustomLessonCountApproval
+                : completeRegistration
+            }
+            className="completeButton"
+            aria-busy={pending}
+            disabled={
+              pending ||
+              (requiresManagerApproval && !customApprovalApproved
+                ? customApprovalPending
+                : !rulesAccepted || !messageSent)
+            }
+            data-final-registration={
+              !requiresManagerApproval || customApprovalApproved
+                ? "true"
+                : "false"
+            }
+          >
+
+            <Icon
+              name="check"
+              size={19}
+            />
+
+            {pending
+              ? "Kayıt İşleniyor..."
+              : requiresManagerApproval && customApprovalPending
+                ? "Yönetici Onayı Bekleniyor"
+                : requiresManagerApproval && !customApprovalApproved
+                  ? customApprovalRejected
+                    ? "Yeniden Yönetici Onayına Gönder"
+                    : "Yönetici Onayına Gönder"
+                  : !messageSent
+                    ? "Önce WhatsApp Mesajını Gönderin"
+                    : "Kaydı Tamamla ve Öğrenciye Aktar"}
+
+          </button>
+
+        </div>
+</>;
+}
 
 export default function RegistrationWizard({
   confirmedMessageAt,
@@ -1017,7 +1110,7 @@ export default function RegistrationWizard({
     useState(
       draftUsesCurrentRegistrationTemplate
         ? savedMessageDraft
-        : ""
+        : confirmedMessageBody || ""
     );
 
   const [
@@ -1026,11 +1119,6 @@ export default function RegistrationWizard({
   ] =
     useState(false);
 
-  const [
-    finalSubmitting,
-    setFinalSubmitting,
-  ] =
-    useState(false);
 
   const messageInteractionId = useRef<string | null>(null);
   const [confirmedInSession, setConfirmedInSession] = useState<string | null>(null);
@@ -1818,6 +1906,14 @@ _Antalya'nın En Köklü Yüzme Okulu_`
    * ==========================================================
    */
 
+  const registrationPlanKey=JSON.stringify([branchId,groupId,packageId,startDate,lessonCount,[...weekdays].sort(),paymentDueDate,coachId]);
+  const previousRegistrationPlan=useRef(registrationPlanKey);
+  useEffect(()=>{
+    if(previousRegistrationPlan.current === registrationPlanKey)return;
+    previousRegistrationPlan.current=registrationPlanKey;
+    setMessage("");setMessageSent(false);setWhatsappOpened(false);setConfirmedInSession(null);messageInteractionId.current=null;
+  },[registrationPlanKey]);
+
   const messageSent = rawMessageSent && ((confirmedInSession || confirmedMessageBody) ? (message || generatedMessage) === (confirmedInSession || confirmedMessageBody) : true);
 
   return (
@@ -1826,14 +1922,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
         completeRegistration
       }
       className="registrationShell"
-      onSubmit={(event) => {
-        const nativeEvent = event.nativeEvent as SubmitEvent;
-        const submitter = nativeEvent.submitter as HTMLButtonElement | null;
 
-        if (submitter?.dataset.finalRegistration === "true") {
-          setFinalSubmitting(true);
-        }
-      }}
     >
 
       {/*
@@ -3426,93 +3515,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
           </div>
         </div>
 
-        {finalSubmitting ? (
-          <div
-            role="status"
-            aria-live="polite"
-            style={{
-              margin: "14px 0 4px",
-              padding: "14px 16px",
-              borderRadius: 14,
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              color: "#1e3a8a",
-              fontWeight: 800,
-              lineHeight: 1.5,
-            }}
-          >
-            Kayıt işleniyor... Öğrenci aktif kayda alınıyor, grup üyeliği ve ders planı oluşturuluyor.
-            Lütfen bu işlem tamamlanana kadar sayfayı kapatmayın.
-          </div>
-        ) : null}
-
-        {!activeEnrollment ? <p role="status" style={{ padding: "12px 16px", borderRadius: 12, background: "#fff7ed", color: "#9a3412" }}>
-          Kesin kayıt henüz tamamlanmadı. Mesajı göndermek veya taslağı kaydetmek kaydı aktifleştirmez.
-          “Kaydı Tamamla ve Öğrenciye Aktar” işlemi başarıyla bittiğinde öğrenci otomatik aktif olur.
-        </p> : null}
-
-        <div className="finalButtons">
-
-          <button
-            type="submit"
-            formAction={
-              saveRegistrationDraft
-            }
-            className="outlineSave"
-            disabled={finalSubmitting}
-          >
-
-            <Icon
-              name="save"
-              size={18}
-            />
-
-            Taslağı Kaydet
-
-          </button>
-
-          <button
-            type="submit"
-            formAction={
-              requiresManagerApproval && !customApprovalApproved
-                ? requestCustomLessonCountApproval
-                : completeRegistration
-            }
-            className="completeButton"
-            aria-busy={finalSubmitting}
-            disabled={
-              finalSubmitting ||
-              (requiresManagerApproval && !customApprovalApproved
-                ? customApprovalPending
-                : !consent?.rules_accepted || !messageSent)
-            }
-            data-final-registration={
-              !requiresManagerApproval || customApprovalApproved
-                ? "true"
-                : "false"
-            }
-          >
-
-            <Icon
-              name="check"
-              size={19}
-            />
-
-            {finalSubmitting
-              ? "Kayıt İşleniyor..."
-              : requiresManagerApproval && customApprovalPending
-                ? "Yönetici Onayı Bekleniyor"
-                : requiresManagerApproval && !customApprovalApproved
-                  ? customApprovalRejected
-                    ? "Yeniden Yönetici Onayına Gönder"
-                    : "Yönetici Onayına Gönder"
-                  : !messageSent
-                    ? "Önce WhatsApp Mesajını Gönderin"
-                    : "Kaydı Tamamla ve Öğrenciye Aktar"}
-
-          </button>
-
-        </div>
+        <RegistrationFinalActions requiresManagerApproval={requiresManagerApproval} customApprovalApproved={customApprovalApproved} customApprovalPending={customApprovalPending} customApprovalRejected={customApprovalRejected} messageSent={messageSent} rulesAccepted={Boolean(consent?.rules_accepted)} hasActiveEnrollment={Boolean(activeEnrollment)}/>
 
       </section>
 

@@ -3,7 +3,7 @@
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 
 import { packageMatchesCourse } from "@/lib/registrations/course-type";
-import { contactResolved } from "@/lib/registrations/follow-up";
+import { persistRegistrationEnrollment } from "@/lib/registrations/persist-enrollment";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -1264,14 +1264,11 @@ export async function completeRegistration(
   if (studentBefore.status === "pre_registration") {
     const { data: followUps, error: followUpError } = await supabase.from("student_activity_logs")
       .select("activity_type,new_value,performed_at").eq("organization_id", profile.organization_id)
-      .eq("student_id", studentId).in("activity_type", ["contact_request_resolved", "trial_lesson"])
+      .eq("student_id", studentId).eq("activity_type", "trial_lesson")
       .order("performed_at", {ascending:false}).limit(100);
     const latestTrial = (followUps || []).find(row=>row.activity_type === "trial_lesson");
-    const unresolved = !contactResolved(consent, (followUps || []).filter(row=>row.activity_type === "contact_request_resolved"));
-    if (followUpError || unresolved || latestTrial?.new_value?.status === "planned") {
-      const message = followUpError ? "Ön kayıt takip bilgileri doğrulanamadı." : unresolved
-        ? "Önce iletişim talebini karşılayıp görüşme sonucunu kaydediniz."
-        : "Önce planlanan deneme dersinin sonucunu kaydediniz veya denemeyi iptal ediniz.";
+    if (followUpError || latestTrial?.new_value?.status === "planned") {
+      const message = followUpError ? "Deneme dersi bilgileri doğrulanamadı." : "Önce planlanan deneme dersinin sonucunu kaydediniz veya denemeyi iptal ediniz.";
       redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(message)}`);
     }
   }
@@ -1322,344 +1319,14 @@ export async function completeRegistration(
     }
   }
 
-  /*
-   * ==========================================================
-   * ÖNCEKİ AKTİF ENROLLMENT'I KAPAT
-   * ==========================================================
-   */
-
-  await supabase
-    .from(
-      "student_enrollments"
-    )
-    .update({
-      status:
-        "completed",
-    })
-    .eq(
-      "student_id",
-      studentId
-    )
-    .eq(
-      "status",
-      "active"
-    );
-
-  /*
-   * ==========================================================
-   * YENİ AKTİF ENROLLMENT
-   *
-   * Vade burada gerçek finans sistemine yazılır.
-   * ==========================================================
-   */
-
-  const {
-    data:
-      enrollment,
-
-    error:
-      enrollmentError,
-  } =
-    await supabase
-      .from(
-        "student_enrollments"
-      )
-      .insert({
-        organization_id:
-          profile.organization_id,
-
-        student_id:
-          studentId,
-
-        package_id:
-          packageId ||
-          null,
-
-        branch_id: branchId,
-
-        group_id:
-          groupId,
-
-        start_date:
-          startDate,
-
-        planned_end_date:
-          plannedEndDate,
-
-        lesson_weekdays:
-          weekdays,
-
-        total_lessons:
-          totalLessons,
-
-        used_lessons:
-          0,
-
-        /*
-         * ÖDEMELER MODÜLÜYLE AYNI VADE
-         */
-        payment_due_date:
-          paymentDueDate,
-
-        status:
-          "active",
-      })
-      .select(`
-        id,
-        planned_end_date,
-        payment_due_date
-      `)
-      .single();
-
-  if (
-    enrollmentError ||
-    !enrollment
-  ) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        enrollmentError?.message ||
-          "Aktif kayıt oluşturulamadı."
-      )}`
-    );
+  let persisted: Awaited<ReturnType<typeof persistRegistrationEnrollment>>;
+  try {
+    persisted=await persistRegistrationEnrollment(supabase,{organizationId:profile.organization_id!,studentId,actorId:profile.id,previousStatus:studentBefore.status,branchId,groupId,packageId:packageId || null,startDate,plannedEndDate,weekdays,isoWeekdays,totalLessons,paymentDueDate});
+  } catch(error) {
+    redirect(`/kayit-tamamlama/${studentId}?error=${encodeURIComponent(error instanceof Error?error.message:"Kayıt tamamlanamadı.")}`);
   }
-
-  /*
-   * ==========================================================
-   * GRUP ÜYELİĞİ
-   * ==========================================================
-   */
-
-  await supabase
-    .from(
-      "student_group_memberships"
-    )
-    .update({
-      is_active:
-        false,
-
-      ended_at:
-        startDate,
-    })
-    .eq(
-      "student_id",
-      studentId
-    )
-    .eq(
-      "is_active",
-      true
-    );
-
-  const {
-    error:
-      membershipError,
-  } =
-    await supabase
-      .from(
-        "student_group_memberships"
-      )
-      .insert({
-        organization_id:
-          profile.organization_id,
-
-        student_id:
-          studentId,
-
-        group_id:
-          groupId,
-
-        started_at:
-          startDate,
-
-        is_active:
-          true,
-      });
-
-  if (
-    membershipError
-  ) {
-    /*
-     * Yeni enrollment yarım kalmasın.
-     */
-
-    await supabase
-      .from(
-        "student_enrollments"
-      )
-      .delete()
-      .eq(
-        "id",
-        enrollment.id
-      );
-
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        membershipError.message
-      )}`
-    );
-  }
-
-  /*
-   * ==========================================================
-   * ESKİ KATILIM PLANINI KAPAT
-   * ==========================================================
-   */
-
-  await supabase
-    .from(
-      "student_attendance_plans"
-    )
-    .update({
-      is_active:
-        false,
-
-      updated_by:
-        profile.id,
-
-      updated_at:
-        new Date()
-          .toISOString(),
-    })
-    .eq(
-      "student_id",
-      studentId
-    )
-    .eq(
-      "is_active",
-      true
-    );
-
-  /*
-   * ==========================================================
-   * GERÇEK KATILIM PLANI
-   * ==========================================================
-   */
-
-  const {
-    error:
-      attendancePlanError,
-  } =
-    await supabase
-      .from(
-        "student_attendance_plans"
-      )
-      .insert({
-        organization_id:
-          profile.organization_id,
-
-        student_id:
-          studentId,
-
-        enrollment_id:
-          enrollment.id,
-
-        group_id:
-          groupId,
-
-        selected_weekdays:
-          isoWeekdays,
-
-        weekly_frequency:
-          isoWeekdays.length,
-
-        package_lesson_count:
-          totalLessons,
-
-        start_date:
-          startDate,
-
-        normal_planned_end_date:
-          plannedEndDate,
-
-        compensation_planned_end_date:
-          plannedEndDate,
-
-        is_active:
-          true,
-
-        created_by:
-          profile.id,
-
-        updated_by:
-          profile.id,
-      });
-
-  if (
-    attendancePlanError
-  ) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        `Katılım planı oluşturulamadı: ${attendancePlanError.message}`
-      )}`
-    );
-  }
-
-  /*
-   * ==========================================================
-   * ÖĞRENCİYİ AKTİF YAP
-   * ==========================================================
-   */
-
-  const {
-    data:
-      updatedStudent,
-
-    error:
-      studentError,
-  } =
-    await supabase
-      .from(
-        "students"
-      )
-      .update({
-        status:
-          "active",
-        is_active: true,
-
-        branch_id:
-          branchId,
-
-        preferred_group_id:
-          groupId,
-
-        preferred_package_id:
-          packageId ||
-          null,
-
-        preferred_days:
-          weekdays.join(","),
-
-        updated_at:
-          new Date()
-            .toISOString(),
-      })
-      .eq(
-        "id",
-        studentId
-      )
-      .eq(
-        "organization_id",
-        profile.organization_id
-      )
-      .eq("status", studentBefore.status)
-      .select(`
-        id,
-        student_number,
-        first_name,
-        last_name
-      `)
-      .single();
-
-  if (
-    studentError ||
-    !updatedStudent
-  ) {
-    redirect(
-      `/kayit-tamamlama/${studentId}?error=${encodeURIComponent(
-        studentError?.message ||
-          "Öğrenci aktif hale getirilemedi."
-      )}`
-    );
-  }
+  const enrollment=persisted.enrollment;
+  const updatedStudent=persisted.student;
 
   // Only announce completion after the persisted student, membership and plan agree.
   const [confirmedStudent, confirmedEnrollment, confirmedMembership, confirmedPlan] = await Promise.all([
@@ -1684,6 +1351,8 @@ export async function completeRegistration(
    * ==========================================================
    */
 
+  const {data:completionAudit} = await supabase.from("student_activity_logs").select("id").eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("activity_type","registration_completed").eq("source_id",enrollment.id).limit(1).maybeSingle();
+  if (!completionAudit) {
   await supabase
     .from(
       "student_activity_logs"
@@ -1771,6 +1440,8 @@ export async function completeRegistration(
       approved_at:
         now,
     });
+
+  }
 
   /*
    * ==========================================================
