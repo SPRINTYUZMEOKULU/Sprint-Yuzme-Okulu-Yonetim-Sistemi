@@ -26,3 +26,38 @@
 .invoice-document-head h3{margin:0}
 .invoice-document-head span{font-size:12px;font-weight:700;color:#80501c;background:#fff4e6;border-radius:20px;padding:6px 10px}
 @media(max-width:640px){.invoice-center{padding:14px 12px 96px}.invoice-center>header{border-radius:16px}.invoice-tabs a{flex:1 1 calc(50% - 10px)}.invoice-section-heading{align-items:flex-start}.invoice-request{align-items:stretch;flex-direction:column}.invoice-request-end{grid-template-columns:1fr auto;align-items:center;justify-items:start}.invoice-request-end a{justify-self:end}.invoice-document-head{align-items:flex-start;flex-direction:column}}
+
+
+/* Mobile navigation and alignment: do not modify shared SprintOS shell. */
+.invoice-header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.invoice-center>header .invoice-header-actions button,
+.invoice-center>header .invoice-header-actions a{display:inline-flex;gap:6px;align-items:center;justify-content:center;min-height:42px;padding:10px 13px;border-radius:11px;border:1px solid rgba(222,238,251,.44);background:rgba(255,255,255,.1);color:#fff;text-decoration:none;font:750 13px system-ui;white-space:nowrap}
+.invoice-center>header .invoice-header-actions button{cursor:pointer}
+.invoice-center>header .invoice-header-actions button:hover,
+.invoice-center>header .invoice-header-actions a:hover{background:rgba(255,255,255,.2)}
+.invoice-header-actions .invoice-reload{margin-left:auto}
+.invoice-header-actions [aria-hidden=true]{font-size:20px;line-height:1}
+.invoice-center>header .invoice-header-actions :focus-visible{outline:3px solid #ffca65;outline-offset:2px}
+.invoice-tabs a{line-height:1.35}
+@media (max-width:640px){
+  .invoice-center>header{padding:18px;border-radius:16px}
+  .invoice-center>header h1{font-size:clamp(23px,6vw,29px);margin:9px 0 4px}
+  .invoice-center>header>p:last-child{font-size:13px;line-height:1.5;margin:8px 0 0}
+  .invoice-header-actions{gap:8px;margin-bottom:13px}
+  .invoice-center>header .invoice-header-actions button,
+  .invoice-center>header .invoice-header-actions a{min-height:40px;padding:9px 10px;font-size:12px}
+  .invoice-kicker{margin-top:8px;letter-spacing:.09em}
+  .invoice-tabs{gap:8px;margin:14px 0}
+  .invoice-tabs a{font-size:12px;padding:11px 8px;min-height:54px}
+  .invoice-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .invoice-grid>div{padding:15px;border-radius:14px;min-width:0}
+  .invoice-grid>div:nth-child(3):last-child{grid-column:1/-1;grid-template-columns:1fr auto;align-items:center;column-gap:10px}
+  .invoice-grid>div:nth-child(3):last-child strong{grid-column:1;grid-row:2}
+  .invoice-grid>div:nth-child(3):last-child a{grid-column:2;grid-row:1 / span 2;text-align:right}
+  .invoice-grid span{font-size:12px}
+  .invoice-grid strong{font-size:28px}
+  .invoice-grid a{font-size:12px;overflow-wrap:anywhere}
+  .invoice-notice{padding:15px;margin:14px 0}
+  .invoice-notice h2{font-size:17px}
+  .invoice-notice p{font-size:13px}
+}
