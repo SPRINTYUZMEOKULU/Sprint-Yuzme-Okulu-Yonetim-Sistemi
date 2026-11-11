@@ -1,5 +1,6 @@
 "use client";
 
+import { TRIAL_POLICY_TEXT, trialEligibilityError } from "@/lib/registrations/trial-policy";
 import {
   FormEvent,
   useEffect,
@@ -281,6 +282,12 @@ export default function PreRegistrationForm() {
         ).entries()
       );
 
+    if (payload.contactRequest === "trial_lesson") {
+      const eligibility = trialEligibilityError(String(payload.registrationFor),String(payload.birthDate || ""));
+      if (eligibility) {
+        setStatus("error");setMessage(eligibility);return;
+      }
+    }
     try {
       const response =
         await fetch(
@@ -1369,7 +1376,7 @@ export default function PreRegistrationForm() {
             bilgi almak istiyorum
           </label>
         </div>
-        {contactRequest === "trial_lesson" ? <p role="status">Deneme talebiniz ekibimize iletilir. Paket seçmeniz gerekmez. Tarih ve saat sizinle görüşülerek kesinleştirilir.</p> : null}
+        {contactRequest === "trial_lesson" ? <div className="trialPolicyNotice" role="status" style={{marginTop:16,padding:16,border:"1px solid #c9def3",borderRadius:14,background:"#f0f7ff",fontSize:14,lineHeight:1.65}}><strong>Deneme dersi koşulları</strong><p>{TRIAL_POLICY_TEXT}</p></div> : null}
       </section>
 
       <section className="formSection">

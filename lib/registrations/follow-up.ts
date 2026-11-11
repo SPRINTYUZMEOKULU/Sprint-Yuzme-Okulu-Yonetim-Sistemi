@@ -15,5 +15,5 @@ export function contactResolved(consent: {contact_request?: string | null; accep
   });
 }
 export const TRIAL_STATUS: Record<string, string> = {
-  planned: "Planlandı", attended: "Katıldı", absent: "Gelmedi", cancelled: "İptal edildi",
+  planned: "Onaylandı · Planlandı", attended: "Katıldı", absent: "Gelmedi", cancelled: "İptal edildi",
 };
