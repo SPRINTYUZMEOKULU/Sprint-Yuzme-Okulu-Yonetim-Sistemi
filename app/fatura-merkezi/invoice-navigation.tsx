@@ -12,7 +12,7 @@ export default function InvoiceNavigation({ home = "/" }: { home?: string }) {
     }} aria-label="Önceki sayfaya geri dön">
       <span aria-hidden="true">←</span> Geri
     </button>
-    <Link href={home} className="invoice-home" aria-label="Ana sayfaya dön">⌂ <span>Ana Sayfa</span></Link>
+    <Link href={home} className="invoice-home" aria-label={home === "/" ? "Ana sayfaya dön" : "Fatura Merkezine dön"}>⌂ <span>{home === "/" ? "Ana Sayfa" : "Fatura Merkezi"}</span></Link>
     <button type="button" className="invoice-reload" onClick={() => router.refresh()} aria-label="Fatura Merkezi verilerini yenile">
       <span aria-hidden="true">↻</span> <span>Yenile</span>
     </button>
