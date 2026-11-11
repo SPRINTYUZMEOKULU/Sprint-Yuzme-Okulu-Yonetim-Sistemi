@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InvoiceNavigation from "../invoice-navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { documentAdmin } from "@/lib/payments/document-admin";
 import { suggestBankStudents } from "@/lib/payments/bank-import";
@@ -38,7 +39,7 @@ export default async function BankReview({searchParams}:{searchParams:Promise<Re
   })).filter(row=>Number.isFinite(row.amount) && row.amount>0);
 
   const studentOptions=(students.data||[]).map(s=>({id:s.id,name:`${s.first_name} ${s.last_name}`}));
-  return <main className="invoice-center"><header><Link href="/fatura-merkezi">← Fatura Merkezine Dön</Link><h1>Banka Hareketleri ve Kontrol</h1><p>Excel alternatif yolu, güvenli ödeme talepleriyle aynı belge sürecini kullanır.</p></header><nav><Link href="/fatura-merkezi?tab=issued">Kesilen Faturalar</Link><Link href="/odeme-bilgileri/belgeler">Güvenli Ödeme Talepleri</Link><Link href="/odemeler">Ödeme Merkezi</Link></nav><ImportFile/>
+  return <main className="invoice-center"><header><InvoiceNavigation home="/fatura-merkezi"/><h1>Banka Hareketleri ve Kontrol</h1><p>Excel alternatif yolu, güvenli ödeme talepleriyle aynı belge sürecini kullanır.</p></header><nav><Link href="/fatura-merkezi?tab=issued">Kesilen Faturalar</Link><Link href="/odeme-bilgileri/belgeler">Güvenli Ödeme Talepleri</Link><Link href="/odemeler">Ödeme Merkezi</Link></nav><ImportFile/>
     <nav aria-label="Banka hareketi durum filtresi" className="invoice-bank-filters">
       <Link aria-current={selectedStatus==="review"?"page":undefined} className={selectedStatus==="review"?"active":""} href="/fatura-merkezi/banka?status=review">İnceleme Bekleyen ({reviewCount.error?"—":reviewCount.count??0})</Link>
       <Link aria-current={selectedStatus==="linked"?"page":undefined} className={selectedStatus==="linked"?"active":""} href="/fatura-merkezi/banka?status=linked">Belgeye Bağlanan ({linkedCount.error?"—":linkedCount.count??0})</Link>
