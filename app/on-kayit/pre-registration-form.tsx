@@ -1,5 +1,6 @@
 "use client";
 
+import { TRIAL_POLICY_TEXT, trialEligibilityError } from "@/lib/registrations/trial-policy";
 import {
   FormEvent,
   useEffect,
@@ -281,6 +282,12 @@ export default function PreRegistrationForm() {
         ).entries()
       );
 
+    if (payload.contactRequest === "trial_lesson") {
+      const eligibility = trialEligibilityError(String(payload.registrationFor),String(payload.birthDate || ""));
+      if (eligibility) {
+        setStatus("error");setMessage(eligibility);return;
+      }
+    }
     try {
       const response =
         await fetch(
@@ -313,10 +320,11 @@ export default function PreRegistrationForm() {
       setStatus("success");
 
       setMessage(
-        "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
+        payload.contactRequest === "trial_lesson" ? "Deneme dersi talebiniz alındı ve okul onayı bekliyor. Başvurunuz henüz kabul edilmiş değildir. SPRİNT YÜZME OKULU onayından sonra bilgilendirme yapılacaktır." : "Ön kaydınız başarıyla alınmıştır. Kayıt ekibimiz en kısa sürede sizinle iletişime geçecektir."
       );
 
       formElement.reset();
+      setContactRequest("");
 
       setRegistrationFor(
         "child"
@@ -455,7 +463,7 @@ export default function PreRegistrationForm() {
                   marginBottom: 7,
                 }}
               >
-                🎉 Ön Kaydınız Başarıyla Alındı!
+                {message.startsWith("Deneme dersi") ? "Deneme Talebiniz Alındı · Onay Bekliyor" : "🎉 Ön Kaydınız Başarıyla Alındı!"}
               </strong>
               <span
                 style={{
@@ -465,8 +473,7 @@ export default function PreRegistrationForm() {
                   opacity: .92,
                 }}
               >
-                Başvurunuz kayıt ekibimize ulaştı. En kısa sürede
-                sizinle iletişime geçeceğiz.
+                {message}
               </span>
             </div>
 
@@ -598,7 +605,7 @@ export default function PreRegistrationForm() {
                   fontWeight: 1000,
                 }}
               >
-                Ön Kaydınız Alındı! 🎉
+                {message.startsWith("Deneme dersi") ? "Deneme Talebiniz Alındı" : "Ön Kaydınız Alındı! 🎉"}
               </h1>
 
               <p
@@ -1369,7 +1376,7 @@ export default function PreRegistrationForm() {
             bilgi almak istiyorum
           </label>
         </div>
-        {contactRequest === "trial_lesson" ? <p role="status">Deneme talebiniz ekibimize iletilir. Paket seçmeniz gerekmez. Tarih ve saat sizinle görüşülerek kesinleştirilir.</p> : null}
+        {contactRequest === "trial_lesson" ? <div className="trialPolicyNotice" role="status" style={{marginTop:16,padding:16,border:"1px solid #c9def3",borderRadius:14,background:"#f0f7ff",fontSize:14,lineHeight:1.65}}><strong>Deneme dersi koşulları</strong><p>{TRIAL_POLICY_TEXT}</p></div> : null}
       </section>
 
       <section className="formSection">

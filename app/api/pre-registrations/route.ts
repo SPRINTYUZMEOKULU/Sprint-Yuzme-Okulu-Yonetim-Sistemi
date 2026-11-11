@@ -1,3 +1,5 @@
+import { TRIAL_POLICY_VERSION, trialEligibilityError } from "@/lib/registrations/trial-policy";
+import { assertTrialAvailable } from "@/lib/registrations/trial-availability";
 import { readSettings } from "@/lib/settings/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -334,6 +336,13 @@ export async function POST(
         body.contactRequest,
         100
       ) || null;
+
+    if (contactRequest === "trial_lesson") {
+      const eligibility=trialEligibilityError(registrationFor,birthDate);
+      if(eligibility) return NextResponse.json({error:eligibility},{status:400});
+      try { await assertTrialAvailable(supabase,organization.id,{first_name:firstName,last_name:lastName,birth_date:birthDate!}); }
+      catch(error) {return NextResponse.json({error:error instanceof Error?error.message:"Deneme hakkı kontrol edilemedi."},{status:400});}
+    }
 
     const healthDeclaration =
       body.healthDeclaration ===
@@ -1121,6 +1130,7 @@ export async function POST(
       );
 
     const snapshot = {
+      ...(contactRequest === "trial_lesson" ? {trial_policy_version:TRIAL_POLICY_VERSION} : {}),
       registration_for:
         registrationFor,
 
