@@ -3,9 +3,9 @@ import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { trialEligibilityError, TRIAL_POLICY_VERSION } from "@/lib/registrations/trial-policy";
+import { TRIAL_POLICY_VERSION } from "@/lib/registrations/trial-policy";
 import { assertTrialAvailable } from "@/lib/registrations/trial-availability";
-import { normalizeCourseType } from "@/lib/registrations/course-type";
+import { isSelfRegistration } from "@/lib/guardian/registration-owner";
 import { contactNeedsFollowUp, TRIAL_STATUS } from "@/lib/registrations/follow-up";
 const ROLES = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 function text(form: FormData, key: string, max = 1000) { return String(form.get(key) || "").trim().slice(0, max); }
@@ -34,10 +34,6 @@ export async function recordCandidateFollowUp(form: FormData) {
     if (status !== "planned" && previous?.new_value?.status !== "planned") fail("Önce bir deneme dersi planlayınız.");
     if (["attended","absent"].includes(status) && !previous?.new_value?.approved_at) fail("Okul onayı olmayan deneme dersi kabul edilmiş sayılamaz. Önce okul onayını tamamlayınız.");
     if (status === "planned") {
-      const {data:consent,error:consentError}=await supabase.from("registration_consents").select("registration_for").eq("organization_id",profile.organization_id).eq("student_id",studentId).order("accepted_at",{ascending:false}).limit(1).maybeSingle();
-      if(consentError)fail("Kayıt türü doğrulanamadı.");
-      const eligibility=trialEligibilityError(consent?.registration_for || "child",student.birth_date);
-      if(eligibility)fail(eligibility);
       if(form.get("trial_approval_confirmed") !== "on")fail("Deneme dersini SPRİNT YÜZME OKULU adına açıkça onaylayınız.");
       try {await assertTrialAvailable(supabase,profile.organization_id!,student);} catch(error) {fail(error instanceof Error?error.message:"Deneme hakkı kontrol edilemedi.");}
 
@@ -46,11 +42,8 @@ export async function recordCandidateFollowUp(form: FormData) {
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) fail("Deneme tarih ve saatini seçiniz.");
       const scheduledAt = new Date(`${local}:00+03:00`);
       if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now()) fail("Gelecekte bir deneme tarihi seçiniz.");
-      const lessonEligibility=trialEligibilityError(consent?.registration_for || "child",student.birth_date,local.slice(0,10));
-      if(lessonEligibility)fail("Deneme tarihinde çocuk 6 yaş veya altında olmalıdır.");
       const {data:group, error:groupError} = await supabase.from("training_groups").select("id,name,branch_id,is_active,course_type").eq("organization_id",profile.organization_id).eq("id",groupId).single();
       if (groupError || !group || group.is_active === false) fail("Aktif bir grup seçiniz.");
-      if(normalizeCourseType(group.course_type) === "adult")fail("Yetişkin grubuna deneme dersi onaylanamaz.");
       value = {approved_at:new Date().toISOString(),approved_by:profile.id,policy_version:TRIAL_POLICY_VERSION,status, group_id:group.id, group_name:group.name, branch_id:group.branch_id, scheduled_at:scheduledAt.toISOString(), note};
     } else {
       if (note.length < 5) throw new Error("Deneme sonucunu en az 5 karakterle yazınız.");
@@ -67,21 +60,23 @@ export async function recordCandidateFollowUp(form: FormData) {
 export async function approvedTrialMessage(studentId: string) {
   const profile=await requireProfile([...ROLES]);
   const supabase=await createClient();
-  const [{data:student,error:studentError},{data:trial,error:trialError}]=await Promise.all([
-    supabase.from("students").select("id,first_name,last_name,guardian_phone,phone").eq("organization_id",profile.organization_id).eq("id",studentId).maybeSingle(),
+  const [{data:student,error:studentError},{data:trial,error:trialError},{data:consent,error:consentError}]=await Promise.all([
+    supabase.from("students").select("id,first_name,last_name,birth_date,guardian_phone,phone").eq("organization_id",profile.organization_id).eq("id",studentId).maybeSingle(),
     supabase.from("student_activity_logs").select("id,new_value").eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("activity_type","trial_lesson").order("performed_at",{ascending:false}).limit(1).maybeSingle(),
+    supabase.from("registration_consents").select("registration_for").eq("organization_id",profile.organization_id).eq("student_id",studentId).order("accepted_at",{ascending:false}).limit(1).maybeSingle(),
   ]);
-  if(studentError || trialError || !student || !trial?.new_value?.approved_at || trial.new_value.status !== "planned") return {ok:false as const,message:"Bilgilendirme yalnızca okul tarafından onaylanmış, planlanan deneme dersi için hazırlanabilir."};
-  let phone=String(student.guardian_phone || student.phone || "").replace(/\D/g,"");
+  if(studentError || trialError || consentError || !student || !trial?.new_value?.approved_at || trial.new_value.status !== "planned") return {ok:false as const,message:"Bilgilendirme yalnızca okul tarafından onaylanmış, planlanan deneme dersi için hazırlanabilir."};
+  const ownAccount=isSelfRegistration(consent?.registration_for,student.birth_date);
+  let phone=String((ownAccount ? student.phone : student.guardian_phone || student.phone) || "").replace(/\D/g,"");
   if(phone.startsWith("0"))phone=`90${phone.slice(1)}`;
   if(phone.length===10)phone=`90${phone}`;
-  if(!/^90\d{10}$/.test(phone))return {ok:false as const,message:"Veli telefonunu kontrol edip tamamlayınız."};
+  if(!/^90\d{10}$/.test(phone))return {ok:false as const,message:"Bilgilendirme telefonunu kontrol edip tamamlayınız."};
   const {createHash}=await import("node:crypto");
   const digest=createHash("sha256").update(`${profile.organization_id}|${studentId}|${trial.id}`).digest("hex").slice(0,32);
   const messageId=`${digest.slice(0,8)}-${digest.slice(8,12)}-${digest.slice(12,16)}-${digest.slice(16,20)}-${digest.slice(20)}`;
   const {data:log,error:logError}=await supabase.from("message_logs").select("status").eq("organization_id",profile.organization_id).eq("student_id",studentId).eq("id",messageId).maybeSingle();
   if(logError)return {ok:false as const,message:"Bilgilendirme geçmişi okunamadı."};
   const {formatDisplayDateTime}=await import("@/lib/dates/display");
-  const message=`*SPRİNT YÜZME OKULU*\n\nSayın Velimiz,\n\n${student.first_name} ${student.last_name} için deneme dersi başvurunuz okulumuz tarafından *onaylanmıştır*.\n\nGrup: ${trial.new_value.group_name}\nTarih ve saat: ${formatDisplayDateTime(new Date(trial.new_value.scheduled_at))}\n\nDeneme dersi kişi başına bir kez uygulanır. Katılımınızla ilgili değişiklik varsa lütfen bize bildiriniz.\n\nBilgilendirme Hattı: 0551 896 83 19`;
+  const message=`*SPRİNT YÜZME OKULU*\n\n${ownAccount ? "Değerli Kursiyerimiz" : "Sayın Velimiz"},\n\n${student.first_name} ${student.last_name} için deneme dersi başvurunuz okulumuz tarafından *onaylanmıştır*.\n\nGrup: ${trial.new_value.group_name}\nTarih ve saat: ${formatDisplayDateTime(new Date(trial.new_value.scheduled_at))}\n\nDeneme dersi kişi başına bir kez uygulanır. Katılımınızla ilgili değişiklik varsa lütfen bize bildiriniz.\n\nBilgilendirme Hattı: 0551 896 83 19`;
   return {ok:true as const,studentId,interactionId:trial.id,recipient:phone,message,sent:log?.status === "sent",opened:log?.status === "opened"};
 }
