@@ -32,6 +32,7 @@ export async function recordCandidateFollowUp(form: FormData) {
     const { data: previous, error: previousError } = await supabase.from("student_activity_logs").select("new_value").eq("organization_id", profile.organization_id).eq("student_id", studentId).eq("activity_type", "trial_lesson").order("performed_at",{ascending:false}).limit(1).maybeSingle();
     if (previousError) fail("Deneme geçmişi okunamadı.");
     if (status !== "planned" && previous?.new_value?.status !== "planned") fail("Önce bir deneme dersi planlayınız.");
+    if (["attended","absent"].includes(status) && !previous?.new_value?.approved_at) fail("Okul onayı olmayan deneme dersi kabul edilmiş sayılamaz. Önce okul onayını tamamlayınız.");
     if (status === "planned") {
       const {data:consent,error:consentError}=await supabase.from("registration_consents").select("registration_for").eq("organization_id",profile.organization_id).eq("student_id",studentId).order("accepted_at",{ascending:false}).limit(1).maybeSingle();
       if(consentError)fail("Kayıt türü doğrulanamadı.");

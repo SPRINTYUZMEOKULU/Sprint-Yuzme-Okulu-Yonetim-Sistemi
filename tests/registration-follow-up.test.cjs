@@ -38,7 +38,7 @@ test('trial planning writes only an activity, never an enrollment or payment',as
 });
 test('trial result requires a planned trial and meaningful assessment',async()=>{
  const f=fixture();await assert.rejects(f.recordCandidateFollowUp(f.form({kind:'trial',trial_status:'attended',note:'Geldi, uygun'})),/Önce/);assert.equal(f.writes.length,0);
- const g=fixture({trial:{status:'planned',scheduled_at:'2099-11-10T15:00:00Z',group_id:'group'}});await assert.rejects(g.recordCandidateFollowUp(g.form({kind:'trial',trial_status:'attended',note:'x'})),/en az/);assert.equal(g.writes.length,0);
+ const g=fixture({trial:{status:'planned',approved_at:'today',scheduled_at:'2099-11-10T15:00:00Z',group_id:'group'}});await assert.rejects(g.recordCandidateFollowUp(g.form({kind:'trial',trial_status:'attended',note:'x'})),/en az/);assert.equal(g.writes.length,0);
  await assert.rejects(g.recordCandidateFollowUp(g.form({kind:'trial',trial_status:'attended',note:'Seviyesi uygun'})),/REDIRECT/);assert.equal(g.writes[0].value.new_value.group_id,'group');assert.equal(g.writes[0].value.new_value.status,'attended');
 });
 test('contact result binds to current consent; active students cannot use candidate workflow',async()=>{
@@ -48,3 +48,5 @@ test('contact result binds to current consent; active students cannot use candid
 
 test('school approval is explicit and cannot issue a second trial for the same child',async()=>{const f=fixture();await assert.rejects(f.recordCandidateFollowUp(f.form({kind:'trial',trial_status:'planned',group_id:'group',scheduled_at:tomorrow+'T18:00'})),/açıkça onaylayınız/);assert.equal(f.writes.length,0);const g=fixture({trial:{status:'attended'}});await assert.rejects(g.recordCandidateFollowUp(g.form({kind:'trial',trial_status:'planned',group_id:'group',scheduled_at:tomorrow+'T18:00',trial_approval_confirmed:'on'})),/yalnızca bir deneme/);assert.equal(g.writes.length,0)});
 test('message preparation refuses unapproved and cancelled trials and never marks an approval sent',async()=>{assert.equal((await fixture({trial:{status:'planned'}}).approvedTrialMessage('student')).ok,false);assert.equal((await fixture({trial:{status:'cancelled',approved_at:'today'}}).approvedTrialMessage('student')).ok,false);const f=fixture({trial:{status:'planned',approved_at:'today',group_name:'Çocuk',scheduled_at:tomorrow+'T15:00:00Z'}});const r=await f.approvedTrialMessage('student');assert.equal(r.ok,true);assert.equal(r.sent,false);assert.equal(r.recipient,'905551112233');assert.match(r.message,/onaylanmıştır/);assert.equal(f.writes.length,0)});
+
+test('a scheduled lesson without school approval cannot be marked attended',async()=>{const f=fixture({trial:{status:'planned'}});await assert.rejects(f.recordCandidateFollowUp(f.form({kind:'trial',trial_status:'attended',note:'Kursiyer geldi'})),/Okul onayı/);assert.equal(f.writes.length,0)});

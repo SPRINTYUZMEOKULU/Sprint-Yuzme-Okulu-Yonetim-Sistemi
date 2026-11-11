@@ -6,7 +6,7 @@ import { TRIAL_STATUS } from "@/lib/registrations/follow-up";
 import "../dashboard.css";
 import "./trial-lessons.css";
 export const dynamic = "force-dynamic";
-type Trial = {status:string;group_name?:string;scheduled_at?:string;note?:string};
+type Trial = {status:string;group_name?:string;scheduled_at?:string;approved_at?:string;note?:string};
 export default async function TrialLessonsPage() {
   const profile = await requireProfile(["owner","admin","branch_manager","registration_staff"]);
   const supabase = await createClient();
@@ -29,7 +29,7 @@ export default async function TrialLessonsPage() {
   if (studentsError) throw new Error("Deneme öğrencileri okunamadı.");
   const studentMap = new Map((students || []).map(s=>[s.id,s]));
   for (const id of requested) if (studentMap.get(id)?.status === "pre_registration") latest.set(id,{status:"requested"});
-  const planned = [...latest.values()].filter(v=>v.status === "planned").length;
+  const planned = [...latest.values()].filter(v=>v.status === "planned" && v.approved_at).length;
   const waiting = [...latest.values()].filter(v=>v.status === "requested").length;
   const rank = (s:string)=>s === "requested" ? 0 : s === "planned" ? 1 : 2;
   const entries = [...latest.entries()].filter(([id])=>studentMap.has(id)).sort((a,b)=>rank(a[1].status)-rank(b[1].status) || (a[1].scheduled_at || "").localeCompare(b[1].scheduled_at || ""));
@@ -37,7 +37,7 @@ export default async function TrialLessonsPage() {
     <header className="operationHeader"><div><h1>Deneme Dersleri</h1><p>{waiting} okul onayı bekleyen talep · {planned} onaylı ders</p></div><div className="operationActions"><Link href="/on-kayitlar">Ön Kayıt Merkezi</Link><Link href="/">Ana Sayfa</Link></div></header>
     <div className="trialIntro"><strong>Talebi alın, dersi planlayın, sonucunu kaydedin.</strong><p>Formda “Önce deneme dersi yapmak istiyorum” seçen başvurular burada Okul Onayı Bekliyor olarak görünür; onaylanmadan kabul edilmiş sayılmaz. Deneme yalnızca 6 yaş ve altındaki çocuklar içindir, yetişkinlere uygulanmaz ve kişi başına bir kez alınabilir. Kaydı açıp grup, tarih ve saat seçerek okul adına onaylayınız; ardından veli bilgilendirmesini gönderiniz. Dersten sonra Katıldı / Gelmedi / İptal sonucunu işleyiniz. Tüm işlemler öğrenci dosyasının geçmişinde saklanır; normal paket, ödeme ve ders sayacına işlenmez.</p></div>
     {(logs?.length === 1000 || consents?.length === 1000) ? <p role="status">Son 1000 işlem ve başvuru inceleniyor.</p> : null}
-    <div className="trialCards">{entries.map(([id,trial])=>{const student=studentMap.get(id)!;return <article key={id} className="trialCard"><h2>{student.first_name} {student.last_name}</h2><span className="trialStatus">{trial.status === "requested" ? "Talep alındı · Okul onayı bekliyor" : TRIAL_STATUS[trial.status] || trial.status}</span>{trial.group_name ? <p>{trial.group_name}{trial.scheduled_at ? ` · ${formatDisplayDateTime(new Date(trial.scheduled_at))}` : ""}</p> : <p>Tarih ve saat henüz belirlenmedi.</p>}{trial.note ? <p>{trial.note}</p>:null}<Link href={student.status === "pre_registration" ? `/kayit-tamamlama/${id}` : `/ogrenciler/${id}`}>{student.status === "pre_registration" ? "Denemeyi planla / Sonucu kaydet →" : "Öğrenci dosyası →"}</Link></article>})}</div>
+    <div className="trialCards">{entries.map(([id,trial])=>{const student=studentMap.get(id)!;return <article key={id} className="trialCard"><h2>{student.first_name} {student.last_name}</h2><span className="trialStatus">{trial.status === "requested" ? "Talep alındı · Okul onayı bekliyor" : trial.status === "planned" ? (trial.approved_at ? "Okul onaylı · Planlandı" : "Okul onayı gerekli") : TRIAL_STATUS[trial.status] || trial.status}</span>{trial.group_name ? <p>{trial.group_name}{trial.scheduled_at ? ` · ${formatDisplayDateTime(new Date(trial.scheduled_at))}` : ""}</p> : <p>Tarih ve saat henüz belirlenmedi.</p>}{trial.note ? <p>{trial.note}</p>:null}<Link href={student.status === "pre_registration" ? `/kayit-tamamlama/${id}` : `/ogrenciler/${id}`}>{student.status === "pre_registration" ? "Denemeyi planla / Sonucu kaydet →" : "Öğrenci dosyası →"}</Link></article>})}</div>
     {!entries.length ? <div className="trialIntro">Henüz deneme talebi veya planlanan ders yok. Mevcut bir ön kaydı açarak da deneme planlayabilirsiniz.</div> : null}
   </main>;
 }
