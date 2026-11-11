@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InvoiceNavigation from "./invoice-navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { documentAdmin } from "@/lib/payments/document-admin";
 import "./style.css";
@@ -70,7 +71,7 @@ export default async function InvoiceCenter({searchParams}:{
 
   return <main className="invoice-center">
     <header>
-      <Link href="/">← Ana Sayfa</Link>
+      <InvoiceNavigation />
       <p className="invoice-kicker">SPRİNT YÜZME OKULU · FİNANS</p>
       <h1>Fatura Merkezi</h1>
       <p>Ödeme talepleri, VakıfBank kontrolü ve belge işlemleri tek noktada takip edilir.</p>
@@ -78,7 +79,7 @@ export default async function InvoiceCenter({searchParams}:{
 
     <nav aria-label="Fatura merkezi" className="invoice-tabs">
       <Link className={!issued?"active":""} aria-current={!issued?"page":undefined} href="/fatura-merkezi">Genel Bakış</Link>
-      <Link className={issued?"active":""} aria-current={issued?"page":undefined} href="/fatura-merkezi?tab=issued">Gönderildi Olarak İşaretlenenler</Link>
+      <Link className={issued?"active":""} aria-current={issued?"page":undefined} href="/fatura-merkezi?tab=issued">Gönderilen Belgeler</Link>
       <Link href="/fatura-merkezi/banka">VakıfBank Hareketleri</Link>
       <Link href="/odeme-bilgileri/belgeler">Belge ve Ödeme Takibi</Link>
     </nav>
