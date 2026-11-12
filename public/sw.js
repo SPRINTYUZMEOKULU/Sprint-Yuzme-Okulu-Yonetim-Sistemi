@@ -25,6 +25,8 @@ self.addEventListener("push", (event) => {
     };
   }
 
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) payload = {};
+
   const title = payload.title || "SprintOS";
 
   const options = {
@@ -66,10 +68,15 @@ self.addEventListener("notificationclick", (event) => {
     event.notification?.data?.targetPath ||
     "/bildirimler";
 
-  const targetUrl = new URL(
-    targetPath,
-    self.location.origin
-  ).href;
+  let targetUrl = new URL("/bildirimler", self.location.origin).href;
+  try {
+    const candidate = new URL(targetPath, self.location.origin);
+    if (candidate.origin === self.location.origin && /^https?:$/.test(candidate.protocol)) {
+      targetUrl = candidate.href;
+    }
+  } catch {
+    // Eski veya hatalı bir bildirim de bildirim merkezini açabilsin.
+  }
 
   event.waitUntil(
     self.clients
@@ -79,13 +86,15 @@ self.addEventListener("notificationclick", (event) => {
       })
       .then(async (windowClients) => {
         for (const client of windowClients) {
-          if ("focus" in client) {
+          if ("focus" in client && new URL(client.url).origin === self.location.origin) {
             try {
               if ("navigate" in client) {
-                await client.navigate(targetUrl);
+                const navigated = await client.navigate(targetUrl);
+                if (!navigated) continue;
+                return navigated.focus();
               }
 
-              return client.focus();
+              if (client.url === targetUrl) return client.focus();
             } catch {
               // Diğer açık pencereyi dene.
             }
