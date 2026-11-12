@@ -39,6 +39,21 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ ok: false, error: "Oturum bulunamadı. Lütfen yeniden giriş yapın." }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("organization_id, role, is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.organization_id || !profile.is_active) {
+      return NextResponse.json({ ok: false, error: "Aktif personel veya kurum yetkisi bulunamadı." }, { status: 403 });
+    }
+
     const body = (await request.json()) as RequestBody;
 
     const requestType = body.request_type;
@@ -114,32 +129,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: organization, error: organizationError } =
-      await supabase
-        .from("organizations")
+    // Kullanıcının kendi kurumu dışındaki öğrencilere işlem açılmasını engelle.
+    if (studentId) {
+      const { data: student, error: studentError } = await supabase
+        .from("students")
         .select("id")
-        .eq("name", "Sprint Yüzme Okulu")
-        .single();
+        .eq("id", studentId)
+        .eq("organization_id", profile.organization_id)
+        .maybeSingle();
 
-    if (organizationError || !organization) {
-      console.error(
-        "organization error:",
-        organizationError
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Kurum kaydı bulunamadı.",
-        },
-        { status: 500 }
-      );
+      if (studentError || !student) {
+        return NextResponse.json({ ok: false, error: "Öğrenci kurumunuzda bulunamadı." }, { status: 404 });
+      }
     }
 
     const { data, error } = await supabase
       .from("lesson_adjustment_requests")
       .insert({
-        organization_id: organization.id,
+        organization_id: profile.organization_id,
 
         request_type: requestType,
 
@@ -158,6 +165,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
 
         status: "pending",
+        requested_by: user.id,
       })
       .select("id,status,request_type,lesson_count")
       .single();
