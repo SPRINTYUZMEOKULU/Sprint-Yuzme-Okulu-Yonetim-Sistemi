@@ -2,7 +2,7 @@
 
 import EventSoundSettings from "./event-sound-settings";
 import { NOTIFICATION_TONES, getNotificationTone, setNotificationTone, getNotificationVolume, setNotificationVolume, type NotificationTone, notificationSoundEnabled, setNotificationSoundEnabled, unlockNotificationAudio, playNotificationSound } from "@/lib/notifications/sound";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type PushState = "checking" | "unsupported" | "blocked" | "off" | "on" | "working" | "error";
 
@@ -34,6 +34,7 @@ export default function NotificationSettingsClient() {
 
   const [state, setState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
+  const operationInProgress = useRef(false);
   const [testing, setTesting] = useState(false);
   const [needsInstall, setNeedsInstall] = useState(false);
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
@@ -62,7 +63,8 @@ export default function NotificationSettingsClient() {
     } finally { setTesting(false); }
   }
 
-  async function refreshState() {
+  const refreshState = useCallback(async () => {
+    if (operationInProgress.current) return;
     if (!supported) {
       setState("unsupported");
       return;
@@ -74,16 +76,16 @@ export default function NotificationSettingsClient() {
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
-      if(subscription){
+      if(subscription && Notification.permission === "granted" && window.localStorage.getItem("sprintos_push_disabled_v1") !== "1"){
         const json=subscription.toJSON();
         const response=await fetch("/api/push/subscribe",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:subscription.endpoint,keys:{p256dh:json.keys?.p256dh,auth:json.keys?.auth},deviceName:getDeviceName()})});
         if(!response.ok)throw new Error("Cihazın sunucu bildirim kaydı yenilenemedi.");
       }
-      setState(subscription ? "on" : "off");
+      if (!operationInProgress.current) setState(subscription && Notification.permission === "granted" ? "on" : "off");
     } catch {
-      setState("error");
+      if (!operationInProgress.current) setState("error");
     }
-  }
+  }, [supported]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) {
@@ -91,7 +93,14 @@ export default function NotificationSettingsClient() {
       return;
     }
     navigator.serviceWorker.register("/sw.js").then(refreshState).catch(() => setState("error"));
-  }, []);
+    const resync = () => { if (document.visibilityState === "visible") void refreshState(); };
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("focus", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+    };
+  }, [refreshState]);
 
   async function enableNotifications() {
     if (!supported || !vapidPublicKey) {
@@ -100,6 +109,8 @@ export default function NotificationSettingsClient() {
       return;
     }
 
+    if (operationInProgress.current) return;
+    operationInProgress.current = true;
     setState("working");
     setMessage("");
 
@@ -138,21 +149,25 @@ export default function NotificationSettingsClient() {
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) throw new Error(result?.error || "Bildirim kaydı açılamadı.");
 
+      window.localStorage.removeItem("sprintos_push_disabled_v1");
       window.localStorage.removeItem("sprintos_push_prompt_dismissed_v1");
       setState("on");
       setMessage("Telefon bildirimleri bu cihaz için açık. Yeni ön kayıt, ödeme, kasa ve onay bildirimleri alınacak.");
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "Telefon bildirimleri açılamadı.");
-    }
+    } finally { operationInProgress.current = false; window.dispatchEvent(new Event("sprintos:push-changed")); }
   }
 
   async function disableNotifications() {
     if (!supported) return;
+    if (operationInProgress.current) return;
+    operationInProgress.current = true;
     setState("working");
     setMessage("");
 
     try {
+      window.localStorage.setItem("sprintos_push_disabled_v1", "1");
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
@@ -171,7 +186,7 @@ export default function NotificationSettingsClient() {
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "Telefon bildirimleri kapatılamadı.");
-    }
+    } finally { operationInProgress.current = false; window.dispatchEvent(new Event("sprintos:push-changed")); }
   }
 
   const isOn = state === "on";
@@ -179,7 +194,7 @@ export default function NotificationSettingsClient() {
 
   return (
     <section className="notificationSettingsCard">
-      <div className="notificationStatusIcon">🔔</div>
+      <div className="notificationStatusIcon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></div>
       <div className="notificationSettingsCopy">
         <div data-ui-sound="off">
           <h3>Bildirim Sesleri</h3>
@@ -209,7 +224,7 @@ export default function NotificationSettingsClient() {
             <h2>Telefon Bildirimleri</h2>
           </div>
           <b className={`notificationBadge ${isOn ? "on" : "off"}`}>
-            {state === "checking" || isWorking ? "Kontrol ediliyor" : isOn ? "Açık" : state === "blocked" ? "Engellendi" : "Kapalı"}
+            {state === "checking" || isWorking ? "Kontrol ediliyor" : isOn ? "Açık" : state === "blocked" ? "Engellendi" : state === "error" ? "Kontrol gerekli" : needsInstall ? "Kurulum gerekli" : "Kapalı"}
           </b>
         </div>
 
@@ -229,13 +244,13 @@ export default function NotificationSettingsClient() {
           <div className="notificationWarning">Bu cihazda bildirim izni tarayıcı/telefon ayarlarından engellenmiş. Önce cihaz ayarlarından SprintOS bildirimlerine izin verin.</div>
         ) : null}
 
-        {message ? <div className="notificationMessage">{message}</div> : null}
+        {message ? <div className="notificationMessage" role="status" aria-live="polite">{message}</div> : null}
 
         <div className="notificationActions">
           {isOn ? (
-            <button type="button" className="notificationDanger" onClick={disableNotifications}>Bildirimleri Kapat</button>
+            <button type="button" className="notificationDanger" onClick={disableNotifications} disabled={isWorking}>Bildirimleri Kapat</button>
           ) : (
-            <button type="button" className="notificationPrimary" onClick={enableNotifications} disabled={isWorking || state === "blocked" || state === "unsupported"}>Bildirimleri Aç</button>
+            <button type="button" className="notificationPrimary" onClick={enableNotifications} disabled={isWorking || state === "blocked" || state === "unsupported" || needsInstall}>Bildirimleri Aç</button>
           )}
           <button type="button" className="notificationSecondary" onClick={refreshState} disabled={isWorking}>Durumu Yenile</button>
           <button type="button" className="notificationSecondary" onClick={testBackgroundPush} disabled={!isOn || testing || isWorking || needsInstall}>{testing ? "Test hazırlanıyor…" : "Kapalı uygulama testi · 15 sn"}</button>
