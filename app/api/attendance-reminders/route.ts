@@ -1,3 +1,5 @@
+import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -12,15 +14,19 @@ export async function GET(request:Request){
   const profile=await requireProfile([...roles]);
   const supabase=await createClient();
   let query=supabase.from("alerts")
-    .select("id,title,description,priority,status,source_id,action_url,due_at,created_at,assigned_to")
+    .select("id,title,description,priority,status,source_id,action_url,due_at,created_at,assigned_to,completed_at,completed_by")
     .eq("organization_id",profile.organization_id)
     .eq("alert_type","attendance_reminder")
     .order("created_at",{ascending:false})
     .limit(100);
+  if(profile.role==="coach"&&!profile.is_super_user)query=query.eq("assigned_to",profile.id);
   if(new URL(request.url).searchParams.get("includeCompleted")!=="1")query=query.in("status",["open","in_progress"]);
   const {data,error}=await query;
   if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
-  return NextResponse.json({ok:true,items:data||[]});
+  const actorIds=Array.from(new Set((data||[]).map(row=>row.completed_by).filter(Boolean)));
+  const {data:people}=actorIds.length?await supabase.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",actorIds):{data:[]};
+  const names=new Map((people||[]).map(person=>[person.id,person.full_name]));
+  return NextResponse.json({ok:true,items:(data||[]).map(row=>({...row,completed_by_name:names.get(row.completed_by)||null}))});
 }
 
 export async function POST(request:Request){
@@ -64,7 +70,7 @@ export async function POST(request:Request){
     action_label:studentId?"Öğrenci Dosyasını Aç":"Yoklamaya Git",
     action_url:actionUrl,
     due_at:dueAt,
-  }).select("id,title,description,priority,status,source_id,action_url,due_at,created_at,assigned_to").single();
+  }).select("id,title,description,priority,status,source_id,action_url,due_at,created_at,assigned_to,completed_at,completed_by").single();
   if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
 
   try{
@@ -98,6 +104,13 @@ export async function PATCH(request:Request){
   const id=String(body.id||"").trim();
   if(!id)return NextResponse.json({ok:false,error:"Hatırlatma bulunamadı."},{status:400});
   const supabase=await createClient();
+  const {data:followup}=await supabase.from("alerts").select("source_id,source_table").eq("organization_id",profile.organization_id).eq("id",id).eq("alert_type","attendance_reminder").maybeSingle();
+  if(followup?.source_table==="student_notes"){
+    const {data,error}=await attendanceOperationsDb().rpc("complete_attendance_student_followup",{p_actor:profile.id,p_note:followup.source_id,p_reply:String(body.reply||"Takip işlemi tamamlandı.")});
+    if(error)return NextResponse.json({ok:false,error:error.message},{status:error.code==="42501"?403:400});
+    revalidatePath("/notlar");revalidatePath("/");
+    return NextResponse.json({...data,message:"Takip tamamlandı; kişi ve zaman geçmişe kaydedildi."});
+  }
   const now=new Date().toISOString();
   const {error}=await supabase.from("alerts").update({status:"completed",completed_at:now,completed_by:profile.id,updated_at:now})
     .eq("organization_id",profile.organization_id).eq("id",id).eq("alert_type","attendance_reminder");

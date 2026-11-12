@@ -1,3 +1,5 @@
+import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { applyPreRegistrationClosure } from "@/lib/registrations/close-pre-registration";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
@@ -1491,12 +1493,33 @@ export async function POST(request: NextRequest) {
        DERS / TELAFİ TALEBİ
        ===================================================== */
 
+    if (!profile?.organization_id || !["owner","admin"].includes(profile.role || "")) {
+      return NextResponse.json({ok:false,error:"Yönetici yetkisi gerekiyor."},{status:403});
+    }
+    const {data:individual,error:lookupError}=await supabase.from("lesson_adjustment_requests").select("id,request_type").eq("id",id).eq("organization_id",profile.organization_id).maybeSingle();
+    if(lookupError || !individual)return NextResponse.json({ok:false,error:"Ders işlem talebi bulunamadı."},{status:404});
+    if(individual.request_type==="individual_compensation") {
+      const {data,error}=await attendanceOperationsDb().rpc("decide_individual_compensation",{p_actor:actorId,p_request:id,p_action:action,p_review:reviewNote});
+      if(error || !data?.ok)return NextResponse.json({ok:false,error:error?.message||"Telafi kararı kaydedilemedi."},{status:error?.code==="42501"?403:409});
+      let warning: string | undefined;
+      if(!data.duplicate){
+        const notice=await publishEventNotification({organization_id:profile.organization_id,category:"approvals",notification_type:action==="approve"?"compensation_approved":"lesson_adjustment_rejected",
+          include_requester:data.requested_by,title:action==="approve"?"Telafi dersleri planlandı":"Telafi talebi reddedildi",body:`${data.lesson_count} ders · ${actorName}`,student_id:data.student_id,
+          source_type:"lesson_adjustment",source_id:id,target_path:`/ogrenciler/${data.student_id}`,created_by:actorId,push_requested:true});
+        if(notice.error)warning=notice.error.message;
+      }
+      revalidateStudentSurfaces(data.student_id);
+      return NextResponse.json({...data,warning,action:action==="approve"?"approved":"rejected",source,id,approved_by:actorName,
+        message:data.duplicate?"Bu karar daha önce kaydedildi; tekrar ders eklenmedi.":action==="approve"?`${data.lesson_count} telafi dersi tarihli olarak planlandı.`:"Telafi talebi reddedildi."});
+    }
+
     const {
       data: lessonRequest,
       error: lessonRequestError,
     } = await supabase
       .from("lesson_adjustment_requests")
       .select("*")
+      .eq("organization_id",profile.organization_id)
       .eq("id", id)
       .single();
 
@@ -1617,159 +1640,6 @@ export async function POST(request: NextRequest) {
         source,
         id,
         message: "Ders işlem talebi reddedildi.",
-      });
-    }
-
-    /* =====================================================
-       BİREYSEL TELAFİ
-       ===================================================== */
-
-    if (requestType === "individual_compensation") {
-      const studentId = lessonRequest.student_id;
-
-      if (!studentId) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Telafi öğrencisi bulunamadı.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const { error: ledgerError } = await supabase
-        .from("student_lesson_ledger")
-        .insert({
-          organization_id: organizationId,
-          student_id: studentId,
-          group_id: lessonRequest.group_id ?? null,
-          lesson_type: "compensation",
-          direction: "credit",
-          lesson_count: lessonCount,
-          reason: lessonRequest.reason ?? null,
-          description: lessonRequest.description ?? null,
-          source_type: "individual_compensation",
-          source_id: id,
-          requires_approval: true,
-          approval_status: "approved",
-          requested_by: lessonRequest.requested_by ?? null,
-          requested_at:
-            lessonRequest.requested_at ??
-            lessonRequest.created_at ??
-            new Date().toISOString(),
-          approved_by: actorId,
-          approved_at: new Date().toISOString(),
-        });
-
-      if (ledgerError) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Telafi öğrenci hesabına eklenemedi.",
-            details: ledgerError.message,
-          },
-          { status: 500 }
-        );
-      }
-
-      const { error: requestApproveError } = await supabase
-        .from("lesson_adjustment_requests")
-        .update({
-          status: "approved",
-        })
-        .eq("id", id)
-        .eq("status", "pending");
-
-      if (requestApproveError) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Telafi eklendi ancak talep kaydı tamamlanamadı.",
-            details: requestApproveError.message,
-          },
-          { status: 500 }
-        );
-      }
-
-      await Promise.all([
-        supabase.from("approval_history").insert({
-          organization_id: organizationId,
-          student_id: studentId,
-          source_type: "lesson_adjustment",
-          source_id: id,
-          action_type: requestType,
-          decision: "approved",
-          reason: lessonRequest.reason ?? null,
-          requested_by: lessonRequest.requested_by ?? null,
-          requested_at:
-            lessonRequest.requested_at ??
-            lessonRequest.created_at ??
-            null,
-          decided_by: actorId,
-          decided_at: new Date().toISOString(),
-          snapshot: lessonRequest,
-        }),
-
-        supabase.from("student_activity_logs").insert({
-          organization_id: organizationId,
-          student_id: studentId,
-          activity_type: "compensation_added",
-          title: `${lessonCount} telafi dersi eklendi`,
-          description:
-            lessonRequest.reason ??
-            "Yönetici onayı ile telafi dersi eklendi.",
-          new_value: {
-            compensation_lessons_added: lessonCount,
-          },
-          source_type: "lesson_adjustment",
-          source_id: id,
-          performed_by: actorId,
-          approved_by: actorId,
-          performed_at: new Date().toISOString(),
-          approved_at: new Date().toISOString(),
-        }),
-
-        publishEventNotification({
-          organization_id: organizationId,
-          recipient_profile_id: null,
-          notification_type: "compensation_approved",
-          include_requester: lessonRequest.requested_by,
-          title: "Telafi dersi onaylandı",
-          body: `${lessonCount} adet telafi dersi ${actorName} tarafından onaylandı.`,
-          priority: "normal",
-          student_id: studentId,
-          source_type: "lesson_adjustment",
-          source_id: id,
-          target_path: `/ogrenciler/${studentId}`,
-          push_required: true,
-        }),
-
-        supabase.from("student_contact_logs").insert({
-          organization_id: organizationId,
-          student_id: studentId,
-          contact_type: "compensation",
-          channel: "whatsapp",
-          status: "prepared",
-          message_text:
-            `${lessonCount} adet telafi dersiniz ` +
-            `${lessonRequest.reason ?? "ilgili işlem"} nedeniyle ` +
-            "yönetim tarafından onaylanmış ve hesabınıza tanımlanmıştır.\n\n" +
-            "Keyifli dersler dileriz.\nSprint Yüzme Okulu",
-          prepared_at: new Date().toISOString(),
-        }),
-      ]);
-
-      return NextResponse.json({
-        ok: true,
-        action: "approved",
-        source,
-        id,
-        request_type: requestType,
-        lesson_count: lessonCount,
-        student_id: studentId,
-        approved_by: actorName,
-        message: `${lessonCount} telafi dersi öğrenci hesabına eklendi.`,
       });
     }
 
@@ -2483,6 +2353,9 @@ export async function GET(request: NextRequest) {
         };
       });
 
+    const approvedIndividualIds=lessonRequests.filter(item=>item.request_type==="individual_compensation"&&item.status==="approved").map(item=>item.id);
+    const datedPlans=approvedIndividualIds.length?await supabase.from("student_compensation_lessons").select("source_request_id").eq("organization_id",profile.organization_id).in("source_request_id",approvedIndividualIds):{data:[],error:null};
+    const plannedRequestIds=new Set((datedPlans.data||[]).map(item=>item.source_request_id));
     const lessonItems: UnifiedApprovalRequest[] =
       lessonRequests.map((item) => {
         const student =
@@ -2529,7 +2402,9 @@ export async function GET(request: NextRequest) {
           new_values: {
             lesson_count: item.lesson_count ?? null,
           },
-          metadata: {},
+          metadata: {dated_plan_status:item.request_type==="individual_compensation"&&item.status==="approved"?(datedPlans.error?"unavailable":plannedRequestIds.has(item.id)?"planned":"missing"):null},
+          reviewed_by:item.approved_by||null,
+          reviewed_at:item.approved_at||null,
           status: item.status ?? "pending",
           requested_by: item.requested_by ?? null,
           requested_at: item.requested_at ?? null,

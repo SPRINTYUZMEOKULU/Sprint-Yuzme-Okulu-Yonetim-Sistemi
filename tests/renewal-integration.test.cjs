@@ -7,7 +7,7 @@ const {renderToStaticMarkup} = require('react-dom/server');
 function load(path, mocks={}) {
  const m={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8').replace(/<style jsx(?: global)?>/g,'<style>'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText;
- new Function('module','exports','require',code)(m,m.exports,n=>n in mocks?mocks[n]:require(n));
+ new Function('module','exports','require',code)(m,m.exports,n=>n==='@/lib/students/registration-payment-hold'?load('lib/students/registration-payment-hold.ts'):n==='@/lib/attendance/operations-db'?{}:n==='@/lib/students/revalidate'?{revalidateStudentSurfaces(){}}:n in mocks?mocks[n]:require(n));
  return m.exports;
 }
 const queue=load('lib/enrollment/renewal-queue.ts');
@@ -38,7 +38,7 @@ test('pending and approved-but-unconsumed requests stay pending and cannot infla
 async function decideRenewal(action, renewal=true){
  const writes=[],notifications=[];
  const approval={id:a,organization_id:'org',student_id:b,status:'pending',request_type:'registration_custom_lesson_count',metadata:{source:renewal?'student_renewal_center':'registration_completion'},new_values:{total_lessons:9},requested_by:'staff'};
- const db={auth:{getUser:async()=>({data:{user:{id:'owner'}},error:null})},from(table){let mode='read';const q={select(){return q},eq(){return q},maybeSingle(){return q},update(value){mode='update';writes.push({table,value});return q},insert(value){mode='insert';writes.push({table,value});return q},then(resolve,reject){const data=mode!=='read'?null:table==='profiles'?{id:'owner',organization_id:'org',role:'owner',full_name:'Owner'}:table==='approval_requests'?approval:table==='students'?{id:b}:null;return Promise.resolve({data,error:null}).then(resolve,reject)}};return q}};
+ const db={rpc:async()=>({data:0,error:null}),auth:{getUser:async()=>({data:{user:{id:'owner'}},error:null})},from(table){let mode='read';const q={select(){return q},eq(){return q},maybeSingle(){return q},update(value){mode='update';writes.push({table,value});return q},insert(value){mode='insert';writes.push({table,value});return q},then(resolve,reject){const data=mode!=='read'?null:table==='profiles'?{id:'owner',organization_id:'org',role:'owner',full_name:'Owner'}:table==='approval_requests'?approval:table==='students'?{id:b}:null;return Promise.resolve({data,error:null}).then(resolve,reject)}};return q}};
  const route=load('app/api/approval-center/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/supabase/server':{createClient:async()=>db},

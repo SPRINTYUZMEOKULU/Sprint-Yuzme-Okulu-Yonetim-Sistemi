@@ -7,7 +7,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import "./attendance-reminder-panel.css";
 
 type Student={id:string;first_name?:string|null;last_name?:string|null;student_number?:string|null};
-type Reminder={id:string;title:string;description:string|null;priority:string;status:string;source_id:string|null;action_url:string|null;due_at:string|null;created_at:string|null;assigned_to:string|null};
+type Reminder={id:string;title:string;description:string|null;priority:string;status:string;source_id:string|null;action_url:string|null;due_at:string|null;created_at:string|null;assigned_to:string|null;completed_at?:string|null;completed_by_name?:string|null};
 
 type Props={students:Student[];context?:string;draftKey?:string;showCompleted?:boolean};
 
@@ -31,7 +31,7 @@ export default function AttendanceReminderPanel({students,context,draftKey,showC
 
   async function submit(e:React.FormEvent){e.preventDefault();if(saving)return;if(note.trim().length<3){setMessage("Kısa bir açıklama yazın.");return}setSaving(true);setMessage("");try{const r=await fetch("/api/attendance-reminders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({studentId:studentId||null,note:context?`${context}\n${note.trim()}`:note.trim(),priority,dueDate:dueDate||null})});const j=await r.json();if(!r.ok||!j?.ok){setMessage(j?.error||"Hatırlatma kaydedilemedi.");return}if(draftKey){try{localStorage.removeItem(draftKey)}catch{}}setNote("");setStudentId("");setPriority("normal");setDueDate("");setMessage("Not kaydedildi. Ana Notlar bölümüne eklendi.");if(context)setExpanded(false);await load()}catch{setMessage("Bağlantı hatası oluştu.")}finally{setSaving(false)}}
 
-  async function complete(id:string){try{const r=await fetch("/api/attendance-reminders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});const j=await r.json();if(!r.ok||!j?.ok){setMessage(j?.error||"İşlem tamamlanamadı.");return}setItems(v=>showCompleted?v.map(x=>x.id===id?{...x,status:"completed"}:x):v.filter(x=>x.id!==id));setMessage("Not tamamlandı olarak işaretlendi.")}catch{setMessage("İşlem tamamlanamadı. Bağlantınızı kontrol edin.")}}
+  async function complete(id:string){try{const r=await fetch("/api/attendance-reminders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});const j=await r.json();if(!r.ok||!j?.ok){setMessage(j?.error||"İşlem tamamlanamadı.");return}setItems(v=>showCompleted?v.map(x=>x.id===id?{...x,status:"completed"}:x):v.filter(x=>x.id!==id));setMessage("İşlem tamamlandı olarak işaretlendi.");await load()}catch{setMessage("İşlem tamamlanamadı. Bağlantınızı kontrol edin.")}}
 
 
   return <section className="attendanceReminderPanel">
@@ -55,6 +55,6 @@ export default function AttendanceReminderPanel({students,context,draftKey,showC
     </form>:null}
     {message?<div className="arpMessage" role="status">{message}<button type="button" aria-label="Mesajı kapat" onClick={()=>setMessage("")}>×</button></div>:null}
     <div className="arpBottom"><button type="button" className="arpListToggle" aria-expanded={listOpen} aria-controls={`${editorId}-list`} onClick={()=>setListOpen(v=>!v)}>{showCompleted?"Kayıtlı notlar":"Açık notlar"}<span>{loading?"…":items.length}</span><svg aria-hidden="true" viewBox="0 0 24 24" className={listOpen?"isOpen":""}><path d="m6 9 6 6 6-6"/></svg></button><Link className="arpAllNotes" href="/notlar">Tüm Notlar <span aria-hidden="true">↗</span></Link></div>
-    {listOpen?<div id={`${editorId}-list`} className="arpList">{loading?<p className="arpEmpty">Notlar yükleniyor…</p>:items.length?items.map(item=><article key={item.id} className={`priority-${item.priority}`}><div className="arpMeta"><strong>{item.title}</strong><small>{fmt(item.created_at)}{item.due_at?` · Hatırlatma: ${fmt(item.due_at)}`:""}</small></div><p>{item.description}</p><div className="arpActions">{item.action_url?<Link href={item.action_url}>Kaydı Aç ↗</Link>:null}{item.status==="completed"?<span className="arpDone">Tamamlandı</span>:<button type="button" onClick={()=>void complete(item.id)}>✓ Tamamla</button>}</div></article>):<p className="arpEmpty">{showCompleted?"Henüz kayıtlı not yok.":"Açık not bulunmuyor."}</p>}</div>:null}
+    {listOpen?<div id={`${editorId}-list`} className="arpList">{loading?<p className="arpEmpty">Notlar yükleniyor…</p>:items.length?items.map(item=><article key={item.id} className={`priority-${item.priority}`}><div className="arpMeta"><strong>{item.title}</strong><small>{fmt(item.created_at)}{item.due_at?` · Hatırlatma: ${fmt(item.due_at)}`:""}</small></div><p>{item.description}</p><div className="arpActions">{item.action_url?<Link href={item.action_url}>Kaydı Aç ↗</Link>:null}{item.status==="completed"?<span className="arpDone">✓ Tamamlandı{item.completed_by_name?` · ${item.completed_by_name}`:""}{item.completed_at?` · ${fmt(item.completed_at)}`:""}</span>:<button type="button" onClick={()=>void complete(item.id)}>✓ Tamamla</button>}</div></article>):<p className="arpEmpty">{showCompleted?"Henüz kayıtlı not yok.":"Açık not bulunmuyor."}</p>}</div>:null}
   </section>
 }
