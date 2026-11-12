@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { mergeRemoteAttendance, mergeAttendanceDraft, verifyAttendanceRows } from "@/lib/attendance/integrity";
 import { registrationDaysLabel, attendanceCourseLabel } from "@/lib/attendance/presentation";
 import { attendanceRoster } from "@/lib/attendance/roster";
+import StudentAttendanceFollowup from "./student-attendance-followup";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
 import { clearAttendance, getAttendanceForDate, saveAttendance } from "./actions";
 
@@ -172,7 +173,7 @@ export default function QuickAttendanceClient(p:Props){
    },{present:0,absent:0,excused:0,unmarked:0});
  }
 
- function setStatus(g:(typeof groups)[number],s:Student,status:"present"|"absent"|"excused"){
+ function setStatus(g:(typeof groups)[number],s:Student,status:"present"|"absent"){
    const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const isComp=g.compensationIds.has(s.id);
    if(e?.status==="scheduled"&&!isComp){setMessage("Yeni dönem henüz başlamadı. Başlangıç tarihinde yoklama otomatik açılır.");return}
    if(rem<=0&&!isComp&&!storedStatuses[attendanceKey(g.schedule.id,s.id)]){setMessage(`${fullName(s)} için ders hakkı bitmiş. Kayıt yenileme gerekiyor.`);return}
@@ -267,7 +268,7 @@ export default function QuickAttendanceClient(p:Props){
 
    {!times.length&&<div className="qaLoading">{!p.schedules.length?"Görüntüleyebileceğiniz aktif seans bulunamadı. Yöneticinizin operasyon planındaki eğitmen atamasını kontrol etmesi gerekiyor.":"Seçilen tarih ve şubede size açık ders yok. Farklı bir tarih veya şube seçebilirsiniz."}</div>}
    {!ready?<div className="qaLoading">{message||"Yoklama hazırlanıyor…"}{message&&<button onClick={()=>setLoadAttempt(v=>v+1)}>Tekrar Yükle</button>}</div>:groups.map(g=>{const counts=groupCounts(g);return <section id={`seans-${g.schedule.id}`} className="qaGroup" key={groupSaveKey(g.group.id,g.schedule.id)}>
-     <header><div><b>{p.branches.find(b=>b.id===g.schedule.branch_id)?.short_name||p.branches.find(b=>b.id===g.schedule.branch_id)?.name||"Havuz"} · {DAYS[day]} · {time} · {attendanceCourseLabel(g.group)}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span><span className="excused">İzinli <strong>{counts.excused}</strong></span>{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button disabled={pending||!ready} onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
+     <header><div><b>{p.branches.find(b=>b.id===g.schedule.branch_id)?.short_name||p.branches.find(b=>b.id===g.schedule.branch_id)?.name||"Havuz"} · {DAYS[day]} · {time} · {attendanceCourseLabel(g.group)}</b><span>{tm(g.schedule.start_time)}–{tm(g.schedule.end_time)} · {g.students.length} öğrenci</span><div className="qaCounts" role="status" aria-live="polite" aria-atomic="true" aria-label="Seans yoklama özeti"><span className="present">Geldi <strong>{counts.present}</strong></span><span className="absent">Gelmedi <strong>{counts.absent}</strong></span>{counts.excused>0&&<span className="excused">Geçmiş İzinli <strong>{counts.excused}</strong></span>}{counts.unmarked>0&&<span className="unmarked">İşaretlenmedi <strong>{counts.unmarked}</strong></span>}</div></div><button disabled={pending||!ready} onClick={()=>markAllPresent(g)}>Tümünü Geldi</button></header>
      <div className="qaList">{g.students.map(s=>{const key=attendanceKey(g.schedule.id,s.id);const e=g.enrollmentByStudent.get(s.id);const rem=remaining(e);const comp=g.compensationIds.has(s.id);const cur=statuses[key];const last=rem===1&&!comp;const expired=(rem<=0||e?.status==="scheduled")&&!comp&&!storedStatuses[key];const nextPeriod=e?.status==="scheduled"?e:p.enrollments.filter(row=>row.student_id===s.id&&row.status==="scheduled"&&row.start_date&&row.start_date>=date).sort((a,b)=>String(a.start_date).localeCompare(String(b.start_date)))[0];return <article key={s.id} className={nextPeriod?"renewalPlanned":expired?"expired":last?"last":""}>
        <div className="qaStudent"><b>{fullName(s)}</b><span>{age(s.birth_date,date)!==null?`${age(s.birth_date,date)} yaş · `:""}{comp?"Telafi dersi":nextPeriod?"KAYIT YENİLENDİ":expired?"DERS HAKKI BİTTİ":last?"SON DERS":`${rem} ders kaldı`}</span></div>
        <div className="qaRegistrationDays">{comp?"Bu tarih için telafi dersi":`Kayıt günleri: ${registrationDaysLabel(e?.lesson_weekdays)}`}</div>
@@ -275,7 +276,7 @@ export default function QuickAttendanceClient(p:Props){
        <div className="qaButtons">
          <button disabled={expired||pending} className={cur==="present"||cur==="compensation"?"on present":""} onClick={()=>setStatus(g,s,"present")}>✓ Geldi</button>
          <button disabled={expired||pending} className={cur==="absent"?"on absent":""} onClick={()=>setStatus(g,s,"absent")}>✕ Gelmedi</button>
-         <button disabled={expired||pending} className={cur==="excused"?"on excused":""} onClick={()=>setStatus(g,s,"excused")}>○ İzinli</button>
+         <StudentAttendanceFollowup key={`${date}:${g.schedule.id}:${s.id}`} studentId={s.id} studentName={fullName(s)} scheduleId={g.schedule.id} date={date} disabled={pending}/>
        </div>
      </article>})}</div>
      <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansın kaydı tamamlanmadı</b><span>{g.students.filter(s=>storedStatuses[attendanceKey(g.schedule.id,s.id)]).length}/{g.students.length} sunucuda kayıtlı · Seçimler kaydedilene kadar bu cihazda taslaktır.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>

@@ -1,3 +1,4 @@
+import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
 import { loadVisibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
 import {revalidatePath} from "next/cache";
@@ -369,6 +370,13 @@ export async function PUT(request: NextRequest) {
   const { data: note } = await supabase.from("student_notes").select("id")
     .eq("organization_id", organizationId).eq("student_id", studentId).eq("id", noteId).maybeSingle();
   if (!note) return NextResponse.json({ error: "Not bulunamadı." }, { status: 404 });
+  const {data: followup} = await supabase.from("alerts").select("id").eq("organization_id",organizationId).eq("source_table","student_notes").eq("source_id",noteId).eq("alert_type","attendance_reminder").maybeSingle();
+  if(followup?.id){
+    const {data,error}=await attendanceOperationsDb().rpc("complete_attendance_student_followup",{p_actor:profile.id,p_note:noteId,p_reply:reply});
+    if(error)return NextResponse.json({error:error.message},{status:error.code==="42501"?403:400});
+    for(const path of ["/notlar",`/ogrenciler/${studentId}`,"/yoklama","/"])revalidatePath(path);
+    return NextResponse.json({...data,message:"Takip tamamlandı. İşlemi yapan kişi ve sonuç geçmişe kaydedildi."});
+  }
   const { data: existing, error: existingError } = await supabase.from("student_timeline_events").select("id,description,created_at,created_by")
     .eq("organization_id", organizationId).eq("student_id", studentId)
     .eq("title", "Öğrenci notu tamamlandı");

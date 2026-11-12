@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { attendanceOperationsDb, validUuid } from "@/lib/attendance/operations-db";
+import { publishEventNotification } from "@/lib/notifications/publish-event";
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
+async function actorProfile(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from("profiles").select("id,organization_id,role,is_active").eq("id",user.id).maybeSingle();
+  return data?.is_active && data.organization_id && ["owner","admin","branch_manager","registration_staff","accounting","coach"].includes(data.role) ? data : null;
+}
 
 type RequestType =
   | "individual_compensation"
@@ -39,6 +48,10 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
+    const profile = await actorProfile(supabase);
+    if (!profile) return NextResponse.json({ok:false,error:"Yetkili oturum bulunamadı."},{status:403});
+    const origin = request.headers.get("origin");
+    if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ok:false,error:"Geçersiz istek."},{status:403});
     const body = (await request.json()) as RequestBody;
 
     const requestType = body.request_type;
@@ -114,37 +127,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: organization, error: organizationError } =
-      await supabase
-        .from("organizations")
-        .select("id")
-        .eq("name", "Sprint Yüzme Okulu")
-        .single();
-
-    if (organizationError || !organization) {
-      console.error(
-        "organization error:",
-        organizationError
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Kurum kaydı bulunamadı.",
-        },
-        { status: 500 }
-      );
+    if (studentId && !validUuid(studentId) || branchId && !validUuid(branchId) || groupId && !validUuid(groupId)) {
+      return NextResponse.json({ok:false,error:"Geçersiz öğrenci, şube veya grup."},{status:400});
     }
-
+    if (requestType === "individual_compensation") {
+      const {data,error} = await attendanceOperationsDb().rpc("request_individual_compensation",{p_actor:profile.id,p_student:studentId,p_count:lessonCount,p_reason:reason,p_description:description});
+      if(error || !data?.ok) return NextResponse.json({ok:false,error:error?.message||"Telafi talebi oluşturulamadı."},{status:400});
+      if(!data.duplicate) await publishEventNotification({organization_id:profile.organization_id,category:"approvals",notification_type:"individual_compensation_requested",
+        include_requester:profile.id,title:"Bireysel telafi onayı bekliyor",body:`${lessonCount} ders · ${reason}`,student_id:studentId,source_type:"lesson_adjustment",source_id:data.request.id,
+        target_path:`/onay-merkezi?requestId=${data.request.id}`,created_by:profile.id,push_requested:true});
+      revalidateStudentSurfaces(studentId);
+      return NextResponse.json({...data,message:data.duplicate?"Bu kursiyerin bekleyen bireysel telafi talebi var. Onay Merkezi’nden takip edebilirsiniz.":"Bireysel telafi yönetici onayına gönderildi. Onaydan sonra tarihli ders planı oluşturulacak."});
+    }
+    // Legacy bulk/count requests stay in their existing flow, scoped to the actor's institution.
+    for (const [table,id] of [["students",studentId],["branches",branchId],["training_groups",groupId]]) {
+      if(!id) continue;
+      const {data,error}=await supabase.from(table).select("id").eq("organization_id",profile.organization_id).eq("id",id).maybeSingle();
+      if(error||!data)return NextResponse.json({ok:false,error:"İlgili kayıt bu kurumda bulunamadı."},{status:404});
+    }
     const { data, error } = await supabase
       .from("lesson_adjustment_requests")
       .insert({
-        organization_id: organization.id,
+        organization_id: profile.organization_id,
+        requested_by: profile.id,
 
         request_type: requestType,
 
         student_id:
-          requestType === "individual_compensation" ||
           requestType === "lesson_count_change"
             ? studentId
             : null,
@@ -181,9 +190,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       message:
-        requestType === "individual_compensation"
-          ? "Bireysel telafi yönetici onayına gönderildi."
-          : requestType === "bulk_compensation"
+        requestType === "bulk_compensation"
           ? "Toplu telafi yönetici onayına gönderildi."
           : "Ders sayısı değişikliği yönetici onayına gönderildi.",
       request: data,
@@ -208,9 +215,12 @@ export async function GET() {
   try {
     const supabase = await createClient();
 
+    const profile = await actorProfile(supabase);
+    if (!profile) return NextResponse.json({ok:false,error:"Yetkili oturum bulunamadı."},{status:403});
     const { data, error } = await supabase
       .from("lesson_adjustment_requests")
       .select("*")
+      .eq("organization_id",profile.organization_id)
       .order("requested_at", {
         ascending: false,
       })

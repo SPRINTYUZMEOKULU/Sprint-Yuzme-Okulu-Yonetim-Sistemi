@@ -401,6 +401,7 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
 
                   {request.reason || request.description ? <div className="requestReason">{request.reason || request.description}</div> : null}
 
+                  {request.metadata?.dated_plan_status === "missing" && <div className="requestReason" role="status"><strong>Eski onay · Tarihli telafi planı eksik</strong><p>Bu işlem önceki sistemde yalnızca ders hareketine yazılmış. Tarihli ders planı bulunmuyor. Geçmiş bakiye ve kayıt dönemi korunmuştur; telafi tarihleri yönetici tarafından ayrıca kontrol edilmelidir.</p></div>}
                   {expanded ? (
                     <div className="requestDetails">
                       {diffKeys.length > 0 ? diffKeys.map((key) => <div className="diffRow" key={key}><span>{key.replaceAll("_", " ")}</span><div><small>Önce</small><strong>{formatValue(oldValues[key])}</strong></div><div><small>Sonra</small><strong>{formatValue(newValues[key])}</strong></div></div>) : <p>Bu işlem için ek alan değişikliği bulunmuyor.</p>}

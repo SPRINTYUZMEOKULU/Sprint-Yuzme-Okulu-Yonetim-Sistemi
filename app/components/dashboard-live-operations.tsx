@@ -11,6 +11,7 @@ import DashboardSmartCalendar from "@/app/components/dashboard-smart-calendar";
 
 type PastSlot = {date:string;branchId:string;branchName:string;time:string;missingCount:number;href:string};
  export type LiveData = {
+  studentFollowups?: {available:boolean;items:Array<{id:string;title:string;description:string;action_url:string}>};
   ok: boolean;
   date: string;
   cancellationMessagesAvailable?: boolean;
@@ -254,6 +255,8 @@ function OperationPanel() {
           <i /> {actionCount ? `${actionCount} işlem` : "Operasyon normal"}
         </a>
       </div>
+
+      {data.studentFollowups?.available && data.studentFollowups.items.length>0 && <section className="livePanel" aria-label="Öğrenci takipleri"><div className="livePanelHead"><div><span>YOKLAMA TAKİBİ</span><h3>Arama ve kontrol bekleyen kursiyerler</h3></div><Link href="/notlar">Tüm Takipler <Icons.arrow /></Link></div>{data.studentFollowups.items.map(item=><Link key={item.id} className="priorityRow" href={item.action_url||"/notlar"}><i><Icons.note /></i><div><strong>{item.title}</strong><span>{item.description}</span></div><b>Takibi Aç <Icons.arrow /></b></Link>)}</section>}
 
       {data.paymentDue?.available && <section className="sprintTodayDue" aria-label="Bugünkü ödeme hatırlatmaları">
         <div className="sprintTodayDueIcon"><Icons.wallet /></div>

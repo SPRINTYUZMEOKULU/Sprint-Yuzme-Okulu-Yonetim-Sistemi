@@ -7,7 +7,7 @@ test('expired package displays planned renewal, and future preview cannot consum
  const Component=load('app/yoklama/quick-attendance-client.tsx',{
   '@/lib/dates/display':{formatDisplayDate:v=>v},'next/navigation':{useRouter:()=>router},
   '@/lib/attendance/integrity':load('lib/attendance/integrity.ts'),'@/lib/attendance/presentation':load('lib/attendance/presentation.ts'),'@/lib/attendance/roster':load('lib/attendance/roster.ts'),
-  './attendance-reminder-panel':{__esModule:true,default:()=>null},'./actions':{getAttendanceForDate:async()=>({ok:true,records:[]}),saveAttendance:async()=>{writes++;return {ok:true};}},
+  './student-attendance-followup':{__esModule:true,default:()=>null},'./attendance-reminder-panel':{__esModule:true,default:()=>null},'./actions':{getAttendanceForDate:async()=>({ok:true,records:[]}),saveAttendance:async()=>{writes++;return {ok:true};}},
  }).default;
  const period={student_id:'s',group_id:'g',lesson_weekdays:[3,5],start_confirmation_required:false};
  const app=createRoot(document.getElementById('root'));

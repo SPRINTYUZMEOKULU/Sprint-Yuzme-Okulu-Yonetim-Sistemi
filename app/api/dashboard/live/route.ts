@@ -49,7 +49,9 @@ export async function GET() {
   const supabase = await createClient();
   const today = turkeyDateParts();
 
-  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult, membershipsResult, compensationResult, reminderNotesResult] = await Promise.all([
+  let studentFollowupQuery=supabase.from("alerts").select("id,title,description,action_url,created_at").eq("organization_id",profile.organization_id).eq("alert_type","attendance_reminder").eq("source_table","student_notes").in("status",["open","in_progress"]).order("created_at",{ascending:false}).limit(20);
+  if(profile.role==="coach"&&!profile.is_super_user)studentFollowupQuery=studentFollowupQuery.eq("assigned_to",profile.id);
+  const [branchesResult, groupsResult, schedulesResult, enrollmentsResult, attendanceResult, attendanceEverResult, transferStartedResult, studentsResult, approvalsResult, cashResult, alertsResult, preregResult, celebrationsResult, membershipsResult, compensationResult, reminderNotesResult, studentFollowupsResult, lessonApprovalsResult] = await Promise.all([
     supabase.from("branches").select("id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("training_groups").select("id,branch_id,name,is_active").eq("organization_id", profile.organization_id).eq("is_active", true),
     supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,end_time,is_active").eq("organization_id", profile.organization_id).in("weekday", scheduleWeekdaysForDate(today.iso)).eq("is_active", true).order("start_time"),
@@ -68,6 +70,8 @@ export async function GET() {
     supabase.from("alerts").select("id,title,description,status,created_at")
       .eq("organization_id", profile.organization_id).eq("alert_type", "attendance_reminder")
       .like("description", `${today.iso} · %`).order("created_at", { ascending: false }),
+    studentFollowupQuery,
+    supabase.from("lesson_adjustment_requests").select("id",{count:"exact",head:true}).eq("organization_id",profile.organization_id).eq("status","pending"),
   ]);
 
   const pastStart = historyStart(today.iso);
@@ -337,6 +341,7 @@ export async function GET() {
     ok: true,
     date: today.iso,
     sessions,
+    studentFollowups: {available:!studentFollowupsResult.error,items:studentFollowupsResult.data||[]},
     cancellationMessagesAvailable: !cancellationMessagesResult.error,
     birthdays,
     paymentDue: {available:paymentDueAvailable,count:dueStudentCount,total:dueTotal,preview:duePreview},
@@ -350,7 +355,7 @@ export async function GET() {
       todayLessons: sessions.length,
       pendingAttendance,
       birthdays: birthdays.length,
-      pendingApprovals: approvalsResult.count || 0,
+      pendingApprovals: (approvalsResult.count || 0) + (lessonApprovalsResult.count || 0),
       pendingCash: cashResult.count || 0,
       openAlerts: alertsResult.count || 0,
       preRegistrations: preregResult.count || 0,

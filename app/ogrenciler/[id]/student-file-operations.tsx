@@ -244,6 +244,7 @@ export default function StudentFileOperations({
 
   const [message, setMessage] = useState("");
   const [result, setResult] = useState("");
+  const [compensationRequestId,setCompensationRequestId]=useState("");
   const [statusApprovalPath, setStatusApprovalPath] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -444,6 +445,7 @@ export default function StudentFileOperations({
   }
 
   async function submitCompensation() {
+    if(submitting)return;
     const count = Number(lessonCount);
 
     if (!Number.isInteger(count) || count < 1 || count > 20) {
@@ -478,7 +480,7 @@ export default function StudentFileOperations({
 
       if (!response.ok || !data.ok) {
         setResult(
-          data.error || data.details || "Telafi talebi oluşturulamadı.",
+          [data.error,data.details].filter(Boolean).join(" · ") || "Telafi talebi oluşturulamadı.",
         );
         return;
       }
@@ -487,6 +489,8 @@ export default function StudentFileOperations({
         data.message || "Bireysel telafi talebi yönetici onayına gönderildi.",
       );
 
+      setCompensationRequestId(data.request?.id||"");
+      setReason("");setDescription("");
       router.refresh();
     } catch (error) {
       console.error(error);
@@ -912,8 +916,7 @@ export default function StudentFileOperations({
                   <div className="proInfo">
                     <strong>Bireysel telafi yönetimi</strong>
                     <p>
-                      Talep öğrenci dosyasına kaydedilir ve mevcut onay
-                      sürecinden geçer.
+                      Talep yönetici onayına gönderilir. Onaydan sonra kayıt günlerine uygun tarihli telafi dersleri dönem sonrasına eklenir. Normal ders paketi değişmez.
                     </p>
                   </div>
 
@@ -1013,7 +1016,7 @@ export default function StudentFileOperations({
                 </>
               )}
 
-              {result && <div className="fileOpsResult">{result}{panel === "delete" && statusApprovalPath ? <a href={statusApprovalPath} style={{display:"block",marginTop:8,fontWeight:700}}>Bekleyen Talebi Aç →</a> : null}</div>}
+              {result && <div className="fileOpsResult" role="status" aria-live="polite">{result}{panel === "compensation" && compensationRequestId ? <a href={`/onay-merkezi?requestId=${compensationRequestId}`} style={{display:"block",marginTop:8,fontWeight:700}}>Telafi Talebini Aç →</a> : null}{panel === "delete" && statusApprovalPath ? <a href={statusApprovalPath} style={{display:"block",marginTop:8,fontWeight:700}}>Bekleyen Talebi Aç →</a> : null}</div>}
             </div>
 
             <footer>
