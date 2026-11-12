@@ -108,9 +108,14 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     const accountName = adult ? studentName : guardianName;
     return { id: s.id, ready: Boolean(accountName && accountPhone) };
   });
-  const unlinkedCount = students.filter((s: any) => !linkByStudent.has(s.id)).length;
-  const readyCount = derived.filter((s: any) => !linkByStudent.has(s.id) && s.ready).length;
-  const missingCount = derived.filter((s: any) => !linkByStudent.has(s.id) && !s.ready).length;
+  const hasPortalAccount=(studentId:string)=>links.some((link:any)=>{
+    if(link.student_id!==studentId)return false;
+    const record:any=guardianRecordById.get(link.guardian_id);
+    return Boolean(record?.auth_user_id&&guardianById.has(record.auth_user_id));
+  });
+  const unlinkedCount = students.filter((s: any) => !hasPortalAccount(s.id)).length;
+  const readyCount = derived.filter((s: any) => !hasPortalAccount(s.id) && s.ready).length;
+  const missingCount = derived.filter((s: any) => !hasPortalAccount(s.id) && !s.ready).length;
 
   const candidateMap = new Map<string, GuardianBulkCandidate>();
   for (const student of students as any[]) {
