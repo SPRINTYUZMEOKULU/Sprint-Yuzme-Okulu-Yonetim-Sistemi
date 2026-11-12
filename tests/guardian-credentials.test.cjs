@@ -23,7 +23,7 @@ test('Saved credentials are reused across screens by account, and invalidated af
 test('Preparing existing linked accounts preserves passwords and resolves the linked identity',async()=>{
  let changes=0;
  process.env.NEXT_PUBLIC_SUPABASE_URL='https://example.test';process.env.SUPABASE_SERVICE_ROLE_KEY='test-key';
- const rows={students:[{id:'child',first_name:'Child',last_name:'Test',guardian_name:'Outdated Name',guardian_phone:'05551111111'}],guardian_students:[{student_id:'child',guardian_id:'person',portal_access:true}]};
+ const rows={students:[{id:'child',first_name:'Child',last_name:'Test',guardian_name:'Outdated Name',guardian_phone:'05551111111'}],guardian_students:[{student_id:'child',guardian_id:'person',portal_access:true}],guardians:[{id:'person',auth_user_id:'actual-linked-parent'}]};
  const client={from(table){let values=[...(rows[table]||[])];const q={select(){return q;},eq(k,v){if(k==='organization_id'||k==='is_deleted')return q;values=values.filter(r=>r[k]===v);return q;},in(k,vs){values=values.filter(r=>vs.includes(r[k]));return q;},then(ok,no){return Promise.resolve({data:values,error:null}).then(ok,no);}};return q;}};
  const contact={ok:true,accountId:'actual-linked-parent',revision:'unchanged',fullName:'Actual Parent',phone:'+905552222222',email:''};
  const bulk=load('app/veliler/ogrenciden-olustur/bulk-account-actions.ts',{'@supabase/supabase-js':{createClient:()=>client},'next/cache':{revalidatePath(){}},'@/lib/auth/profile':{requireProfile:async()=>({organization_id:'org'})},'../portal-credential-actions':{portalCredentialContact:async()=>contact,savePortalCredential:async()=>{changes++;return {...contact,password:'Reset-Test-94!',message:'Saved'};}}});

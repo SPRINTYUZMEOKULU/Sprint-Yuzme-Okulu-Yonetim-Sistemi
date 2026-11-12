@@ -82,8 +82,22 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[], res
   const unlinkedStudents: any[] = [];
   const {data:existingLinks,error:linksError}=await admin.from("guardian_students").select("student_id,guardian_id").in("student_id",studentIds);
   if(linksError) return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Mevcut hesap bağlantıları okunamadı. Şifreler değiştirilmedi."}];
+  const guardianIds=[...new Set((existingLinks||[]).map(link=>link.guardian_id))];
+  const {data:linkedRecords,error:recordsError}=guardianIds.length
+    ?await admin.from("guardians").select("id,auth_user_id,phone,is_active,login_enabled").eq("organization_id",organizationId).in("id",guardianIds)
+    :{data:[],error:null};
+  if(recordsError)return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Veli kayıtları okunamadı. İşlem yapılmadı."}];
+  const pendingRecords=new Map<string,any>();
   for(const student of students || []) {
     if(!existingLinks?.some(link=>link.student_id===student.id)){unlinkedStudents.push(student);continue;}
+    const links=existingLinks!.filter(link=>link.student_id===student.id);
+    const records=links.map(link=>linkedRecords?.find(record=>record.id===link.guardian_id));
+    if(records.every(record=>record&&!record.auth_user_id)&&records.length===1&&records[0]?.is_active!==false&&records[0]?.login_enabled!==false){
+      const group:any=groupMap.get(student.preferred_group_id);
+      const phone=normalizePhone(isAdultCourse(group?.course_type,group?.name)?student.phone:student.guardian_phone);
+      const storedPhone=normalizePhone(records[0]?.phone);
+      if(!storedPhone||storedPhone===phone){pendingRecords.set(student.id,records[0]);unlinkedStudents.push(student);continue;}
+    }
     const contact=await portalCredentialContact({studentId:student.id});
     const studentName=`${student.first_name || ""} ${student.last_name || ""}`.trim();
     if(!contact.ok){linkedResults.set(student.id,{ok:false,key:student.id,fullName:studentName,phone:"",email:"",studentNames:[studentName],status:"error",message:contact.message});continue;}
@@ -103,7 +117,10 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[], res
     const phone = usesSelf ? ownPhone : guardianPhone;
     const fullName = usesSelf ? studentName : guardianName;
     const email = usesSelf ? "" : String(student.guardian_email || "").trim().toLowerCase();
-    if (!fullName || !phone) continue;
+    if (!fullName || !phone) {
+      linkedResults.set(student.id,{ok:false,key:student.id,fullName:studentName,phone,email,studentNames:[studentName],status:"error",message:"Portal hesabı için ad veya geçerli cep telefonu eksik."});
+      continue;
+    }
     const current = groups.get(phone);
     if (current) current.students.push(student);
     else groups.set(phone, { fullName, phone, email, relationship: usesSelf ? "Kendisi" : "Veli", students: [student] });
@@ -116,6 +133,9 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[], res
     const password = temporaryPassword();
     let created = false;
     try {
+      const pending=[...new Map(group.students.map(student=>pendingRecords.get(student.id)).filter(Boolean).map(record=>[record.id,record])).values()];
+      if(pending.length>1)throw new Error("Aynı telefon birden fazla veli kaydına bağlı. Veli merkezinden bağlantıları kontrol edin.");
+      const pendingRecord:any=pending[0]||null;
       const { data: existingProfile, error: lookupError } = await admin.from("profiles").select("id,full_name,phone,email,is_active").eq("organization_id", organizationId).eq("role", "guardian").in("phone", candidates).limit(1).maybeSingle();
       if (lookupError) throw lookupError;
       let authUserId = existingProfile?.id || "";
@@ -137,7 +157,8 @@ export async function prepareGuardianAccountBatch(studentIdsValue: string[], res
 
       let guardianRecord: any = null;
       const { data: byAuth } = await admin.from("guardians").select("id,auth_user_id").eq("organization_id", organizationId).eq("auth_user_id", authUserId).limit(1).maybeSingle();
-      guardianRecord = byAuth;
+      if(byAuth&&pendingRecord&&byAuth.id!==pendingRecord.id)throw new Error("Mevcut giriş hesabı başka bir veli kaydına bağlı. Veli merkezinden kontrol edin.");
+      guardianRecord = byAuth||pendingRecord;
       if (!guardianRecord) {
         const { data: byPhone } = await admin.from("guardians").select("id,auth_user_id").eq("organization_id", organizationId).in("phone", candidates).limit(1).maybeSingle();
         guardianRecord = byPhone;
