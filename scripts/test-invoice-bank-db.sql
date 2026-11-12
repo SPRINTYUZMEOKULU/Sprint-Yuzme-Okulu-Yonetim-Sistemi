@@ -1,4 +1,5 @@
 begin;
+set local role service_role;
 do $$
 declare actor uuid; org uuid; student uuid; entry uuid; request_one uuid; request_two uuid; rejected boolean;
 begin
