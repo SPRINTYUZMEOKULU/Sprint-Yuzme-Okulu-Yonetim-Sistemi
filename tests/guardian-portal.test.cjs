@@ -54,7 +54,7 @@ test('Phone conflict stops updates; a record failure restores the original profi
 const finance=load('lib/guardian/payment-summary.ts');
 test('Received payments reduce only their own package balance; cancellations and old packages do not',()=>{
  const result=finance.guardianPaymentSummary({id:'current'},{price:6000},[{enrollment_id:'current',payment_status:'received',amount:4000},{enrollment_id:'old',payment_status:'received',amount:9000},{enrollment_id:'current',payment_status:'cancelled',amount:2000}]);
- assert.deepEqual(result,{paid:4000,price:6000,debt:2000});assert.equal(finance.guardianPaymentSummary({id:'current'},{price:6000},[],{status:'cancelled',total_amount:9000}).price,6000);
+ assert.deepEqual(result,{paid:4000,price:6000,debt:2000,excess:0});assert.equal(finance.guardianPaymentSummary({id:'current'},{price:6000},[],{status:'cancelled',total_amount:9000}).price,6000);
 });
 test('Reminders use the earliest unpaid installment, partial remaining amount and actual Turkey calendar date',()=>{
  const rows=[{due_date:'2026-10-21',amount:3000,paid_amount:0,status:'pending'},{due_date:'2026-10-19',amount:2000,paid_amount:500,status:'partial'},{due_date:'2026-10-01',amount:1000,paid_amount:0,status:'cancelled'},{due_date:'2026-10-02',amount:1000,paid_amount:1000,status:'paid'}];

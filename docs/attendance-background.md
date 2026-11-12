@@ -1,18 +1,20 @@
-# Attendance background job
+# Scheduled integration checks
 
-Endpoint: `/api/cron/attendance-notifications`.
+The production endpoint is `/api/cron/attendance-notifications`. It requires a server-side bearer secret. Only this exact path bypasses the cookie-login middleware; the handler still rejects missing/invalid authorization. `?check=1` verifies authentication without updating counters or producing notifications.
 
-The implementation is deployed but the schedule is deliberately inactive until project management access is restored and the account's cron interval limit is verified. No claim of active background scheduling should be made before a successful authenticated invocation and scheduler execution are observed.
+The scheduler uses the existing Supabase pg_cron instance and pg_net, so no Vercel cron-frequency upgrade is required. The five-minute job is `sprint-background-notifications`. Its stored command calls `private.enqueue_sprint_background()`; it contains no credential. The enqueuer retrieves its dedicated secret from Vault and sends it as an Authorization header to the fixed production host. CRON_SECRET is a Production Secret in the intended Vercel project. Never print either value or put it in a URL, source file, report or build log.
 
-Activation:
-1. Reconnect Vercel to the owner of `sprintyuzmeokulus-projects`, project `sprint-yuzme-okulu-yonetim-sistemi`.
-2. Verify that five-minute cron is supported on the current plan. Do not upgrade billing automatically.
-3. Set a newly generated random `CRON_SECRET` of at least 32 characters in the production environment. Never put it in source control, URLs or logs.
-4. Merge `attendance-cron.vercel.json` into the root `vercel.json` and redeploy.
-5. Confirm that missing/invalid authorization returns 401, or 503 if the job is unconfigured.
-6. Run an authenticated production check. Confirm that cancelled and fully recorded sessions generate zero alerts and that resolved alerts stay closed.
-7. Verify the first scheduled execution and then perform a closed-app test on an authorized user's device.
+The migration creates the job **inactive**. After deploying the endpoint:
 
-The runner uses Istanbul dates and existing notification routing and push subscriptions. It excludes inactive schedules, passive students, pending starts and cancelled students. It supports partial attendance and groups sharing a time slot.
+1. Verify unauthorized requests return 401; unconfigured jobs return 503.
+2. Use the dedicated secret for an authenticated `?check=1` request. It must return `{ok:true,check:true}` without sending anything.
+3. Enqueue one production run and inspect only status/count fields from `net._http_response` using the request ID recorded in `private.sprint_background_requests`.
+4. Enable the job only after a successful response. Observe a successful scheduled invocation as well; enqueuing alone does not prove delivery.
 
-Concurrent scheduler and interactive generation use the service-only `attendance_notification_claims` primary key (organization + schedule + date). Existing attendance notification history is seeded into claims. A failed notification insert releases only its own claim token. A successful notification remains claimed even after reading/dismissing it.
+Each execution first uses the existing `sync_scheduled_used_lessons` engine, then runs attendance and registration notification checks. It does not create payments, registration packages, approvals or historical attendance rows. Counters and elapsed makeup statuses follow the existing school rules. Notification routing, subscriptions and existing deduplication claims are reused.
+
+A daily midnight-Turkey renewal activation job remains separate and is preserved.
+
+`Ayarlar → Sistem Kontrolü` reads the service-only `sprint_system_integration_health` RPC. It shows current registration/plan/link/counter checks, missing legacy makeup plans, manual approval backlog and the latest HTTP scheduler result. Missing or stale results are not marked healthy. The page itself performs no repairs or messaging. Device delivery still requires an installed/supported app, notification permission and a real-device test.
+
+To pause background work, disable only the named pg_cron job. Do not remove the renewal activation job or rotate shared keys. The older `attendance-cron.vercel.json` is an unused sample; adding it would create a second scheduler and is unnecessary for this deployment.

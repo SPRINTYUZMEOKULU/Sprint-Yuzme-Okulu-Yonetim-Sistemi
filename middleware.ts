@@ -61,6 +61,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   const isPublicApi =
+    pathname === "/api/cron/attendance-notifications" ||
     pathname.startsWith("/api/auth/phone-password") ||
     pathname.startsWith("/api/auth/support-request") ||
     pathname.startsWith("/api/pre-registrations") ||
