@@ -18,7 +18,7 @@ export function integrationHealthRows(checks:Record<string,number>):HealthRow[]{
 export function schedulerHealth(scheduler:any,now=Date.now()){
  const time=Date.parse(scheduler?.last_success_at||"");
  const recent=Number.isFinite(time)&&time<=now&&now-time<15*60*1000;
- if(recent&&(scheduler?.http_status===200||!scheduler?.http_status))return {state:"ok",title:"Zamanlı kontrol çalışıyor",description:"Uygulama kapalıyken ders sayaçları, eksik yoklama ve tamamlanmamış kayıt bildirimleri sunucuda kontrol ediliyor."};
+ if(recent&&scheduler?.http_status===200&&!scheduler?.timed_out)return {state:"ok",title:"Zamanlı kontrol çalışıyor",description:"Uygulama kapalıyken ders sayaçları, eksik yoklama ve tamamlanmamış kayıt bildirimleri sunucuda kontrol ediliyor."};
  if(scheduler?.http_status && scheduler.http_status!==200 || scheduler?.timed_out)return {state:"warning",title:"Son kontrol tamamlanamadı",description:"Zamanlı çağrı başarısız. Cihaz bildirimi testi bu bağlantının yerine geçmez; sunucu kontrolü incelenmeli."};
  return {state:"warning",title:"Güncel çalışma doğrulanamadı",description:"Son 15 dakikada başarılı zamanlı kontrol bulunmuyor. Zamanlayıcı bağlantısı kontrol edilmeli."};
 }
