@@ -139,6 +139,7 @@ async function getProfile(profileId: string, organizationId: string) {
   if (error || !data) {
     throw new Error("Kullanıcı bulunamadı veya bu organizasyona ait değil.");
   }
+  if(data.role==="guardian")throw new Error("Veli ve kursiyer portal işlemlerini Veli Merkezi üzerinden yapın.");
   return data;
 }
 
@@ -158,11 +159,11 @@ async function getStaff(profileId: string, organizationId: string) {
 }
 
 async function ensureStaff(profileId: string, organizationId: string) {
+  const profile = await getProfile(profileId, organizationId);
   const existing = await getStaff(profileId, organizationId);
   if (existing) return existing;
 
   const admin = getAdminClient();
-  const profile = await getProfile(profileId, organizationId);
   const { firstName, lastName } = splitName(
     profile.full_name || profile.email || "Personel"
   );
@@ -309,6 +310,7 @@ export async function createStaffAction(
     if (!fullName) throw new Error("Ad soyad zorunludur.");
     if (!email && !phone) throw new Error("Telefon veya e-posta zorunludur.");
     if (password.length < 8) throw new Error("Şifre en az 8 karakter olmalıdır.");
+    if(role==="guardian")throw new Error("Veli ve kursiyer portal hesabını Veli Merkezi üzerinden oluşturun veya düzenleyin.");
     if (!isAllowedRole(role) || role === "owner") throw new Error("Geçersiz rol.");
 
     let branchIds = [...new Set(input.branchIds ?? [])];
@@ -478,6 +480,7 @@ export async function updateStaffProfileAction(
     if (target.role === "owner") throw new Error("Sistem Sahibi hesabı değiştirilemez.");
     if (!fullName) throw new Error("Ad soyad zorunludur.");
     if (!email && !phone) throw new Error("Telefon veya e-posta zorunludur.");
+    if(role==="guardian")throw new Error("Veli ve kursiyer portal hesabını Veli Merkezi üzerinden oluşturun veya düzenleyin.");
     if (!isAllowedRole(role) || role === "owner") throw new Error("Geçersiz rol.");
 
     const attrs: {
