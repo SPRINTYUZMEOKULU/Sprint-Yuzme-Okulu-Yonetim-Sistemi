@@ -19,11 +19,16 @@ export default function CustomerDocumentForm({ token }: { token: string }) {
     <label>{type === "company" ? "Firma Unvanı" : "Ad Soyad"}<input name="recipient_name" required autoComplete="name" /></label>
     <label>{type === "company" ? "Vergi No" : "T.C. Kimlik No"}<input name="tax_identity_number" required inputMode="numeric" maxLength={type === "company" ? 10 : 11} /></label>
     {type === "company" && <label>Vergi Dairesi<input name="tax_office" required /></label>}
-    <label>Adres<textarea name="address" required rows={3} /></label>
+    <div className="doc-address-grid">
+      <label>İl<input name="city" required maxLength={100} autoComplete="address-level1" placeholder="Örn. Antalya" /></label>
+      <label>İlçe<input name="district" required maxLength={100} autoComplete="address-level2" placeholder="Örn. Muratpaşa" /></label>
+    </div>
+    <label>Açık Adres<textarea name="address" required rows={3} maxLength={500} autoComplete="street-address" placeholder="Mahalle, cadde/sokak, bina ve kapı numarası" /></label>
+    <label>Posta Kodu <span>(isteğe bağlı)</span><input name="postal_code" inputMode="numeric" maxLength={5} pattern="[0-9]{5}" autoComplete="postal-code" /></label>
     <label>E-posta <span>(isteğe bağlı)</span><input name="email" type="email" autoComplete="email" /></label>
     <label>Telefon <span>(isteğe bağlı)</span><input name="phone" type="tel" autoComplete="tel" /></label>
     <label className="consent"><input name="consent" type="checkbox" required /> Girdiğim bilgilerin ödeme belgesinin düzenlenmesinde kullanılmasını onaylıyorum.</label>
     <button disabled={pending || done}>{pending ? "Kaydediliyor…" : done ? "Bilgiler Kaydedildi ✓" : "Bilgileri Kaydet ve Ödemeye Geç"}</button>
-    {message && <p className={done ? "success" : "error"}>{message}</p>}
+    {message && <p role={done?"status":"alert"} className={done ? "success" : "error"}>{message}</p>}
   </form>;
 }
