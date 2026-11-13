@@ -1,5 +1,6 @@
 "use client";
 
+import { currentRecipient, navigateWhatsapp } from "@/lib/messaging/current-recipient";
 import { packageMatchesCourse } from "@/lib/registrations/course-type";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
@@ -1121,14 +1122,27 @@ export default function RegistrationWizard({
 
 
   const messageInteractionId = useRef<string | null>(null);
+  const openingRequest = useRef<Promise<void> | null>(null);
+  const verifiedRecipient = useRef<string | null>(null);
+  const openedStorageKey = `registration-whatsapp:${student.id}`;
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(openedStorageKey) || "null");
+      if (saved?.id && saved?.message === (message || generatedMessage)) {
+        messageInteractionId.current = saved.id;
+        verifiedRecipient.current = saved.recipient || null;
+        setWhatsappOpened(true);
+      }
+    } catch { /* Storage may be unavailable in private browsing. */ }
+  }, [openedStorageKey]);
   const [confirmedInSession, setConfirmedInSession] = useState<string | null>(null);
   const [messageSaving, setMessageSaving] = useState(false);
   const [messageSaveFeedback, setMessageSaveFeedback] = useState("");
   async function recordRegistrationMessage(confirmed: boolean) {
     if (!messageInteractionId.current) messageInteractionId.current = crypto.randomUUID();
     const response = await fetch("/api/whatsapp-interactions", {
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({studentId:student.id,recipient:student.guardian_phone || student.phone,
+      method:"POST",keepalive:true,headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({studentId:student.id,recipient:verifiedRecipient.current || student.guardian_phone || student.phone,
         message:message || generatedMessage,sourcePath:`/kayit-tamamlama/${student.id}`,
         queueEvent:confirmed ? "confirmed" : "opened",interactionId:messageInteractionId.current,
         templateKey:"registration",templateTitle:"Kayıt bilgilendirmesi"}),
@@ -1139,7 +1153,7 @@ export default function RegistrationWizard({
   async function confirmRegistrationMessage() {
     if (messageSaving || !whatsappOpened) return;
     setMessageSaving(true);setMessageSaveFeedback("");
-    try { await recordRegistrationMessage(true);setConfirmedInSession(message || generatedMessage);setMessageSent(true);setMessageSaveFeedback("Gönderim onayınız kaydedildi. Kesin kaydı tamamlamak için son işlem düğmesini kullanın."); }
+    try { await openingRequest.current; await recordRegistrationMessage(true);setConfirmedInSession(message || generatedMessage);setMessageSent(true);setMessageSaveFeedback("Gönderim onayınız kaydedildi. Kesin kaydı tamamlamak için son işlem düğmesini kullanın."); }
     catch(error) {setMessageSaveFeedback(error instanceof Error ? error.message : "Gönderim onayı kaydedilemedi.");}
     finally {setMessageSaving(false);}
   }
@@ -3396,7 +3410,22 @@ _Antalya'nın En Köklü Yüzme Okulu_`
             }
             target="_blank"
             rel="noreferrer"
-            onClick={() => {
+            data-whatsapp-managed="true"
+            onClick={async (event) => {
+              event.preventDefault();
+              if (whatsappOpening) return;
+              const popup = window.open("about:blank", "_blank");
+              if (popup) popup.opener = null;
+              setWhatsappOpening(true);
+              setMessageSaveFeedback("");
+              try {
+                verifiedRecipient.current = await currentRecipient(student.id, whatsappPhone);
+              } catch (error) {
+                popup?.close();
+                setWhatsappOpening(false);
+                setMessageSaveFeedback(error instanceof Error ? error.message : "WhatsApp açılamadı.");
+                return;
+              }
               if (!message) {
                 setMessage(generatedMessage);
               }
@@ -3411,11 +3440,17 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               setWhatsappOpening(true);
               setWhatsappOpened(true);
               messageInteractionId.current = crypto.randomUUID();
-              void recordRegistrationMessage(false).catch(() => setMessageSaveFeedback("WhatsApp açıldı; açılış kaydı kaydedilemedi. Gönderimden sonra onaylayın."));
+              try {
+                sessionStorage.setItem(openedStorageKey, JSON.stringify({
+                  id: messageInteractionId.current, message: message || generatedMessage, recipient: verifiedRecipient.current,
+                }));
+              } catch { /* The current page can still confirm without storage. */ }
+              openingRequest.current = recordRegistrationMessage(false).catch(() => {
+                setMessageSaveFeedback("WhatsApp açıldı; açılış kaydı kaydedilemedi. Gönderimden sonra onaylayın.");
+              });
 
-              window.setTimeout(() => {
-                setWhatsappOpening(false);
-              }, 700);
+              navigateWhatsapp(popup, `https://wa.me/${verifiedRecipient.current}?text=${encodeURIComponent(message || generatedMessage)}`);
+              setWhatsappOpening(false);
             }}
           >
 
@@ -3432,6 +3467,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
 
           </a>
 
+          <p>WhatsApp’ta mesajı gönderin, bu ekrana dönüp aşağıdaki gönderim onayını işaretleyin. Ardından kesin kaydı tamamlayabilirsiniz.</p>
           {messageSaveFeedback && <p role="status">{messageSaveFeedback}</p>}
           <label className="sentCheck">
 
@@ -3453,7 +3489,7 @@ _Antalya'nın En Köklü Yüzme Okulu_`
               {messageSent
                 ? "Gönderim personel tarafından onaylandı ✓"
                 : whatsappOpened
-                  ? "WhatsApp'ta gönderdiğimi onaylıyorum"
+                  ? "Mesajı WhatsApp’ta gönderdim · Kaydet ve devam et"
                   : "Önce WhatsApp'ta Aç butonuna basın"}
 
             </span>
