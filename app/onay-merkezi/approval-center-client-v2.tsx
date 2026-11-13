@@ -2,7 +2,7 @@
 
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type StudentInfo = {
   id: string;
@@ -150,8 +150,9 @@ function categoryLabel(category: Category) {
   return CATEGORY_OPTIONS.find((item) => item.key === category)?.label || "Sistem";
 }
 
-function categoryIcon(category: Category) {
-  return CATEGORY_OPTIONS.find((item) => item.key === category)?.icon || "⚙";
+function CategoryIcon({category}:{category:CategoryFilter}) {
+  const paths:Record<CategoryFilter,string>={all:"M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",finance:"M3 5h18v14H3z M3 10h18 M7 15h3",student:"M16 7a4 4 0 1 1-8 0a4 4 0 0 1 8 0 M4 21v-2a8 8 0 0 1 16 0v2",enrollment:"M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5",lesson:"M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h3 M8 17h7",attendance:"M4 5h16v16H4z M8 13l3 3 5-6",staff:"M9 8a3 3 0 1 1-6 0a3 3 0 0 1 6 0 M13 21v-3a6 6 0 0 0-12 0 M19 5a3 3 0 0 1 0 6 M17 15a5 5 0 0 1 6 5",system:"M4 7h16 M4 17h16 M8 4v6 M16 14v6"};
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[category]}/></svg>;
 }
 
 function statusLabel(status: string) {
@@ -188,6 +189,7 @@ async function readJsonSafely(response: Response) {
 }
 
 export default function ApprovalCenterClientV2({initialStatus,initialRequestId,initialStudentId}:{initialStatus?:string;initialRequestId?:string;initialStudentId?:string}) {
+  const processingRef=useRef(false);
   const [focused,setFocused]=useState(Boolean(initialRequestId||initialStudentId));
   const [allRequests, setAllRequests] = useState<ApprovalRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialRequestId||initialStudentId?"all":STATUS_OPTIONS.find(x=>x.key===initialStatus)?.key||"pending");
@@ -256,8 +258,8 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
       if (categoryFilter !== "all" && request.category !== categoryFilter) return false;
       if (criticalOnly && (request.priority || "").toLowerCase() !== "critical") return false;
       const date = request.requested_at || request.created_at;
-      if (dateFrom && date && new Date(date).getTime() < new Date(`${dateFrom}T00:00:00`).getTime()) return false;
-      if (dateTo && date && new Date(date).getTime() > new Date(`${dateTo}T23:59:59`).getTime()) return false;
+      if (dateFrom && date && new Date(date).getTime() < new Date(`${dateFrom}T00:00:00+03:00`).getTime()) return false;
+      if (dateTo && date && new Date(date).getTime() >= new Date(`${dateTo}T00:00:00+03:00`).getTime()+86400000) return false;
       if (!query) return true;
       return [
         getStudentName(request), request.id, request.request_type, request.request_label,
@@ -268,6 +270,7 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
   }, [statusRequests, categoryFilter, criticalOnly, dateFrom, dateTo, search,focused,initialRequestId,initialStudentId]);
 
   async function processRequest(request: ApprovalRequest, action: "approve" | "reject") {
+    if(processingRef.current)return;
     let reviewNote = "";
     if (action === "reject") {
       const note = window.prompt(`${getRequestLabel(request)} talebini reddetme gerekçesini yazınız:`);
@@ -283,7 +286,8 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
       reviewNote = window.prompt("İsterseniz yönetici notu ekleyebilirsiniz:", "")?.trim() || "";
     }
 
-    setProcessingId(request.id);
+    processingRef.current=true;
+    setProcessingId(`${request.source}:${request.id}`);
     setError("");
     setSuccessMessage("");
 
@@ -307,6 +311,7 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
     } catch (err) {
       setError(err instanceof Error ? err.message : "İşlem sırasında hata oluştu.");
     } finally {
+      processingRef.current=false;
       setProcessingId(null);
     }
   }
@@ -329,36 +334,36 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
             <span>Tüm modüllerden gelen kritik işlemleri tek merkezden inceleyin, onaylayın, reddedin ve geçmiş kayıtlarını denetleyin.</span>
           </div>
           <div className="headerActions">
-            <Link href="/">⌂ Ana Sayfa</Link>
-            <Link href="/ayarlar/onay-merkezi">⚙ Onay Ayarları</Link>
+            <Link href="/">Ana Sayfa</Link>
+            <Link href="/ayarlar/onay-merkezi">Onay Ayarları</Link>
           </div>
         </header>
 
-        <section className="statusTabs">
+        <section className="statusTabs" aria-label="Talep durumları">
           {STATUS_OPTIONS.map((item) => {
             const count = item.key === "pending" ? globalCounts.pending
               : item.key === "approved" ? globalCounts.approved
               : item.key === "rejected" ? globalCounts.rejected
               : item.key === "cancelled" ? globalCounts.cancelled
               : globalCounts.total;
-            return <button key={item.key} type="button" className={statusFilter === item.key ? "active" : ""} onClick={() => { setStatusFilter(item.key); setCategoryFilter("all"); }}>{item.label}<span>{count}</span></button>;
+            return <button key={item.key} type="button" aria-pressed={statusFilter===item.key} className={statusFilter === item.key ? "active" : ""} onClick={() => { setStatusFilter(item.key); setCategoryFilter("all"); }}>{item.label}<span>{count}</span></button>;
           })}
         </section>
 
         <section className="summaryGrid">
           {CATEGORY_OPTIONS.map((item) => {
             const count = categoryCounts[item.key];
-            return <button key={item.key} type="button" className={`summaryCard ${categoryFilter === item.key ? "selected" : ""}`} onClick={() => setCategoryFilter(item.key)}><div className="summaryIcon">{item.icon}</div><div><strong>{count}</strong><span>{item.label}</span></div></button>;
+            return <button key={item.key} type="button" aria-pressed={categoryFilter===item.key} className={`summaryCard ${categoryFilter === item.key ? "selected" : ""}`} onClick={() => setCategoryFilter(item.key)}><div className="summaryIcon"><CategoryIcon category={item.key}/></div><div><strong>{count}</strong><span>{item.label}</span></div></button>;
           })}
         </section>
 
         <section className="filterCard">
-          <div className="searchField"><span>⌕</span><input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Öğrenci, talep no, işlem, personel veya açıklama ara..." /></div>
+          <div className="searchField"><span>⌕</span><input aria-label="Onay taleplerinde ara" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Öğrenci, talep no, işlem, personel veya açıklama ara..." /></div>
           <label><span>Başlangıç</span><input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
           <label><span>Bitiş</span><input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
           <label className="criticalToggle"><input type="checkbox" checked={criticalOnly} onChange={(e) => setCriticalOnly(e.target.checked)} /><span>Yalnız kritik</span></label>
           <button type="button" className="secondaryButton" onClick={clearFilters}>Filtreleri Temizle</button>
-          <button type="button" className="refreshButton" disabled={loading} onClick={() => void loadRequests()}>{loading ? "Yükleniyor..." : "↻ Yenile"}</button>
+          <button type="button" className="refreshButton" disabled={loading} onClick={() => void loadRequests()}>{loading ? "Yükleniyor..." : "Yenile"}</button>
         </section>
 
         <section className="resultBar">
@@ -367,8 +372,8 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
         </section>
 
         {focused?<div className="alert" role="status">Bildirimdeki işlem gösteriliyor. <button type="button" onClick={()=>{setFocused(false);setStatusFilter("pending")}}>Tüm Talepleri Göster</button></div>:null}
-        {error ? <div className="alert error">{error}</div> : null}
-        {successMessage ? <div className="alert success">{successMessage}</div> : null}
+        {error ? <div className="alert error" role="alert">{error}</div> : null}
+        {successMessage ? <div className="alert success" role="status">{successMessage}</div> : null}
 
         {loading ? (
           <div className="emptyCard"><strong>Onay talepleri yükleniyor...</strong></div>
@@ -378,7 +383,7 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
           <div className="requestList">
             {visibleRequests.map((request) => {
               const expanded = expandedId === request.id;
-              const isProcessing = processingId === request.id;
+              const isProcessing = processingId === `${request.source}:${request.id}`;
               const oldValues = request.old_values || {};
               const newValues = request.new_values || {};
               const diffKeys = Array.from(new Set([...Object.keys(oldValues), ...Object.keys(newValues)]));
@@ -386,22 +391,23 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
                 <article className={`requestCard ${request.priority === "critical" ? "critical" : ""}`} key={`${request.source}-${request.id}`}>
                   <div className="requestTop">
                     <div className="requestIdentity">
-                      <div className="moduleBadge"><span>{categoryIcon(request.category)}</span>{categoryLabel(request.category)}</div>
+                      <div className="moduleBadge"><CategoryIcon category={request.category}/>{categoryLabel(request.category)}</div>
                       <h2>{getRequestLabel(request)}</h2>
-                      <div className="subject">{getStudentName(request)}</div>
+                      <div className="subject">{request.student_id?<Link href={`/ogrenciler/${request.student_id}`}>{getStudentName(request)}</Link>:getStudentName(request)}</div>
                     </div>
                     <div className={statusClass(request.status)}>{statusLabel(request.status)}</div>
                   </div>
 
                   <div className="requestMeta">
-                    <span>Talep: {formatDate(request.requested_at || request.created_at)}</span>
+                    <span><span className="metaLabel">Talep tarihi</span>{formatDate(request.requested_at || request.created_at)}</span>
+                    {typeof request.lesson_count==="number"?<span className="lessonCountBadge">{request.lesson_count} ders</span>:null}
                     {request.requested_by_name ? <span>İsteyen: {request.requested_by_name}</span> : null}
                     {request.reviewed_by_name ? <span>İşleyen: {request.reviewed_by_name}</span> : null}
                   </div>
 
                   {request.reason || request.description ? <div className="requestReason">{request.reason || request.description}</div> : null}
 
-                  {request.metadata?.dated_plan_status === "missing" && <div className="requestReason" role="status"><strong>Eski onay · Tarihli telafi planı eksik</strong><p>Bu işlem önceki sistemde yalnızca ders hareketine yazılmış. Tarihli ders planı bulunmuyor. Geçmiş bakiye ve kayıt dönemi korunmuştur; telafi tarihleri yönetici tarafından ayrıca kontrol edilmelidir.</p></div>}
+                  {request.metadata?.dated_plan_status === "missing" && <details className="legacyPlanNotice"><summary>Telafi planı kontrol edilmeli</summary><p>Bu eski onayın tarihli telafi planı bulunmuyor. Telafi adedini ve uygulanacağı dönemi kontrol edin.</p></details>}
                   {expanded ? (
                     <div className="requestDetails">
                       {diffKeys.length > 0 ? diffKeys.map((key) => <div className="diffRow" key={key}><span>{key.replaceAll("_", " ")}</span><div><small>Önce</small><strong>{formatValue(oldValues[key])}</strong></div><div><small>Sonra</small><strong>{formatValue(newValues[key])}</strong></div></div>) : <p>Bu işlem için ek alan değişikliği bulunmuyor.</p>}
@@ -409,10 +415,10 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
                   ) : null}
 
                   <div className="requestActions">
-                    <button type="button" className="secondaryButton" onClick={() => setExpandedId(expanded ? null : request.id)}>{expanded ? "Detayı Kapat" : "Detayı Gör"}</button>
+                    <button type="button" className="secondaryButton" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : request.id)}>{expanded ? "Detayı Kapat" : "Detayı Gör"}</button>
                     {request.status === "pending" ? <>
-                      <button type="button" className="rejectButton" disabled={isProcessing} onClick={() => void processRequest(request, "reject")}>{isProcessing ? "İşleniyor..." : "Reddet"}</button>
-                      <button type="button" className="approveButton" disabled={isProcessing} onClick={() => void processRequest(request, "approve")}>{isProcessing ? "İşleniyor..." : "Onayla"}</button>
+                      <button type="button" className="rejectButton" disabled={processingId!==null} onClick={() => void processRequest(request, "reject")}>{isProcessing ? "İşleniyor..." : "Reddet"}</button>
+                      <button type="button" className="approveButton" disabled={processingId!==null} onClick={() => void processRequest(request, "approve")}>{isProcessing ? "İşleniyor..." : "Onayla"}</button>
                     </> : null}
                   </div>
                 </article>
