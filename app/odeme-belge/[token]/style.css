@@ -9,3 +9,5 @@
 .payment-brand-copy h2{font-size:20px;line-height:1.25;letter-spacing:-.02em;color:#142b4f;margin:0;font-weight:800}
 .payment-brand-copy p:last-child{color:#667b91;font-size:12px;margin:7px 0 0}
 @media(max-width:520px){.payment-brand-header{gap:12px;min-height:128px;padding:18px 20px!important}.payment-brand-logo{width:88px;height:88px}.payment-brand-copy .payment-brand-kicker{font-size:10px;letter-spacing:.04em}.payment-brand-copy h2{font-size:17px}.payment-brand-copy p:last-child{font-size:11px}}
+
+.doc-form .doc-address-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.doc-form .doc-address-grid input{min-width:0;width:100%;box-sizing:border-box}@media(max-width:520px){.doc-form .doc-address-grid{grid-template-columns:minmax(0,1fr)}.doc-form input,.doc-form textarea{font-size:16px}}

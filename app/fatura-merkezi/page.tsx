@@ -55,7 +55,7 @@ export default async function InvoiceCenter({searchParams}:{
     db.from("payment_document_requests").select("id",{count:"exact",head:true})
       .eq("organization_id",profile.organization_id).eq("status","document_sent"),
     db.from("payment_document_requests")
-      .select("id,student_id,recipient_name,expected_amount,status,created_at,expires_at")
+      .select("id,student_id,recipient_name,expected_amount,status,created_at,expires_at,city,district")
       .eq("organization_id",profile.organization_id).in("status",awaiting)
       .order("created_at",{ascending:false}).limit(15)
   ]);
@@ -113,6 +113,7 @@ export default async function InvoiceCenter({searchParams}:{
         <div className="invoice-request-list">{(requests.data||[]).map(row=><article className="invoice-request" key={row.id}>
           <div><strong>{studentNames.get(row.student_id)||"Kursiyer"}</strong>
             <p>{statusNames[row.status]||"Yönetici kontrolü gerekli"}</p>
+            {row.status!=="waiting_customer"&&(!row.city?.trim()||!row.district?.trim())?<p>Belge hazırlığı için alıcının il / ilçe bilgisi kontrol edilmeli.</p>:null}
             <small>{when(row.created_at)} · {row.recipient_name||"Belge alıcısı bekleniyor"}</small></div>
           <div className="invoice-request-end"><b>{money(row.expected_amount)}</b>
             <Link href={`/odeme-bilgileri/belgeler?studentId=${encodeURIComponent(row.student_id)}`}>Talebi incele</Link></div>

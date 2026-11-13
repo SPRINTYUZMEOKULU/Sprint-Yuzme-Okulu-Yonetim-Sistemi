@@ -94,3 +94,7 @@ Kullanıcının seçtiği ürün İşNet NetteFatura e-SMM'dir. Yukarıdaki Invo
 - GİB test rapor kabulü ve gerçek makbuz PDF/XML'si henüz doğrulanamadı; canlı/otomatik kesim açılmadı. İşNet'in aynı ETTN üzerinden kayıt/sorgu uyumluluğunu incelemesi gerekiyor.
 - İstemciye belirsiz kabul yanıtında dönen ETTN/numarayı koruma ve yalnız ETTN ile salt okunur kurtarma sorgusu eklendi. Boş sorgu kesinleşmiş belge sayılmaz; farklı ETTN dönerse sonuç reddedilir. Otomatik tekrar kesim yoktur.
 - Maskeleme yapılmış istek/servis yanıtları ve teknik destek mesajı taslağı ayrı test raporunda saklandı. Bu SOAP servis yanıtları GİB makbuz XML'si değildir. Gerçek firma/müşteri verileri, sağlayıcı test VKN'leri, portal bilgileri ve erişim anahtarları repoya eklenmedi.
+
+## 13 Kasım 2026 — mobil e-SMM ekranları
+
+Alıcı formundaki il/ilçe eksikliği ve hizmet/vergi ekranının hangi alanları gösterdiği [alan karşılaştırmasında](./isnet-esmm-field-review.md) kaydedildi. Yeni güvenli müşteri formları yapılandırılmış il/ilçe ve isteğe bağlı posta kodu toplar. Eski belgeler, onaylar, ödemeler ve test gönderim kimliği değiştirilmedi. Dolu hizmet/vergi özeti ve mevcut test belgesinin sorgu/PDF/XML doğrulaması bekleniyor; gerçek gönderim açılmadı.
