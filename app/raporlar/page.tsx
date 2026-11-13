@@ -16,7 +16,7 @@ type SearchParams = Record<string, string | undefined>;
 
 type Branch = { id: string; name: string; is_active: boolean };
 type Group = { id: string; branch_id: string | null; name: string; primary_coach_id: string | null; is_active: boolean };
-type Student = { id: string; first_name: string | null; last_name: string | null; status: string | null; branch_id: string | null; created_at: string };
+type Student = { id: string; first_name: string | null; last_name: string | null; status: string | null; branch_id: string | null; birth_date: string | null; created_at: string };
 type Enrollment = { id: string; student_id: string; branch_id: string | null; group_id: string | null; start_date: string | null; planned_end_date: string | null; total_lessons: number | null; used_lessons: number | null; status: string | null; created_at: string; lesson_weekdays: number[] | null; package_id: string | null; payment_due_date: string | null; start_confirmation_required?: boolean; actual_started_at?: string | null };
 type Attendance = { id: string; enrollment_id?: string | null; student_id: string; group_id: string | null; schedule_id: string | null; coach_id: string | null; lesson_date: string; status: string | null; branch_id: string | null; coach_note: string | null };
 type Payment = { id: string; student_id: string | null; enrollment_id: string | null; amount: number | string | null; payment_status: string | null; payment_method: string | null; received_at: string | null; cancelled_at: string | null; cash_handover_status: string | null };
@@ -88,12 +88,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     }
   }
 
-  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, paymentsResult, profilesResult, schedulesResult, staffResult, assignmentsResult, packagesResult, plansResult, installmentsResult] = await Promise.all([
+  const [branchesResult, groupsResult, studentsResult, enrollmentsResult, attendanceResult, periodAttendanceResult, paymentsResult, profilesResult, schedulesResult, staffResult, assignmentsResult, packagesResult, plansResult, installmentsResult] = await Promise.all([
     readAll(supabase.from("branches").select("id,name,is_active").eq("organization_id", organizationId).order("name")),
     readAll(supabase.from("training_groups").select("id,branch_id,name,is_active,primary_coach_id").eq("organization_id", organizationId).order("name")),
-    readAll(supabase.from("students").select("id,first_name,last_name,status,branch_id,created_at").eq("organization_id", organizationId).eq("is_deleted", false)),
+    readAll(supabase.from("students").select("id,first_name,last_name,status,branch_id,birth_date,created_at").eq("organization_id", organizationId).eq("is_deleted", false)),
     readAll(supabase.from("student_enrollments").select("id,student_id,branch_id,group_id,start_date,planned_end_date,total_lessons,used_lessons,status,created_at,lesson_weekdays,package_id,payment_due_date,start_confirmation_required,actual_started_at").eq("organization_id", organizationId)),
     readAll(supabase.from("attendance_records").select("id,enrollment_id,student_id,group_id,schedule_id,coach_id,lesson_date,status,branch_id,coach_note").eq("organization_id", organizationId).gte("lesson_date", from).lte("lesson_date", to)),
+    readAll(supabase.from("attendance_records").select("id,enrollment_id,student_id,status,lesson_date").eq("organization_id", organizationId)),
     readAll(supabase.from("student_payments").select("id,student_id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at,cash_handover_status").eq("organization_id", organizationId)),
     readAll(supabase.from("profiles").select("id,full_name,role").eq("organization_id", organizationId)),
     readAll(supabase.from("lesson_schedules").select("id,branch_id,group_id,coach_id,weekday,start_time,is_active").eq("organization_id", organizationId).eq("is_active", true)),
@@ -104,7 +105,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     readAll(supabase.from("student_payment_installments").select("id,plan_id,enrollment_id,due_date,amount,paid_amount,status").eq("organization_id", organizationId)),
   ]);
 
-  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error || staffResult.error || assignmentsResult.error || packagesResult.error || plansResult.error || installmentsResult.error;
+  const loadError = branchesResult.error || groupsResult.error || studentsResult.error || enrollmentsResult.error || attendanceResult.error || periodAttendanceResult.error || paymentsResult.error || profilesResult.error || schedulesResult.error || staffResult.error || assignmentsResult.error || packagesResult.error || plansResult.error || installmentsResult.error;
   if (loadError) {
     return <main className="reportsShell"><div className="reportsError"><strong>Rapor verileri yüklenemedi.</strong><span>{loadError.message}</span><Link href="/">Yönetim paneline dön</Link></div></main>;
   }
@@ -114,6 +115,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const students = (studentsResult.data || []) as Student[];
   const enrollments = (enrollmentsResult.data || []) as Enrollment[];
   const attendance = (attendanceResult.data || []) as Attendance[];
+  const periodAttendance = (periodAttendanceResult.data || []) as Pick<Attendance, 'id' | 'enrollment_id' | 'student_id' | 'status' | 'lesson_date'>[];
   const payments = (paymentsResult.data || []) as Payment[];
   const coaches = (profilesResult.data || []) as Profile[];
   const schedules = (schedulesResult.data || []) as Schedule[];
@@ -258,6 +260,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   for (const history of Array.from(histories.values())) history
     .sort((a,b) => String(a.start_date || a.created_at).localeCompare(String(b.start_date || b.created_at)) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
     .forEach((e,i) => periodNumbers.set(e.id, i + 1));
+  const ageOf = (birth: string | null) => {
+    if (!birth || !isIsoDate(birth) || birth > today) return "—";
+    const [y,m,d] = birth.split("-").map(Number);
+    const [cy,cm,cd] = today.split("-").map(Number);
+    return String(cy-y-(cm<m || (cm===m && cd<d) ? 1 : 0));
+  };
   const financeRows = reportEnrollments.map(e => {
     const student = studentMap.get(e.student_id)!;
     const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
@@ -302,10 +310,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     if (unplannedCompensation > 0) actions.push(`${unplannedCompensation} telafi hakkı için gün ve seans planlayın.`);
     const nextActions = actions.join(" • ") || "İşlem gerekmiyor";
     for (const action of actions) addNote(name,action,`/ogrenciler/${student.id}`);
-    return {id:e.id, studentId:student.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
+    const studentAssignments = assignments.filter(a => a.student_id === student.id && a.coach_id);
+    const coachNames = [...new Set(studentAssignments.map(a => coachMap.get(a.coach_id) || "").filter(Boolean))];
+    const groupCoach = groupMap.get(e.group_id || "")?.primary_coach_id;
+    if (!coachNames.length && groupCoach) coachNames.push(coachMap.get(groupCoach) || "");
+    const enrollmentAttendance = periodAttendance.filter(a => a.enrollment_id === e.id);
+    const present = enrollmentAttendance.filter(a => statusIsPresent(a.status)).length;
+    const absent = enrollmentAttendance.filter(a => statusIsAbsent(a.status)).length;
+    return {age:ageOf(student.birth_date),branch:branchMap.get(enrollmentBranch(e) || "") || "—",group:groupMap.get(e.group_id || "")?.name || "—",coach:coachNames.filter(Boolean).join(", ") || "Atama yok",present,absent,normalRemaining:rights.normal,compensation:rights.compensation,studentId:student.id,id:e.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
   });
   financeRows.sort((a,b) => a.endIso.localeCompare(b.endIso) || a.name.localeCompare(b.name,"tr") || a.id.localeCompare(b.id));
-  const financeSheet = (name: string, rows: typeof financeRows) => ({name,rows:[["Sıra","Öğrenci","Kayıt uyarısı","Kayıt tarihi","Başlangıç","Kayıt bitiş tarihi","Telafi bitiş tarihi","Ücret","Ödenen","Kalan","Gecikmiş taksit","Ödeme durumu","Ek dönem bilgisi","Kayıt dönemi","Kayıt durumu","Yapılacak işlemler"],...rows.map((r,i)=>[i+1,r.name,r.recordStatus,r.registered,r.start,r.end,r.compensationEnd,r.price,r.paid,r.balance,r.overdue,r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status,r.periodInfo,`${r.periodNumber}. kayıt dönemi`,r.scope,r.nextActions])]});
+  const financeSheet = (name: string, rows: typeof financeRows) => ({name,rows:[["Sıra","Öğrenci","Ders özeti","Kayıt uyarısı","Kayıt tarihi","Başlangıç","Kayıt bitiş tarihi","Telafi bitiş tarihi","Ücret","Ödenen","Kalan","Gecikmiş taksit","Ödeme durumu","Ek dönem bilgisi","Kayıt dönemi","Kayıt durumu","Yapılacak işlemler"],...rows.map((r,i)=>[i+1,`${r.name}\nYaş: ${r.age} · ${r.branch}\nGrup: ${r.group}\nEğitmen: ${r.coach}`,`Geldi: ${r.present} · Gelmedi: ${r.absent}\nNormal kalan: ${r.normalRemaining} · Telafi: ${r.compensation}`,r.recordStatus,r.registered,r.start,r.end,r.compensationEnd,r.price,r.paid,r.balance,r.overdue,r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status,r.periodInfo,`${r.periodNumber}. kayıt dönemi`,r.scope,r.nextActions])]});
   const assignmentRows = activeEnrollments.flatMap(e => {
     const student = studentMap.get(e.student_id)!;
     const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
