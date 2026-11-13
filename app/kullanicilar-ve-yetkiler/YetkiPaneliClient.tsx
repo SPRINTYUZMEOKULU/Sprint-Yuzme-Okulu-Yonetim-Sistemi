@@ -103,7 +103,6 @@ const STAFF_ROLES: Array<[Exclude<UserRole, "owner">, string]> = [
   ["registration_staff", "Kayıt Personeli"],
   ["accounting", "Muhasebe"],
   ["coach", "Eğitmen"],
-  ["guardian", "Veli"],
 ];
 
 const MODULE_LABELS: Record<string, string> = {
@@ -446,8 +445,7 @@ export default function YetkiPaneliClient({
         <Stat
           title="Süper Kullanıcı"
           value={
-            localProfiles.filter((x) => x.role === "owner").length +
-            localStaff.filter((x) => x.is_super_user).length
+            localProfiles.filter((profile) => profile.role === "owner" || localStaff.some((staff) => staff.auth_user_id === profile.id && staff.is_super_user)).length
           }
           note="Tam erişim"
           active={summaryFilter === "super"}
@@ -565,11 +563,13 @@ export default function YetkiPaneliClient({
                     </div>
 
                     <div className="personnelPersonStats" style={personTinyStatsStyle}>
+                      {profile.role==="guardian"?<span>Veli / kursiyer portalı</span>:<>
                       <span>{staff?.all_branches ? "Tüm" : branchCount} Şube</span>
                       <span>{permissionCount} Yetki</span>
                       {staff?.is_super_user || profile.role === "owner" ? (
                         <span>★ Süper</span>
                       ) : null}
+                      </>}
                     </div>
                   </div>
 
@@ -616,6 +616,15 @@ export default function YetkiPaneliClient({
                 )
               }
             />
+          ) : selectedProfile?.role==="guardian" ? (
+            <div className="personnelPortalNotice">
+              <div style={eyebrowStyle}>VELİ / KURSİYER PORTALI</div>
+              <h2>{selectedProfile.full_name||"Portal hesabı"}</h2>
+              <p>Giriş, şifre, kursiyer bağlantısı ve mesaj işlemlerini bu hesabın veli dosyasından yönetin.</p>
+              <p>Şube ve personel yetkileri veli portalında kullanılmaz.</p>
+              <a href={`/veliler/${selectedProfile.id}`} className="personnelPortalLink">Veli dosyasını aç <span aria-hidden="true">›</span></a>
+              <a href="/veliler/ogrenciden-olustur" className="personnelPortalSecondary">Portal hesap hazırlığı</a>
+            </div>
           ) : selectedProfile ? (
             <Fragment key={selectedProfile.id}>
               <header className="personnelHeader" style={personHeaderStyle}>

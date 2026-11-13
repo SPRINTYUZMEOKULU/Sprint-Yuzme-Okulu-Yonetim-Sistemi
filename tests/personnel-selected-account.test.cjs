@@ -8,9 +8,12 @@ test('switching personnel replaces the editable identity rather than retaining t
  const js=ts.transpileModule(fs.readFileSync('app/kullanicilar-ve-yetkiler/YetkiPaneliClient.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  new Function('require','module','exports',js)(n=>{if(n in imports)return imports[n];throw Error(n)},m,m.exports);
  const profiles=[{id:'first',full_name:'First Coach',phone:'+905550000001',email:'first@example.invalid',role:'coach',is_active:true,last_sign_in_at:null},{id:'second',full_name:'Second Coach',phone:'+905550000002',email:'second@example.invalid',role:'coach',is_active:true,last_sign_in_at:null}];
+ profiles.push({id:'parent',full_name:'Test Parent',phone:'+905550000003',email:'parent@example.invalid',role:'guardian',is_active:true,last_sign_in_at:null});
+ profiles.push({id:'system-owner',full_name:'Owner',phone:'',email:'',role:'owner',is_active:true,last_sign_in_at:null});
  const root=createRoot(document.getElementById('root'));
  try{
- await act(async()=>root.render(React.createElement(m.exports.default,{profiles,staffRows:[],branches:[],permissionDefinitions:[],staffBranches:[],staffPermissions:[],auditLogs:[]})));
+ await act(async()=>root.render(React.createElement(m.exports.default,{profiles,staffRows:[{id:"owner-staff",auth_user_id:"system-owner",is_super_user:true,login_enabled:true,all_branches:true}],branches:[],permissionDefinitions:[],staffBranches:[],staffPermissions:[],auditLogs:[]})));
+ assert.equal([...document.querySelectorAll(".personnelStat")].find(el=>el.textContent.includes("Süper Kullanıcı")).querySelector("strong").textContent,"1");
  const fields=()=>[...document.querySelectorAll('.personnelTabContent input')].map(e=>e.value);
  assert.deepEqual(fields().slice(0,3),['First Coach','+905550000001','first@example.invalid']);
  await act(async()=>document.querySelectorAll('.personnelPersonCard')[1].click());
@@ -18,5 +21,9 @@ test('switching personnel replaces the editable identity rather than retaining t
  assert.deepEqual(fields().slice(0,3),['Second Coach','+905550000002','second@example.invalid']);
  await act(async()=>document.querySelectorAll('.personnelPersonCard')[0].click());
  assert.deepEqual(fields().slice(0,3),['First Coach','+905550000001','first@example.invalid']);
+ await act(async()=>document.querySelectorAll('.personnelPersonCard')[2].click());
+ assert.equal(document.querySelector('.personnelPortalLink').getAttribute('href'),'/veliler/parent');
+ assert.equal(document.querySelector('.personnelTabs'),null);
+ assert.equal(document.querySelector('.personnelTabContent input'),null);
  }finally{await act(async()=>root.unmount());dom.window.close();delete global.window;delete global.document;delete global.requestAnimationFrame;delete global.IS_REACT_ACT_ENVIRONMENT;}
 });
