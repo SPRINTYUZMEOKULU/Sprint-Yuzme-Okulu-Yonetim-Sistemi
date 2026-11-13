@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDisplayDateTime } from "@/lib/dates/display";
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import PasswordField from "./password-field";
 import {
@@ -160,7 +160,7 @@ function Toast({
   if (!toast) return null;
 
   return (
-    <div
+    <div className="personnelToast" role={toast.type==="error"?"alert":"status"}
       style={{
         position: "fixed",
         right: 24,
@@ -216,6 +216,24 @@ export default function YetkiPaneliClient({
   auditLogs,
 }: YetkiPaneliClientProps) {
   const router = useRouter();
+  const [mobileDetail, setMobileDetail] = useState(false);
+  const detailRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  function openDetails() {
+    setMobileDetail(true);
+    if (window.matchMedia("(max-width: 900px)").matches) requestAnimationFrame(() => {
+      detailRef.current?.scrollIntoView({block:"start"});
+      detailRef.current?.focus({preventScroll:true});
+    });
+  }
+  function backToList() {
+    setMobileDetail(false);
+    requestAnimationFrame(() => {
+      const selected=sidebarRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]');
+      (selected||sidebarRef.current)?.focus({preventScroll:true});
+      (selected||sidebarRef.current)?.scrollIntoView({block:"center"});
+    });
+  }
   const [isPending, startTransition] = useTransition();
 
   const [selectedId, setSelectedId] = useState(profiles[0]?.id || "");
@@ -390,7 +408,7 @@ export default function YetkiPaneliClient({
         Henüz personel bulunmuyor.
         <button
           type="button"
-          onClick={() => setShowCreate(true)}
+          onClick={() => {setCreatedAccount(null);setShowCreate(true);openDetails();}}
           style={primaryButton}
         >
           İlk Personeli Oluştur
@@ -400,7 +418,7 @@ export default function YetkiPaneliClient({
   }
 
   return (
-    <div className="personnelUi">
+    <div className="personnelUi" data-mobile-view={mobileDetail?"detail":"list"}>
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       {isPending ? (
@@ -412,16 +430,16 @@ export default function YetkiPaneliClient({
 
       <section className="personnelStats" style={statsGridStyle}>
         <Stat
-          title="Toplam Personel"
+          title="Toplam Kullanıcı"
           value={localProfiles.length}
-          note="Sistemde kayıtlı"
+          note="Personel ve portal hesapları"
           active={summaryFilter === "all"}
           onClick={() => setSummaryFilter("all")}
         />
         <Stat
-          title="Aktif Hesap"
+          title="Aktif Kullanıcı"
           value={localProfiles.filter((x) => x.is_active).length}
-          note="Kullanılabilir"
+          note="Aktif kullanıcı profili"
           active={summaryFilter === "active"}
           onClick={() => setSummaryFilter("active")}
         />
@@ -445,7 +463,7 @@ export default function YetkiPaneliClient({
       </section>
 
       <section className="personnelWorkspace" style={workspaceStyle}>
-        <aside className="personnelSidebar" style={sidebarStyle}>
+        <aside ref={sidebarRef} tabIndex={-1} className="personnelSidebar" style={sidebarStyle}>
           <div style={sidebarHeaderStyle}>
             <div>
               <div style={eyebrowStyle}>PERSONELLER</div>
@@ -454,7 +472,7 @@ export default function YetkiPaneliClient({
 
             <button
               type="button"
-              onClick={() => setShowCreate(true)}
+              onClick={() => {setCreatedAccount(null);setShowCreate(true);openDetails();}}
               style={smallPrimaryButton}
             >
               + Yeni
@@ -465,11 +483,13 @@ export default function YetkiPaneliClient({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Kullanıcı ara"
               placeholder="Ad, telefon veya e-posta ara..."
               style={inputStyle}
             />
 
             <select
+              aria-label="Kullanıcı rolü"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
               style={inputStyle}
@@ -483,7 +503,9 @@ export default function YetkiPaneliClient({
             </select>
           </div>
 
-          <div style={personListStyle}>
+          <div className="personnelListSummary"><span>{filteredProfiles.length} kullanıcı listeleniyor</span>{search||roleFilter||summaryFilter!=="all"?<button type="button" onClick={()=>{setSearch("");setRoleFilter("");setSummaryFilter("all");}}>Filtreleri temizle</button>:null}</div>
+          <div className="personnelList" style={personListStyle}>
+            {!filteredProfiles.length?<div className="personnelListEmpty"><strong>Kullanıcı bulunamadı</strong><span>Aramayı veya rol filtresini değiştirin.</span></div>:null}
             {filteredProfiles.map((profile) => {
               const staff = localStaff.find(
                 (row) => row.auth_user_id === profile.id
@@ -501,11 +523,16 @@ export default function YetkiPaneliClient({
               return (
                 <button
                   key={profile.id}
+                  className="personnelPersonCard"
+                  aria-pressed={active}
+                  aria-label={`${profile.full_name||"İsimsiz kullanıcı"} bilgilerini aç`}
                   type="button"
                   onClick={() => {
+                    setCreatedAccount(null);
                     setSelectedId(profile.id);
                     setActiveTab("genel");
                     setShowCreate(false);
+                    openDetails();
                   }}
                   style={{
                     ...personCardStyle,
@@ -513,11 +540,11 @@ export default function YetkiPaneliClient({
                     background: active ? "#eff6ff" : "#ffffff",
                   }}
                 >
-                  <div style={avatarStyle}>{initials(profile.full_name)}</div>
+                  <div className="personnelAvatar" style={avatarStyle}>{initials(profile.full_name)}</div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={personCardTopStyle}>
-                      <strong style={personNameStyle}>
+                    <div className="personnelPersonTop" style={personCardTopStyle}>
+                      <strong className="personnelPersonName" style={personNameStyle}>
                         {profile.full_name || "İsimsiz Kullanıcı"}
                       </strong>
                       <span
@@ -537,23 +564,24 @@ export default function YetkiPaneliClient({
                       {formatPhone(profile.phone)}
                     </div>
 
-                    <div style={personTinyStatsStyle}>
-                      <span>🏢 {staff?.all_branches ? "Tüm" : branchCount} Şube</span>
-                      <span>🔑 {permissionCount} Yetki</span>
+                    <div className="personnelPersonStats" style={personTinyStatsStyle}>
+                      <span>{staff?.all_branches ? "Tüm" : branchCount} Şube</span>
+                      <span>{permissionCount} Yetki</span>
                       {staff?.is_super_user || profile.role === "owner" ? (
                         <span>★ Süper</span>
                       ) : null}
                     </div>
                   </div>
 
-                  <span style={arrowStyle}>›</span>
+                  <span aria-hidden="true" className="personnelCardArrow" style={arrowStyle}>›</span>
                 </button>
               );
             })}
           </div>
         </aside>
 
-        <section className="personnelDetail" style={detailPanelStyle}>
+        <section ref={detailRef} tabIndex={-1} aria-label="Kullanıcı detayları" className="personnelDetail" style={detailPanelStyle}>
+          <button className="personnelBack" type="button" onClick={backToList}><span aria-hidden="true">‹</span> Kullanıcı listesine dön</button>
           {createdAccount ? (
             <CreatedStaffReceipt
               account={createdAccount}
@@ -589,7 +617,7 @@ export default function YetkiPaneliClient({
               }
             />
           ) : selectedProfile ? (
-            <>
+            <Fragment key={selectedProfile.id}>
               <header className="personnelHeader" style={personHeaderStyle}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={bigAvatarStyle}>
@@ -625,7 +653,7 @@ export default function YetkiPaneliClient({
                 </div>
               </header>
 
-              <nav className="personnelTabs" style={tabsStyle}>
+              <nav aria-label="Kullanıcı işlemleri" className="personnelTabs" style={tabsStyle}>
                 {[
                   ["genel", "Genel Bilgiler"],
                   ["subeler", "Şubeler"],
@@ -636,6 +664,7 @@ export default function YetkiPaneliClient({
                   <button
                     key={key}
                     type="button"
+                    aria-current={activeTab===key?"page":undefined}
                     onClick={() => setActiveTab(key as typeof activeTab)}
                     style={{
                       ...tabButtonStyle,
@@ -861,190 +890,14 @@ export default function YetkiPaneliClient({
                   <HistoryTab logs={selectedLogs} />
                 ) : null}
               </div>
-            </>
+            </Fragment>
           ) : (
             <div style={emptyPanelStyle}>Personel seçiniz.</div>
           )}
         </section>
       </section>
 
-      <style jsx global>{`
-        .personnelUi,
-        .personnelUi * {
-          box-sizing: border-box;
-        }
 
-        .personnelUi {
-          width: 100%;
-          max-width: 100%;
-          overflow: hidden;
-        }
-
-        .personnelUi button,
-        .personnelUi input,
-        .personnelUi select {
-          font: inherit;
-          touch-action: manipulation;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        .personnelUi button {
-          cursor: pointer;
-          transition:
-            transform 150ms ease,
-            box-shadow 150ms ease,
-            filter 150ms ease,
-            opacity 150ms ease !important;
-        }
-
-        .personnelUi button:not(:disabled):hover {
-          filter: brightness(0.98);
-          box-shadow: 0 8px 22px rgba(23, 105, 232, 0.12);
-        }
-
-        .personnelUi button:not(:disabled):active {
-          transform: translateY(1px) scale(0.975) !important;
-          filter: brightness(0.94);
-        }
-
-        .personnelUi button:focus-visible,
-        .personnelUi input:focus-visible,
-        .personnelUi select:focus-visible {
-          outline: 3px solid rgba(23, 105, 232, 0.2) !important;
-          outline-offset: 2px;
-        }
-
-        .personnelUi button:disabled {
-          cursor: not-allowed;
-          opacity: 0.58 !important;
-          box-shadow: none !important;
-        }
-
-        @media (max-width: 900px) {
-          body {
-            overflow-x: hidden;
-          }
-
-          main:has(.personnelUi) {
-            padding: 16px 12px 32px !important;
-            width: 100%;
-            max-width: 100vw;
-            overflow-x: hidden;
-          }
-
-          main:has(.personnelUi) > div {
-            width: 100%;
-            max-width: 100%;
-          }
-
-          .personnelStats {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 9px !important;
-          }
-
-          .personnelWorkspace {
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) !important;
-            gap: 12px !important;
-            width: 100% !important;
-          }
-
-          .personnelSidebar,
-          .personnelDetail {
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-          }
-
-          .personnelSidebar {
-            max-height: 390px;
-            overflow-y: auto !important;
-            overscroll-behavior: contain;
-          }
-
-          .personnelHeader,
-          .personnelHeader > div:first-child {
-            align-items: flex-start !important;
-          }
-
-          .personnelHeader {
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) !important;
-            gap: 12px !important;
-          }
-
-          .personnelTabs {
-            display: flex !important;
-            width: 100%;
-            overflow-x: auto !important;
-            overflow-y: hidden;
-            padding: 10px 12px !important;
-            scroll-snap-type: x proximity;
-            -webkit-overflow-scrolling: touch;
-          }
-
-          .personnelTabs button {
-            flex: 0 0 auto;
-            min-height: 44px;
-            scroll-snap-align: start;
-          }
-
-          .personnelTabContent {
-            padding: 16px 12px !important;
-            min-width: 0 !important;
-            overflow: hidden;
-          }
-
-          .personnelUi input,
-          .personnelUi select,
-          .personnelUi button {
-            min-height: 44px;
-          }
-        }
-
-        @media (max-width: 560px) {
-          .personnelStats {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
-
-          .personnelStats > article {
-            padding: 13px 12px !important;
-            min-width: 0;
-          }
-
-          .personnelStats strong {
-            font-size: 23px !important;
-          }
-
-          .personnelUi [data-personnel-form-grid],
-          .personnelUi [data-personnel-grid] {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-
-          .personnelUi [data-personnel-section-header] {
-            align-items: stretch !important;
-            flex-direction: column !important;
-          }
-
-          .personnelUi [data-personnel-section-header] > button {
-            width: 100%;
-          }
-
-          .personnelUi [data-create-panel] {
-            padding: 16px 12px 22px !important;
-          }
-
-          .personnelUi [data-password-panel] {
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) !important;
-            align-items: stretch !important;
-          }
-
-          .personnelUi [data-password-panel] button {
-            width: 100%;
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -1063,7 +916,7 @@ function Stat({
   onClick: () => void;
 }) {
   return (
-    <button
+    <button className="personnelStat"
       type="button"
       aria-pressed={active}
       onClick={onClick}

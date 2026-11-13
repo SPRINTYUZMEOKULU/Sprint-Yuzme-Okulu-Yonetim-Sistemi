@@ -1,0 +1,75 @@
+.permissionsPage { padding: 28px !important; }
+.permissionsPageHeading { margin-bottom: 22px !important; }
+.permissionsPageHeading h1 { font-size: clamp(24px, 2.5vw, 30px) !important; line-height: 1.2 !important; letter-spacing: -.7px; text-wrap: balance; }
+.permissionsPageHeading p { max-width: 720px; line-height: 1.6; }
+.personnelUi, .personnelUi * { box-sizing: border-box; }
+.personnelUi { width: 100%; min-width: 0; color: #13233f; }
+.personnelUi button, .personnelUi input, .personnelUi select { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.personnelUi button { cursor: pointer; transition: background-color .15s, border-color .15s, box-shadow .15s; }
+.personnelUi button:not(:disabled):hover { box-shadow: 0 3px 12px #10213a0a; }
+.personnelUi button:focus-visible, .personnelUi input:focus-visible, .personnelUi select:focus-visible { outline: 3px solid #1769e855 !important; outline-offset: 2px; }
+.personnelUi button:disabled { cursor: not-allowed; opacity: .58 !important; }
+.personnelUi input, .personnelUi select { min-width: 0; min-height: 44px; font-size: 14px; }
+.personnelStats { gap: 12px !important; }
+.personnelStat { min-width: 0; text-align: left; min-height: 116px; padding: 16px 18px !important; box-shadow: 0 2px 6px #10213a04; }
+.personnelStat > span:first-child { font-size: 12px !important; }
+.personnelStat strong { font-size: 28px !important; font-variant-numeric: tabular-nums; }
+.personnelStat > small { font-size: 11px !important; line-height: 1.4; }
+.personnelWorkspace { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) !important; gap: 20px !important; }
+.personnelSidebar, .personnelDetail { min-width: 0; box-shadow: 0 4px 18px #10213a04; }
+.personnelSidebar { position: sticky; top: 92px; }
+.personnelListSummary { padding: 12px 16px 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #64748b; }
+.personnelListSummary button { border: 0; background: transparent; color: #1769e8; font-size: 11px; padding: 8px 0; }
+.personnelList { max-height: min(65vh, 700px) !important; overflow-y: auto; scrollbar-gutter: stable; align-content: start; }
+.personnelPersonCard { align-items: center !important; padding: 14px 12px !important; gap: 12px !important; min-width: 0; }
+.personnelPersonCard[aria-pressed="true"] { box-shadow: inset 3px 0 #1769e8; }
+.personnelPersonTop { flex-wrap: wrap; align-items: center; row-gap: 5px !important; }
+.personnelPersonName { font-size: 14px; line-height: 1.4; white-space: normal !important; overflow-wrap: anywhere; }
+.personnelPersonTop > span { flex-shrink: 0; font-size: 10px !important; }
+.personnelPersonStats { gap: 5px 10px !important; font-size: 10px !important; line-height: 1.5; }
+.personnelPersonStats span { white-space: nowrap; }
+.personnelCardArrow { margin-top: 0 !important; flex-shrink: 0; }
+.personnelDetail { scroll-margin-top: 94px; outline: none; }
+.personnelHeader > div { min-width: 0; }
+.personnelHeader h2 { overflow-wrap: anywhere; }
+.personnelTabs { gap: 6px !important; overflow-x: auto; scrollbar-width: thin; }
+.personnelTabs button { white-space: nowrap; flex-shrink: 0; min-height: 44px; }
+.personnelBack { display: none; }
+.personnelListEmpty { display: grid; gap: 8px; padding: 28px 18px; color: #64748b; font-size: 13px; line-height: 1.5; text-align: center; }
+.personnelListEmpty strong { color: #13233f; }
+.personnelToast { width: min(440px, calc(100vw - 32px)); min-width: 0 !important; }
+@media(max-width: 1100px) { .personnelWorkspace { grid-template-columns: minmax(270px, 310px) minmax(0, 1fr) !important; gap: 14px !important; } }
+@media(max-width: 900px) {
+ .permissionsPage { padding: 20px 16px 32px !important; }
+ .permissionsPageHeading { margin-bottom: 18px !important; }
+ .permissionsPageHeading h1 { font-size: 24px !important; }
+ .permissionsPageHeading p { font-size: 13px !important; }
+ .personnelStats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+ .personnelStat { min-height: 108px; padding: 14px !important; }
+ .personnelWorkspace { grid-template-columns: minmax(0, 1fr) !important; }
+ .personnelSidebar { position: static; overflow: hidden !important; max-height: none; }
+ .personnelList { max-height: none !important; overflow: visible !important; scrollbar-gutter: auto; }
+ .personnelUi[data-mobile-view="list"] .personnelDetail { display: none; }
+ .personnelUi[data-mobile-view="detail"] .personnelSidebar { display: none; }
+ .personnelDetail { min-height: 0 !important; scroll-margin-top: 90px; }
+ .personnelBack { display: flex; align-items: center; gap: 8px; border: 0; border-bottom: 1px solid #e8eef6; background: #f8fafc; width: 100%; color: #1769e8; padding: 12px 16px; min-height: 48px; font-size: 13px; font-weight: 700; }
+ .personnelBack span { font-size: 22px; line-height: 1; }
+ .personnelPersonCard { padding: 14px !important; }
+ .personnelPersonName { font-size: 15px; }
+ .personnelPersonTop { justify-content: flex-start !important; gap: 10px !important; }
+ .personnelAvatar { width: 42px !important; height: 42px !important; font-size: 14px; }
+ .personnelHeader { display: grid !important; grid-template-columns: minmax(0,1fr); gap: 12px !important; padding: 18px 16px !important; }
+ .personnelHeader > div:first-child { align-items: flex-start !important; }
+ .personnelHeader h2 { font-size: 21px !important; }
+ .personnelTabs { padding: 8px 12px !important; -webkit-overflow-scrolling: touch; }
+ .personnelTabContent { padding: 18px 16px !important; min-width: 0; }
+ .personnelUi input, .personnelUi select { font-size: 16px; }
+ .personnelUi [data-personnel-form-grid], .personnelUi [data-personnel-grid] { grid-template-columns: minmax(0, 1fr) !important; }
+ .personnelUi [data-personnel-section-header] { align-items: stretch !important; flex-direction: column !important; }
+ .personnelUi [data-personnel-section-header] > button { width: 100%; }
+ .personnelUi [data-create-panel] { padding: 18px 16px 24px !important; }
+ .personnelUi [data-password-panel] { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; align-items: stretch !important; }
+ .personnelUi [data-password-panel] button { width: 100%; }
+ .personnelToast { right: 16px !important; top: calc(88px + env(safe-area-inset-top, 0px)) !important; }
+}
+@media(prefers-reduced-motion: reduce) { .personnelUi button { transition: none; } }
