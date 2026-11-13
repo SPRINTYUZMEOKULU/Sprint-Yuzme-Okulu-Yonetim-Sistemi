@@ -1,3 +1,4 @@
+import "./permissions.css";
 import UstGezinme from "@/app/components/UstGezinme";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -49,13 +50,13 @@ export default async function PermissionsSettingsContent({ embedded = false }: {
 
   return <>
     {!embedded ? <UstGezinme /> : null}
-    <main style={{ minHeight: "100vh", background: "#f4f7fb", padding: 28, color: "#13233f", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <main className="permissionsPage" style={{ minHeight: "100vh", background: "#f4f7fb", padding: 28, color: "#13233f", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div style={{ maxWidth: 1580, margin: "0 auto" }}>
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 18, flexWrap: "wrap", marginBottom: 18 }}>
+        <header className="permissionsPageHeading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 18, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
             <div style={{ color: "#1769e8", fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>SPRİNT YÜZME OKULU · SPRINTOS</div>
-            <h1 style={{ margin: "6px 0 0", color: "#0f172a", fontSize: 30, lineHeight: 1.1 }}>Kullanıcı, Portal & Yetki Merkezi</h1>
-            <p style={{ margin: "7px 0 0", color: "#64748b", fontSize: 13 }}>Personel, veli ve yetişkin kursiyer portal hesaplarını; giriş, şube, yetki, güvenlik ve işlem geçmişiyle tek merkezden yönetin.</p>
+            <h1 style={{ margin: "6px 0 0", color: "#0f172a", fontSize: 30, lineHeight: 1.1 }}>Kullanıcı ve Yetki Merkezi</h1>
+            <p style={{ margin: "7px 0 0", color: "#64748b", fontSize: 13 }}>Personel ve portal hesaplarını, şube erişimlerini ve güvenliği tek merkezden yönetin.</p>
           </div>
         </header>
         <YetkiPaneliClient profiles={profiles} staffRows={staffResult.data ?? []} branches={branchesResult.data ?? []} permissionDefinitions={permissionDefinitionsResult.data ?? []} staffBranches={staffBranchesResult.data ?? []} staffPermissions={staffPermissionsResult.data ?? []} auditLogs={auditLogsResult.data ?? []} />
