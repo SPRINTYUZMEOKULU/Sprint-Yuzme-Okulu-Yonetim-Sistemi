@@ -408,7 +408,7 @@ export default function YetkiPaneliClient({
         Henüz personel bulunmuyor.
         <button
           type="button"
-          onClick={() => {setShowCreate(true);openDetails();}}
+          onClick={() => {setCreatedAccount(null);setShowCreate(true);openDetails();}}
           style={primaryButton}
         >
           İlk Personeli Oluştur
@@ -472,7 +472,7 @@ export default function YetkiPaneliClient({
 
             <button
               type="button"
-              onClick={() => {setShowCreate(true);openDetails();}}
+              onClick={() => {setCreatedAccount(null);setShowCreate(true);openDetails();}}
               style={smallPrimaryButton}
             >
               + Yeni
@@ -528,6 +528,7 @@ export default function YetkiPaneliClient({
                   aria-label={`${profile.full_name||"İsimsiz kullanıcı"} bilgilerini aç`}
                   type="button"
                   onClick={() => {
+                    setCreatedAccount(null);
                     setSelectedId(profile.id);
                     setActiveTab("genel");
                     setShowCreate(false);
