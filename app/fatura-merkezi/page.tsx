@@ -80,6 +80,7 @@ export default async function InvoiceCenter({searchParams}:{
     <nav aria-label="Fatura merkezi" className="invoice-tabs">
       <Link className={!issued?"active":""} aria-current={!issued?"page":undefined} href="/fatura-merkezi">Genel Bakış</Link>
       <Link className={issued?"active":""} aria-current={issued?"page":undefined} href="/fatura-merkezi?tab=issued">Gönderilen Belgeler</Link>
+      <Link href="/fatura-merkezi/esmm-hazirlik">e-SMM Hesap Hazırlığı</Link>
       <Link href="/fatura-merkezi/banka">VakıfBank Hareketleri</Link>
       <Link href="/odeme-bilgileri/belgeler">Belge ve Ödeme Takibi</Link>
     </nav>

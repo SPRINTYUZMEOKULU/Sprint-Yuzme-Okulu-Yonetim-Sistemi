@@ -97,4 +97,14 @@ Kullanıcının seçtiği ürün İşNet NetteFatura e-SMM'dir. Yukarıdaki Invo
 
 ## 13 Kasım 2026 — mobil e-SMM ekranları
 
-Alıcı formundaki il/ilçe eksikliği ve hizmet/vergi ekranının hangi alanları gösterdiği [alan karşılaştırmasında](./isnet-esmm-field-review.md) kaydedildi. Yeni güvenli müşteri formları yapılandırılmış il/ilçe ve isteğe bağlı posta kodu toplar. Eski belgeler, onaylar, ödemeler ve test gönderim kimliği değiştirilmedi. Dolu hizmet/vergi özeti ve mevcut test belgesinin sorgu/PDF/XML doğrulaması bekleniyor; gerçek gönderim açılmadı.
+Alıcı formundaki il/ilçe eksikliği ve hizmet/vergi ekranının hangi alanları gösterdiği [alan karşılaştırmasında](./isnet-esmm-field-review.md) kaydedildi. Yeni güvenli müşteri formları yapılandırılmış il/ilçe ve isteğe bağlı posta kodu toplar. Eski belgeler, onaylar ve ödemeler değiştirilmedi.
+
+### Düzenlenmiş örnek ve yeni sandbox doğrulaması
+
+- Paylaşılan makbuz: 4.000,00 TL tahsilat = 3.333,33 TL brüt/net hizmet + 666,67 TL KDV; KDV %20, stopaj ve tevkifat %0. Bu oranlar yalnız örneğe aittir. Yeni hazırlık ekranı tahsilat / brüt girişini ayırır, kuruş hesabını kontrol eder ve hiçbir kayıt veya belge göndermez.
+- Sağlayıcının 12 Kasım destek yanıtı eski test belgesinin bakım sırasında silindiğini, test ortamının tekrar hazır olduğunu doğruladı. Görüntüleme linki e-SMM desteklemiyor; PDF/XML `SearchESMM` ResultSet ile istenmeli.
+- Sağlayıcının resmi test firmasına, sabit test uç noktasında sentetik alıcıyla tek yeni 1,20 TL test gönderildi. ETTN ve harici kod gönderim öncesi diske kaydedildi. Sağlayıcı numarası döndü ancak harici kod yine boş olduğundan istemci bunu belirsiz kabul saydı; otomatik tekrar gönderilmedi.
+- Aynı ETTN ile sorguda 1 kayıt bulundu. Brüt 1,00 TL, KDV 0,20 TL, tahsilat 1,20 TL doğrulandı. PDF 192.258 bayt ve geçerli PDF imzasıyla; XML 1.884 bayt, ayrıştırılabilir `eArsivVeri` köküyle döndü. PDF metnindeki toplamlar da aynı. Bu sonuç henüz GİB rapor kabulü veya imzalı belge doğrulaması değildir.
+- Son sorguda `Status=DocumentPrepared`, `SendingStatus=Sent`, `ReportStatus=WaitingForSending`. Sağlayıcının istediği kabul durumu henüz gelmedi. Aynı ETTN üzerinden salt okunur takip yapılmalı; ikinci gönderim yapılmamalı.
+- Canlı şirket yetkisi, gerçek sabit çıkış IP'si, kabul edilmiş test raporu ve yönetici onaylı kalıcı gönderim akışı tamamlanmadan canlı/otomatik kesim açılmaz. Herhangi bir ücretli IP veya plan satın alınmadı.
+- 400 yerel test ve üretim derlemesi geçti. Gerçek makbuzun kişisel verileri veya sağlayıcı kimlik/erişim bilgileri repoya kopyalanmadı.
