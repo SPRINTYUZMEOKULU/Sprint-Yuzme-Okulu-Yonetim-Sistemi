@@ -1,3 +1,4 @@
+import { currentMakeupNotice } from "@/lib/students/compensation-management";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { compensationChangeMessage } from "@/lib/students/compensation-message";
 import { revalidatePath } from "next/cache";
@@ -38,7 +39,7 @@ async function prepareChangeMessage(ctx: NonNullable<Awaited<ReturnType<typeof c
     return {date,time:schedule?`${String(schedule.start_time).slice(0,5)}–${String(schedule.end_time).slice(0,5)}`:null,group:group?.name,branch:branch?.name};
   }
   const [previous,next]=await Promise.all([plan(current.lesson_date,current.target_schedule_id,current.target_group_id),changes.status==="cancelled"?Promise.resolve(null):plan(changes.lesson_date,changes.target_schedule_id,changes.target_group_id)]);
-  const message=compensationChangeMessage([student.first_name,student.last_name].filter(Boolean).join(" "),previous,next);
+  const message=compensationChangeMessage([student.first_name,student.last_name].filter(Boolean).join(" "),previous,next,Boolean(current.reserved));
   let recipient=String(student.guardian_phone||student.phone||"").replace(/\D/g,"");
   if(recipient.length===11&&recipient.startsWith("0"))recipient=`90${recipient.slice(1)}`;
   else if(recipient.length===10)recipient=`90${recipient}`;
@@ -52,14 +53,32 @@ export async function GET(){
   try{
     const ctx=await context();
     if(!ctx||!manageRoles.includes(ctx.role)) return NextResponse.json({ok:false,error:"Yetkisiz."},{status:403});
-    const {data:rows,error}=await ctx.admin.from("student_compensation_lessons")
-      .select("id,student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status,note,created_at,updated_at")
-      .eq("organization_id",ctx.organizationId).in("status",["planned","cancelled"]).order("lesson_date",{ascending:true});
-    if(error) return NextResponse.json({ok:false,error:error.message},{status:500});
-    const ids=[...new Set((rows||[]).map((r:any)=>String(r.student_id)).filter(Boolean))];
-    const {data:students}=ids.length?await ctx.admin.from("students").select("id,first_name,last_name,student_number").in("id",ids):{data:[] as any[]};
-    const names=new Map((students||[]).map((s:any)=>[String(s.id),s]));
-    return NextResponse.json({ok:true,canDelete:deleteRoles.includes(ctx.role),items:(rows||[]).map((r:any)=>({...r,student:names.get(String(r.student_id))||null}))});
+    const org=ctx.organizationId;
+    const [lessons,reserves,schedules,groups,branches,logs,changes]=await Promise.all([
+      ctx.admin.from("student_compensation_lessons").select("id,student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status,note,created_at,updated_at").eq("organization_id",org).in("status",["planned","cancelled","completed"]).order("lesson_date",{ascending:false}).limit(1000),
+      ctx.admin.from("student_activity_logs").select("id,student_id,old_value,new_value,description").eq("organization_id",org).eq("activity_type","lesson_cancellation_compensation").eq("new_value->>compensation_mode","reserve").order("performed_at",{ascending:false}).limit(1000),
+      ctx.admin.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",org).eq("is_active",true),
+      ctx.admin.from("training_groups").select("id,name,branch_id").eq("organization_id",org).eq("is_active",true),
+      ctx.admin.from("branches").select("id,name").eq("organization_id",org).eq("is_active",true),
+      ctx.admin.from("message_logs").select("id,message_body,recipient,status,metadata").eq("organization_id",org).eq("template_key","compensation_plan_change").in("status",["prepared","sent"]).order("prepared_at",{ascending:false}).limit(1000),
+      ctx.admin.from("student_activity_logs").select("source_id").eq("organization_id",org).in("activity_type",["compensation_rescheduled","compensation_cancelled","compensation_reserved_planned"]).limit(1000),
+    ]);
+    const error=[lessons,reserves,schedules,groups,branches,logs,changes].find(result=>result.error)?.error;
+    if(error) return NextResponse.json({ok:false,error:"Telafi yönetimi verileri doğrulanamadı. Lütfen yeniden deneyin."},{status:500});
+    const pending=(reserves.data||[]).filter((row:any)=>!row.new_value?.compensation_date).map((row:any)=>({id:row.id,student_id:row.student_id,lesson_date:null,status:"reserved",note:row.description,target_group_id:row.new_value?.group_id,source_date:row.old_value?.cancelled_lesson_date}));
+    const all=[...(lessons.data||[]),...pending];
+    const ids=[...new Set(all.map((r:any)=>String(r.student_id)))];
+    const names=new Map<string,any>();
+    for(let offset=0;offset<ids.length;offset+=100){
+      const students=await ctx.admin.from("students").select("id,first_name,last_name,student_number").eq("organization_id",org).in("id",ids.slice(offset,offset+100));
+      if(students.error) return NextResponse.json({ok:false,error:"Kursiyer bilgileri alınamadı."},{status:500});
+      for(const student of students.data||[])names.set(String(student.id),student);
+    }
+    const activeBranches=new Set((branches.data||[]).map((row:any)=>row.id));
+    const activeGroups=(groups.data||[]).filter((row:any)=>activeBranches.has(row.branch_id));
+    return NextResponse.json({ok:true,canDelete:deleteRoles.includes(ctx.role),schedules:schedules.data,groups:activeGroups,branches:branches.data,
+      truncated:[lessons,reserves,logs,changes].some(result=>(result.data||[]).length>=1000),
+      items:all.map((row:any)=>({...row,student:names.get(String(row.student_id))||null,notification:currentMakeupNotice(row,logs.data||[]),canPrepare:(changes.data||[]).some((event:any)=>event.source_id===row.id)}))});
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Telafiler alınamadı."},{status:500});}
 }
 
@@ -133,12 +152,24 @@ export async function POST(request:NextRequest){
   const ctx=await context();
   if(!ctx||!manageRoles.includes(ctx.role)) return NextResponse.json({ok:false,error:"Yetkisiz."},{status:403});
   const body=await request.json();
+  if(body.action==="plan_reserved"){
+    const date=String(body.lesson_date||""),schedule=String(body.target_schedule_id||""),id=String(body.id||"");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!id||!schedule)return NextResponse.json({ok:false,error:"Telafi hakkı, tarih ve seans seçin."},{status:400});
+    const {data,error}=await ctx.admin.rpc("plan_reserved_compensation",{p_actor:ctx.userId,p_log:id,p_date:date,p_schedule:schedule});
+    if(error)return NextResponse.json({ok:false,error:error.message},{status:409});
+    let notification=null,messageWarning="";
+    if(body.prepare_message!==false&&!data.duplicate){
+      try{notification=await prepareChangeMessage(ctx,data.previous,data.current);}catch{messageWarning=" Plan kaydedildi; mesaj hazırlanamadı. Son değişikliğin mesajını tekrar hazırlayabilirsiniz.";}
+    }
+    revalidateStudentSurfaces(data.student_id);
+    return NextResponse.json({ok:true,notification,messageWarning,message:data.duplicate?"Bu hak zaten planlanmış. Güncel telafiyi kontrol edin.":"Saklı telafi hakkı planlandı. Toplam ders hakkı korunmuştur."});
+  }
   if(body.action==="prepare"){
     const {data:current}=await ctx.admin.from("student_compensation_lessons").select("*").eq("organization_id",ctx.organizationId).eq("id",String(body.id||"")).maybeSingle();
     if(!current)return NextResponse.json({ok:false,error:"Telafi bulunamadı."},{status:404});
-    const {data:event}=await ctx.admin.from("student_activity_logs").select("old_value,new_value").eq("organization_id",ctx.organizationId).eq("student_id",current.student_id).eq("source_id",current.id).in("activity_type",["compensation_rescheduled","compensation_cancelled"]).order("performed_at",{ascending:false}).limit(1).maybeSingle();
+    const {data:event}=await ctx.admin.from("student_activity_logs").select("old_value,new_value").eq("organization_id",ctx.organizationId).eq("student_id",current.student_id).eq("source_id",current.id).in("activity_type",["compensation_rescheduled","compensation_cancelled","compensation_reserved_planned"]).order("performed_at",{ascending:false}).limit(1).maybeSingle();
     if(!event?.old_value||!event.new_value)return NextResponse.json({ok:false,error:"Son telafi değişikliği bulunamadı."},{status:404});
-    if((event.new_value.status==="cancelled"&&current.status!=="cancelled")||(event.new_value.lesson_date&&current.lesson_date!==event.new_value.lesson_date))return NextResponse.json({ok:false,error:"Telafi planı yeniden değişmiş. Sayfayı yenileyin."},{status:409});
+    if((event.new_value.status==="cancelled"&&current.status!=="cancelled")||(event.new_value.lesson_date&&current.lesson_date!==event.new_value.lesson_date)||(event.new_value.target_schedule_id&&current.target_schedule_id!==event.new_value.target_schedule_id))return NextResponse.json({ok:false,error:"Telafi planı yeniden değişmiş. Sayfayı yenileyin."},{status:409});
     const notification=await prepareChangeMessage(ctx,event.old_value,event.new_value);
     revalidatePath(`/ogrenciler/${current.student_id}`);
     return NextResponse.json({ok:true,notification});
