@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 type Schedule={id:string;group_id:string;weekday:number;start_time:string;end_time:string};
 export type CompensationNotification={id:string;body:string;recipient:string;status:string};
-export default function CompensationPlanEditor({id,date,status="planned",notification:initialNotification=null,studentId,canPrepare=false,schedules,groups,branches}:{id:string;date:string;status?:string;notification?:CompensationNotification|null;studentId:string;canPrepare?:boolean;schedules:Schedule[];groups:{id:string;name:string;branch_id:string}[];branches:{id:string;name:string}[]}){
+export default function CompensationPlanEditor({id,date,status="planned",notification:initialNotification=null,studentId,canPrepare=false,schedules,groups,branches,onChanged}:{id:string;date:string;status?:string;notification?:CompensationNotification|null;studentId:string;canPrepare?:boolean;schedules:Schedule[];groups:{id:string;name:string;branch_id:string}[];branches:{id:string;name:string}[];onChanged?:()=>void}){
  const router=useRouter();
  const [open,setOpen]=useState(false),[day,setDay]=useState(date),[schedule,setSchedule]=useState("");
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(""),[prepareMessage,setPrepareMessage]=useState(true);
@@ -18,12 +18,12 @@ export default function CompensationPlanEditor({id,date,status="planned",notific
   try{
    const response=await fetch("/api/compensation-management",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,action,lesson_date:day,target_schedule_id:schedule,prepare_message:prepareMessage})});
    const result=await response.json();setMessage((result.message||result.error||"İşlem tamamlanamadı.")+(result.messageWarning||""));
-   if(response.ok){setChanged(true);setNotification(result.notification||null);setOpen(false);router.refresh();}
+   if(response.ok){setChanged(true);setNotification(result.notification||null);setOpen(false);router.refresh();onChanged?.();}
   }catch{setMessage("İşlem doğrulanamadı. Sayfayı yenileyip telafiyi kontrol edin.");}finally{setBusy(false);}
  }
  async function messageAction(action:"prepare"|"confirm_sent"){
   if(busy)return;setBusy(true);
-  try{const response=await fetch("/api/compensation-management",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,action,message_id:notification?.id})});const result=await response.json();setMessage(result.message||result.error||"Mesaj hazırlandı.");if(response.ok){if(result.notification)setNotification(result.notification);else if(notification)setNotification({...notification,status:"sent"});router.refresh();}}
+  try{const response=await fetch("/api/compensation-management",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,action,message_id:notification?.id})});const result=await response.json();setMessage(result.message||result.error||"Mesaj hazırlandı.");if(response.ok){if(result.notification)setNotification(result.notification);else if(notification)setNotification({...notification,status:"sent"});router.refresh();onChanged?.();}}
   catch{setMessage("Mesaj durumu kaydedilemedi. Kontrol edip tekrar deneyin.");}finally{setBusy(false);}
  }
  return <div className="makeupEditor">
