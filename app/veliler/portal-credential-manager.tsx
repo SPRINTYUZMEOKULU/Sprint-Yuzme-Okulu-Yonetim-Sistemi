@@ -3,7 +3,7 @@ import { generatePortalPassword } from "@/lib/guardian/password";
 import { useEffect, useRef, useState } from 'react';
 import { portalCredentialContact, savePortalCredential } from './portal-credential-actions';
 import { portalCredentialDraft, rememberPortalCredential } from '@/lib/guardian/credential-draft';
-import { portalMessage, type PortalCredential } from '@/lib/guardian/portal-message';
+import { portalGuideMessage, portalMessage, type PortalCredential } from '@/lib/guardian/portal-message';
 import './portal-credential-manager.css';
 export default function PortalCredentialManager({ accountId, studentId, initialCredential }: {
     accountId?: string;
@@ -123,6 +123,17 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
             setStatus('Giriş bilgileri doğrulanamadı. Tekrar deneyin.');
         }
     }
+    async function shareGuide() {
+        const target=window.open('about:blank','_blank');
+        if(target)target.opener=null;
+        try {
+            const contact=await portalCredentialContact({accountId,studentId});
+            if(!contact.ok||!contact.phone){target?.close();setStatus(contact.ok?'Rehber paylaşımı için kayıtlı telefon bulunamadı.':contact.message);return;}
+            const href=`https://wa.me/${contact.phone.replace(/\D/g,'')}?text=${encodeURIComponent(portalGuideMessage(window.location.origin))}`;
+            if(target)target.location.replace(href);else window.location.assign(href);
+            setStatus('Kullanım rehberi mesajı WhatsApp’ta açıldı. Gönderimi WhatsApp üzerinden onaylayın.');
+        }catch{target?.close();setStatus('Rehber paylaşımı için alıcı doğrulanamadı.');}
+    }
     async function sharePasswordOnly() {
         // A standalone WhatsApp bubble allows the recipient to copy the full password
         // using the standard message Copy command, without selecting part of a long message.
@@ -143,12 +154,13 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
     return <section className="portalCredentialManager" aria-label="Portal giriş bilgileri">
     <h3>Portal şifresi ve giriş bilgileri</h3>
     <p>Mesajı açmak şifreyi değiştirmez. Aynı veli hesabına bağlı tüm kursiyerler aynı şifreyi kullanır.</p>
+    <div className="credentialButtons"><a href="/portal-rehberi" target="_blank" rel="noreferrer">Görsel Rehberi Aç</a><button type="button" onClick={()=>void shareGuide()} disabled={busy}>Rehberi WhatsApp’ta Aç</button></div>
     {!credential ? <p className="credentialHint">Mevcut şifre güvenlik nedeniyle okunamaz. Bu oturumda hazırlanan şifre varsa burada kullanılır; yoksa yeni şifre belirleyip kaydedin.</p> : null}
     <label>Yeni şifre<input type={show ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => { setPassword(e.target.value); if (status.startsWith('Şifre en az')) setStatus(''); }} minLength={8} maxLength={100} disabled={busy} aria-describedby="portalPasswordRules"/></label>
     <p id="portalPasswordRules" className="credentialHint">En az 8 karakter kullanın. Şifreyi kaydetmeden WhatsApp paylaşımı açılamaz. Mevcut veli şifresini değiştirmek istemiyorsanız yeniden kaydetmeyin.</p>
     <div className="credentialButtons"><button type="button" onClick={generatePassword} disabled={busy}>Güçlü Şifre Oluştur</button><button type="button" onClick={() => setShow(v => !v)} aria-pressed={show}>{show ? 'Şifreyi gizle' : 'Şifreyi göster'}</button><button type="button" className="credentialPrimary" disabled={busy || password.length < 8} onClick={save}>{busy ? 'Kaydediliyor…' : 'Yeni Şifreyi Kaydet'}</button></div>
     {!credential ? <p className="credentialHint" role="status">WhatsApp paylaşımı için önce en az 8 karakterlik yeni şifreyi kaydedin.</p> : null}
-    {credential ? <div className="credentialReady"><strong>{credential.fullName} · Giriş bilgileri hazır</strong><label>Giriş telefonu<input readOnly value={credential.phone} onFocus={e => e.target.select()}/></label><label>Kaydedilen şifre<input type={show ? 'text' : 'password'} readOnly value={credential.password} onFocus={e => e.target.select()}/></label><div className="credentialButtons"><button type="button" onClick={() => copy('phone')}>Telefonu Kopyala</button><button type="button" onClick={() => copy('password')}>Şifreyi Kopyala</button><button type="button" onClick={() => copy('message')}>Giriş Bilgilerini Kopyala</button><button type="button" className="credentialWhatsapp" onClick={share}>WhatsApp Mesajını Aç</button><button type="button" className="credentialWhatsapp" onClick={sharePasswordOnly}>Şifreyi Ayrı Mesaj Olarak Gönder</button></div></div> : null}
+    {credential ? <div className="credentialReady"><strong>{credential.fullName} · Giriş bilgileri hazır</strong><label>Giriş telefonu<input readOnly value={credential.phone} onFocus={e => e.target.select()}/></label><label>Kaydedilen şifre<input type={show ? 'text' : 'password'} readOnly value={credential.password} onFocus={e => e.target.select()}/></label><details className="credentialPreview"><summary>Gönderilecek karşılama mesajını önizle</summary><textarea readOnly rows={16} aria-label="Gönderilecek karşılama mesajı" value={portalMessage(credential,window.location.origin)}/></details><div className="credentialButtons"><button type="button" onClick={() => copy('phone')}>Telefonu Kopyala</button><button type="button" onClick={() => copy('password')}>Şifreyi Kopyala</button><button type="button" onClick={() => copy('message')}>Giriş Bilgilerini Kopyala</button><button type="button" className="credentialWhatsapp" onClick={share}>WhatsApp Mesajını Aç</button><button type="button" className="credentialWhatsapp" onClick={sharePasswordOnly}>Şifreyi Ayrı Mesaj Olarak Gönder</button></div></div> : null}
     {fallbackText ? <label>Kopyalanacak metin<textarea readOnly rows={4} value={fallbackText} onFocus={event => event.target.select()}/></label> : null}
     {status ? <p role="status" aria-live="polite">{status}</p> : null}
   </section>;
