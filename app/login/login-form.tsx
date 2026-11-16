@@ -1,5 +1,6 @@
 "use client";
 
+import { loginDestination } from "@/lib/auth/login-destination";
 import { FormEvent, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -138,11 +139,8 @@ export default function LoginForm() {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError || !session) throw new Error("Oturum oluşturulamadı. Lütfen tekrar giriş yapın.");
       }
-      if (!rememberMe) sessionStorage.setItem("sprintos-session-only", "true"); else sessionStorage.removeItem("sprintos-session-only");
-      const rawNext = searchParams.get("next");
-      const fallback = role === "guardian" ? "/veli-paneli" : "/";
-      const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : fallback;
-      window.location.assign(next);
+      try{if (!rememberMe) sessionStorage.setItem("sprintos-session-only", "true"); else sessionStorage.removeItem("sprintos-session-only");}catch{/* Optional browser storage must not turn a valid sign-in into an authentication error. */}
+      window.location.assign(loginDestination(role,searchParams.get("next")));
     } catch (loginError) {
       try { await supabase.auth.signOut(); } catch {}
       const message = loginError instanceof Error ? loginError.message : "Giriş sırasında beklenmeyen bir hata oluştu.";

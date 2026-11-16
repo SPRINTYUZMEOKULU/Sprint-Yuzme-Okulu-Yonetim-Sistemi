@@ -13,7 +13,7 @@ test('public visual guide renders instructional screen examples and functional d
 test('guide remains accessible before login without granting access to account settings or management',async()=>{
  const response=(status=200,location)=>({status,headers:new Headers(location?{location}:{}),cookies:{getAll:()=>[],set(){}}});
  process.env.NEXT_PUBLIC_SUPABASE_URL='test';process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY='test';
- const middleware=load('middleware.ts',{'@supabase/ssr':{createServerClient:()=>({auth:{getUser:async()=>({data:{user:null}})}})},'@supabase/supabase-js':{},'next/server':{NextResponse:{next:()=>response(),redirect:url=>response(307,String(url))}}}).middleware;
+ const middleware=load('middleware.ts',{'@/lib/auth/login-destination':load('lib/auth/login-destination.ts'),'@supabase/ssr':{createServerClient:()=>({auth:{getUser:async()=>({data:{user:null}})}})},'@supabase/supabase-js':{},'next/server':{NextResponse:{next:()=>response(),redirect:url=>response(307,String(url))}}}).middleware;
  function request(path){const url=new URL('https://sprint.test'+path);url.clone=()=>new URL(url.href);return {nextUrl:url,headers:new Headers(),cookies:{getAll:()=>[],set(){}}};}
  assert.equal((await middleware(request('/portal-rehberi'))).status,200);
  for(const path of ['/veli-hesabim','/api/guardian-account/password','/ogrenciler'])assert.equal((await middleware(request(path))).status,307);

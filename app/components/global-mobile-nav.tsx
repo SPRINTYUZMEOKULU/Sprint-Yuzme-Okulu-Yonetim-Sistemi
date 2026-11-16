@@ -212,7 +212,7 @@ const groups: NavGroup[] = [
 
 function shouldHide(pathname: string) {
   if (pathname === "/" || pathname.startsWith("/veli-")) return true;
-  return ["/portal-rehberi", "/login", "/giris", "/odeme-belge", "/on-kayit", "/veli-paneli", "/veli-giris", "/reset-password", "/sifremi-unuttum"].some(
+  return ["/yetkisiz", "/portal-rehberi", "/login", "/giris", "/odeme-belge", "/on-kayit", "/veli-paneli", "/veli-giris", "/reset-password", "/sifremi-unuttum"].some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 }
