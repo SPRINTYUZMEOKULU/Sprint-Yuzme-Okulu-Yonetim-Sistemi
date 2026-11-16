@@ -3,7 +3,7 @@ export function isReceivedPayment(status: unknown) {
 }
 
 export function guardianPaymentSummary(enrollment: any, coursePackage: any, payments: any[], plan?: any) {
-  const paid = !enrollment?.id ? 0 : payments.filter(payment => payment.enrollment_id === enrollment?.id && !payment.cancelled_at && isReceivedPayment(payment.payment_status)).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const paid = !enrollment?.id ? 0 : payments.filter(payment => payment.enrollment_id === enrollment?.id && !payment.is_obligation_payment && !payment.cancelled_at && isReceivedPayment(payment.payment_status)).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const price = Number((plan?.status !== "cancelled" ? plan?.total_amount : undefined) ?? enrollment?.package_price ?? coursePackage?.price ?? 0);
   return { paid, price, debt: Math.max(0, price - paid), excess: Math.max(0, paid - price) };
 }
@@ -35,4 +35,20 @@ export function installmentPresentation(item:any,today=new Intl.DateTimeFormat('
  if(remaining===0)return {remaining,label:'Ödendi',tone:'green'};
  if(item.due_date&&item.due_date<today)return {remaining,label:'Gecikti',tone:'red'};
  return {remaining,label:Number(item.paid_amount||0)>0?'Kısmi ödeme':item.due_date===today?'Bugün ödenecek':'Bekliyor',tone:item.due_date===today?'orange':'blue'};
+}
+
+export function guardianObligationSummary(obligations:any[]=[]){
+ const rows=obligations.filter(row=>!['cancelled','canceled'].includes(String(row.status))&&!(row.obligation_type==='installment'&&String(row.title||'').toLocaleLowerCase('tr-TR').startsWith('paket ücreti')));
+ const open=rows.filter(row=>Number(row.amount)>Number(row.paid_amount||0)&&row.status!=='paid');
+ const debt=open.reduce((sum,row)=>sum+Math.max(0,Number(row.amount||0)-Number(row.paid_amount||0)),0);
+ return {rows,open,debt};
+}
+export function guardianCombinedReminder(enrollment:any,packageDebt:number,installments:any[],plan:any,obligations:any[]=[],today?:string):GuardianPaymentReminder|null{
+ const course=guardianPaymentReminder(enrollment,packageDebt,installments,plan,today);
+ const extra=guardianObligationSummary(obligations);
+ const day=today||new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul'}).format(new Date());
+ const candidates=[...(course?[course]:[]),...extra.open.map(row=>({dueDate:row.due_date||null,amount:Math.max(0,Number(row.amount)-Number(row.paid_amount||0))}))].sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')));
+ if(!candidates.length)return null;
+ const next=candidates[0],dueDate=next.dueDate;
+ return {dueDate,amount:next.amount,debt:packageDebt+extra.debt,state:!dueDate?'unscheduled':dueDate<day?'overdue':dueDate===day?'today':'upcoming',day};
 }

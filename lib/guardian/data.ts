@@ -28,6 +28,7 @@ export type GuardianContext = {
   progress: any[];
   announcements: any[];
   payments: any[];
+  obligations?: any[];
   paymentPlan: any | null;
   paymentInstallments: any[];
   messages: any[];
@@ -56,6 +57,7 @@ function emptyContext(students: GuardianStudent[] = [], issue?:string): Guardian
     progress: [],
     announcements: [],
     payments: [],
+    obligations: [],
     paymentPlan: null,
     paymentInstallments: [],
     messages: [],
@@ -186,9 +188,9 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     if(plan.overview)return q.not("status","in","(resolved,rejected,archived)");
     return q.order("updated_at",{ascending:false}).limit(200);
   };
-  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,paymentHistoryRes,rights]=await Promise.all([
+  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes]=await Promise.all([
     attendance(),noteQuery(),
-    plan.finance&&enrollment?allRows("student_payments",plan.full?"id,enrollment_id,amount,payment_status,payment_method,received_at":"id,enrollment_id,amount,payment_status",q=>(plan.full?q:q.eq("enrollment_id",enrollment.id)).order("id")):empty(),
+    plan.finance&&enrollment?allRows("student_payments",plan.full?"id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at":"id,enrollment_id,amount,payment_status,cancelled_at",q=>(plan.full?q:q.eq("enrollment_id",enrollment.id)).order("id")):empty(),
     messageQuery(),
     plan.documents?admin.from("guardian_documents").select(plan.overview?"id,version,requires_consent":"*").eq("organization_id",profile.organization_id).eq("is_active",true).order("sort_order").order("created_at",{ascending:false}):empty(),
     plan.documents?admin.from("guardian_consents").select("id,document_id,document_version,accepted_at,student_id").eq("organization_id",profile.organization_id).eq("guardian_id",userId).eq("student_id",selected.id).order("accepted_at",{ascending:false}):empty(),
@@ -197,10 +199,12 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     plan.group&&enrollment?.group_id?admin.from("training_groups").select("id,name,branch_id,primary_coach_id").eq("organization_id",profile.organization_id).eq("id",enrollment.group_id).maybeSingle():emptyOne(),
     plan.finance&&enrollment?.package_id?admin.from("course_packages").select("id,name,price,lesson_count").eq("organization_id",profile.organization_id).eq("id",enrollment.package_id).maybeSingle():emptyOne(),
     plan.schedule?base("lesson_student_assignments","coach_id,schedule_id,group_id").eq("is_active",true):empty(),
-    plan.paymentHistory?base("student_payments","id,enrollment_id,amount,payment_status,payment_method,received_at").order("received_at",{ascending:false}).order("id").range((historyPage-1)*HISTORY_PAGE_SIZE,historyPage*HISTORY_PAGE_SIZE):empty(),
+    plan.paymentHistory?base("student_payments","id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at").order("received_at",{ascending:false}).order("id").range((historyPage-1)*HISTORY_PAGE_SIZE,historyPage*HISTORY_PAGE_SIZE):empty(),
     currentRights(),
+    plan.finance?allRows("student_financial_obligations","id,enrollment_id,title,amount,paid_amount,due_date,status,obligation_type",q=>q.order("due_date").order("id")):empty(),
+    plan.finance?allRows("student_activity_logs","new_value",q=>q.eq("activity_type","financial_obligation_payment").order("id")):empty(),
   ]);
-  for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes]] as const)report(label,result);
+  for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes],["Ödeme ek borçları",obligationsRes],["Ödeme eşleştirmeleri",obligationPaymentsRes]] as const)report(label,result);
   if(enrollment&&rights)enrollment.lesson_rights=rights;
   const group=groupRes.data||null,branchId=group?.branch_id||selected.branch_id;
   const currentAssignments=(assignmentsRes.data||[]).filter((row:any)=>row.group_id===group?.id);
@@ -218,6 +222,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   ]);
   for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Duyuru",announcementsRes]] as const)report(label,result);
   const progress=(notesRes.data||[]).map((item:any)=>({...item,note:item.body,visible_to_guardian:item.is_guardian_visible,coach_id:item.author_id}));
+  const obligationPaymentIds=new Set((obligationPaymentsRes.data||[]).map((row:any)=>row.new_value?.payment_id).filter(Boolean));
   const history=plan.attendanceHistory?attendanceRes.data:paymentHistoryRes.data;
   return {
     students:studentList,issues,selected,enrollment,group,branch:branchRes.data||null,coursePackage:packageRes.data||null,
@@ -226,7 +231,8 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     attendance:plan.attendanceHistory?(attendanceRes.data||[]).slice(0,HISTORY_PAGE_SIZE):attendanceRes.data||[],
     progress:progress.filter((note:any)=>note.note_type==='coach'),
     announcements:(announcementsRes.data||[]).filter((a:any)=>a.group_id?a.group_id===group?.id:a.branch_id?a.branch_id===branchId:true),
-    payments:paymentsRes.data||[],paymentHistory:(paymentHistoryRes.data||[]).slice(0,HISTORY_PAGE_SIZE),
+    obligations:obligationsRes.data||[],
+    payments:(paymentsRes.data||[]).map((row:any)=>({...row,is_obligation_payment:obligationPaymentIds.has(row.id)})),paymentHistory:(paymentHistoryRes.data||[]).slice(0,HISTORY_PAGE_SIZE).map((row:any)=>({...row,is_obligation_payment:obligationPaymentIds.has(row.id)})),
     historyPage,historyHasNext:Boolean(history&&history.length>HISTORY_PAGE_SIZE),
     paymentPlan:planRes.data||null,paymentInstallments:installmentsRes.data||[],
     requests:requestsRes.data||[],openRequestCount:plan.overview?requestsRes.count||0:undefined,

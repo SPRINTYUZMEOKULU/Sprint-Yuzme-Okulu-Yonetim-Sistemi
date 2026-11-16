@@ -8,6 +8,7 @@ import "./globals.css";
 import "./components/navigation-brand.css";
 import "./components/permission-ui-guard.css";
 
+import PortalOpeningRecovery from "./components/portal-opening-recovery";
 import UiClickSound from "./components/ui-click-sound";
 import SprintLaunchSplash from "./components/sprint-launch-splash";
 import PWARegister from "./components/pwa-register";
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="tr">
       <body>
         <SprintLaunchSplash />
+        <PortalOpeningRecovery />
         <UiClickSound />
         <WhatsAppSafeOpen />
         <Suspense fallback={null}>

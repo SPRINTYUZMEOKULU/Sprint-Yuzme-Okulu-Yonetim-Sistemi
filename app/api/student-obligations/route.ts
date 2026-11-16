@@ -1,3 +1,5 @@
+import { notifyGuardianFinance } from "@/lib/guardian/finance-notifications";
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -72,6 +74,12 @@ export async function POST(request: NextRequest) {
 
     if (!student) return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
 
+    if(body.enrollmentId){
+      const {data:enrollment,error:enrollmentError}=await supabase.from("student_enrollments").select("id").eq("organization_id",organizationId).eq("student_id",studentId).eq("id",body.enrollmentId).maybeSingle();
+      if(enrollmentError||!enrollment)return NextResponse.json({error:"Borç için seçilen kayıt dönemi bu kursiyere ait değil."},{status:400});
+    }
+    const parsedDate=new Date(dueDate+"T12:00:00Z");
+    if(Number.isNaN(parsedDate.getTime())||parsedDate.toISOString().slice(0,10)!==dueDate)return NextResponse.json({error:"Geçerli bir vade tarihi seçin."},{status:400});
     const { data: obligation, error } = await supabase
       .from("student_financial_obligations")
       .insert({
@@ -83,7 +91,7 @@ export async function POST(request: NextRequest) {
         description: String(body.description || "").trim().slice(0, 1000) || null,
         amount: obligationAmount,
         due_date: dueDate,
-        reminder_days: Math.min(90, Math.max(0, Number(body.reminderDays) || 3)),
+        reminder_days: Math.min(90, Math.max(0, Number.isFinite(Number(body.reminderDays)) ? Number(body.reminderDays) : 3)),
         created_by: profile.id,
       })
       .select("id")
@@ -119,137 +127,28 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json({ ok: true, message: "Borç kaydı oluşturuldu ve vadeli takibe alındı." });
+    revalidateStudentSurfaces(studentId);
+    let warning="";
+    try{await notifyGuardianFinance(organizationId,studentId,obligation.id,"Yeni borç bilgisi",`${title}: ${obligationAmount.toLocaleString("tr-TR")} TL. Vade: ${dueDate}. Ayrıntıları Ödemeler bölümünden inceleyebilirsiniz.`,profile.id);}catch{warning=" Borç kaydedildi; veli bildirimi hazırlanamadı. Veli panelindeki güncel borç bilgisi korunur.";}
+    return NextResponse.json({ ok: true, message: "Borç kaydı oluşturuldu ve vadeli takibe alındı."+warning });
   } catch (error) {
     console.error("student obligations POST error", error);
     return NextResponse.json({ error: "Borç kaydı oluşturulamadı." }, { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const profile = await requireProfile([...ROLES]);
-    const body = await request.json();
-    const organizationId = profile.organization_id;
-    const obligationId = String(body.obligationId || "");
-    const paidAmount = amount(body.paidAmount);
-    const paymentMethod = PAYMENT_METHODS.has(body.paymentMethod) ? body.paymentMethod : "cash";
-
-    if (!organizationId || !obligationId || !paidAmount) {
-      return NextResponse.json({ error: "Geçerli tahsilat tutarı giriniz." }, { status: 400 });
-    }
-
-    const supabase = adminClient();
-    const { data: current } = await supabase
-      .from("student_financial_obligations")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .eq("id", obligationId)
-      .maybeSingle();
-
-    if (!current || ["paid", "cancelled"].includes(current.status)) {
-      return NextResponse.json({ error: "Açık borç kaydı bulunamadı." }, { status: 404 });
-    }
-
-    const alreadyPaid = Number(current.paid_amount || 0);
-    const remaining = Math.max(0, Number(current.amount) - alreadyPaid);
-    if (paidAmount > remaining) {
-      return NextResponse.json(
-        { error: `Tahsilat kalan borçtan fazla olamaz. Kalan: ${remaining.toLocaleString("tr-TR")} TL` },
-        { status: 400 },
-      );
-    }
-
-    const now = new Date().toISOString();
-    const nextPaid = Math.round((alreadyPaid + paidAmount) * 100) / 100;
-    const nextStatus = nextPaid >= Number(current.amount) ? "paid" : "partially_paid";
-    const cashHandoverStatus = paymentMethod === "cash" ? "with_staff" : "main_cash_confirmed";
-
-    const { data: payment, error: paymentError } = await supabase
-      .from("student_payments")
-      .insert({
-        organization_id: organizationId,
-        student_id: current.student_id,
-        enrollment_id: current.enrollment_id || null,
-        amount: paidAmount,
-        currency: "TRY",
-        payment_method: paymentMethod,
-        payment_status: "received",
-        description: `Ek borç tahsilatı · ${current.title}`,
-        received_by: profile.id,
-        received_at: now,
-        cash_handover_status: cashHandoverStatus,
-        cash_handover_requested_at: null,
-        cash_handover_approved_by: null,
-        cash_handover_approved_at: paymentMethod === "cash" ? null : now,
-      })
-      .select("id")
-      .single();
-
-    if (paymentError || !payment) {
-      return NextResponse.json(
-        { error: paymentError ? `Tahsilat ödeme merkezine yazılamadı: ${paymentError.message}` : "Tahsilat kaydedilemedi." },
-        { status: 500 },
-      );
-    }
-
-    const { error: obligationError } = await supabase
-      .from("student_financial_obligations")
-      .update({
-        paid_amount: nextPaid,
-        status: nextStatus,
-        paid_by: profile.id,
-        paid_at: nextStatus === "paid" ? now : null,
-        updated_at: now,
-      })
-      .eq("organization_id", organizationId)
-      .eq("id", obligationId);
-
-    if (obligationError) {
-      await supabase.from("student_payments").delete().eq("id", payment.id).eq("organization_id", organizationId);
-      throw obligationError;
-    }
-
-    await Promise.all([
-      supabase.from("student_activity_logs").insert({
-        organization_id: organizationId,
-        student_id: current.student_id,
-        activity_type: "financial_obligation_payment",
-        title: nextStatus === "paid" ? "Ek borç tamamen ödendi" : "Ek borca kısmi ödeme alındı",
-        description: `${current.title} · ${paidAmount} TL tahsil edildi.`,
-        source_type: "student_financial_obligation",
-        source_id: obligationId,
-        new_value: { obligation_id: obligationId, payment_id: payment.id, paid_amount: paidAmount, status: nextStatus },
-        performed_at: now,
-      }),
-      publishEventNotification({
-        organization_id: organizationId,
-        category: "finance",
-        event_key: "financial_obligation_payment",
-        title: nextStatus === "paid" ? "Borç kapatıldı" : "Kısmi tahsilat alındı",
-        message: `${current.title} için ${paidAmount.toLocaleString("tr-TR")} TL ödeme alındı.`,
-        severity: "success",
-        entity_type: "student",
-        entity_id: current.student_id,
-        is_read: false,
-        target_path: `/ogrenciler/${current.student_id}?payment=history`,
-        created_by: profile.id,
-        metadata: { obligation_id: obligationId, payment_id: payment.id },
-      }),
-    ]);
-
-    return NextResponse.json({
-      ok: true,
-      paymentId: payment.id,
-      message:
-        nextStatus === "paid"
-          ? `Borç tamamen kapatıldı. ${paymentMethod === "cash" ? "Nakit kasa teslimi bekliyor." : "Ödeme merkeze işlendi."}`
-          : `Kısmi ödeme kaydedildi. Kalan ${(Number(current.amount) - nextPaid).toLocaleString("tr-TR")} TL.`,
-    });
-  } catch (error) {
-    console.error("student obligations PATCH error", error);
-    return NextResponse.json({ error: "Tahsilat kaydedilemedi." }, { status: 500 });
-  }
+export async function PATCH(request:NextRequest){
+ try{
+  const profile=await requireProfile([...ROLES]);const body=await request.json();
+  const paidAmount=amount(body.paidAmount),obligationId=String(body.obligationId||"");
+  if(!profile.organization_id||!paidAmount||!obligationId)return NextResponse.json({error:"Borç ve geçerli tahsilat tutarı girin."},{status:400});
+  const {data,error}=await adminClient().rpc("collect_student_obligation",{p_actor:profile.id,p_obligation:obligationId,p_amount:paidAmount,p_method:PAYMENT_METHODS.has(body.paymentMethod)?body.paymentMethod:"cash",p_request:typeof body.requestId==="string"?body.requestId:null});
+  if(error||!data)return NextResponse.json({error:error?.message||"Tahsilat doğrulanamadı."},{status:409});
+  revalidateStudentSurfaces(data.student_id);
+  let warning="";
+  if(!data.duplicate){try{await notifyGuardianFinance(profile.organization_id,data.student_id,data.payment_id,"Ödemeniz kaydedildi",`${data.title}: ${paidAmount.toLocaleString("tr-TR")} TL ödeme alındı. Kalan: ${Number(data.remaining).toLocaleString("tr-TR")} TL.`,profile.id,"guardian_obligation_payment");}catch{warning=" Tahsilat kaydedildi; veli bildirimi hazırlanamadı.";}}
+  return NextResponse.json({ok:true,paymentId:data.payment_id,message:(data.duplicate?"Bu tahsilat zaten kayıtlı.":data.status==="paid"?"Ek borç tamamen kapatıldı.":`Kısmi ödeme kaydedildi. Kalan ${Number(data.remaining).toLocaleString("tr-TR")} TL.`)+warning});
+ }catch{return NextResponse.json({error:"Tahsilat sonucu doğrulanamadı. Yeniden denemeden önce ödeme geçmişini kontrol edin."},{status:500});}
 }
 
 export async function DELETE(request: NextRequest) {
@@ -327,6 +226,8 @@ export async function DELETE(request: NextRequest) {
       performed_at: now,
     });
 
+    revalidateStudentSurfaces(current.student_id);
+    try{await notifyGuardianFinance(organizationId,current.student_id,obligationId,"Borç bilgisi güncellendi",`${current.title} başlıklı ek borç iptal edildi. Güncel tutarı Ödemeler bölümünden inceleyebilirsiniz.`,profile.id,"guardian_obligation_cancelled");}catch{/* Cancellation is saved; the portal reads the current row directly. */}
     return NextResponse.json({
       ok: true,
       message: "Ek borç iptal edildi ve toplam borç yeniden hesaplandı.",

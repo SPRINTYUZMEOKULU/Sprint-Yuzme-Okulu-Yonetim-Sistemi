@@ -3,7 +3,7 @@ import {attendanceSummary as currentPeriodAttendanceSummary} from "@/lib/student
 import {loadGuardianPage} from "@/lib/guardian/page-context";
 import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl, currentDocumentConsent } from "@/lib/guardian/presentation";
 import PaymentReminder from "@/app/veli-paneli/payment-reminder";
-import { guardianPaymentReminder, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
+import { guardianCombinedReminder, guardianObligationSummary, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import Link from "next/link";
 import { formatDate, formatMoney, weekdayLabel } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, GuardianIcon, StatusPill } from "./guardian-ui";
@@ -25,6 +25,8 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const currentAttendance=enrollmentAttendance(data.attendance,data.enrollment);
   const {rate:attendanceRate,absenceStreak,latestAbsence}=attendanceSummary(currentAttendance);
   const {paid: paidTotal, price: packagePrice, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
+  const extraDebt=guardianObligationSummary(data.obligations||[]).debt;
+  const totalDebt=debt+extraDebt;
   const selectedId = data.selected.id;
   const unreadMessages=data.unreadMessageCount??data.messages.filter((m:any)=>m.kind!=="note"&&!m.read_at).length;
   const pendingDocuments=data.documents.filter((document:any)=>document.requires_consent&&!currentDocumentConsent(document,data.consents)).length;
@@ -47,9 +49,10 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         </div>
       </section> : null}
 
-      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianPaymentReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan)} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
+      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianCombinedReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan,data.obligations||[])} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
+      {totalDebt>0?<Link className="guardianDebtShortcut guardianAttention" href={`/veli-odemeler?child=${selectedId}${previewQuery}`}><span><strong>Ödeme bilgilerinizi kontrol edin</strong><small>Paket: {formatMoney(debt)} · Ek borç: {formatMoney(extraDebt)}</small></span><b>{formatMoney(totalDebt)} →</b></Link>:null}
       <section className="guardianFollowUps" aria-label="Takip ve bekleyen işlemler">
-        <Link href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><span aria-hidden="true">›</span></Link>
+        <Link className={unreadMessages>0?"guardianAttention":""} href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><span aria-hidden="true">›</span></Link>
         <Link href={`/veli-talepleri?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="request"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Talep"))?"Bilgi alınamadı":`${openRequests} açık görüşme`}</strong><small>Talepler ve yönetim yanıtları</small></span><span aria-hidden="true">›</span></Link>
         <Link href={`/veli-belgeler?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="document"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Belge")||issue.startsWith("Onay"))?"Bilgi alınamadı":pendingDocuments?`${pendingDocuments} belge onay bekliyor`:data.documents.some((document:any)=>document.requires_consent)?"Belge onayları güncel":"Kurallar ve bilgilendirme"}</strong><small>Güncel kurallar ve belgeler</small></span><span aria-hidden="true">›</span></Link>
       </section>
@@ -57,7 +60,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         <article className="guardianStat"><span>Mevcut Seviye</span><strong>{data.selected.swimming_level || "Belirlenmedi"}</strong></article>
         <article className="guardianStat"><span>Planlanan Bitiş</span><strong>{formatDate(data.enrollment?.planned_end_date)}</strong></article>
         <article className="guardianStat"><span>Devam Oranı</span><strong>{attendanceRate===null?"Henüz yoklama yok":`%${attendanceRate}`}</strong></article>
-        <article className="guardianStat"><span>Ödeme Durumu</span><strong>{data.issues.some(issue=>issue.startsWith("Ödeme"))?"Bilgi alınamadı":!data.enrollment?"Paket tanımlanmadı":debt > 0 ? formatMoney(debt) : "Tamamlandı"}</strong></article>
+        <article className="guardianStat"><span>Ödeme Durumu</span><strong>{data.issues.some(issue=>issue.startsWith("Ödeme"))?"Bilgi alınamadı":totalDebt>0?formatMoney(totalDebt):!data.coursePackage&&!data.paymentPlan?"Paket tanımlanmadı":"Borç bulunmuyor"}</strong></article>
       </section>
 
       <section className="guardianGrid">

@@ -6,7 +6,7 @@ import {
 } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, StatusPill } from "@/app/veli-paneli/guardian-ui";
 import PaymentReminder from "@/app/veli-paneli/payment-reminder";
-import { guardianPaymentReminder, paymentPresentation, installmentPresentation, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
+import { guardianCombinedReminder, guardianObligationSummary, paymentPresentation, installmentPresentation, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
 import "@/app/veli-paneli/veli.css";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -21,6 +21,8 @@ export default async function Page({
   const planResult = {data:data.paymentPlan};
   const installments = data.paymentPlan?.status==="cancelled"?[]:data.paymentInstallments;
   const {paid, price, debt, excess} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
+  const extras=guardianObligationSummary(data.obligations||[]);
+  const totalDebt=debt+extras.debt;
   return (
     <main className="guardianShell">
       <GuardianHeader previewGuardian={previewGuardian}
@@ -33,15 +35,17 @@ export default async function Page({
         <p className="guardianSectionLead">
           Paket ücreti, alınan ödemeler ve kalan ödeme bilgisi.
         </p>
-      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianPaymentReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan)} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
+      <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianCombinedReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan,data.obligations||[])} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
+        <section className={'guardianFinanceTotal '+(totalDebt>0?'hasDebt':'clear')} aria-label="Toplam ödeme özeti"><div><span>TOPLAM KALAN BORÇ</span><strong>{financeReady?formatMoney(totalDebt):'Bilgi alınamadı'}</strong><p>Paket kalan borcu ve açık ek borçlarınız birlikte gösterilir.</p></div><div><span>Paket kalan: <b>{financeReady?formatMoney(debt):'—'}</b></span><span>Ek borç kalan: <b>{financeReady?formatMoney(extras.debt):'—'}</b></span></div></section>
+        {!data.coursePackage&&!data.paymentPlan?<p className="guardianFinanceNotice">Kurs paketi henüz tanımlanmamış. Aşağıdaki ek borçlar varsa paket bilgisinden bağımsız olarak geçerlidir.</p>:null}
         <section className="guardianStats">
           <article className="guardianStat">
             <span>Paket</span>
-            <strong>{data.coursePackage?.name || "—"}</strong>
+            <strong>{data.coursePackage?.name || "Henüz tanımlanmadı"}</strong>
           </article>
           <article className="guardianStat">
             <span>Paket Ücreti</span>
-            <strong>{financeReady?formatMoney(price):"Bilgi alınamadı"}</strong>
+            <strong>{financeReady?data.coursePackage||data.paymentPlan?formatMoney(price):"Tanımlanmadı":"Bilgi alınamadı"}</strong>
           </article>
           <article className="guardianStat">
             <span>Bu pakette ödenen</span>
@@ -52,6 +56,7 @@ export default async function Page({
             <strong>{financeReady?formatMoney(debt):"Bilgi alınamadı"}</strong>
           </article>
         </section>
+        {extras.rows.length>0?<section className="guardianCard guardianObligations" id="ek-borclar"><div className="guardianCardHeader"><div><small className="guardianCardEyebrow">EK BORÇLAR VE VADELER</small><h2>Paket dışı ödemeler</h2></div></div><div className="guardianObligationList">{extras.rows.map((item:any)=>{const state=installmentPresentation(item);return <article key={item.id}><div><strong>{item.title}</strong><small>Vade: {formatDate(item.due_date)}</small><StatusPill tone={state.tone}>{state.label}</StatusPill></div><dl><div><dt>Tutar</dt><dd>{formatMoney(Number(item.amount))}</dd></div><div><dt>Ödenen</dt><dd>{formatMoney(Number(item.paid_amount||0))}</dd></div><div><dt>Kalan</dt><dd>{formatMoney(state.remaining)}</dd></div></dl></article>;})}</div></section>:null}
         {financeReady && excess > 0 ? <p className="guardianCard">Paket tutarını aşan tahsilat: <strong>{formatMoney(excess)}</strong>. Çok dönemli ödemenizin kapsamı için kayıt açıklamanızı kontrol edebilirsiniz.</p> : null}
         {planResult.data && planResult.data.status!=="cancelled" ? (
           <section className="guardianCard" style={{ marginTop: 18 }}>
@@ -84,7 +89,7 @@ export default async function Page({
           </section>
         ) : null}
         <section className="guardianCard" style={{ marginTop: 18 }}>
-          <h2>Ödeme Geçmişi</h2><p className="guardianSectionLead">Tüm kayıt dönemlerindeki tahsilatlar. Üstteki bakiye mevcut pakete aittir.</p><table className="guardianTable">
+          <h2>Ödeme Geçmişi</h2><p className="guardianSectionLead">Tüm kayıt dönemlerindeki tahsilatlar. Üstteki bakiye mevcut pakete aittir.</p><div className="guardianTableWrap"><table className="guardianTable">
             <thead>
               <tr>
                 <th>Tarih</th>
@@ -97,7 +102,7 @@ export default async function Page({
               {history.map((p: any) => (
                 <tr key={p.id}>
                   <td>{formatDate(p.received_at)}</td>
-                  <td>{formatMoney(p.amount)}</td>
+                  <td>{formatMoney(p.amount)}{p.is_obligation_payment?<small style={{display:"block"}}>Ek borç tahsilatı</small>:null}</td>
                   <td>
                     {p.payment_method === "cash"
                       ? "Nakit"
@@ -117,7 +122,7 @@ export default async function Page({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           <HistoryPagination path="/veli-odemeler" page={data.historyPage||1} hasNext={data.historyHasNext||false} child={data.selected.id} previewGuardian={previewGuardian}/>
           {!history.length ? (
             <p className="guardianSectionLead">Henüz ödeme kaydı bulunmuyor.</p>
