@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -301,6 +302,7 @@ export default function GlobalSearch() {
           <button
             type="button"
             title="Aramayı Temizle"
+            aria-label="Aramayı temizle"
             onClick={(event) => {
               event.stopPropagation();
 
@@ -326,7 +328,7 @@ export default function GlobalSearch() {
               fontSize: "16px",
             }}
           >
-            ×
+            <UiIcon name="close" size={18}/>
           </button>
         ) : (
           <kbd>⌘ K</kbd>
@@ -502,7 +504,7 @@ export default function GlobalSearch() {
                         700,
                     }}
                   >
-                    ← Sonuçlar
+                    <UiIcon name="arrowLeft" size={16}/> Sonuçlar
                   </button>
                 </div>
               </div>
@@ -965,7 +967,7 @@ export default function GlobalSearch() {
                               "18px",
                           }}
                         >
-                          ›
+                          <UiIcon name="chevronRight" size={18}/>
                         </span>
                       </button>
                     )
