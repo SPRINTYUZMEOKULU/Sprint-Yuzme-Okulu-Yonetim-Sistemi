@@ -1,8 +1,11 @@
 'use client';
+import {useEffect} from 'react';
+import {reportPortalClientError} from '@/lib/guardian/client-diagnostics';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import './veli.css';
-export default function PortalError({reset}:{error:Error;reset:()=>void}){
+export default function PortalError({error,reset}:{error:Error;reset:()=>void}){
+ useEffect(()=>{reportPortalClientError(error);},[error]);
  const params=useSearchParams(),query=new URLSearchParams();
  const child=params.get('child'),preview=params.get('previewGuardian');
  if(child)query.set('child',child);if(preview)query.set('previewGuardian',preview);

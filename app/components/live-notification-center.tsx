@@ -1,4 +1,5 @@
 "use client";
+import {usePathname} from "next/navigation";
 import { formatDatesInText, formatDisplayDateTime } from "@/lib/dates/display";
 
 import { unlockNotificationAudio, playEventNotificationSound } from "@/lib/notifications/sound";
@@ -45,6 +46,8 @@ function logicalKey(item: LiveNotification) {
 }
 
 export default function LiveNotificationCenter() {
+  const pathname=usePathname();
+  const portalRoute=pathname.startsWith("/veli-")||["/login","/on-kayit","/portal-rehberi"].includes(pathname);
   const [current, setCurrent] = useState<LiveNotification | null>(null);
   const [navigating, setNavigating] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -124,6 +127,7 @@ export default function LiveNotificationCenter() {
   }, [markRead, rememberHandled]);
 
   useEffect(() => {
+    if(portalRoute)return;
     const unlock=()=>void unlockNotificationAudio();
     document.addEventListener("pointerdown",unlock);
     document.addEventListener("keydown",unlock);
@@ -144,9 +148,9 @@ export default function LiveNotificationCenter() {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("sprintos-note-completed",onCompleted);
     };
-  }, [check]);
+  }, [check,portalRoute]);
 
-  if (!current) return null;
+  if (portalRoute||!current) return null;
 
   const tone = ["success", "warning", "error", "critical"].includes(current.severity) ? current.severity : "info";
   const label = tone === "success" ? "İşlem tamamlandı" : tone === "error" || tone === "critical" ? "Önemli bildirim" : tone === "warning" ? "Hatırlatma" : "Bilgilendirme";

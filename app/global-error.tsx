@@ -1,4 +1,7 @@
 'use client';
-export default function GlobalError({reset}:{error:Error&{digest?:string};reset:()=>void}){
+import {useEffect} from 'react';
+import {reportPortalClientError} from '@/lib/guardian/client-diagnostics';
+export default function GlobalError({error,reset}:{error:Error&{digest?:string};reset:()=>void}){
+ useEffect(()=>{reportPortalClientError(error);},[error]);
  return <html lang="tr"><body style={{margin:0,fontFamily:'Arial,sans-serif',background:'#f4f8fc',color:'#173859'}}><main style={{maxWidth:540,margin:'10vh auto',padding:24}}><section style={{padding:28,border:'1px solid #d6e4f0',borderRadius:20,background:'#fff'}}><p style={{fontSize:11,fontWeight:800,color:'#1768c5'}}>SPRİNT YÜZME OKULU</p><h1 style={{fontSize:24,lineHeight:1.4}}>Ekranı yeniden açalım</h1><p style={{fontSize:15,lineHeight:1.8,color:'#627b92'}}>Sayfa yüklenirken bir sorun oluştu. Tekrar deneyebilir veya güncel sürümü yüklemek için sayfayı yenileyebilirsiniz. Bu hata kayıtlarınızı değiştirmez.</p><div style={{display:'flex',gap:12,flexWrap:'wrap'}}><button style={{padding:'13px 18px',border:0,borderRadius:10,background:'#1768c5',color:'#fff',fontWeight:700}} onClick={reset}>Tekrar Dene</button><button style={{padding:'13px 18px',border:'1px solid #c7d9eb',borderRadius:10,background:'#fff',color:'#1768c5',fontWeight:700}} onClick={()=>window.location.reload()}>Sayfayı Yenile</button><a style={{padding:'13px 0',color:'#1768c5'}} href="/login">Giriş Ekranı</a></div></section></main></body></html>;
 }
