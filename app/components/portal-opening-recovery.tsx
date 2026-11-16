@@ -1,12 +1,13 @@
 'use client';
 import {useEffect} from 'react';
 import {usePathname} from 'next/navigation';
+import {reportPortalClientError} from '@/lib/guardian/client-diagnostics';
 import {allowPortalReload,isStalePortalChunk} from '@/lib/guardian/opening-recovery';
 export default function PortalOpeningRecovery(){
  const path=usePathname();
  useEffect(()=>{
   if(!path.startsWith('/veli-')&&path!=='/login')return;
-  const recover=(error:unknown)=>{try{if(isStalePortalChunk(error)&&allowPortalReload(window.sessionStorage))window.location.reload();}catch{/* A blocked storage API must not cause another opening error. */}};
+  const recover=(error:unknown)=>{reportPortalClientError(error);try{if(isStalePortalChunk(error)&&allowPortalReload(window.sessionStorage))window.location.reload();}catch{/* A blocked storage API must not cause another opening error. */}};
   const onError=(event:ErrorEvent)=>recover(event.error||event.message);
   const onRejection=(event:PromiseRejectionEvent)=>recover(event.reason);
   window.addEventListener('error',onError);window.addEventListener('unhandledrejection',onRejection);
