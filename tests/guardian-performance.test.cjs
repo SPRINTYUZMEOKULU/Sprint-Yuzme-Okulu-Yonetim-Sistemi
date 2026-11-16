@@ -34,3 +34,9 @@ test('Attendance fetches forty records plus one lookahead and preserves access t
 test('Pagination retains the child and preview identity, and invalid page numbers are bounded',()=>{
  const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');const pager=load('app/veli-paneli/history-pagination.tsx',{'next/link':{default:({children,prefetch,...props})=>React.createElement('a',props,children)}});const html=renderToStaticMarkup(React.createElement(pager.default,{path:'/veli-devam',child:'child',previewGuardian:'parent',page:2,hasNext:true}));assert.ok(html.includes('child=child&amp;page=3&amp;previewGuardian=parent'));assert.ok(html.includes('child=child&amp;page=1&amp;previewGuardian=parent'));for(const value of ['-1','bad','1.5','0'])assert.equal(plan.guardianHistoryPage(value),1);assert.equal(plan.guardianHistoryPage('999999999'),10000);
 });
+test('Finance reads the same scoped extra obligations and tags only their audited receipts',async()=>{
+ const f=fixture();f.rows.student_financial_obligations=[{id:'extra',organization_id:'org',student_id:'child',title:'Palet',amount:12000,paid_amount:100,status:'partially_paid'},{id:'foreign',organization_id:'other',student_id:'child',amount:999999,status:'open'}];
+ f.rows.student_activity_logs=[{id:'audit',organization_id:'org',student_id:'child',activity_type:'financial_obligation_payment',new_value:{payment_id:'p1'}}];
+ const data=await f.data.getGuardianContext('parent','child','payments');assert.equal(data.obligations.length,1);assert.equal(data.obligations[0].amount,12000);assert.equal(data.payments.find(row=>row.id==='p1').is_obligation_payment,true);assert.equal(data.payments.find(row=>row.id==='p2').is_obligation_payment,false);
+ const finance=load('lib/guardian/payment-summary.ts');assert.equal(finance.guardianPaymentSummary(data.enrollment,data.coursePackage,data.payments).debt,1000);
+});

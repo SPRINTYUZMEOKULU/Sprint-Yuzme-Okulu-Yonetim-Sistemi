@@ -115,6 +115,7 @@ function revalidateFinancePaths(studentId?: string | null) {
 
   revalidatePath("/kasa");
   revalidatePath("/veli-odemeler");
+  revalidatePath("/veli-paneli");
   revalidatePath("/onay-merkezi");
   revalidatePath("/ayarlar/onay-merkezi");
   revalidatePath("/");
@@ -538,6 +539,7 @@ export async function createStudentPayment(
     });
 
     revalidateFinancePaths(studentId);
+    try{const {notifyGuardianFinance}=await import("@/lib/guardian/finance-notifications");await notifyGuardianFinance(organizationId,studentId,payment.id,"Paket ödemeniz kaydedildi",`${amount.toLocaleString("tr-TR")} TL ödemeniz kaydedildi. Güncel ödeme durumunuzu portalda inceleyebilirsiniz.`,profile.id,"guardian_package_payment");}catch{/* Receipt is saved; the portal reads it directly even if notifications are unavailable. */}
 
     return {
       ok: true,

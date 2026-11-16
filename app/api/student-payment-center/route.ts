@@ -167,8 +167,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const {data:links,error:linkError}=await supabase.from("student_activity_logs").select("new_value").eq("organization_id",organizationId).eq("student_id",studentId).eq("activity_type","financial_obligation_payment");
+    if(linkError)throw linkError;
+    const extraPaymentIds=new Set((links||[]).map((row:any)=>row.new_value?.payment_id).filter(Boolean));
+    const {data:activePlan,error:planError}=enrollment?await supabase.from("student_payment_plans").select("total_amount,status").eq("organization_id",organizationId).eq("student_id",studentId).eq("enrollment_id",enrollment.id).maybeSingle():{data:null,error:null};
+    if(planError)throw planError;
     const activePayments = enrollment?.id
-      ? allPayments.filter((row: any) => row.enrollment_id === enrollment.id)
+      ? allPayments.filter((row: any) => row.enrollment_id === enrollment.id && !extraPaymentIds.has(row.id) && ["received","recorded","paid","completed"].includes(row.payment_status))
       : [];
 
     const totalReceived = activePayments.reduce(
@@ -176,7 +181,7 @@ export async function GET(request: NextRequest) {
       0,
     );
 
-    const totalAmount = amount(packageInfo?.price);
+    const totalAmount = amount((activePlan?.status!=="cancelled"?activePlan?.total_amount:undefined) ?? packageInfo?.price);
     const remainingPayment = Math.max(0, totalAmount - totalReceived);
 
     const draftStartDate = String(draftData.start_date || "") || null;
@@ -215,6 +220,7 @@ export async function GET(request: NextRequest) {
         return {
           id: row.id,
           enrollmentId: row.enrollment_id || null,
+          isObligationPayment:extraPaymentIds.has(row.id),
           amount: amount(row.amount),
           method: row.payment_method || "other",
           description: row.description || null,
