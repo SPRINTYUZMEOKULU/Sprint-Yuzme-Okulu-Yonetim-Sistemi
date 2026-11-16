@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 
 import {useState} from "react";
 import GuardianNotifications from "./guardian-notifications";
@@ -8,9 +9,10 @@ import { usePathname } from "next/navigation";
 import type { GuardianStudent } from "@/lib/guardian/data";
 import GuardianAutoRefresh from "./guardian-auto-refresh";
 
-type IconName = "home" | "calendar" | "progress" | "wallet" | "message" | "bell" | "document" | "request" | "logout" | "swimmer" | "location";
+type IconName = "home" | "calendar" | "progress" | "wallet" | "message" | "bell" | "document" | "request" | "logout" | "swimmer" | "location" | "key" | "book";
 
 export function GuardianIcon({ name, size = 20 }: { name: IconName; size?: number }) {
+  if (name === "key" || name === "book") return <UiIcon name={name} size={size}/>;
   const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
   if (name === "home") return <svg {...common}><path d="m3 10 9-7 9 7"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/></svg>;
   if (name === "calendar") return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="m9 15 2 2 4-4"/></svg>;
@@ -33,8 +35,8 @@ const navItems: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/veli-mesajlar", label: "Mesajlar", icon: "message" },
   { href: "/veli-duyurular", label: "Duyurular", icon: "bell" },
   { href: "/veli-belgeler", label: "Kurallar ve Belgeler", icon: "document" },
-  { href: "/veli-hesabim", label: "Hesabım ve Şifrem", icon: "document" },
-  { href: "/portal-rehberi", label: "Kullanım Rehberi", icon: "document" },
+  { href: "/veli-hesabim", label: "Hesabım ve Şifrem", icon: "key" },
+  { href: "/portal-rehberi", label: "Kullanım Rehberi", icon: "book" },
   { href: "/veli-talepleri", label: "Talepler ve Yanıtlar", icon: "request" },
 ];
 
@@ -62,9 +64,9 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
       </div>
     </header>
     <div className="guardianNavWrap">
-      <div className="guardianBreadcrumb">{pathname !== "/veli-paneli" ? <Link href={href("/veli-paneli",selectedId)} aria-label="Seçili kursiyerin genel bakışına dön">← Genel Bakışa Dön</Link> : <span>Veli / Kursiyer Portalı</span>}<span>{students.find(student=>student.id===selectedId)?.first_name} {students.find(student=>student.id===selectedId)?.last_name}</span></div>
+      <div className="guardianBreadcrumb">{pathname !== "/veli-paneli" ? <Link href={href("/veli-paneli",selectedId)} aria-label="Seçili kursiyerin genel bakışına dön"><UiIcon name="arrowLeft" size={16}/> Genel Bakışa Dön</Link> : <span>Veli / Kursiyer Portalı</span>}<span>{students.find(student=>student.id===selectedId)?.first_name} {students.find(student=>student.id===selectedId)?.last_name}</span></div>
       {issues.length ? <div className="guardianDataNotice" role="alert">{issues.map(issue=><p key={issue}>{issue}</p>)}</div> : null}
-      <button type="button" className="guardianMenuToggle" aria-expanded={menuOpen} aria-controls="guardian-navigation" onClick={()=>setMenuOpen(!menuOpen)}><span><GuardianIcon name={navItems.find(i=>i.href===pathname)?.icon||'home'}/>{navItems.find(i=>i.href===pathname)?.label||'Portal Menüsü'}</span><span>{menuOpen?'Kapat':'Tüm Menü'}</span></button>
+      <button type="button" className="guardianMenuToggle" aria-expanded={menuOpen} aria-controls="guardian-navigation" onClick={()=>setMenuOpen(!menuOpen)}><span><GuardianIcon name={navItems.find(i=>i.href===pathname)?.icon||'home'}/>{navItems.find(i=>i.href===pathname)?.label||'Portal Menüsü'}</span><span>{menuOpen?'Kapat':'Tüm Menü'}<UiIcon name={menuOpen?'chevronUp':'chevronDown'} size={16}/></span></button>
       <nav id="guardian-navigation" className={`guardianNav ${menuOpen?'isOpen':''}`} aria-label="Portal menüsü">
         {navItems.map((item) => <Link prefetch={false} key={item.href} onClick={()=>setMenuOpen(false)} aria-current={pathname === item.href ? "page" : undefined} href={item.href==="/portal-rehberi"?item.href:href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
       </nav>

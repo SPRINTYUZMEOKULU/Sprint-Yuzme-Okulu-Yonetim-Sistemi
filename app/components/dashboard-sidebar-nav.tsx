@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -169,7 +170,7 @@ export default function DashboardSidebarNav({
                         aria-expanded={isExpanded}
                         onClick={() => setExpanded((current) => (current === item.href ? null : item.href))}
                       >
-                        <span>⌄</span>
+                        <UiIcon name={isExpanded ? "chevronUp" : "chevronDown"} size={16}/>
                       </button>
                     ) : null}
                   </div>
@@ -187,7 +188,7 @@ export default function DashboardSidebarNav({
                           >
                             <i />
                             <span>{child.label}</span>
-                            <b>→</b>
+                            <UiIcon name="chevronRight" size={16}/>
                           </Link>
                         );
                       })}

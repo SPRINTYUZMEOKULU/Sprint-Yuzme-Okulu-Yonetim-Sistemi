@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -21,8 +22,8 @@ export default function PaymentReminder({ reminder, accountId, enrollmentId, chi
   return <>
     <section className={`guardianPaymentReminder ${reminder.state}`} aria-label="Ödeme hatırlatması">
       <div><strong><span className="guardianReminderDot" aria-hidden="true"/>{title}</strong><p>{text}</p>{reminder.amount < reminder.debt ? <small>Toplam kalan borç: {money(reminder.debt)}</small> : null}</div>
-      <Link href={href}>Ödeme detaylarını gör →</Link>
+      <Link href={href}>Ödeme detaylarını gör <UiIcon name="arrowRight" size={16}/></Link>
     </section>
-    {notice === key ? <aside className="guardianPaymentToast" role="status" aria-live="polite"><button type="button" aria-label="Ödeme bildirimini kapat" onClick={() => setNotice(null)}>×</button><strong>{title}</strong><p>{text}</p><Link href={href} onClick={() => setNotice(null)}>Ödemelerimi aç</Link></aside> : null}
+    {notice === key ? <aside className="guardianPaymentToast" role="status" aria-live="polite"><button type="button" aria-label="Ödeme bildirimini kapat" onClick={() => setNotice(null)}><UiIcon name="close" size={18}/></button><strong>{title}</strong><p>{text}</p><Link href={href} onClick={() => setNotice(null)}>Ödemelerimi aç</Link></aside> : null}
   </>;
 }

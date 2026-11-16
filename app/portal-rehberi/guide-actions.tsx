@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 import {useState} from 'react';
 export default function GuideActions(){
  const [copied,setCopied]=useState(false),[error,setError]=useState('');
@@ -11,5 +12,5 @@ export default function GuideActions(){
   window.addEventListener('afterprint',restore,{once:true});
   window.print();
  }
- return <div className="portalGuideActions"><a href="/login" className="portalGuidePrimary">Portala Giriş Yap →</a><button type="button" onClick={()=>void copy()}>{copied?'Bağlantı Kopyalandı':'Rehber Bağlantısını Kopyala'}</button><button type="button" onClick={print}>Yazdır / PDF Kaydet</button>{error&&<p role="status">{error}</p>}</div>;
+ return <div className="portalGuideActions"><a href="/login" className="portalGuidePrimary">Portala Giriş Yap <UiIcon name="arrowRight" size={16}/></a><button type="button" onClick={()=>void copy()}>{copied?'Bağlantı Kopyalandı':'Rehber Bağlantısını Kopyala'}</button><button type="button" onClick={print}>Yazdır / PDF Kaydet</button>{error&&<p role="status">{error}</p>}</div>;
 }

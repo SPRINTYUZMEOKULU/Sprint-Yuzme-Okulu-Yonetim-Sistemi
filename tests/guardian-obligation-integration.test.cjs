@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
-function load(file,mocks={}){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText)(n=>n in mocks?mocks[n]:n.endsWith('.css')?{}:require(n),m,m.exports);return m.exports;}
+function load(file,mocks={}){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText)(n=>n in mocks?mocks[n]:n.endsWith('.css')?{}:n==='@/app/components/ui-icon'?load('app/components/ui-icon.tsx'):require(n),m,m.exports);return m.exports;}
 const summary=load('lib/guardian/payment-summary.ts');
 test('Palet 12000 TL is shown as an independent debt even when no course package is assigned',()=>{
  const extras=summary.guardianObligationSummary([{id:'palet',title:'Palet',amount:12000,paid_amount:0,due_date:'2026-11-16',status:'open'}]);
@@ -28,6 +28,12 @@ test('missing real-time transport cannot crash the guardian notification compone
  const root=require('react-dom/client').createRoot(document.getElementById('root'));try{
   await React.act(async()=>root.render(React.createElement(Component)));assert.match(document.querySelector('button').className,/guardianAttention/);
   await React.act(async()=>document.querySelector('button').click());assert.match(document.body.textContent,/Palet/);
+  let posts=0,complete;global.fetch=async()=>{posts++;return new Promise(resolve=>{complete=resolve})};
+  const mark=[...document.querySelectorAll('button')].find(button=>button.textContent==='Okundu olarak işaretle');
+  await React.act(async()=>{mark.click();mark.click()});assert.equal(posts,1);assert.equal(mark.disabled,true);assert.match(mark.textContent,/Kaydediliyor/);
+  await React.act(async()=>complete({ok:false}));assert.match(document.body.textContent,/Okundu bilgisi kaydedilemedi/);assert.match(document.body.textContent,/Palet/);assert.equal(mark.disabled,false);
+  global.fetch=async()=>({ok:true});await React.act(async()=>mark.click());assert.doesNotMatch(document.body.textContent,/Palet/);
+
  }finally{await React.act(async()=>root.unmount());dom.window.close();}
 });
 test('stale chunk recovery is limited to real loading errors and never loops when storage is blocked',()=>{

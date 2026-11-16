@@ -1,3 +1,4 @@
+import UiIcon from "@/app/components/ui-icon";
 import PortalDataMap from "../portal-data-map";
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
@@ -83,7 +84,7 @@ export default async function GuardianContentManagement({ searchParams, embedded
           <h2>Hangi alan nereden yönetiliyor?</h2>
           <div className="guardianDetailGrid" style={embedded?{gridTemplateColumns:"1fr"}:undefined}>
             <div className="guardianChild portalSyncRow"><span><b>Duyurular</b><small>Genel, şube veya grup bazında yayınlanabilir.</small></span><span className="guardianPill compact">Manuel</span></div>
-            <div className="guardianChild portalSyncRow"><span><b>Mesajlar & Gelişim</b><small>Veli dosyasından kişiye/öğrenciye özel gönderilir.</small></span><Link className="portalManageButton" href="/veliler"><span>Veli Dosyalarını Yönet</span><b>→</b></Link></div>
+            <div className="guardianChild portalSyncRow"><span><b>Mesajlar & Gelişim</b><small>Veli dosyasından kişiye/öğrenciye özel gönderilir.</small></span><Link className="portalManageButton" href="/veliler"><span>Veli Dosyalarını Yönet</span><UiIcon name="arrowRight" size={16}/></Link></div>
             <div className="guardianChild portalSyncRow"><span><b>Kurallar & Belgeler</b><small>Bu ekrandan yayınlanır; onay gerektiren belge işaretlenebilir.</small></span><span className="guardianPill compact">Manuel</span></div>
             <div className="guardianChild portalSyncRow"><span><b>Program · Yoklama · Ödeme</b><small>Mevcut SprintOS kayıtlarından otomatik gelir; burada tekrar girilmez.</small></span><span className="guardianPill compact">Otomatik</span></div>
           </div>

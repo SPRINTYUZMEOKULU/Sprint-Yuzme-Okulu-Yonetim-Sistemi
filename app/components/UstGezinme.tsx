@@ -1,4 +1,5 @@
 "use client";
+import UiIcon from "@/app/components/ui-icon";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -142,12 +143,12 @@ export default function UstGezinme() {
             <small>SPRİNT YÜZME OKULU</small>
             <strong>Yönetim Menüsü</strong>
           </div>
-          <button type="button" onClick={() => setMenuOpen(false)}>×</button>
+          <button type="button" onClick={() => setMenuOpen(false)} aria-label="Menüyü kapat"><UiIcon name="close" size={20}/></button>
         </header>
         <nav>
           {visibleItems.map((item) => (
             <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}>
-              <span>{item.label}</span><b>→</b>
+              <span>{item.label}</span><UiIcon name="chevronRight" size={16}/>
             </Link>
           ))}
         </nav>
