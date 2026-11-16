@@ -1,3 +1,4 @@
+import { loginDestination } from "@/lib/auth/login-destination";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
@@ -114,7 +115,7 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
-    loginUrl.searchParams.set("next", pathname);
+    loginUrl.searchParams.set("next", pathname+request.nextUrl.search);
 
     const redirectResponse = NextResponse.redirect(loginUrl);
     copyCookies(response, redirectResponse);
@@ -122,26 +123,15 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && pathname === "/login") {
-    const requestedNext = request.nextUrl.searchParams.get("next");
-    const targetUrl = request.nextUrl.clone();
-
-    if (
-      requestedNext &&
-      requestedNext.startsWith("/") &&
-      !requestedNext.startsWith("//")
-    ) {
-      targetUrl.pathname = requestedNext;
-    } else {
-      targetUrl.pathname = "/";
+  if (user && ["/login","/yetkisiz"].includes(pathname)) {
+    const {data:entryProfile,error:entryError}=await supabase.from("profiles").select("role,is_active").eq("id",user.id).maybeSingle();
+    if(pathname==="/login" || (!entryError&&entryProfile?.is_active&&entryProfile.role==="guardian")){
+      const destination=entryError||!entryProfile?.is_active?"/yetkisiz":loginDestination(String(entryProfile.role),pathname==="/login"?request.nextUrl.searchParams.get("next"):null);
+      const targetUrl=new URL(destination,request.nextUrl.origin);
+      const redirected=copyCookies(response,NextResponse.redirect(targetUrl));
+      redirected.headers.set("Cache-Control","private, no-store");
+      return redirected;
     }
-
-    targetUrl.search = "";
-
-    const redirectResponse = NextResponse.redirect(targetUrl);
-    copyCookies(response, redirectResponse);
-    redirectResponse.headers.set("Cache-Control", "private, no-store");
-    return redirectResponse;
   }
 
   /*
@@ -204,6 +194,14 @@ export async function middleware(request: NextRequest) {
     const denied = NextResponse.redirect(deniedUrl);
     copyCookies(response, denied);
     return denied;
+  }
+
+  // Guardians never pass through staff/module membership checks on management URLs.
+  // Redirecting keeps the management page closed and opens their own portal instead.
+  if(String(profile.role)==="guardian"){
+    const portalUrl=request.nextUrl.clone();portalUrl.pathname="/veli-paneli";portalUrl.search="";
+    const redirected=copyCookies(response,NextResponse.redirect(portalUrl));
+    redirected.headers.set("Cache-Control","private, no-store");return redirected;
   }
 
   /*
