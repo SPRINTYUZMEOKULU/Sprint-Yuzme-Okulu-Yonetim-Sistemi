@@ -33,6 +33,8 @@ const navItems: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/veli-mesajlar", label: "Mesajlar", icon: "message" },
   { href: "/veli-duyurular", label: "Duyurular", icon: "bell" },
   { href: "/veli-belgeler", label: "Kurallar ve Belgeler", icon: "document" },
+  { href: "/veli-hesabim", label: "Hesabım ve Şifrem", icon: "document" },
+  { href: "/portal-rehberi", label: "Kullanım Rehberi", icon: "document" },
   { href: "/veli-talepleri", label: "Talepler ve Yanıtlar", icon: "request" },
 ];
 
@@ -64,7 +66,7 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
       {issues.length ? <div className="guardianDataNotice" role="alert">{issues.map(issue=><p key={issue}>{issue}</p>)}</div> : null}
       <button type="button" className="guardianMenuToggle" aria-expanded={menuOpen} aria-controls="guardian-navigation" onClick={()=>setMenuOpen(!menuOpen)}><span><GuardianIcon name={navItems.find(i=>i.href===pathname)?.icon||'home'}/>{navItems.find(i=>i.href===pathname)?.label||'Portal Menüsü'}</span><span>{menuOpen?'Kapat':'Tüm Menü'}</span></button>
       <nav id="guardian-navigation" className={`guardianNav ${menuOpen?'isOpen':''}`} aria-label="Portal menüsü">
-        {navItems.map((item) => <Link prefetch={false} key={item.href} onClick={()=>setMenuOpen(false)} aria-current={pathname === item.href ? "page" : undefined} href={href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
+        {navItems.map((item) => <Link prefetch={false} key={item.href} onClick={()=>setMenuOpen(false)} aria-current={pathname === item.href ? "page" : undefined} href={item.href==="/portal-rehberi"?item.href:href(item.href, selectedId)}><GuardianIcon name={item.icon} size={18}/><span>{item.label}</span></Link>)}
       </nav>
       {students.length > 1 ? <div className="childSwitch"><span>Öğrenci:</span>{students.map((student) => <Link prefetch={false} key={student.id} aria-current={student.id === selectedId ? "true" : undefined} className={student.id === selectedId ? "active" : ""} href={href(pathname, student.id)}>{student.first_name} {student.last_name}</Link>)}</div> : null}
     </div>

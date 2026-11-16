@@ -152,6 +152,7 @@ export default function LoginForm() {
   }
 
   return <div>
+    <p style={{margin:"0 0 16px",fontSize:13,lineHeight:1.6,color:"#536b85"}}>İlk kez mi giriş yapıyorsunuz? <a href="/portal-rehberi" style={{color:"#1768c5",fontWeight:750}}>Görsel kullanım rehberini açın →</a></p>
     <p className="sprintLoginRoleLabel">Giriş yapmak istediğiniz paneli seçin</p>
     <div className="v2RoleTabs" role="tablist" aria-label="Giriş türü">
       {roles.map((item) => <button key={item.value} type="button" role="tab" aria-selected={role === item.value} className={role === item.value ? "v2RoleTab active" : "v2RoleTab"} onClick={() => { setRole(item.value); setError(""); }}><Icon name={item.icon}/><span>{item.label}</span></button>)}

@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
   "/login",
+  "/portal-rehberi",
   "/on-kayit",
   "/auth/signout",
   "/yetkisiz",
