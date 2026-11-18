@@ -1,0 +1,56 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import UiIcon from "@/app/components/ui-icon";
+import { satisfactionTopics, scoreLabels } from "@/lib/guardian/satisfaction";
+import { submitSatisfaction } from "./satisfaction-action";
+import "./support-survey.css";
+
+const phone = "0551 896 83 19";
+const whatsApp = `https://wa.me/90${phone.replace(/\s/g, "").slice(1)}?text=`;
+const reasons = [
+  ["Ders hakkında soru", "Merhaba, derslerle ilgili bir sorum var."],
+  ["Uygulama hatası", "Merhaba, SprintOS Veli Paneli’nde bir hata bildirmek istiyorum."],
+  ["Görüş ve öneri", "Merhaba, bir görüş veya önerimi paylaşmak istiyorum."],
+];
+
+export function SprintSupport() {
+  return <section className="guardianSupportCard" aria-labelledby="sprint-support-heading">
+    <div className="guardianSupportHead">
+      <span className="guardianSupportIcon"><UiIcon name="message" size={22}/></span>
+      <div><h2 id="sprint-support-heading">SPRİNT Bilgilendirme Hattı</h2><p>{phone}</p></div>
+      <a className="guardianWhatsAppButton" href={whatsApp + encodeURIComponent("Merhaba, SPRİNT Bilgilendirme Hattı ile görüşmek istiyorum.")}
+        target="_blank" rel="noopener noreferrer">WhatsApp’ta Görüş</a>
+    </div>
+    <div className="guardianSupportTopics" aria-label="Görüşme konuları">
+      {reasons.map(([label, message]) => <a key={label} href={whatsApp + encodeURIComponent(message)}
+        target="_blank" rel="noopener noreferrer">{label}</a>)}
+    </div>
+  </section>;
+}
+
+export default function SatisfactionSurvey({ id }: { id: string }) {
+  const [submissionId] = useState(id);
+  const [result, action, pending] = useActionState(submitSatisfaction.bind(null, submissionId), { sent: false, message: "" });
+  return <section className="guardianSurveyCard" aria-labelledby="satisfaction-heading">
+    <h2 id="satisfaction-heading">Memnuniyet Anketi</h2>
+    <p className="guardianSurveyPrivacy"><strong>Kimliğiniz gizli tutulur.</strong> Adınız ve öğrenci bilgileriniz anket kaydına eklenmez. Yanıtlar yalnızca Yönetim Kurulu Başkanlığı tarafından incelenir. Eğitmenler ve diğer kurum personeli yanıtlarınıza erişemez. Gerekli adımları Başkanlık değerlendirir.</p>
+    {result.sent ? <p className="guardianSurveyResult" role="status">{result.message}</p> :
+      <form action={action} className="guardianSurveyForm">
+        <fieldset>
+          <legend>SPRİNT deneyiminizi nasıl değerlendirirsiniz?</legend>
+          <div className="guardianSurveyScores">{scoreLabels.map((label, index) =>
+            <label key={label}><input type="radio" name="rating" value={index + 1} required aria-label={`${index + 1} · ${label}`}/>
+              <span>{index + 1}</span></label>)}</div>
+          <div className="guardianSurveyScale"><span>Çok memnuniyetsizim</span><span>Çok memnunum</span></div>
+        </fieldset>
+        <label>Konu<select name="topic" defaultValue="" required><option value="" disabled>Konu seçin</option>
+          {Object.entries(satisfactionTopics).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></label>
+        <label>Görüşünüz <small>(isteğe bağlı)</small><textarea name="comment" maxLength={1200} rows={4}
+          placeholder="Lütfen ad, telefon veya öğrenci bilgisi yazmayın."/></label>
+        <button className="guardianSurveySubmit" type="submit" disabled={pending}>{pending ? "Gönderiliyor…" : "Anketi Gönder"}</button>
+        {result.message && <p role="alert">{result.message}</p>}
+      </form>}
+  </section>;
+}

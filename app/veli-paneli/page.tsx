@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import SatisfactionSurvey, { SprintSupport } from "./support-survey";
 import LessonBalance from "./lesson-balance";
 import UiIcon from "@/app/components/ui-icon";
 import AttendanceSummary from "@/app/components/attendance-summary";
@@ -18,7 +20,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"overview");
 
   if (!data.selected) {
-    return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /></div></main>;
+    return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /><SprintSupport /></div></main>;
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
@@ -72,6 +74,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
           <Link href={`/veli-odemeler?child=${selectedId}${previewQuery}`}>Ödeme detayları</Link>
         </div>
       </section> : null}
+      <SprintSupport />
       <section className="guardianFollowUps" aria-label="Takip ve bekleyen işlemler">
         <Link className={unreadMessages>0?"guardianAttention":""} href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><UiIcon name="chevronRight" size={18}/></Link>
         <Link href={`/veli-talepleri?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="request"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Talep"))?"Bilgi alınamadı":`${openRequests} açık görüşme`}</strong><small>Talepler ve yönetim yanıtları</small></span><UiIcon name="chevronRight" size={18}/></Link>
@@ -112,6 +115,7 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
         <Link className="guardianAction" href={`/veli-duyurular?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="bell"/></span><div><strong>Duyurular</strong><small>Güncel kurs bilgilendirmeleri</small></div></Link>
       </section>
 
+      {!previewGuardian && <SatisfactionSurvey id={randomUUID()}/>}
     </div>
   </main>;
 }

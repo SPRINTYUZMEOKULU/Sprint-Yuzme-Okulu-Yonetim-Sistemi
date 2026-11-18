@@ -117,7 +117,7 @@ export default async function BildirimlerPage() {
 
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("id, organization_id")
+    .select("id, organization_id, role, is_active")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -320,6 +320,7 @@ export default async function BildirimlerPage() {
               <span>Uyarılar</span>
             </Link>
 
+            {profile.role === "owner" && profile.is_active && <Link href="/memnuniyet-anketleri">Memnuniyet Anketleri</Link>}
             <Link
               href="/onay-merkezi"
               className="header-button primary"
