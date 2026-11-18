@@ -137,7 +137,7 @@ export default function WhatsAppSafeOpen() {
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!anchor || !isWhatsAppUrl(anchor.href)) return;
+      if (!anchor || !isWhatsAppUrl(anchor.href) || anchor.dataset.whatsappManaged === "true") return;
 
       // Authentication messages retain the separately verified account recipient.
       if(extractStudentId()&&!/şifre|sifre|doğrulama|otp|giriş bilg|giris bilg/i.test(extractWhatsAppPayload(anchor.href).message)){
