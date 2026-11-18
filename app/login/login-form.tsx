@@ -150,13 +150,15 @@ export default function LoginForm() {
   }
 
   return <div>
-    <p style={{margin:"0 0 16px",fontSize:13,lineHeight:1.6,color:"#536b85"}}>İlk kez mi giriş yapıyorsunuz? <a href="/portal-rehberi" style={{color:"#1768c5",fontWeight:750}}>Görsel kullanım rehberini açın →</a></p>
-    <p className="sprintLoginRoleLabel">Giriş yapmak istediğiniz paneli seçin</p>
+    <header className="sprintLoginIntro">
+      <h1>{role === "guardian" ? "Veli ve Kursiyer Paneli" : role === "coach" ? "Eğitmen Paneli" : "Yönetim Paneli"}</h1>
+      {role === "guardian" ? <a href="/portal-rehberi">İlk giriş için kullanım rehberi</a> : null}
+    </header>
     <div className="v2RoleTabs" role="tablist" aria-label="Giriş türü">
       {roles.map((item) => <button key={item.value} type="button" role="tab" aria-selected={role === item.value} className={role === item.value ? "v2RoleTab active" : "v2RoleTab"} onClick={() => { setRole(item.value); setError(""); }}><Icon name={item.icon}/><span>{item.label}</span></button>)}
     </div>
 
-    <p className="sprintLoginRoleDescription" role="status">{role === "admin" ? "Yönetici ve yetkili personel girişi" : role === "coach" ? "Eğitmen ve yoklama paneli girişi" : "Veli ve kursiyer takibi girişi"}</p>
+
     <form className="v2LoginForm" onSubmit={handleSubmit}>
       <div className="v2MethodTabs">
         <button type="button" className={method === "email" ? "active" : ""} onClick={() => { setMethod("email"); setError(""); setPhonePreview(""); }}><Icon name="mail"/>E-posta ile giriş</button>

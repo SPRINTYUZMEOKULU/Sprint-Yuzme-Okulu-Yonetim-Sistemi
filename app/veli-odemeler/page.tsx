@@ -1,3 +1,5 @@
+import PendingSubmitButton from "@/app/ogrenciler/[id]/pending-submit-button";
+import { openGuardianBankPayment } from "./actions";
 import HistoryPagination from "@/app/veli-paneli/history-pagination";
 import {loadGuardianPage} from "@/lib/guardian/page-context";
 import {
@@ -12,17 +14,18 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ child?: string; previewGuardian?:string;page?:string }>;
+  searchParams: Promise<{ child?: string; previewGuardian?:string;page?:string;paymentError?:string }>;
 }) {
   const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"payments");
   if(!data.selected) return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues}/><div className="guardianContent"><EmptyGuardian title="Bağlı kursiyer bulunamadı" text="Hesabınıza aktif kursiyer bağlandığında ödeme bilgileri burada görüntülenir."/></div></main>;
   const history=data.paymentHistory??data.payments;
-  const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme"));
+  const financeReady=!data.issues.some(issue=>issue.startsWith("Ödeme") || issue.startsWith("Kayıt"));
   const planResult = {data:data.paymentPlan};
   const installments = data.paymentPlan?.status==="cancelled"?[]:data.paymentInstallments;
   const {paid, price, debt, excess} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
   const extras=guardianObligationSummary(data.obligations||[]);
   const totalDebt=debt+extras.debt;
+  const canPay = !previewGuardian && financeReady && (Boolean(data.enrollment?.id && debt > 0) || extras.open.length > 0);
   return (
     <main className="guardianShell">
       <GuardianHeader previewGuardian={previewGuardian}
@@ -37,6 +40,19 @@ export default async function Page({
         </p>
       <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianCombinedReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan,data.obligations||[])} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
         <section className={'guardianFinanceTotal '+(totalDebt>0?'hasDebt':'clear')} aria-label="Toplam ödeme özeti"><div><span>TOPLAM KALAN BORÇ</span><strong>{financeReady?formatMoney(totalDebt):'Bilgi alınamadı'}</strong><p>Paket kalan borcu ve açık ek borçlarınız birlikte gösterilir.</p></div><div><span>Paket kalan: <b>{financeReady?formatMoney(debt):'—'}</b></span><span>Ek borç kalan: <b>{financeReady?formatMoney(extras.debt):'—'}</b></span></div></section>
+        {canPay || query.paymentError ? <section id="guvenli-odeme" className="guardianCard guardianBankPayment">
+          <div><h2>Güvenli Ödeme</h2><p>Belge bilgilerinizi girin, ardından VakıfBank IBAN’ı veya QR koduyla bankanızdan havale yapın.</p></div>
+          {canPay ? <form action={openGuardianBankPayment.bind(null, data.selected.id)}>
+            <label>Ödenecek kalem
+              <select name="payment_target" required>
+                {data.enrollment?.id && debt > 0 ? <option value="package">Paket borcu · {formatMoney(debt)}</option> : null}
+                {extras.open.map(row => <option key={row.id} value={row.id}>{row.title} · {formatMoney(installmentPresentation(row).remaining)}</option>)}
+              </select>
+            </label>
+            <PendingSubmitButton className="guardianPayButton" pendingText="Ödeme hazırlanıyor…">Ödeme İşlemini Başlat</PendingSubmitButton>
+          </form> : null}
+          {query.paymentError ? <p role="alert" className="guardianFinanceNotice">{query.paymentError}</p> : null}
+        </section> : null}
         {!data.coursePackage&&!data.paymentPlan?<p className="guardianFinanceNotice">Kurs paketi henüz tanımlanmamış. Aşağıdaki ek borçlar varsa paket bilgisinden bağımsız olarak geçerlidir.</p>:null}
         <section className="guardianStats">
           <article className="guardianStat">

@@ -37,9 +37,20 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   return <main className="guardianShell">
     <GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={selectedId} />
     <div className="guardianContent">
-      <section className="guardianHero">
-        <div className="guardianHeroMain"><small>ÖĞRENCİ PANELİ · GÜNCEL VERİ</small><h1>{data.selected.first_name} {data.selected.last_name}</h1><p>{data.branch?.name || "Şube belirlenmedi"} · {data.group?.name || "Grup belirlenmedi"}</p><div className="guardianHeroMeta"><span><i/> Panel açıldığında güncel kayıtlar gösterilir</span></div></div>
-        <div className="lessonRing"><b>{remaining}</b><span>Toplam Kalan Ders</span><small>Normal {data.enrollment?.lesson_rights?.normal ?? remaining} · Telafi +{data.enrollment?.lesson_rights?.compensation ?? 0}</small></div>
+      <section className="guardianHero guardianOverviewHero">
+        <div className="guardianHeroMain">
+          <small>KURSİYER ÖZETİ</small>
+          <h1>{data.selected.first_name} {data.selected.last_name}</h1>
+          <p>{data.branch?.name || "Şube belirlenmedi"}</p>
+          <p>{data.group?.name || "Grup belirlenmedi"}</p>
+        </div>
+        <div className="guardianLessonBalance">
+          <div><span>Toplam kalan ders</span><strong>{remaining}</strong></div>
+          <dl>
+            <div><dt>Normal ders</dt><dd>{data.enrollment?.lesson_rights?.normal ?? remaining}</dd></div>
+            <div><dt>Telafi</dt><dd>{data.enrollment?.lesson_rights?.compensation ?? 0}</dd></div>
+          </dl>
+        </div>
       </section>
 
       {data.enrollment?.start_confirmation_required&&!data.enrollment?.actual_started_at?<div className="guardianFooterNote" role="status"><strong>Kurs başlangıcı bekleniyor</strong><p>Planlanan başlangıç: {formatDate(data.enrollment.start_date)}. Yönetim kursu başlattığında ders ve yoklama bilgileri bu ekranda güncellenecektir.</p></div>:null}
@@ -51,7 +62,14 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
       </section> : null}
 
       <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianCombinedReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan,data.obligations||[])} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
-      {totalDebt>0?<Link className="guardianDebtShortcut guardianAttention" href={`/veli-odemeler?child=${selectedId}${previewQuery}`}><span><strong>Ödeme bilgilerinizi kontrol edin</strong><small>Paket: {formatMoney(debt)} · Ek borç: {formatMoney(extraDebt)}</small></span><b>{formatMoney(totalDebt)} <UiIcon name="arrowRight"/></b></Link>:null}
+      {totalDebt > 0 && !data.issues.some(issue => (issue.startsWith("Ödeme") || issue.startsWith("Kayıt"))) ? <section className="guardianPaymentOverview">
+        <div><span>Kalan ödeme</span><strong>{formatMoney(totalDebt)}</strong>
+          <small>Paket {formatMoney(debt)} · Ek borç {formatMoney(extraDebt)}</small></div>
+        <div className="guardianPayActions">
+          {!previewGuardian ? <Link className="guardianPayButton" href={`/veli-odemeler?child=${selectedId}#guvenli-odeme`}>Güvenli Ödeme Yap</Link> : null}
+          <Link href={`/veli-odemeler?child=${selectedId}${previewQuery}`}>Ödeme detayları</Link>
+        </div>
+      </section> : null}
       <section className="guardianFollowUps" aria-label="Takip ve bekleyen işlemler">
         <Link className={unreadMessages>0?"guardianAttention":""} href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><UiIcon name="chevronRight" size={18}/></Link>
         <Link href={`/veli-talepleri?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="request"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Talep"))?"Bilgi alınamadı":`${openRequests} açık görüşme`}</strong><small>Talepler ve yönetim yanıtları</small></span><UiIcon name="chevronRight" size={18}/></Link>
@@ -87,13 +105,11 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
 
       <section className="guardianActions">
         <Link className="guardianAction" href={`/veli-gelisim?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="progress"/></span><div><strong>Gelişim Notları</strong><small>Antrenör değerlendirmeleri</small></div></Link>
-        <Link className="guardianAction" href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="message"/></span><div><strong>Mesaj Merkezi</strong><small>Bilgilendirme ve mesajlar</small></div></Link>
-        <Link className="guardianAction" href={`/veli-belgeler?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="document"/></span><div><strong>Kurallar & Belgeler</strong><small>Kurs belgeleri ve onaylar</small></div></Link>
         {safePortalUrl(data.branch?.location_url) ? <a className="guardianAction" href={safePortalUrl(data.branch.location_url)!} target="_blank" rel="noreferrer"><span><GuardianIcon name="location"/></span><div><strong>Havuz Konumu</strong><small>Haritada görüntüle</small></div></a> : null}
         <Link className="guardianAction" href={`/veli-odemeler?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="wallet"/></span><div><strong>Ödeme Geçmişi</strong><small>Ödeme ve borç durumu</small></div></Link>
         <Link className="guardianAction" href={`/veli-duyurular?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="bell"/></span><div><strong>Duyurular</strong><small>Güncel kurs bilgilendirmeleri</small></div></Link>
       </section>
-      <p className="guardianFooterNote">Bilgiler SprintOS yönetim panelindeki güncel kayıtlarla senkronize gösterilir. Grup, yoklama, ödeme ve bitiş tarihi değişiklikleri yetkili yönetici tarafından güncellendiğinde, ilgili ekranı açtığınızda veya uygulamaya geri döndüğünüzde yenilenir.</p>
+
     </div>
   </main>;
 }
