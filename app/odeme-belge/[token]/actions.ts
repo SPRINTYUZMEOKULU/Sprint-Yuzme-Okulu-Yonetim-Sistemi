@@ -18,7 +18,7 @@ function clean(v: FormDataEntryValue | null, max = 300) {
 export async function saveCustomerDocumentInfo(token: string, formData: FormData) {
   const supabase = admin();
   const { data: request } = await supabase.from("payment_document_requests").select("id,expires_at,status").eq("public_token", token).maybeSingle();
-  if (!request || publicDocumentState(request.status,request.expires_at)!=="form") return { ok: false, message: "Bu bağlantı geçersiz veya süresi dolmuş." };
+  if (!request || publicDocumentState(request.status,request.expires_at)!== "form" && publicDocumentState(request.status,request.expires_at)!=="bank") return { ok: false, message: "Bu bağlantı geçersiz veya süresi dolmuş." };
 
   const recipientType = clean(formData.get("recipient_type"), 20);
   const recipientName = clean(formData.get("recipient_name"), 200);
@@ -41,7 +41,7 @@ export async function saveCustomerDocumentInfo(token: string, formData: FormData
   if(postalCode&&!/^\d{5}$/.test(postalCode))return {ok:false,message:"Posta kodu 5 haneli olmalıdır veya boş bırakılmalıdır."};
   if(email&&!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))return {ok:false,message:"Geçerli bir e-posta adresi yazınız veya alanı boş bırakınız."};
   const now = new Date().toISOString();
-  const { data: saved, error } = await supabase.from("payment_document_requests").update({ recipient_type: recipientType, recipient_name: recipientName, tax_identity_number: taxIdentityNumber, tax_office: taxOffice || null, address, city, district, postal_code:postalCode||null, email: email || null, phone: phone || null, customer_consent_at: now, customer_completed_at: now, status: "waiting_payment", updated_at: now }).eq("id", request.id).eq("status", "waiting_customer").gt("expires_at", now).select("id").maybeSingle();
+  const { data: saved, error } = await supabase.from("payment_document_requests").update({ recipient_type: recipientType, recipient_name: recipientName, tax_identity_number: taxIdentityNumber, tax_office: taxOffice || null, address, city, district, postal_code:postalCode||null, email: email || null, phone: phone || null, customer_consent_at: now, customer_completed_at: now, status: "waiting_payment", updated_at: now }).eq("id", request.id).in("status", ["waiting_customer", "customer_completed", "waiting_payment"]).gt("expires_at", now).select("id").maybeSingle();
   if (error || !saved) return { ok: false, message: "Bilgiler kaydedilemedi. Lütfen tekrar deneyiniz." };
   revalidatePath(`/odeme-belge/${token}`);
   return { ok: true, message: "Bilgileriniz kaydedildi. Ödeme bilgilerine geçebilirsiniz." };
