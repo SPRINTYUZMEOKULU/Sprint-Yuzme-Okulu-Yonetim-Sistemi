@@ -1,0 +1,15 @@
+.portalSectionHeading {
+  display:flex; align-items:center; gap:14px; padding:clamp(16px,4vw,26px); margin-bottom:16px;
+  border-radius:18px; background:linear-gradient(112deg,#102c52,#174e73); color:white;
+}
+.portalSectionIcon { display:grid; place-items:center; flex:none; width:44px; height:44px; border:1px solid #ffffff45; border-radius:14px; background:#ffffff12; }
+.portalSectionHeading h1 { margin:0; color:white; font-size:clamp(21px,4vw,30px); line-height:1.2; }
+.portalSectionHeading p { margin:5px 0 0; color:#e0eef7; line-height:1.45; font-size:14px; }
+.lessonWeek,.lessonHistory { list-style:none; margin:0; padding:0; }
+.lessonWeek li,.lessonHistory li>div { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.lessonWeek li,.lessonHistory li { padding:12px 0; color:#213a55; }
+.lessonWeek li+li,.lessonHistory li+li { border-top:1px solid #dee8f0; }
+.lessonWeek span { font-variant-numeric:tabular-nums; padding:5px 10px; color:#214e76; background:#eff5fa; border-radius:8px; }
+.lessonHistory time { font-weight:700; }
+.lessonHistory p,.lessonEmpty { margin:8px 0 0; line-height:1.5; color:#475e73; overflow-wrap:anywhere; }
+.lessonEmpty { padding:14px; background:#f4f8fb; border-radius:10px; }
