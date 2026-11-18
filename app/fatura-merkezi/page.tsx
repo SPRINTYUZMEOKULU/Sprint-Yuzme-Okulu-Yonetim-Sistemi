@@ -100,8 +100,8 @@ export default async function InvoiceCenter({searchParams}:{
 
     <section className="invoice-notice" aria-labelledby="integration-status">
       <h2 id="integration-status">İşNet / NetteFatura bağlantı durumu</h2>
-      <p><strong>Otomatik fatura veya e-SMM kesimi açık değil.</strong> İşNet test makbuzunun SearchESMM sorgusu, PDF/XML erişimi ve GİB kabul durumu henüz doğrulanmadı. Mali müşavir onayına göre e-SMM, e-Fatura veya e-Arşiv belge türü belirlenmelidir.</p>
-      <p>Banka Excel dosyası ve gönderildi işaretleri kesin tahsilat ya da sağlayıcı tarafından doğrulanmış belge anlamına gelmez. Gerçek belge kesimi için yönetici, sağlayıcı ve mali müşavir doğrulaması gereklidir.</p>
+      <p><strong>Gerçek e-SMM kesimi henüz açık değil.</strong> 13 Kasım tarihli İşNet testinde SearchESMM ile belge bulundu ve PDF/XML çıktıları doğrulandı. Ancak son test raporu <strong>WaitingForSending</strong> durumundaydı; <strong>GibRaporuKabulEtti</strong> onayı ve canlı firma / sabit çıkış IP yetkisi henüz doğrulanmadı. Daha önce e-SMM düzenlenmiş olması canlı web servis yetkisi yerine geçmez.</p>
+      <p>Banka Excel dosyası ve gönderildi işaretleri kesin tahsilat ya da GİB kabulü anlamına gelmez. İlk gerçek belge için mali müşavir tarafından hizmet ve vergi profili, yönetici tarafından tahsilat ve alıcı bilgileri doğrulanmalıdır. <Link href="/fatura-merkezi/esmm-hazirlik">e-SMM hazırlık ve kontrol ekranı</Link></p>
     </section>
 
     {!issued ? <section className="invoice-pending">
