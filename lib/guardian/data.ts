@@ -108,21 +108,12 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   if(guardianError)return emptyContext([],"Portal bağlantısı doğrulanamadı.");
   if (!guardian?.id || guardian.is_active === false || guardian.login_enabled === false) return emptyContext();
 
-  const { data: links, error: linksError } = await admin
-    .from("guardian_students")
-    .select("student_id")
-    .eq("guardian_id", guardian.id)
-    .eq("portal_access", true);
-
-  if(linksError)return emptyContext([],"Kursiyer bağlantıları yüklenemedi.");
-  const ids = (links || []).map((item: any) => item.student_id).filter(Boolean);
-  if (!ids.length) return emptyContext();
-
   const { data: students, error: studentsError } = await admin
     .from("students")
-    .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id,is_deleted")
+    .select("id,first_name,last_name,status,birth_date,swimming_level,branch_id,is_deleted,guardian_students!inner()")
     .eq("organization_id", profile.organization_id)
-    .in("id", ids)
+    .eq("guardian_students.guardian_id", guardian.id)
+    .eq("guardian_students.portal_access", true)
     .eq("status", "active")
     .eq("is_deleted", false)
     .order("first_name");

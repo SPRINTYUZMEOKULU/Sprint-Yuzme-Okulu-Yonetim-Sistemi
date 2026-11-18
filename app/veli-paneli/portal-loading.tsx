@@ -1,2 +1,10 @@
 import './veli.css';
-export default function PortalLoading(){return <main className="guardianShell guardianLoading" aria-busy="true" aria-label="Veli paneli yükleniyor"><div className="guardianContent"><div className="guardianLoadingTop"><span className="guardianLoadingLogo"/><div><strong>SPRİNT Yüzme Okulu</strong><p>Bilgileriniz hazırlanıyor…</p></div></div><div className="guardianLoadingBar"/><section className="guardianLoadingCards" aria-hidden="true"><div/><div/><div/><div/></section><div className="guardianLoadingPanel" aria-hidden="true"/></div></main>;}
+
+export default function PortalLoading({title = "Veli Paneli"}: {title?: string}) {
+  return <main className="guardianShell" aria-busy="true">
+    <div className="guardianContent">
+      <h1 className="guardianSectionTitle">{title}</h1>
+      <p className="guardianSectionLead" role="status">Yükleniyor…</p>
+    </div>
+  </main>;
+}
