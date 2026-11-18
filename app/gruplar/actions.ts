@@ -65,6 +65,9 @@ function refreshGroupPages() {
   revalidatePath("/kayit-tamamlama");
   revalidatePath("/yoklama");
   revalidatePath("/ders-programi");
+  revalidatePath("/veli-paneli");
+  revalidatePath("/veli-devam");
+  revalidatePath("/veli-duyurular");
   revalidatePath("/operasyon-plani");
   revalidatePath("/ogrenciler");
 }

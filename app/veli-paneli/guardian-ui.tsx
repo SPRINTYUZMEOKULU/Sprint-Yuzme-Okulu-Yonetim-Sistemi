@@ -49,7 +49,6 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
   const [menuOpen,setMenuOpen]=useState(false);
   const href=(path:string,child?:string)=>{const params=new URLSearchParams();if(child)params.set("child",child);if(previewGuardian)params.set("previewGuardian",previewGuardian);return path+(params.size?`?${params}`:"");};
   return <>
-    <GuardianAutoRefresh />
     {previewGuardian?<div className="guardianPreviewBanner"><strong>Yönetici Önizlemesi · Velinin gördüğü güncel ekran</strong><span>Bu görünümde veli adına onay veya okundu işlemi yapılmaz.</span><Link href={`/veliler/${previewGuardian}`}>Veli Dosyasına Dön</Link><Link href="/veliler/icerik">Portal İçeriklerini Yönet</Link></div>:null}
     <header className="guardianTop">
       <Link prefetch={false} href={href("/veli-paneli", selectedId)} className="guardianBrand" aria-label="Sprint Yüzme Okulu portal ana sayfası">
@@ -57,6 +56,7 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
         <span><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
       </Link>
       <div className="guardianTopRight">
+        <GuardianAutoRefresh />
         {!previewGuardian?<GuardianNotifications/>:null}
         <span className="guardianWelcome">Hoş geldiniz, <b>{name}</b></span>
         <span className="guardianLive"><i/> Veli / Kursiyer</span>
