@@ -6,7 +6,7 @@ type Details = Record<"recipient_type"|"recipient_name"|"tax_identity_number"|"t
 export function DocumentDetailsToggle({token,details}:{token:string;details:Details}) {
   const [open,setOpen]=useState(false);
   const [editing,setEditing]=useState(false);
-  const mask=(s:string|null)=>s ? "••••" + s.slice(-2) : "—";
+  const mask=(s:string|null)=>s || "—";
   return <section className="document-details-panel">
     <button type="button" className="details-toggle" onClick={()=>{setOpen(!open);setEditing(false)}} aria-expanded={open}>{open ? "▾ Belge Bilgilerimi Gizle" : "▸ Belge Bilgilerim"}</button>
     {open && (editing ? <CustomerDocumentForm token={token} editing onCancel={()=>setEditing(false)}/> : <div className="details-summary">
