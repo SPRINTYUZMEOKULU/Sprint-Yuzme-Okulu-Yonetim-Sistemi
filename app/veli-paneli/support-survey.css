@@ -5,8 +5,6 @@
 .guardianSupportCard h2,.guardianSurveyCard h2{margin:0;font-size:clamp(18px,4vw,23px)}
 .guardianSupportHead p{margin:5px 0 0;color:#3d5064;font-size:15px;font-weight:700}
 .guardianWhatsAppButton,.guardianSurveySubmit{display:inline-flex;justify-content:center;align-items:center;min-height:46px;padding:10px 16px;border:0;border-radius:11px;font:inherit;font-weight:740;color:#fff;background:#146348;text-decoration:none;cursor:pointer}
-.guardianSupportTopics{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.guardianSupportTopics a{display:inline-flex;align-items:center;min-height:44px;padding:7px 11px;border:1px solid #dbe9e2;border-radius:10px;color:#17533c;background:#f1f8f4;font-size:13px;font-weight:700;text-decoration:none}
 .guardianSurveyPrivacy,.guardianSurveyResult{padding:13px;border-radius:12px;background:#edf5ff;color:#174178;line-height:1.55;font-size:14px}
 .guardianSurveyPrivacy strong{display:block;margin-bottom:3px}
 .guardianSurveyForm{display:grid;gap:16px;max-width:680px}

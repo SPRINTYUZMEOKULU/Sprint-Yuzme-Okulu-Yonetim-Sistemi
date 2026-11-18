@@ -4,7 +4,8 @@ import LessonBalance from "./lesson-balance";
 import UiIcon from "@/app/components/ui-icon";
 import AttendanceSummary from "@/app/components/attendance-summary";
 import {attendanceSummary as currentPeriodAttendanceSummary} from "@/lib/students/attendance-summary";
-import {loadGuardianPage} from "@/lib/guardian/page-context";
+import { Suspense } from "react";
+import {guardianPageIdentity, loadGuardianPage, type GuardianPageQuery} from "@/lib/guardian/page-context";
 import { attendancePresentation, attendanceSummary, enrollmentAttendance, safePortalUrl, currentDocumentConsent } from "@/lib/guardian/presentation";
 import PaymentReminder from "@/app/veli-paneli/payment-reminder";
 import { guardianCombinedReminder, guardianObligationSummary, guardianPaymentSummary } from "@/lib/guardian/payment-summary";
@@ -17,7 +18,18 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function GuardianPortal({ searchParams }: { searchParams: Promise<{ child?: string; previewGuardian?:string }> }) {
-  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"overview");
+  const query = await searchParams;
+  const identity = await guardianPageIdentity(query);
+  return <Suspense fallback={<main className="guardianShell"><div className="guardianContent">
+    <h1>Veli Paneli</h1><p>Hoş geldiniz, {identity.profile.full_name || "Değerli Velimiz"}.</p>
+    <p role="status">Kurs ve ödeme bilgileri yükleniyor…</p><SprintSupport />
+  </div></main>}>
+    <GuardianOverview query={query} identity={identity} />
+  </Suspense>;
+}
+
+async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identity:Awaited<ReturnType<typeof guardianPageIdentity>>}) {
+  const {profile,data,previewGuardian}=await loadGuardianPage(query,"overview",identity);
 
   if (!data.selected) {
     return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} students={data.students} issues={data.issues} /><div className="guardianContent"><EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantınız yönetim tarafından tamamlandığında ders, ödeme, yoklama ve gelişim bilgileriniz otomatik olarak burada görüntülenecektir." /><SprintSupport /></div></main>;
