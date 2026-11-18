@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import UiIcon from "@/app/components/ui-icon";
 import { satisfactionTopics, scoreLabels } from "@/lib/guardian/satisfaction";
 import { submitSatisfaction } from "./satisfaction-action";
 import "./support-survey.css";
@@ -17,7 +16,7 @@ const reasons = [
 export function SprintSupport() {
   return <section className="guardianSupportCard" aria-labelledby="sprint-support-heading">
     <div className="guardianSupportHead">
-      <span className="guardianSupportIcon"><UiIcon name="message" size={22}/></span>
+      <span className="guardianSupportIcon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l1.2-3.1A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8 11h9M8 15h6"/></svg></span>
       <div><h2 id="sprint-support-heading">SPRİNT Bilgilendirme Hattı</h2><p>{phone}</p></div>
       <a className="guardianWhatsAppButton" href={whatsApp + encodeURIComponent("Merhaba, SPRİNT Bilgilendirme Hattı ile görüşmek istiyorum.")}
         target="_blank" rel="noopener noreferrer">WhatsApp’ta Görüş</a>
