@@ -23,3 +23,33 @@ export default function CopyIban({ iban }: { iban: string }) {
     <p role="status">{message}</p>
   </div>;
 }
+
+export function CopyAccountOwner({ name }: { name: string }) {
+  const [message, setMessage] = useState("");
+  async function copyName() {
+    try {
+      await navigator.clipboard.writeText(name);
+      setMessage("Hesap sahibi kopyalandı ✓");
+    } catch {
+      setMessage("Kopyalanamadı. Hesap sahibinin adını seçerek kopyalayabilirsiniz.");
+    }
+  }
+  return <div className="bank-copy"><strong className="account-owner-name">{name}</strong><button type="button" onClick={copyName}>Hesap Sahibini Kopyala</button><span role="status" className="copy-feedback">{message}</span></div>;
+}
+
+export function PaymentBackLink() {
+  function goBack() {
+    const referrer = document.referrer;
+    if (referrer) {
+      try {
+        const url = new URL(referrer);
+        if (url.origin === window.location.origin && url.pathname !== window.location.pathname) {
+          window.location.assign(url.href);
+          return;
+        }
+      } catch { /* fall through to safe destination */ }
+    }
+    window.location.assign("https://sprintyuzmekursu.com");
+  }
+  return <nav className="payment-back-nav" aria-label="Sayfa gezinme"><button type="button" onClick={goBack} aria-label="Geri dön">← Geri Dön</button></nav>;
+}
