@@ -85,3 +85,10 @@
 .guardianBankPayment form, .guardianBankPayment label { display: grid; gap: 8px; min-width: 0; }
 .guardianBankPayment label { color: #263d5a; font-size: 13px; font-weight: 700; }
 .guardianBankPayment select { min-height: 44px; width: 100%; padding: 8px 10px; border: 1px solid #cddbed; border-radius: 9px; color: #152e4e; background: #fff; font: inherit; }
+
+.guardianRefreshButton {
+  display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:44px;
+  padding:0 8px; border:1px solid #d5e4f0; border-radius:10px; background:#f4f8fc;
+  color:#16476f; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+}
+.guardianRefreshButton:disabled { opacity:.65; cursor:wait; }
