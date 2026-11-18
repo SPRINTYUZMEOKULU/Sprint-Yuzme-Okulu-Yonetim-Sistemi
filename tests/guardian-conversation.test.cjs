@@ -29,3 +29,11 @@ test('Guardian notification list filters both account and active student, and re
  const saved=await api.POST({json:async()=>({id:'notice'})});assert.equal(saved.status,200);assert.ok(calls.every(([k,v])=>k!=='recipient_user_id'||v==='parent'));
  notice=null;const missing=await api.POST({json:async()=>({id:'missing'})});assert.equal(missing.status,404);
 });
+
+test('Correcting a sent answer creates a visible update for the owning parent',async()=>{
+ const f=fixture({guardian_id:'parent',student_id:'child',guardian_response:'Previous answer',responded_by:'first-staff',responded_at:'first-time',updated_at:'version1'});
+ await assert.rejects(f.mod.manageGuardianRequest(form({request_id:'request',status:'answered',correct_response:'yes',guardian_response:'Corrected answer',expected_updated_at:'version1'})),e=>e.url.includes('request=request&saved='));
+ assert.equal(f.writes[0].value.guardian_response,'Düzeltme\n\nCorrected answer');
+ assert.deepEqual(f.notifications[0].recipientProfileIds,['parent']);
+ assert.match(f.notifications[0].title,/güncellendi/);
+});

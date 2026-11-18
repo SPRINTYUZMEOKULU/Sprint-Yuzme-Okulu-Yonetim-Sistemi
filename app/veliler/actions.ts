@@ -198,7 +198,13 @@ export async function manageGuardianRequest(formData: FormData) {
   if(!requestStatusLabels[requestedStatus])back("/veli-talepleri","error","Geçersiz talep durumu.");
   const assignedTo=text(formData,"assigned_to",100)||null;
   if(assignedTo){const {data:assignee}=await supabase.from("profiles").select("id").eq("organization_id",organizationId).eq("id",assignedTo).eq("is_active",true).in("role",[...staffRoles]).maybeSingle();if(!assignee)back("/veli-talepleri","error","Atanacak personel bulunamadı.");}
-  const guardianResponse = text(formData, "guardian_response", 4000) || previous.guardian_response || null;
+  const responseBody = text(formData, "guardian_response", 3980);
+  const correcting = formData.get("correct_response") === "yes";
+  if (correcting && (!previous.guardian_response || !responseBody ||
+      !formData.get("expected_updated_at") || responseBody === previous.guardian_response.replace(/^Düzeltme\s*\n+/, ""))) {
+    back("/veli-talepleri", "error", "Düzeltilmiş yanıtı giriniz.");
+  }
+  const guardianResponse = correcting ? `Düzeltme\n\n${responseBody}` : responseBody || previous.guardian_response || null;
   if(formData.get("expected_updated_at") && text(formData,"expected_updated_at",100)!==previous.updated_at)back("/veli-talepleri","error","Görüşmeye yeni yanıt geldi. Güncel kaydı açıp tekrar deneyin.");
   const state=responseState(requestedStatus,guardianResponse,previous.guardian_response);
   const status=state.status;
@@ -223,7 +229,7 @@ export async function manageGuardianRequest(formData: FormData) {
       category: "students",
       eventKey: "guardian_request_answered",
       notificationType: "guardian_request_answered",
-      title: `Talebiniz yanıtlandı · ${requestRow.request_number}`,
+      title: `${correcting ? "Talebinizin yanıtı güncellendi" : "Talebiniz yanıtlandı"} · ${requestRow.request_number}`,
       body: guardianResponse,
       severity: "success",
       priority: "normal",
@@ -239,12 +245,15 @@ export async function manageGuardianRequest(formData: FormData) {
 
   if(requestRow?.student_id)revalidateGuardianConnection(requestRow.guardian_id,requestRow.student_id);
   revalidatePath("/veli-talepleri");
-  back("/veli-talepleri", "saved", notificationOk?"Talep ve görüşme geçmişi güncellendi.":"Yanıt kaydedildi; veli bildirimi oluşturulamadı.");
+  back(`/veli-talepleri?request=${encodeURIComponent(requestId)}`, "saved", notificationOk?"Talep ve görüşme geçmişi güncellendi.":"Yanıt kaydedildi; veli bildirimi oluşturulamadı.");
 }
 
 export async function replyGuardianRequest(formData:FormData){
  const profile=await requireProfile(["guardian"]),org=profile.organization_id;
- const id=text(formData,"request_id",100),body=text(formData,"body",4000);
+ const id=text(formData,"request_id",100);
+ const correction=formData.get("reply_kind")==="correction";
+ const message=text(formData,"body",correction ? 3980 : 4000);
+ const body=message && correction ? `Talep düzeltmesi\n\n${message}` : message;
  const db=adminClient();
  const {data:row}=await db.from("guardian_requests").select("id,student_id,request_number").eq("organization_id",org).eq("guardian_id",profile.id).eq("id",id).maybeSingle();
  const path=`/veli-talepleri?child=${row?.student_id||""}&request=${id}`;

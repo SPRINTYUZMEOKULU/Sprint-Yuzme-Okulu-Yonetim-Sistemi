@@ -636,3 +636,24 @@ button,input,a{-webkit-tap-highlight-color:transparent}
  .compactLogin .v2BrandContent{gap:2px!important}
  .compactLogin .v2FormPanel{padding-top:10px!important}
 }
+
+.sprintLoginIntro {
+  padding: 22px 26px 14px;
+  display: grid;
+  gap: 8px;
+}
+.sprintLoginIntro h1 {
+  margin: 0;
+  color: #13294c;
+  font-size: clamp(21px, 4vw, 28px);
+  line-height: 1.2;
+}
+.sprintLoginIntro a {
+  justify-self: start;
+  color: #155ca9;
+  font-size: 13px;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .sprintLoginIntro { padding: 5px 4px 14px; }
+}
