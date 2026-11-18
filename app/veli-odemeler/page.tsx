@@ -1,3 +1,4 @@
+import GuardianInvoiceList from "./guardian-invoice-list";
 import PendingSubmitButton from "@/app/ogrenciler/[id]/pending-submit-button";
 import { openGuardianBankPayment } from "./actions";
 import HistoryPagination from "@/app/veli-paneli/history-pagination";
@@ -104,6 +105,7 @@ export default async function Page({
             </div>
           </section>
         ) : null}
+        {!previewGuardian && profile.organization_id ? <GuardianInvoiceList org={profile.organization_id} guardianId={profile.id} studentId={data.selected.id}/> : null}
         <section className="guardianCard" style={{ marginTop: 18 }}>
           <h2>Ödeme Geçmişi</h2><p className="guardianSectionLead">Tüm kayıt dönemlerindeki tahsilatlar. Üstteki bakiye mevcut pakete aittir.</p><div className="guardianTableWrap"><table className="guardianTable">
             <thead>
