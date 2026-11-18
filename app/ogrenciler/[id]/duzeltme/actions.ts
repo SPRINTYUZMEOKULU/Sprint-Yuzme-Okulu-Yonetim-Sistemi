@@ -656,7 +656,7 @@ export async function applyManagerCorrection(formData: FormData) {
   if (!logResult.data) {
     redirect(`${correctionPage}&error=${encodeURIComponent("Kayıt güncellendi ancak denetim kaydı doğrulanamadı.")}#duzeltme-sonucu`);
   }
-  redirect(`${correctionPage}&correction=${encodeURIComponent(logResult.data.id)}#duzeltme-sonucu`);
+  redirect(`${correctionPage}&saved=1&correction=${encodeURIComponent(logResult.data.id)}#duzeltme-sonucu`);
 }
 
 export async function updateScheduledRenewalDate(formData: FormData) {
