@@ -36,39 +36,6 @@
 @media(max-width:360px){.guardianShell .guardianHero{flex-direction:column}.lessonRing{width:100%;height:auto;min-height:68px;flex-direction:row;gap:10px;flex-basis:auto;border-radius:15px}.lessonRing small{max-width:80px}}
 @media(prefers-reduced-motion:reduce){.guardianShell *{scroll-behavior:auto}.guardianAction{transition:none}.guardianAction:hover{transform:none}}
 
-.guardianShell .guardianOverviewHero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-  gap: 22px;
-  align-items: center;
-}
-.guardianLessonBalance {
-  position: relative;
-  z-index: 2;
-  padding: 16px;
-  border: 1px solid #ffffff38;
-  border-radius: 18px;
-  background: #071c4657;
-}
-.guardianLessonBalance > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.guardianLessonBalance > div span { font-size: 14px; font-weight: 700; }
-.guardianLessonBalance > div strong { font-size: 36px; font-variant-numeric: tabular-nums; line-height: 1; }
-.guardianLessonBalance dl {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid #ffffff38;
-  margin: 12px 0 0;
-}
-.guardianLessonBalance dl div { display: flex; gap: 6px; flex-wrap: wrap; justify-content: space-between; }
-.guardianLessonBalance dt { font-size: 12px; color: #d9e9ff; }
-.guardianLessonBalance dd { margin: 0; font-size: 13px; font-weight: 800; }
 .guardianPaymentOverview, .guardianBankPayment {
   display: flex;
   flex-wrap: wrap;
@@ -109,8 +76,6 @@
 .guardianBankPayment h2 { margin: 0 0 6px; font-size: 20px; }
 .guardianBankPayment p { margin: 0; color: #4b617b; line-height: 1.5; }
 @media (max-width: 600px) {
-  .guardianShell .guardianOverviewHero { grid-template-columns: minmax(0, 1fr); gap: 15px; }
-  .guardianShell .guardianOverviewHero p { max-width: none; }
   .guardianPaymentOverview .guardianPayActions { width: 100%; }
 }
 

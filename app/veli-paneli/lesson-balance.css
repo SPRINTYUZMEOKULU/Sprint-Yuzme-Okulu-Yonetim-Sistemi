@@ -1,0 +1,33 @@
+.guardianShell .guardianCourseHero {
+  display: block;
+  padding: clamp(22px, 5vw, 36px);
+}
+.guardianShell .guardianCourseHero h1 { margin-bottom: 10px; }
+.guardianShell .guardianCourseHero p { color: #e1edff; max-width: none; }
+.guardianLessonCard {
+  --lesson-accent: #154b9b;
+  --lesson-tint: #edf5ff;
+  margin-top: 14px;
+  padding: clamp(16px, 4vw, 24px);
+  border: 1px solid #dbe5f2;
+  border-radius: 20px;
+  background: #fff;
+  color: #12213d;
+}
+.guardianLessonCard[data-tone="warning"] { --lesson-accent: #805000; --lesson-tint: #fff3d7; }
+.guardianLessonCard[data-tone="critical"] { --lesson-accent: #9d221e; --lesson-tint: #fff0ee; }
+.guardianLessonCardHeader, .guardianLessonCounters { display: grid; gap: 10px; }
+.guardianLessonCardHeader { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.guardianLessonCard h2 { margin: 0 0 7px; font-size: clamp(18px, 4.5vw, 23px); }
+.guardianLessonCard a { color: #164e96; font-size: 13px; font-weight: 700; text-underline-offset: 3px; }
+.guardianLessonTotal { display: grid; justify-items: center; min-width: 70px; padding: 9px 12px; border-radius: 12px; background: var(--lesson-tint); color: var(--lesson-accent); }
+.guardianLessonTotal span, .guardianLessonCounters dt { font-size: 13px; font-weight: 650; }
+.guardianLessonTotal strong { font-size: 30px; line-height: 1.12; }
+.guardianLessonCounters { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 13px 0 0; }
+.guardianLessonCounters div { padding: 12px; border-radius: 12px; background: #f3f6fb; }
+.guardianLessonCounters div:first-child { color: var(--lesson-accent); background: var(--lesson-tint); }
+.guardianLessonCounters dd { margin: 5px 0 0; font-size: 26px; line-height: 1.05; }
+.guardianLessonTotal strong, .guardianLessonCounters dd { font-weight: 800; font-variant-numeric: tabular-nums; }
+.guardianLessonWarning { display: grid; justify-items: start; gap: 7px; margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--lesson-tint); color: var(--lesson-accent); }
+.guardianLessonToast { position: fixed; inset: auto 14px calc(90px + env(safe-area-inset-bottom, 0px)) auto; z-index: 45; display: flex; align-items: center; gap: 12px; max-width: min(420px, calc(100vw - 28px)); padding: 10px 12px; border: 1px solid currentColor; border-radius: 12px; background: var(--lesson-tint); color: var(--lesson-accent); box-shadow: 0 8px 25px #12213d25; }
+.guardianLessonToast button { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
