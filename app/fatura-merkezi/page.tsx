@@ -38,7 +38,7 @@ export default async function InvoiceCenter({searchParams}:{
   // The "issued" tab is deliberately limited to records explicitly marked as sent
   // in SprintOS. It is not a guarantee of GIB acceptance or a provider archive sync.
   let documentQuery = db.from("payment_document_requests")
-    .select("id,student_id,recipient_name,expected_amount,document_type,document_number,provider_document_id,document_status,document_pdf_url,document_xml_url,status,created_at",{count:"exact"})
+    .select("id,student_id,payment_id,recipient_name,expected_amount,document_type,document_number,provider_document_id,document_status,document_pdf_url,document_xml_url,status,created_at",{count:"exact"})
     .eq("organization_id",profile.organization_id);
   if (issued) {
     documentQuery = documentQuery.eq("status","document_sent");
@@ -55,7 +55,7 @@ export default async function InvoiceCenter({searchParams}:{
     db.from("payment_document_requests").select("id",{count:"exact",head:true})
       .eq("organization_id",profile.organization_id).eq("status","document_sent"),
     db.from("payment_document_requests")
-      .select("id,student_id,recipient_name,expected_amount,status,created_at,expires_at,city,district")
+      .select("id,student_id,payment_id,recipient_name,expected_amount,status,created_at,expires_at,city,district")
       .eq("organization_id",profile.organization_id).in("status",awaiting)
       .order("created_at",{ascending:false}).limit(15)
   ]);
@@ -117,7 +117,9 @@ export default async function InvoiceCenter({searchParams}:{
             {row.status!=="waiting_customer"&&(!row.city?.trim()||!row.district?.trim())?<p>Belge hazırlığı için alıcının il / ilçe bilgisi kontrol edilmeli.</p>:null}
             <small>{when(row.created_at)} · {row.recipient_name||"Belge alıcısı bekleniyor"}</small></div>
           <div className="invoice-request-end"><b>{money(row.expected_amount)}</b>
-            <Link href={`/odeme-bilgileri/belgeler?studentId=${encodeURIComponent(row.student_id)}`}>Talebi incele</Link></div>
+            <Link href={`/odeme-bilgileri/belgeler?studentId=${encodeURIComponent(row.student_id)}`}>Talebi incele</Link>
+            {row.payment_id && ["payment_received", "document_pending"].includes(row.status) ?
+              <Link href={`/odeme-bilgileri/belgeler/paylas/${row.id}`}>Veliye PDF paylaşımı</Link> : null}</div>
         </article>)}</div>}
     </section> : null}
 
@@ -139,6 +141,8 @@ export default async function InvoiceCenter({searchParams}:{
           </dl>
           <div className="invoice-actions">
             <Link href={`/ogrenciler/${row.student_id}`}>Kursiyer Dosyası</Link>
+            {row.payment_id && ["payment_received", "document_pending", "document_created", "document_sent"].includes(row.status) ?
+              <Link href={`/odeme-bilgileri/belgeler/paylas/${row.id}`}>Veliye PDF paylaşımı</Link> : null}
             {row.document_pdf_url?<Link target="_blank" rel="noopener noreferrer" href={`/fatura-merkezi/belge/${row.id}/pdf`}>PDF Aç</Link>:<span>PDF henüz alınmadı</span>}
             {row.document_xml_url?<Link target="_blank" rel="noopener noreferrer" href={`/fatura-merkezi/belge/${row.id}/xml`}>XML Aç</Link>:null}
           </div>
