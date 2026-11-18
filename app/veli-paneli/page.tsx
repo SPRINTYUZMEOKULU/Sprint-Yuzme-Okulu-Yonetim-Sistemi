@@ -1,3 +1,4 @@
+import LessonBalance from "./lesson-balance";
 import UiIcon from "@/app/components/ui-icon";
 import AttendanceSummary from "@/app/components/attendance-summary";
 import {attendanceSummary as currentPeriodAttendanceSummary} from "@/lib/students/attendance-summary";
@@ -21,8 +22,8 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   }
 
   const total = Number(data.enrollment?.total_lessons || data.coursePackage?.lesson_count || 0);
-  const used = Number(data.enrollment?.lesson_rights?.used ?? data.enrollment?.used_lessons ?? 0);
-  const remaining = Number(data.enrollment?.lesson_rights?.total ?? Math.max(0,total-used));
+  const rights = data.enrollment?.lesson_rights;
+  const rightsReady = Boolean(rights && Number.isFinite(rights.normal) && Number.isFinite(rights.compensation));
   const currentAttendance=enrollmentAttendance(data.attendance,data.enrollment);
   const {rate:attendanceRate,absenceStreak,latestAbsence}=attendanceSummary(currentAttendance);
   const {paid: paidTotal, price: packagePrice, debt} = guardianPaymentSummary(data.enrollment, data.coursePackage, data.payments, data.paymentPlan);
@@ -37,21 +38,22 @@ export default async function GuardianPortal({ searchParams }: { searchParams: P
   return <main className="guardianShell">
     <GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={selectedId} />
     <div className="guardianContent">
-      <section className="guardianHero guardianOverviewHero">
+      <section className="guardianHero guardianCourseHero">
         <div className="guardianHeroMain">
           <small>KURSİYER ÖZETİ</small>
           <h1>{data.selected.first_name} {data.selected.last_name}</h1>
           <p>{data.branch?.name || "Şube belirlenmedi"}</p>
           <p>{data.group?.name || "Grup belirlenmedi"}</p>
         </div>
-        <div className="guardianLessonBalance">
-          <div><span>Toplam kalan ders</span><strong>{remaining}</strong></div>
-          <dl>
-            <div><dt>Normal ders</dt><dd>{data.enrollment?.lesson_rights?.normal ?? remaining}</dd></div>
-            <div><dt>Telafi</dt><dd>{data.enrollment?.lesson_rights?.compensation ?? 0}</dd></div>
-          </dl>
-        </div>
       </section>
+      {data.enrollment || data.issues.some(issue => issue.startsWith("Kayıt")) ? <LessonBalance
+        normal={Math.max(0, rights?.normal ?? 0)}
+        makeup={Math.max(0, rights?.compensation ?? 0)}
+        ready={rightsReady}
+        alertKey={!previewGuardian && data.enrollment?.id ? `${profile.id}:${data.enrollment.id}` : undefined}
+        attendanceUrl={`/veli-devam?child=${selectedId}${previewQuery}`}
+        requestUrl={`/veli-talepleri?child=${selectedId}${previewQuery}`}
+      /> : null}
 
       {data.enrollment?.start_confirmation_required&&!data.enrollment?.actual_started_at?<div className="guardianFooterNote" role="status"><strong>Kurs başlangıcı bekleniyor</strong><p>Planlanan başlangıç: {formatDate(data.enrollment.start_date)}. Yönetim kursu başlattığında ders ve yoklama bilgileri bu ekranda güncellenecektir.</p></div>:null}
       {latestAbsence ? <section className="guardianAttendanceAlert" style={{margin:"0 0 16px",padding:"15px 17px",border:"1px solid #f3c9c9",borderRadius:16,background:"#fff7f7",color:"#7f1d1d"}}>
