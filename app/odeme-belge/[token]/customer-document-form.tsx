@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveCustomerDocumentInfo } from "./actions";
 
-export default function CustomerDocumentForm({ token }: { token: string }) {
+export default function CustomerDocumentForm({ token, editing = false, onCancel }: { token: string; editing?: boolean; onCancel?: () => void }) {
   const router = useRouter();
   const [type, setType] = useState("individual");
   const [message, setMessage] = useState("");
@@ -12,6 +12,7 @@ export default function CustomerDocumentForm({ token }: { token: string }) {
   const [pending, startTransition] = useTransition();
 
   return <form className="doc-form" action={(fd) => startTransition(async () => { try { const r = await saveCustomerDocumentInfo(token, fd); setMessage(r.message); setDone(r.ok); if (r.ok) router.refresh(); } catch { setDone(false); setMessage("Bağlantı kontrol edilemedi. Tekrar deneyiniz."); } })}>
+    {editing && <p className="intro">Güvenliğiniz için belge bilgilerini yeniden giriniz. Kaydedince önceki bilgileriniz güncellenir.</p>}
     <div className="type-grid">
       <label className={type === "individual" ? "selected" : ""}><input type="radio" name="recipient_type" value="individual" checked={type === "individual"} onChange={() => setType("individual")} /> Bireysel</label>
       <label className={type === "company" ? "selected" : ""}><input type="radio" name="recipient_type" value="company" checked={type === "company"} onChange={() => setType("company")} /> Kurumsal</label>
@@ -29,6 +30,7 @@ export default function CustomerDocumentForm({ token }: { token: string }) {
     <label>Telefon <span>(isteğe bağlı)</span><input name="phone" type="tel" autoComplete="tel" /></label>
     <label className="consent"><input name="consent" type="checkbox" required /> Girdiğim bilgilerin ödeme belgesinin düzenlenmesinde kullanılmasını onaylıyorum.</label>
     <button disabled={pending || done}>{pending ? "Kaydediliyor…" : done ? "Bilgiler Kaydedildi ✓" : "Bilgileri Kaydet ve Ödemeye Geç"}</button>
+    {editing && <button type="button" className="secondary-action" onClick={onCancel}>Vazgeç ve Ödeme Bilgilerine Dön</button>}
     {message && <p role={done?"status":"alert"} className={done ? "success" : "error"}>{message}</p>}
   </form>;
 }
