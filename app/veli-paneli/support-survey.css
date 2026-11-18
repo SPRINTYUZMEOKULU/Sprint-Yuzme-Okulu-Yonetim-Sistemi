@@ -23,3 +23,16 @@
 .guardianSurveySubmit{justify-self:start;background:#174b8d}
 .guardianSurveySubmit:disabled{opacity:.65;cursor:wait}
 @media(max-width:520px){.guardianWhatsAppButton,.guardianSurveySubmit{width:100%}}
+.guardianSupportCard { border-color:#ccded7; background:#f6fbf8; }
+.guardianSupportHead > div { min-width:min(145px,100%); }
+.guardianWhatsAppButton { gap:8px; }
+.guardianSurveyCard { padding:0; }
+.surveyToggle { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; list-style:none; cursor:pointer; }
+.surveyToggle::-webkit-details-marker { display:none; }
+.surveyToggle strong,.surveyToggle small { display:block; }
+.surveyToggle strong { font-size:19px; }
+.surveyToggle small { margin-top:4px; color:#50657a; line-height:1.45; }
+.surveyChevron { color:#195890; }
+.guardianSurveyCard[open] .surveyChevron { transform:rotate(180deg); }
+.surveyBody { border-top:1px solid #deE7ef; padding:0 20px 20px; }
+.surveyToggle:focus-visible { outline:3px solid #2876b5; outline-offset:2px; border-radius:18px; }
