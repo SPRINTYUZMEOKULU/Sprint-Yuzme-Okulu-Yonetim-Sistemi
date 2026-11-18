@@ -79,13 +79,15 @@ function getAdminClient() {
   });
 }
 
-export async function getGuardianContext(userId: string, selectedId?: string, view:GuardianDataView="full", pageValue?:string): Promise<GuardianContext> {
+export async function getGuardianContext(userId: string, selectedId?: string, view:GuardianDataView="full", pageValue?:string, verifiedProfile?: {id:string; role:string; organization_id:string|null; is_active:boolean}): Promise<GuardianContext> {
   const plan=guardianLoadPlan(view),historyPage=guardianHistoryPage(pageValue);
   const admin = getAdminClient();
 
   if (!admin) return emptyContext([],"Portal bağlantısı şu anda kullanılamıyor.");
 
-  const { data: profile, error: profileError } = await admin
+  const { data: profile, error: profileError } = verifiedProfile
+    ? { data: verifiedProfile.id === userId && verifiedProfile.role === "guardian" && verifiedProfile.is_active ? verifiedProfile : null, error: null }
+    : await admin
     .from("profiles")
     .select("id,organization_id,role,is_active")
     .eq("id", userId)

@@ -7,11 +7,6 @@ import "./support-survey.css";
 
 const phone = "0551 896 83 19";
 const whatsApp = `https://wa.me/90${phone.replace(/\s/g, "").slice(1)}?text=`;
-const reasons = [
-  ["Ders hakkında soru", "Merhaba, derslerle ilgili bir sorum var."],
-  ["Uygulama hatası", "Merhaba, SprintOS Veli Paneli’nde bir hata bildirmek istiyorum."],
-  ["Görüş ve öneri", "Merhaba, bir görüş veya önerimi paylaşmak istiyorum."],
-];
 
 export function SprintSupport() {
   return <section className="guardianSupportCard" aria-labelledby="sprint-support-heading">
@@ -20,10 +15,6 @@ export function SprintSupport() {
       <div><h2 id="sprint-support-heading">SPRİNT Bilgilendirme Hattı</h2><p>{phone}</p></div>
       <a className="guardianWhatsAppButton" href={whatsApp + encodeURIComponent("Merhaba, SPRİNT Bilgilendirme Hattı ile görüşmek istiyorum.")}
         target="_blank" rel="noopener noreferrer">WhatsApp’ta Görüş</a>
-    </div>
-    <div className="guardianSupportTopics" aria-label="Görüşme konuları">
-      {reasons.map(([label, message]) => <a key={label} href={whatsApp + encodeURIComponent(message)}
-        target="_blank" rel="noopener noreferrer">{label}</a>)}
     </div>
   </section>;
 }

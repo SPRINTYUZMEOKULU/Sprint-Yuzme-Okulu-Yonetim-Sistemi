@@ -19,6 +19,7 @@ export type CurrentProfile = {
   email: string | null;
   role: UserRole;
   base_role: UserRole;
+  is_active: boolean;
   organization_id: string | null;
   is_super_user: boolean;
 };
@@ -89,7 +90,7 @@ export async function requireProfile(allowedRoles?: UserRole[]): Promise<Current
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, organization_id")
+    .select("id, full_name, email, role, organization_id, is_active")
     .eq("id", user.id)
     .single();
 
@@ -122,6 +123,7 @@ export async function requireProfile(allowedRoles?: UserRole[]): Promise<Current
     email: profile.email,
     role: effectiveRole,
     base_role: baseRole,
+    is_active: profile.is_active === true,
     organization_id: profile.organization_id,
     is_super_user: isSuperUser,
   };
