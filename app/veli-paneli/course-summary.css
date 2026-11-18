@@ -1,0 +1,21 @@
+.courseIdentity {
+  display:flex; align-items:center; gap:16px; padding:clamp(20px,4vw,36px);
+  border-radius:20px; color:white; background:linear-gradient(115deg,#102c52,#164b73);
+}
+.courseMonogram {
+  display:grid; place-items:center; flex:none; width:52px; height:52px; border-radius:16px;
+  background:#ffffff16; border:1px solid #ffffff45; font-size:20px; font-weight:700;
+}
+.courseIdentity > div:last-child { min-width:0; overflow-wrap:anywhere; }
+.courseIdentity small { color:#bedbed; font-weight:600; }
+.courseIdentity h1 { margin:3px 0 6px; font-size:clamp(22px,4vw,34px); line-height:1.16; color:white; }
+.courseIdentity p { display:flex; align-items:center; gap:6px; margin:0; color:#deedf8; }
+.courseIdentity svg { flex:none; }
+.courseDetails .guardianCardHeader a { display:inline-flex; align-items:center; gap:5px; min-height:44px; }
+.courseFacts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:14px 0; }
+.courseFacts > div { min-width:0; }
+.courseFacts > div:nth-child(-n+2), .courseFacts > div:last-child { grid-column:1/-1; }
+.courseFacts dt { color:#53677c; font-size:13px; margin-bottom:4px; }
+.courseFacts dd { margin:0; color:#162f48; font-size:16px; line-height:1.45; font-weight:650; overflow-wrap:anywhere; }
+.courseTimes { border-top:1px solid #dbe6ef; padding-top:14px; }
+.courseTimes h3 { margin:0 0 8px; color:#28445e; font-size:14px; }

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { formatDate, formatMoney, weekdayLabel } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, GuardianIcon, StatusPill } from "./guardian-ui";
 import "./veli.css";
+import "./course-summary.css";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -52,12 +53,11 @@ async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identi
   return <main className="guardianShell">
     <GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={selectedId} />
     <div className="guardianContent">
-      <section className="guardianHero guardianCourseHero">
-        <div className="guardianHeroMain">
-          <small>KURSİYER ÖZETİ</small>
+      <section className="courseIdentity">
+        <div className="courseMonogram" aria-hidden="true">{[data.selected.first_name, data.selected.last_name].map(part => part?.trim().slice(0,1).toLocaleUpperCase("tr-TR")).join("")}</div>
+        <div><small>Kursiyer özeti</small>
           <h1>{data.selected.first_name} {data.selected.last_name}</h1>
-          <p>{data.branch?.name || "Şube belirlenmedi"}</p>
-          <p>{data.group?.name || "Grup belirlenmedi"}</p>
+          <p><GuardianIcon name="location" size={16}/>{data.branch?.name || "Şube belirlenmedi"}</p>
         </div>
       </section>
       {data.enrollment || data.issues.some(issue => issue.startsWith("Kayıt")) ? <LessonBalance
@@ -86,7 +86,6 @@ async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identi
           <Link href={`/veli-odemeler?child=${selectedId}${previewQuery}`}>Ödeme detayları</Link>
         </div>
       </section> : null}
-      <SprintSupport />
       <section className="guardianFollowUps" aria-label="Takip ve bekleyen işlemler">
         <Link className={unreadMessages>0?"guardianAttention":""} href={`/veli-mesajlar?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="message"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Mesaj"))?"Bilgi alınamadı":`${unreadMessages} okunmamış mesaj`}</strong><small>Mesajlarınızı görüntüleyin</small></span><UiIcon name="chevronRight" size={18}/></Link>
         <Link href={`/veli-talepleri?child=${selectedId}${previewQuery}`}><span className="guardianFollowIcon"><GuardianIcon name="request"/></span><span><strong>{data.issues.some(issue=>issue.startsWith("Talep"))?"Bilgi alınamadı":`${openRequests} açık görüşme`}</strong><small>Talepler ve yönetim yanıtları</small></span><UiIcon name="chevronRight" size={18}/></Link>
@@ -100,17 +99,17 @@ async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identi
       </section>
 
       <section className="guardianGrid">
-        <article className="guardianCard">
-          <div className="guardianCardHeader"><div><small className="guardianCardEyebrow">KURS DURUMU</small><h2>Kurs Bilgileri</h2></div><Link href={`/veli-devam?child=${selectedId}${previewQuery}`}>Takvimi aç</Link></div>
-          <div className="infoList">
-            <div className="infoRow"><span>Şube</span><strong>{data.branch?.name || "—"}</strong></div>
-            <div className="infoRow"><span>Grup</span><strong>{data.group?.name || "—"}</strong></div>
-            <div className="infoRow"><span>Eğitmen</span><strong>{data.coach?.full_name || "Atanmadı"}</strong></div>
-            <div className="infoRow"><span>Paket</span><strong>{data.coursePackage?.name || `${total || 0} Ders`}</strong></div>
-            <div className="infoRow"><span>Başlangıç</span><strong>{formatDate(data.enrollment?.start_date)}</strong></div>
-            <div className="infoRow"><span>Yoklama</span><AttendanceSummary summary={currentPeriodAttendanceSummary(data.attendance,data.enrollment)} /></div>
-          </div>
-          {data.schedules.length ? <div className="scheduleChips">{data.schedules.map((schedule: any) => <span className="scheduleChip" key={schedule.id}>{weekdayLabel(Number(schedule.weekday))} · {String(schedule.start_time).slice(0,5)}</span>)}</div> : null}
+        <article className="guardianCard courseDetails">
+          <div className="guardianCardHeader"><div><h2>Kurs Bilgileri</h2></div><Link href={`/veli-devam?child=${selectedId}${previewQuery}`}><GuardianIcon name="calendar" size={16}/> Takvimi aç</Link></div>
+          <dl className="courseFacts">
+            <div><dt>Şube</dt><dd>{data.branch?.name || "—"}</dd></div>
+            <div><dt>Grup</dt><dd>{data.group?.name || "—"}</dd></div>
+            <div><dt>Eğitmen</dt><dd>{data.coach?.full_name || "Atanmadı"}</dd></div>
+            <div><dt>Paket</dt><dd>{data.coursePackage?.name || `${total || 0} Ders`}</dd></div>
+            <div><dt>Başlangıç</dt><dd>{formatDate(data.enrollment?.start_date)}</dd></div>
+            <div><dt>Yoklama</dt><dd><AttendanceSummary summary={currentPeriodAttendanceSummary(data.attendance,data.enrollment)} /></dd></div>
+          </dl>
+          {data.schedules.length ? <div className="courseTimes"><h3>Ders programı</h3><div className="scheduleChips">{data.schedules.map((schedule: any) => <span className="scheduleChip" key={schedule.id}>{weekdayLabel(Number(schedule.weekday))} · {String(schedule.start_time).slice(0,5)}</span>)}</div></div> : null}
         </article>
 
         <article className="guardianCard">
@@ -128,6 +127,7 @@ async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identi
       </section>
 
       {!previewGuardian && <SatisfactionSurvey id={randomUUID()}/>}
+      <SprintSupport />
     </div>
   </main>;
 }
