@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { openCurrentWhatsapp } from "@/lib/messaging/current-recipient";
+
 type Props = {
   studentName: string;
-  phone?: string | null;
-  guardianPhone?: string | null;
+  studentId: string;
   branchName?: string | null;
   groupName?: string | null;
   packageName?: string | null;
@@ -14,15 +16,6 @@ type Props = {
   sessions?: string[];
 };
 
-function whatsappPhone(value?: string | null) {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("90")) return digits;
-  if (digits.startsWith("0")) return `90${digits.slice(1)}`;
-  if (digits.length === 10) return `90${digits}`;
-  return digits;
-}
-
 function dateTR(value?: string | null) {
   if (!value) return "—";
   const [y, m, d] = value.slice(0, 10).split("-");
@@ -30,12 +23,13 @@ function dateTR(value?: string | null) {
 }
 
 export default function CorrectionWhatsapp(props: Props) {
-  const recipient = whatsappPhone(props.guardianPhone || props.phone);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
   const message = [
     "*SPRİNT YÜZME OKULU - KAYIT BİLGİLENDİRMESİ*",
     "",
-    `Sayın ${props.studentName},`,
-    "Kursiyer kaydınızda yapılan güncelleme tamamlanmıştır. Güncel kayıt bilgileriniz aşağıdaki gibidir:",
+    "Merhaba,",
+    `${props.studentName} için güncel yüzme kursu kayıt bilgilerini paylaşıyoruz.`,
     "",
     `• *Şube:* ${props.branchName || "—"}`,
     `• *Grup:* ${props.groupName || "—"}`,
@@ -50,28 +44,34 @@ export default function CorrectionWhatsapp(props: Props) {
     "",
     "*SPRİNT YÜZME OKULU*",
     "Bilgilendirme Hattı: 0551 896 83 19",
+    "https://sprintyuzmekursu.com",
   ].join("\n");
 
-  function send() {
-    if (!recipient) {
-      window.alert("Kursiyer veya veli için WhatsApp numarası bulunamadı.");
-      return;
+  async function openWhatsapp() {
+    setPending(true);
+    setError("");
+    try {
+      await openCurrentWhatsapp(props.studentId, null, message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "WhatsApp açılamadı. Tekrar deneyin.");
+    } finally {
+      setPending(false);
     }
-    window.open(
-      `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
   }
 
   return (
     <div className="correctionWhatsapp">
       <div>
-        <strong>Güncel bilgileri kursiyere gönder</strong>
-        <span>Düzeltme sonrası kesinleşen son kayıt bilgilerini WhatsApp mesajı olarak hazırlar.</span>
+        <strong>Kayıt güncellemesini paylaş</strong>
+        <span>Göndermek isterseniz hazır mesajı WhatsApp’ta açın.</span>
+        <details>
+          <summary>Mesajı önizle</summary>
+          <p className="correctionWhatsappPreview">{message}</p>
+        </details>
+        {error && <p role="alert">{error}</p>}
       </div>
-      <button type="button" onClick={send} disabled={!recipient}>
-        {recipient ? "WhatsApp’tan Gönder" : "Telefon Numarası Yok"}
+      <button type="button" onClick={openWhatsapp} disabled={pending} aria-busy={pending}>
+        {pending ? "Alıcı doğrulanıyor…" : "WhatsApp’ta Aç"}
       </button>
     </div>
   );

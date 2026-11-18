@@ -65,6 +65,20 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     </form>
   </div></main>;
   const savedEnrollment = enrollmentResult.data;
+  const correctionResult = savedEnrollment && query.correction &&
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(query.correction)
+    ? await supabase.from("student_activity_logs").select("new_value,performed_at")
+        .eq("id", query.correction).eq("organization_id", organizationId)
+        .eq("student_id", id).eq("source_id", savedEnrollment.id)
+        .eq("activity_type", "manager_data_correction").maybeSingle()
+    : null;
+  const savedScheduleIds = correctionResult?.data?.new_value?.program?.schedule_ids;
+  const hasSavedCorrection = Array.isArray(savedScheduleIds) &&
+    Date.parse(correctionResult?.data?.performed_at || "") === Date.parse(savedEnrollment?.updated_at || "") &&
+    savedScheduleIds.every((scheduleId) => schedulesResult.data?.some((schedule) =>
+      schedule.id === scheduleId && schedule.group_id === savedEnrollment?.group_id,
+    )) &&
+    ![branchesResult, groupsResult, packagesResult, schedulesResult].some((result) => result.error);
   // Yönetici düzeltmesinde yalnız aktif kayıt dönemine ait ödeme hareketini göster.
   // Eski dönem ödemesinin yanlışlıkla düzenlenmesini engeller.
   const activeEnrollmentPayment = savedEnrollment
@@ -75,7 +89,12 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
   const savedPackage = (packagesResult.data || []).find((coursePackage) => coursePackage.id === savedEnrollment?.package_id);
   const selectedDays = new Set((planResult.data?.selected_weekdays || []).map(normalizeIsoWeekday));
   const savedSessions = (schedulesResult.data || [])
-    .filter((schedule) => schedule.group_id === savedEnrollment?.group_id && selectedDays.has(normalizeIsoWeekday(schedule.weekday)))
+    .filter((schedule) =>
+      schedule.group_id === savedEnrollment?.group_id &&
+      (Array.isArray(savedScheduleIds)
+        ? savedScheduleIds.includes(schedule.id)
+        : selectedDays.has(normalizeIsoWeekday(schedule.weekday))),
+    )
     .map((schedule) => `${DAYS[normalizeIsoWeekday(schedule.weekday)] || "Ders"} ${shortTime(schedule.start_time)}-${shortTime(schedule.end_time)}`);
   const savedProgramLabel = savedSessions.length ? savedSessions.join(" · ") : (savedGroup?.name || "—");
 
@@ -99,19 +118,18 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
           </div>
         ) : null}
 
-        {query.saved === "1" ? (
-          <div className="correctionNotice success">
-            <strong>✓ Düzeltme uygulandı.</strong>
+        {hasSavedCorrection && !query.error ? (
+          <div id="duzeltme-sonucu" className="correctionNotice success">
+            <strong role="status">✓ Düzeltme uygulandı.</strong>
             <span>Eski ve yeni değerler öğrenci işlem geçmişine kilitli denetim kaydı olarak eklendi.</span>
             <div className="savedSummary" aria-label="Kaydedilen güncel bilgiler">
               <div><small>Şube</small><b>{savedBranch?.name || "—"}</b></div><div><small>Grup / Seanslar</small><b>{savedProgramLabel}</b></div><div><small>Paket</small><b>{savedPackage?.name || "—"}</b></div><div><small>Toplam Ders</small><b>{savedEnrollment?.total_lessons ?? "—"}</b></div><div><small>Başlangıç</small><b>{savedEnrollment?.start_date || "—"}</b></div><div><small>Planlanan Bitiş</small><b>{savedEnrollment?.planned_end_date || "—"}</b></div><div><small>Ödeme Vadesi</small><b>{savedEnrollment?.payment_due_date || "—"}</b></div>
             </div>
             <CorrectionWhatsapp
               studentName={`${student.first_name || ""} ${student.last_name || ""}`.trim()}
-              phone={student.phone}
-              guardianPhone={student.guardian_phone}
+              studentId={id}
               branchName={savedBranch?.name}
-              groupName={savedProgramLabel}
+              groupName={savedGroup?.name}
               packageName={savedPackage?.name}
               totalLessons={savedEnrollment?.total_lessons}
               startDate={savedEnrollment?.start_date}
@@ -122,7 +140,11 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
           </div>
         ) : null}
 
-        {query.error ? <div className="correctionNotice error"><strong>İşlem tamamlanamadı.</strong><span>{query.error}</span></div> : null}
+        {query.error || (query.correction && !hasSavedCorrection) ? (
+          <div id="duzeltme-sonucu" role="alert" className="correctionNotice error">
+            {query.error || "Kaydedilen düzeltmenin bilgileri doğrulanamadı. Sayfayı yenileyip tekrar deneyin."}
+          </div>
+        ) : null}
         {!enrollmentResult.data ? <div className="correctionNotice error"><strong>Aktif kayıt bulunamadı.</strong><span>Paket/program düzeltmesi için öğrencinin aktif kaydı olmalıdır.</span></div> : (
           <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={activeEnrollmentPayment} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
         )}

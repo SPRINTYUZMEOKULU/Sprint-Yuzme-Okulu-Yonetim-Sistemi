@@ -636,7 +636,7 @@ export async function applyManagerCorrection(formData: FormData) {
     approved_by: profile.id,
     performed_at: now,
     approved_at: now,
-  });
+  }).select("id").single();
 
   if (logResult.error) {
     console.error("MANAGER CORRECTION AUDIT LOG ERROR", logResult.error);
@@ -652,7 +652,11 @@ export async function applyManagerCorrection(formData: FormData) {
   revalidatePath("/yoklama/aylik");
   revalidatePath("/");
 
-  redirect(`/ogrenciler/${studentId}/duzeltme?saved=1`);
+  const correctionPage = `/ogrenciler/${studentId}/duzeltme?period=active`;
+  if (!logResult.data) {
+    redirect(`${correctionPage}&error=${encodeURIComponent("Kayıt güncellendi ancak denetim kaydı doğrulanamadı.")}#duzeltme-sonucu`);
+  }
+  redirect(`${correctionPage}&correction=${encodeURIComponent(logResult.data.id)}#duzeltme-sonucu`);
 }
 
 export async function updateScheduledRenewalDate(formData: FormData) {
