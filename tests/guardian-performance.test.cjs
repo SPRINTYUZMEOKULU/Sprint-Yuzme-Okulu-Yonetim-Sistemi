@@ -43,3 +43,20 @@ test('Finance reads the same scoped extra obligations and tags only their audite
  const data=await f.data.getGuardianContext('parent','child','payments');assert.equal(data.obligations.length,1);assert.equal(data.obligations[0].amount,12000);assert.equal(data.payments.find(row=>row.id==='p1').is_obligation_payment,true);assert.equal(data.payments.find(row=>row.id==='p2').is_obligation_payment,false);
  const finance=load('lib/guardian/payment-summary.ts');assert.equal(finance.guardianPaymentSummary(data.enrollment,data.coursePackage,data.payments).debt,1000);
 });
+
+test('A fresh guardian page reflects saved attendance and schedule changes for the linked child',async()=>{
+ const f=fixture();
+ f.rows.lesson_schedules=[{id:'slot',organization_id:'org',group_id:'group',weekday:2,start_time:'19:00',end_time:'20:00',is_active:true}];
+ const first=await f.data.getGuardianContext('parent','child','attendance');
+ assert.equal(first.schedules[0].start_time,'19:00');
+ f.rows.lesson_schedules[0]={...f.rows.lesson_schedules[0],start_time:'18:00'};
+ f.rows.attendance_records[0]={...f.rows.attendance_records[0],status:'absent',coach_note:'Güncellendi'};
+ const next=await f.data.getGuardianContext('parent','child','attendance');
+ assert.equal(next.schedules[0].start_time,'18:00');
+ assert.equal(next.attendance[0].status,'absent');
+ assert.equal(next.attendance[0].coach_note,'Güncellendi');
+ f.rows.guardian_students[0].portal_access=false;
+ const revoked=await f.data.getGuardianContext('parent','child','attendance');
+ assert.equal(revoked.selected,null);
+ assert.deepEqual(revoked.attendance,[]);
+});

@@ -181,7 +181,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     if(plan.overview)return q.not("status","in","(resolved,rejected,archived)");
     return q.order("updated_at",{ascending:false}).limit(200);
   };
-  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes]=await Promise.all([
+  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes,schedulesRes]=await Promise.all([
     attendance(),noteQuery(),
     plan.finance&&enrollment?allRows("student_payments",plan.full?"id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at":"id,enrollment_id,amount,payment_status,cancelled_at",q=>(plan.full?q:q.eq("enrollment_id",enrollment.id)).order("id")):empty(),
     messageQuery(),
@@ -196,6 +196,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     currentRights(),
     plan.finance?allRows("student_financial_obligations","id,enrollment_id,title,amount,paid_amount,due_date,status,obligation_type",q=>q.order("due_date").order("id")):empty(),
     plan.finance?allRows("student_activity_logs","new_value",q=>q.eq("activity_type","financial_obligation_payment").order("id")):empty(),
+    plan.schedule&&enrollment?.group_id?admin.from("lesson_schedules").select("id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("group_id",enrollment.group_id).eq("is_active",true):empty(),
   ]);
   for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes],["Ödeme ek borçları",obligationsRes],["Ödeme eşleştirmeleri",obligationPaymentsRes]] as const)report(label,result);
   if(enrollment&&rights)enrollment.lesson_rights=rights;
@@ -206,11 +207,10 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   const scopes=["and(group_id.is.null,branch_id.is.null)"];
   if(branchId)scopes.push(`and(group_id.is.null,branch_id.eq.${branchId})`);
   if(group?.id)scopes.push(`group_id.eq.${group.id}`);
-  const [installmentsRes,branchRes,coachesRes,schedulesRes,announcementsRes]=await Promise.all([
+  const [installmentsRes,branchRes,coachesRes,announcementsRes]=await Promise.all([
     planRes.data?.id&&planRes.data.status!=="cancelled"?admin.from("student_payment_installments").select("id,sequence_no,due_date,amount,paid_amount,status").eq("plan_id",planRes.data.id).order("sequence_no"):empty(),
     plan.branch&&branchId?admin.from("branches").select("id,name,address,location_url,phone").eq("organization_id",profile.organization_id).eq("id",branchId).maybeSingle():emptyOne(),
     plan.coach&&coachIds.length?admin.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",coachIds):empty(),
-    plan.schedule&&group?.id?admin.from("lesson_schedules").select("id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("group_id",group.id).eq("is_active",true):empty(),
     plan.announcements?admin.from("announcements").select("id,title,body,branch_id,group_id,published_at,created_at").eq("organization_id",profile.organization_id).eq("is_published",true).or(scopes.join(",")).order("published_at",{ascending:false}).limit(200):empty(),
   ]);
   for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Duyuru",announcementsRes]] as const)report(label,result);
@@ -220,7 +220,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   return {
     students:studentList,issues,selected,enrollment,group,branch:branchRes.data||null,coursePackage:packageRes.data||null,
     coach:coachesRes.data?.length?{full_name:coachesRes.data.map((row:any)=>row.full_name).join(", ")}:null,
-    schedules:visibleSchedules(schedulesRes.data||[],enrollment,currentAssignments),
+    schedules:visibleSchedules(group ? schedulesRes.data||[] : [],enrollment,currentAssignments),
     attendance:plan.attendanceHistory?(attendanceRes.data||[]).slice(0,HISTORY_PAGE_SIZE):attendanceRes.data||[],
     progress:progress.filter((note:any)=>note.note_type==='coach'),
     announcements:(announcementsRes.data||[]).filter((a:any)=>a.group_id?a.group_id===group?.id:a.branch_id?a.branch_id===branchId:true),

@@ -1,3 +1,4 @@
+import GuardianSectionHeading from "@/app/veli-paneli/section-heading";
 import GuardianInvoiceList from "./guardian-invoice-list";
 import PendingSubmitButton from "@/app/ogrenciler/[id]/pending-submit-button";
 import { openGuardianBankPayment } from "./actions";
@@ -35,10 +36,7 @@ export default async function Page({
         selectedId={data.selected?.id}
       />
       <div className="guardianContent">
-        <h1 className="guardianSectionTitle">Ödemeler ve Paket</h1>
-        <p className="guardianSectionLead">
-          Paket ücreti, alınan ödemeler ve kalan ödeme bilgisi.
-        </p>
+        <GuardianSectionHeading icon="wallet" title="Ödemeler ve Paket" description="Paket ücreti, alınan ödemeler ve kalan ödeme bilgisi."/>
       <PaymentReminder reminder={data.issues.some(issue=>issue.startsWith("Ödeme")) ? null : guardianCombinedReminder(data.enrollment, debt, data.paymentInstallments, data.paymentPlan,data.obligations||[])} accountId={profile.id} enrollmentId={data.enrollment?.id} childId={data.selected.id} previewGuardian={previewGuardian}/>
         <section className={'guardianFinanceTotal '+(totalDebt>0?'hasDebt':'clear')} aria-label="Toplam ödeme özeti"><div><span>TOPLAM KALAN BORÇ</span><strong>{financeReady?formatMoney(totalDebt):'Bilgi alınamadı'}</strong><p>Paket kalan borcu ve açık ek borçlarınız birlikte gösterilir.</p></div><div><span>Paket kalan: <b>{financeReady?formatMoney(debt):'—'}</b></span><span>Ek borç kalan: <b>{financeReady?formatMoney(extras.debt):'—'}</b></span></div></section>
         {canPay || query.paymentError ? <section id="guvenli-odeme" className="guardianCard guardianBankPayment">
