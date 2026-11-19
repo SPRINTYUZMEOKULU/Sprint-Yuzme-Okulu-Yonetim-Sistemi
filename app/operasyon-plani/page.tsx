@@ -869,12 +869,35 @@ export default async function OperasyonPlaniPage({
             Number(schedule.weekday) === selectedWeekday
         );
 
-  const coachMap = new Map(
-    coaches.map((item: any) => [
-      item.id,
-      item,
-    ])
+  // Legacy personnel records may use staff.id while newer assignments use
+  // profiles.id. Resolve both identifiers without modifying existing records.
+  const { data: staffDirectory, error: staffDirectoryError } = await supabase
+    .from("staff")
+    .select("id,auth_user_id,first_name,last_name,email,is_active")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+
+  const coachMap = new Map<string, any>(
+    coaches.map((item: any) => [String(item.id), item])
   );
+
+  if (!staffDirectoryError) {
+    for (const staff of staffDirectory || []) {
+      const profileCoach = staff.auth_user_id
+        ? coachMap.get(String(staff.auth_user_id))
+        : null;
+      const staffCoach = profileCoach || {
+        id: staff.id,
+        full_name: [staff.first_name, staff.last_name].filter(Boolean).join(" ").trim() || null,
+        email: staff.email || null,
+      };
+      // Keep the profile record as the canonical display entry when present.
+      coachMap.set(String(staff.id), staffCoach);
+      if (staff.auth_user_id && !coachMap.has(String(staff.auth_user_id))) {
+        coachMap.set(String(staff.auth_user_id), staffCoach);
+      }
+    }
+  }
 
   const studentMap = new Map(
     students.map((item: any) => [
