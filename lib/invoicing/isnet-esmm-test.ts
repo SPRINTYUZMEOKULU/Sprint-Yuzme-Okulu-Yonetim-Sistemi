@@ -165,8 +165,18 @@ function validateDraft(d: EsmmTestDraft) {
         "not_sent",
         "Vergi oranı 0–100 aralığında olmalıdır.",
       );
-    if (cents(line.witholdingTaxAmount) > 0 && !line.witholdingTaxCode.trim())
-      throw new IsnetEsmmError("not_sent", "Tevkifat kodu zorunlu.");
+    // NetteFatura's 19 Nov 2026 schema error: tevkifatKodu='0' violates
+    // the required three-digit XML pattern. With no withholding, omit
+    // the optional code entirely instead of sending 0/blank as a code.
+    const withholdingAmount = cents(line.witholdingTaxAmount);
+    const withholdingRate = cents(line.witholdingTaxRate);
+    const withholdingCode = line.witholdingTaxCode.trim();
+    if (withholdingAmount === 0 && (withholdingRate !== 0 || withholdingCode !== "")) {
+      throw new IsnetEsmmError("not_sent", "Tevkifat yoksa oran 0 ve kod boş olmalıdır.");
+    }
+    if (withholdingAmount > 0 && !/^\\d{3}$/.test(withholdingCode)) {
+      throw new IsnetEsmmError("not_sent", "Tevkifat varsa üç haneli geçerli tevkifat kodu zorunludur.");
+    }
     if (
       cents(line.grossAmount) +
         cents(line.vatTaxAmount) -
@@ -224,7 +234,7 @@ export function buildEsmmTestSend(companyTaxCode: string, d: EsmmTestDraft) {
           ["VatTaxRate", l.vatTaxRate],
           ["VatTaxableAmount", l.vatTaxableAmount],
           ["WitholdingTaxAmount", l.witholdingTaxAmount],
-          ["WitholdingTaxCode", l.witholdingTaxCode],
+          ...(l.witholdingTaxCode.trim() ? [["WitholdingTaxCode", l.witholdingTaxCode.trim()]] : []),
           ["WitholdingTaxRate", l.witholdingTaxRate],
           ["WitholdingTaxableAmount", l.witholdingTaxableAmount],
         ]

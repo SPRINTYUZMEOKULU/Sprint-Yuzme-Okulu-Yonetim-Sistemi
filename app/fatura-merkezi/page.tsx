@@ -100,7 +100,7 @@ export default async function InvoiceCenter({searchParams}:{
 
     <section className="invoice-notice" aria-labelledby="integration-status">
       <h2 id="integration-status">İşNet / NetteFatura bağlantı durumu</h2>
-      <p><strong>Gerçek e-SMM kesimi henüz açık değil.</strong> 13 Kasım tarihli İşNet testinde SearchESMM ile belge bulundu ve PDF/XML çıktıları doğrulandı. İşNet 19 Kasım'da test e-SMM'nin <strong>hata aldığını</strong> bildirdi ve yeniden test istedi. <strong>GibRaporuKabulEtti</strong> onayı ve canlı firma / sabit çıkış IP yetkisi henüz doğrulanmadı. Daha önce e-SMM düzenlenmiş olması canlı web servis yetkisi yerine geçmez.</p>
+      <p><strong>Gerçek e-SMM kesimi henüz açık değil.</strong> 13 Kasım tarihli İşNet testinde SearchESMM ile belge bulundu ve PDF/XML çıktıları doğrulandı. İşNet 19 Kasım'da test e-SMM'nin <strong>tevkifat kodu XML şema doğrulaması nedeniyle hata aldığını</strong> bildirdi (kod <code>0</code> yerine üç rakamlı biçim gerekli). İstemci artık sıfır tevkifatta kod göndermiyor; yeni testin GİB kabulü ayrıca doğrulanmalıdır. <strong>GibRaporuKabulEtti</strong> onayı ve canlı firma / sabit çıkış IP yetkisi henüz doğrulanmadı. Daha önce e-SMM düzenlenmiş olması canlı web servis yetkisi yerine geçmez.</p>
       <p>Banka Excel dosyası ve gönderildi işaretleri kesin tahsilat ya da GİB kabulü anlamına gelmez. İlk gerçek belge için mali müşavir tarafından hizmet ve vergi profili, yönetici tarafından tahsilat ve alıcı bilgileri doğrulanmalıdır. <Link href="/fatura-merkezi/esmm-hazirlik">e-SMM hazırlık ve kontrol ekranı</Link></p>
     </section>
 
