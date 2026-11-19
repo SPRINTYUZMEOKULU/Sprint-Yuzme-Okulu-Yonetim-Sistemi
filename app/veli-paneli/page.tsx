@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import SatisfactionSurvey, { SprintSupport } from "./support-survey";
+import SatisfactionSurvey from "./support-survey";
+import SprintSupport from "./sprint-support";
 import LessonBalance from "./lesson-balance";
 import UiIcon from "@/app/components/ui-icon";
 import AttendanceSummary from "@/app/components/attendance-summary";
@@ -126,7 +127,7 @@ async function GuardianOverview({query,identity}:{query:GuardianPageQuery;identi
         <Link className="guardianAction" href={`/veli-duyurular?child=${selectedId}${previewQuery}`}><span><GuardianIcon name="bell"/></span><div><strong>Duyurular</strong><small>Güncel kurs bilgilendirmeleri</small></div></Link>
       </section>
 
-      {!previewGuardian && <SatisfactionSurvey id={randomUUID()}/>}
+      {!previewGuardian && <SatisfactionSurvey key={selectedId} id={randomUUID()} studentId={selectedId}/>}
       <SprintSupport />
     </div>
   </main>;
