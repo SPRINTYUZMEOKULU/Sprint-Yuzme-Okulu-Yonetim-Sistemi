@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Sprint Yüzme Okulu",
-  "short_name": "Sprint",
-  "description": "Sprint Yüzme Okulu yönetim, öğrenci, ödeme, yoklama ve operasyon sistemi.",
+  "name": "SPRINT Yüzme Okulu",
+  "short_name": "SPRINT",
+  "description": "SPRINT Yüzme Okulu yönetim, öğrenci, ödeme, yoklama ve operasyon sistemi.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
