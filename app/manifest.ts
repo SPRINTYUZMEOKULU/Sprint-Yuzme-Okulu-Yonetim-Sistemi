@@ -4,11 +4,11 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
 
-    name: "Sprint Yüzme Okulu",
-    short_name: "Sprint",
+    name: "SPRINT Yüzme Okulu",
+    short_name: "SPRINT",
 
     description:
-      "Sprint Yüzme Okulu yönetim, öğrenci, ödeme, yoklama ve operasyon sistemi.",
+      "SPRINT Yüzme Okulu yönetim, öğrenci, ödeme, yoklama ve operasyon sistemi.",
 
     start_url: "/",
     scope: "/",

@@ -23,7 +23,7 @@ const platforms = [
 export default function InstallGuide() {
   return <section className="installGuide" id="telefona-ekle" aria-labelledby="install-title">
     <header>
-      <h2 id="install-title">Sprint’i telefonunuza ekleyin</h2>
+      <h2 id="install-title">SPRINT’i telefonunuza ekleyin</h2>
       <p>Portalı Safari veya Chrome’dan ana ekranınıza ekleyebilirsiniz. Mağazadan indirme gerekmez.</p>
       <Link href="/login" className="portalGuidePrimary">Giriş Sayfasını Aç</Link>
     </header>
@@ -42,8 +42,8 @@ export default function InstallGuide() {
     </div>)}
     <div className="installFollow">
       <img src="/icons/apple-touch-icon.png?v=10" alt="" width="54" height="54" loading="lazy"/>
-      <div><h3>Her gün Sprint simgesinden takip edin</h3>
-      <p>Ana ekranınızdaki Sprint simgesine dokunun ve mevcut hesabınızla giriş yapın. Ders programınız, yoklamalarınız, telafileriniz ve ödeme bilgileriniz aynı hesapta görünür.</p></div>
+      <div><h3>Her gün SPRINT simgesinden takip edin</h3>
+      <p>Ana ekranınızdaki SPRINT simgesine dokunun ve mevcut hesabınızla giriş yapın. Ders programınız, yoklamalarınız, telafileriniz ve ödeme bilgileriniz aynı hesapta görünür.</p></div>
     </div>
   </section>;
 }
