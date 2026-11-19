@@ -10,3 +10,11 @@
 .esmm-launch-steps code{overflow-wrap:anywhere;font-size:12px}
 .esmm-launch .esmm-launch-warning{border:1px solid #e7cfac;background:#fff8eb;border-radius:10px;padding:13px;color:#775119}
 @media(max-width:560px){.esmm-launch-steps li{padding:12px 12px 12px 47px}.esmm-launch-steps li:before{left:10px;top:12px}.esmm-launch-steps p{font-size:12px}}
+
+.esmm-readiness>p{color:#516f89;font-size:13px}
+.esmm-readiness-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+.esmm-readiness-grid>div{display:grid;align-content:start;gap:9px;padding:15px;border:1px solid #dce9f4;background:#f6faff;border-radius:12px}
+.esmm-readiness-grid span{font-size:12px;font-weight:750;color:#52708c;line-height:1.5}
+.esmm-readiness-grid strong{font-size:30px;font-variant-numeric:tabular-nums;color:#194e7e}
+@media(max-width:720px){.esmm-readiness-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:420px){.esmm-readiness-grid>div{padding:12px}.esmm-readiness-grid strong{font-size:25px}}
