@@ -2196,14 +2196,26 @@ export default async function OperasyonPlaniPage({
                   );
                 }
 
-                const sessionCoaches =
-                  Array.from(
-                    staffCoachIds
-                  )
-                    .map((id) =>
-                      coachMap.get(id)
+                // Individual student allocations are not session-wide staff
+                // assignments. Show them as a separate, clearly labelled fallback.
+                const allocatedStudentIds = new Set(
+                  groupStudents.map((student: any) => String(student.id))
+                );
+                const studentCoachIds = Array.from(new Set(
+                  studentAssignments
+                    .filter((assignment: any) =>
+                      assignment.schedule_id === schedule.id &&
+                      allocatedStudentIds.has(String(assignment.student_id)) &&
+                      assignment.coach_id
                     )
-                    .filter(Boolean);
+                    .map((assignment: any) => String(assignment.coach_id))
+                ));
+                const sessionCoaches = Array.from(staffCoachIds)
+                  .map((id) => coachMap.get(id))
+                  .filter(Boolean);
+                const studentAllocationCoaches = studentCoachIds
+                  .map((id) => coachMap.get(id))
+                  .filter(Boolean);
 
                 const primaryAssignment = explicitStaff.find(
                   (assignment: any) => assignment.assignment_role === "coach"
@@ -2388,7 +2400,9 @@ export default async function OperasyonPlaniPage({
                             ? sessionCoaches
                                 .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
                                 .join(", ")
-                            : "Atanmadı"}
+                            : studentAllocationCoaches.length
+                              ? `Öğrenci dağılımı: ${studentAllocationCoaches.map((coach: any) => coach.full_name || coach.email || "Eğitmen").join(", ")} (seans sorumlusu atanmadı)`
+                              : "Atanmadı"}
                         </strong>
                       </div>
 
