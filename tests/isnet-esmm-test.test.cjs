@@ -51,3 +51,24 @@ test('ETTN recovery is read-only, keeps empty results unresolved, and rejects a 
  assert.deepEqual(await client.searchByEttn(id,true),[]);assert.equal(calls,1);
  const wrong=new IsnetEsmmTestClient('0000000000',async()=>new Response(reply('SearchESMM','<Result>Success</Result><ESMM><ESMM><ETTN>other-document</ETTN></ESMM></ESMM>')));await assert.rejects(()=>wrong.searchByEttn(id),e=>e.outcome==='uncertain');
 });
+
+test('zero withholding omits the optional three-digit code instead of emitting an invalid XML value',()=>{
+ const xml=buildEsmmTestSend('0000000000',draft());
+ assert.doesNotMatch(xml,/<b:WitholdingTaxCode>/);
+ assert.match(xml,/<b:WitholdingTaxAmount>0<\/b:WitholdingTaxAmount>/);
+ for(const invalidCode of ['0','00','000','ABC','1234']) {
+   const bad=draft();bad.lines[0].witholdingTaxCode=invalidCode;
+   assert.throws(()=>buildEsmmTestSend('0000000000',bad),e=>e.outcome==='not_sent');
+ }
+ const badRate=draft();badRate.lines[0].witholdingTaxRate='1';
+ assert.throws(()=>buildEsmmTestSend('0000000000',badRate),e=>e.outcome==='not_sent');
+});
+test('nonzero withholding requires exactly three digits, preserving XML field order',()=>{
+ const d=draft();d.lines[0].witholdingTaxAmount='10.00';d.lines[0].witholdingTaxRate='10';d.lines[0].witholdingTaxableAmount='100.00';d.lines[0].witholdingTaxCode='601';
+ d.lines[0].payableAmount='110.00';d.payableAmount='110.00';d.totalWitholdingAmount='10.00';d.totalCollectedVatAmount='10.00';
+ const xml=buildEsmmTestSend('0000000000',d);
+ assert.match(xml,/<b:WitholdingTaxCode>601<\/b:WitholdingTaxCode>/);
+ assert.ok(xml.indexOf('<b:WitholdingTaxAmount>')<xml.indexOf('<b:WitholdingTaxCode>'));
+ const invalid=draft();invalid.lines[0].witholdingTaxAmount='1';
+ assert.throws(()=>buildEsmmTestSend('0000000000',invalid),e=>e.outcome==='not_sent');
+});
