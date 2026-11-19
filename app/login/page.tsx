@@ -5,7 +5,7 @@ import LoginForm from "./login-form";
 export default function LoginPage() {
   return (
     <main className="v2LoginPage compactLogin">
-      <section className="v2BrandPanel" aria-label="SPRİNT Yüzme Okulu">
+      <section className="v2BrandPanel" aria-label="Sprint Yüzme Okulu">
         <div className="v2WaterGlow" aria-hidden="true" />
         <div className="v2BrandContent">
           <div className="v2LogoFrame compactLogoFrame">
@@ -13,7 +13,7 @@ export default function LoginPage() {
             <Image src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" width={520} height={520} priority className="v2BrandLogo" />
           </div>
           <div className="v2Slogan compactSlogan">
-            <span>SPRİNT Yüzme Okulu</span>
+            <span>Sprint Yüzme Okulu</span>
             <strong>Veli ve Kursiyer Portalı</strong>
           </div>
           <p className="brandDescription">Ders programınız, kursiyer gelişimi ve ödemeleriniz.</p>

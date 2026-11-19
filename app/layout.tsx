@@ -35,15 +35,15 @@ import PermissionUiGuard from "./components/permission-ui-guard";
 import PersonelNavEnhancer from "./components/personel-nav-enhancer";
 
 export const metadata: Metadata = {
-  title: { default: "SPRİNT YÜZME OKULU", template: "%s | SPRİNT YÜZME OKULU" },
+  title: { default: "Sprint Yüzme Okulu", template: "%s | Sprint Yüzme Okulu" },
   description: "Sprint Yüzme Okulu Yönetim Sistemi",
-  applicationName: "SPRİNT YÜZME OKULU",
-  manifest: "/manifest.webmanifest?v=11",
+  applicationName: "Sprint Yüzme Okulu",
+  manifest: "/manifest.webmanifest?v=12",
   icons: {
     icon: [{ url: "/icons/icon-512.png?v=10", sizes: "512x512", type: "image/png" }],
     apple: [{ url: "/icons/apple-touch-icon.png?v=10", sizes: "180x180", type: "image/png" }],
   },
-  appleWebApp: { capable: true, title: "SPRİNT", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Sprint", statusBarStyle: "default" },
   formatDetection: { telephone: false },
 };
 
