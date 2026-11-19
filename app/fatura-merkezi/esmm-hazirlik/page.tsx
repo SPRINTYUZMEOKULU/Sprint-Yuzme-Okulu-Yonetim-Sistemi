@@ -34,7 +34,7 @@ export default async function EsmmPreparationPage() {
           <div><span>Sağlayıcı işlem kaydı</span><strong>{ledger.count??0}</strong></div>
           <div><span>GİB kabulü kayıtlı</span><strong>{gibAccepted.count??0}</strong></div>
         </div>}
-      <p><strong>Canlı gönderim kapalı.</strong> İşNet'in test raporu kabulü, firmanın canlı web servis erişimi ve sabit çıkış IP yetkisi doğrulanmadı. Sağlayıcı işlem defteri yalnızca gelecekteki tekil ETTN, durum ve özel arşiv izini tutmak için hazırlandı; henüz herhangi bir makbuz oluşturmaz.</p>
+      <p><strong>Canlı gönderim kapalı.</strong> İşNet 19 Kasım'da mevcut test e-SMM'nin hata aldığını bildirdi; test raporu kabulü, firmanın canlı web servis erişimi ve sabit çıkış IP yetkisi doğrulanmadı. Sağlayıcı işlem defteri yalnızca gelecekteki tekil ETTN, durum ve özel arşiv izini tutmak için hazırlandı; henüz herhangi bir makbuz oluşturmaz.</p>
       <Link href="/odeme-bilgileri/belgeler">Belge taleplerini ve ön onayları incele</Link>
     </section>
     <EsmmAmountPreview/>
@@ -44,7 +44,7 @@ export default async function EsmmPreparationPage() {
       <ol className="esmm-launch-steps">
         <li><strong>Alıcı ve tahsilat</strong><p><Link href="/odeme-bilgileri/belgeler">Belge ve ödeme takibinde</Link> kursiyer, alıcı kimliği, il/ilçe, açık adres, ödeme tutarı ve banka eşleştirmesini yönetici doğrular. Var olan makbuzlar yeniden gönderilmez.</p></li>
         <li><strong>Hizmet ve vergi profili</strong><p>Mali müşavir hizmet açıklaması, vergilendirme dönemi, KDV, GV stopajı ve tevkifat oranlarını teyit eder. Örnek makbuzdaki %20 KDV / %0 kesintiler her işlem için varsayılmaz.</p></li>
-        <li><strong>İşNet test onayı</strong><p>13 Kasım testinde SearchESMM ve PDF/XML doğrulandı; son kayıt <code>ReportStatus=WaitingForSending</code>. Aynı ETTN sorgulanmalı ve <code>GibRaporuKabulEtti</code> sonucu doğrulanmalıdır. Aynı belge tekrar gönderilmez.</p></li>
+        <li><strong>İşNet test onayı</strong><p>13 Kasım testinde SearchESMM ve PDF/XML alındı. <strong>İşNet 19 Kasım'da test e-SMM'nin hata aldığını bildirdi ve yeniden test istedi.</strong> Mevcut ETTN'nin kesin red/hata kodunu netleştirmeden veya aynı belgeyi sorgulamadan gönderimi tekrar etmeyiniz. Yeni test yalnızca doğrulanmış test yetkisiyle ve yeni tekil kimlikle yapılmalıdır.</p></li>
         <li><strong>Canlı servis yetkisi</strong><p>Sprint'in gerçek düzenleyen hesabı için İşNet canlı web servis erişimi, sabit çıkış IP'si, belge serisi ve yetkilendirilmiş firma bilgileri doğrulanır. Bu bilgiler kamuya açık alanda gösterilmez.</p></li>
         <li><strong>Tek belge pilotu</strong><p>Yönetici onaylı tek tahsilat üzerinde önce mükerrer belge kontrolü yapılır. ETTN, durum, PDF ve XML kursiyer dosyasında doğrulandıktan sonra daha geniş kullanım değerlendirilir.</p></li>
       </ol>
