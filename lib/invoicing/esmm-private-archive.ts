@@ -33,7 +33,7 @@ function assertFile(bytes: Uint8Array, kind: "pdf" | "xml") {
 async function uploadOnce(path: string, bytes: Uint8Array, contentType: string) {
   const storage = documentAdmin().storage.from(BUCKET);
   const expectedHash = sha256(bytes);
-  const result = await storage.upload(path, bytes, { contentType, upsert: false, cacheControl: "0" });
+  const result = await storage.upload(path, Buffer.from(bytes), { contentType, upsert: false, cacheControl: "0" });
   if (result.error) {
     // A retry after an interrupted first upload is permitted only when the
     // existing private object has precisely the same content hash.
