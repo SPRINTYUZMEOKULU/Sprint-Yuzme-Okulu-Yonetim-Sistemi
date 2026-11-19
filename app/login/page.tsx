@@ -14,7 +14,7 @@ export default function LoginPage() {
           </div>
           <div className="v2Slogan compactSlogan">
             <span>SPRİNT Yüzme Okulu</span>
-            <strong>SprintOS</strong>
+            <strong>Veli ve Kursiyer Portalı</strong>
           </div>
           <p className="brandDescription">Ders programınız, kursiyer gelişimi ve ödemeleriniz.</p>
           <div className="v2SloganLine" aria-hidden="true" />

@@ -1,0 +1,18 @@
+.installGuide { margin-block:2rem; scroll-margin-top:24px; color:#13294a; }
+.installGuide > header { background:#eaf3fc; border:1px solid #d1e2f5; border-radius:20px; padding:clamp(18px,4vw,30px); }
+.installGuide h2,.installGuide h3,.installGuide h4 { margin:0; }
+.installGuide p { color:#405977; line-height:1.5; margin:.5rem 0 0; }
+.installGuide header a { display:inline-flex; margin-top:1rem; }
+.installPlatform { margin-top:1.5rem; }
+.installSteps { list-style:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:0; margin:10px 0 0; }
+.installSteps li { padding:12px; background:#fff; border:1px solid #dce6f0; border-radius:15px; break-inside:avoid; }
+.installIllustration { display:flex; align-items:center; gap:10px; min-height:88px; padding:10px; border-radius:10px; background:#eaf3fc; margin-bottom:12px; color:#164e82; }
+.installStepNumber { font-size:20px; font-weight:750; }
+.installScreen { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px; background:white; border:1px solid #bed4e8; border-radius:8px; font-weight:700; }
+.installScreen > span { display:grid; place-items:center; width:24px; height:24px; background:#eaf3fc; border-radius:5px; font-size:18px; }
+.installFollow { display:flex; align-items:center; gap:12px; margin-top:16px; padding:16px; background:white; border:1px solid #dce6f0; border-radius:15px; }
+.installFollow img { border-radius:12px; flex:none; }
+@media (max-width:640px) {
+  .installSteps { grid-template-columns:1fr; }
+  .installIllustration { min-height:56px; }
+}
