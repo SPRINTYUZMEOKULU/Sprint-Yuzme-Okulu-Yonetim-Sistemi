@@ -174,7 +174,7 @@ function validateDraft(d: EsmmTestDraft) {
     if (withholdingAmount === 0 && (withholdingRate !== 0 || withholdingCode !== "")) {
       throw new IsnetEsmmError("not_sent", "Tevkifat yoksa oran 0 ve kod boş olmalıdır.");
     }
-    if (withholdingAmount > 0 && !/^\\d{3}$/.test(withholdingCode)) {
+    if (withholdingAmount > 0 && !/^\d{3}$/.test(withholdingCode)) {
       throw new IsnetEsmmError("not_sent", "Tevkifat varsa üç haneli geçerli tevkifat kodu zorunludur.");
     }
     if (
