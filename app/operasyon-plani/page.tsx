@@ -169,6 +169,43 @@ function initials(name?: string | null) {
   return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
 }
 
+async function kulvarKaydet(formData: FormData) {
+  "use server";
+  const profile = await requireProfile(["owner", "admin", "branch_manager"]);
+  const organizationId = profile.organization_id;
+  if (!organizationId) throw new Error("Organizasyon bulunamadı.");
+  const scheduleId = String(formData.get("schedule_id") || "");
+  const laneLabel = String(formData.get("lane_label") || "").trim();
+  if (!scheduleId || laneLabel.length > 80) throw new Error("Kulvar bilgisi geçersiz.");
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("lesson_schedules")
+    .select("id,branch_id")
+    .eq("id", scheduleId)
+    .eq("organization_id", organizationId)
+    .single();
+  if (scheduleError || !schedule) throw new Error("Seans bulunamadı.");
+  if (profile.role === "branch_manager" && profile.branch_id !== schedule.branch_id) {
+    throw new Error("Bu şubede işlem yetkiniz yok.");
+  }
+  const { data: existing, error: readError } = await supabase
+    .from("lesson_shared_session_preferences")
+    .select("mode")
+    .eq("organization_id", organizationId)
+    .eq("schedule_id", scheduleId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  const { error } = await supabase.from("lesson_shared_session_preferences").upsert({
+    organization_id: organizationId,
+    schedule_id: scheduleId,
+    mode: existing?.mode || "auto",
+    lane_label: laneLabel || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "organization_id,schedule_id" });
+  if (error) throw new Error("Kulvar kaydedilemedi: " + error.message);
+  revalidatePath("/operasyon-plani");
+}
+
 /* =========================================================
    PERSONEL ATAMA
 ========================================================= */
@@ -2972,6 +3009,20 @@ export default async function OperasyonPlaniPage({
                           >
                             + Ata / Güncelle
                           </button>
+                        </form>
+                      </section>
+                    )}
+
+                    {canManage && (
+                      <section style={{ padding: "12px 0" }}>
+                        <strong style={{ display: "block", marginBottom: 8 }}>Kulvar planı</strong>
+                        <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          <input type="hidden" name="schedule_id" value={schedule.id} />
+                          <input name="lane_label" aria-label="Kulvar veya havuz bölümü" maxLength={80}
+                            placeholder="Örn. Kulvar 1-2 / Eğitim havuzu"
+                            defaultValue={sharedPreferences.find((item: any) => item.schedule_id === schedule.id)?.lane_label || ""}
+                            style={{ ...compactInputStyle, flex: "1 1 180px" }} />
+                          <button type="submit" style={compactPrimaryButtonStyle}>Kulvarı kaydet</button>
                         </form>
                       </section>
                     )}
