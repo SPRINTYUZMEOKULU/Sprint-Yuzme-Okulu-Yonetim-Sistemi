@@ -171,7 +171,7 @@ function initials(name?: string | null) {
 
 async function kulvarKaydet(formData: FormData) {
   "use server";
-  const profile = await requireProfile(["owner", "admin", "branch_manager"]);
+  const profile = await requireProfile(["owner", "admin"]);
   const organizationId = profile.organization_id;
   if (!organizationId) throw new Error("Organizasyon bulunamadı.");
   const scheduleId = String(formData.get("schedule_id") || "");
@@ -185,9 +185,6 @@ async function kulvarKaydet(formData: FormData) {
     .eq("organization_id", organizationId)
     .single();
   if (scheduleError || !schedule) throw new Error("Seans bulunamadı.");
-  if (profile.role === "branch_manager" && profile.branch_id !== schedule.branch_id) {
-    throw new Error("Bu şubede işlem yetkiniz yok.");
-  }
   const { data: existing, error: readError } = await supabase
     .from("lesson_shared_session_preferences")
     .select("mode")
@@ -3013,7 +3010,7 @@ export default async function OperasyonPlaniPage({
                       </section>
                     )}
 
-                    {canEdit && (
+                    {["owner", "admin"].includes(profile.role) && (
                       <section style={{ padding: "12px 0" }}>
                         <strong style={{ display: "block", marginBottom: 8 }}>Kulvar planı</strong>
                         <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
