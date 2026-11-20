@@ -3013,7 +3013,7 @@ export default async function OperasyonPlaniPage({
                       </section>
                     )}
 
-                    {canManage && (
+                    {canEdit && (
                       <section style={{ padding: "12px 0" }}>
                         <strong style={{ display: "block", marginBottom: 8 }}>Kulvar planı</strong>
                         <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
