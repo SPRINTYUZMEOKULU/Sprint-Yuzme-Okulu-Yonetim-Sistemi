@@ -169,6 +169,40 @@ function initials(name?: string | null) {
   return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
 }
 
+async function kulvarKaydet(formData: FormData) {
+  "use server";
+  const profile = await requireProfile(["owner", "admin"]);
+  const organizationId = profile.organization_id;
+  if (!organizationId) throw new Error("Organizasyon bulunamadı.");
+  const scheduleId = String(formData.get("schedule_id") || "");
+  const laneLabel = String(formData.get("lane_label") || "").trim();
+  if (!scheduleId || laneLabel.length > 80) throw new Error("Kulvar bilgisi geçersiz.");
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("lesson_schedules")
+    .select("id,branch_id")
+    .eq("id", scheduleId)
+    .eq("organization_id", organizationId)
+    .single();
+  if (scheduleError || !schedule) throw new Error("Seans bulunamadı.");
+  const { data: existing, error: readError } = await supabase
+    .from("lesson_shared_session_preferences")
+    .select("mode")
+    .eq("organization_id", organizationId)
+    .eq("schedule_id", scheduleId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  const { error } = await supabase.from("lesson_shared_session_preferences").upsert({
+    organization_id: organizationId,
+    schedule_id: scheduleId,
+    mode: existing?.mode || "auto",
+    lane_label: laneLabel || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "organization_id,schedule_id" });
+  if (error) throw new Error("Kulvar kaydedilemedi: " + error.message);
+  revalidatePath("/operasyon-plani");
+}
+
 /* =========================================================
    PERSONEL ATAMA
 ========================================================= */
@@ -869,12 +903,35 @@ export default async function OperasyonPlaniPage({
             Number(schedule.weekday) === selectedWeekday
         );
 
-  const coachMap = new Map(
-    coaches.map((item: any) => [
-      item.id,
-      item,
-    ])
+  // Legacy personnel records may use staff.id while newer assignments use
+  // profiles.id. Resolve both identifiers without modifying existing records.
+  const { data: staffDirectory, error: staffDirectoryError } = await supabase
+    .from("staff")
+    .select("id,auth_user_id,first_name,last_name,email,is_active")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true);
+
+  const coachMap = new Map<string, any>(
+    coaches.map((item: any) => [String(item.id), item])
   );
+
+  if (!staffDirectoryError) {
+    for (const staff of staffDirectory || []) {
+      const profileCoach = staff.auth_user_id
+        ? coachMap.get(String(staff.auth_user_id))
+        : null;
+      const staffCoach = profileCoach || {
+        id: staff.id,
+        full_name: [staff.first_name, staff.last_name].filter(Boolean).join(" ").trim() || null,
+        email: staff.email || null,
+      };
+      // Keep the profile record as the canonical display entry when present.
+      coachMap.set(String(staff.id), staffCoach);
+      if (staff.auth_user_id && !coachMap.has(String(staff.auth_user_id))) {
+        coachMap.set(String(staff.auth_user_id), staffCoach);
+      }
+    }
+  }
 
   const studentMap = new Map(
     students.map((item: any) => [
@@ -2173,14 +2230,26 @@ export default async function OperasyonPlaniPage({
                   );
                 }
 
-                const sessionCoaches =
-                  Array.from(
-                    staffCoachIds
-                  )
-                    .map((id) =>
-                      coachMap.get(id)
+                // Individual student allocations are not session-wide staff
+                // assignments. Show them as a separate, clearly labelled fallback.
+                const allocatedStudentIds = new Set(
+                  groupStudents.map((student: any) => String(student.id))
+                );
+                const studentCoachIds = Array.from(new Set(
+                  studentAssignments
+                    .filter((assignment: any) =>
+                      assignment.schedule_id === schedule.id &&
+                      allocatedStudentIds.has(String(assignment.student_id)) &&
+                      assignment.coach_id
                     )
-                    .filter(Boolean);
+                    .map((assignment: any) => String(assignment.coach_id))
+                ));
+                const sessionCoaches = Array.from(staffCoachIds)
+                  .map((id) => coachMap.get(id))
+                  .filter(Boolean);
+                const studentAllocationCoaches = studentCoachIds
+                  .map((id) => coachMap.get(id))
+                  .filter(Boolean);
 
                 const primaryAssignment = explicitStaff.find(
                   (assignment: any) => assignment.assignment_role === "coach"
@@ -2365,7 +2434,9 @@ export default async function OperasyonPlaniPage({
                             ? sessionCoaches
                                 .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
                                 .join(", ")
-                            : "Atanmadı"}
+                            : studentAllocationCoaches.length
+                              ? `Öğrenci dağılımı: ${studentAllocationCoaches.map((coach: any) => coach.full_name || coach.email || "Eğitmen").join(", ")} (seans sorumlusu atanmadı)`
+                              : "Atanmadı"}
                         </strong>
                       </div>
 
@@ -2935,6 +3006,20 @@ export default async function OperasyonPlaniPage({
                           >
                             + Ata / Güncelle
                           </button>
+                        </form>
+                      </section>
+                    )}
+
+                    {["owner", "admin"].includes(profile.role) && (
+                      <section style={{ padding: "12px 0" }}>
+                        <strong style={{ display: "block", marginBottom: 8 }}>Kulvar planı</strong>
+                        <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          <input type="hidden" name="schedule_id" value={schedule.id} />
+                          <input name="lane_label" aria-label="Kulvar veya havuz bölümü" maxLength={80}
+                            placeholder="Örn. Kulvar 1-2 / Eğitim havuzu"
+                            defaultValue={sharedPreferences.find((item: any) => item.schedule_id === schedule.id)?.lane_label || ""}
+                            style={{ ...compactInputStyle, flex: "1 1 180px" }} />
+                          <button type="submit" style={compactPrimaryButtonStyle}>Kulvarı kaydet</button>
                         </form>
                       </section>
                     )}

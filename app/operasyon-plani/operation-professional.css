@@ -481,3 +481,79 @@ details[open] > .opSessionSummary .opSessionChevron {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+
+/* Operation Centre 2026: concise, scannable session overview.
+   Keep full controls inside the expanded detail panel. */
+.opScheduleGrid {
+  align-items: start;
+  gap: 14px !important;
+}
+.opSessionSummary {
+  min-width: 0;
+  border-bottom: 1px solid #e7edf5;
+  background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+  transition: background-color .18s ease, box-shadow .18s ease;
+}
+.opSessionSummary:hover {
+  background: #f3f7ff;
+}
+.opSessionSummary:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
+.opSessionMeta,
+.opSessionMeta strong,
+.opSessionMeta small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.opSessionTime strong {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+}
+.opSessionChevron {
+  transition: transform .2s ease;
+}
+details[open] > .opSessionSummary .opSessionChevron {
+  transform: rotate(180deg);
+}
+@media (max-width: 760px) {
+  /* Former layout stacked every attribute into a tall, confusing card.
+     Put pool/group and coach/attendance into two compact columns. */
+  .opSessionSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 14px !important;
+  }
+  .opSessionTime {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    padding-right: 40px;
+  }
+  .opSessionChevron {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: end;
+  }
+  .opSessionMeta {
+    grid-column: auto !important;
+    padding-top: 9px !important;
+    border-top: 1px solid #e9eff7;
+    font-size: 12px !important;
+  }
+  .opSessionMeta strong {
+    font-size: 13px !important;
+    line-height: 1.35;
+  }
+  .opSessionStudentMetric {
+    grid-column: auto !important;
+  }
+  .opSessionLevels {
+    grid-column: 1 / -1 !important;
+    justify-content: flex-start !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opSessionSummary, .opSessionChevron { transition: none !important; }
+}
