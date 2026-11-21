@@ -196,6 +196,54 @@ function CoachLabels({ groupCoachName, sessionCoachName, backupCoachName }: Coac
   );
 }
 
+function LaneEditor({ scheduleId, laneLabel }: { scheduleId: string; laneLabel?: string }) {
+  return (
+    <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <input type="hidden" name="schedule_id" value={scheduleId} />
+      <input name="lane_label" aria-label="Kulvar veya havuz bölümü" maxLength={80}
+        placeholder="Örn. Kulvar 1–2 veya Eğitim havuzu"
+        defaultValue={laneLabel || ""}
+        style={{ ...compactInputStyle, flex: "1 1 180px" }} />
+      <button type="submit" style={compactPrimaryButtonStyle}>Kulvarı kaydet</button>
+    </form>
+  );
+}
+
+function lanesOverlap(first: string, second: string) {
+  const normalize = (value: string) => value.toLocaleLowerCase("tr").trim().replace(/\s+/g, " ");
+  const a = normalize(first);
+  const b = normalize(second);
+  if (a === b) return true;
+
+  function numericRanges(value: string) {
+    const label = value.replace(/kulvar(?:lar)?/g, "").trim();
+    const parts = label.split(/[,/;+&]/);
+    const ranges = parts.map((part) => part.trim().match(/^(\d+)(?:\s*[-–—]\s*(\d+))?$/));
+    if (ranges.some((range) => !range)) return [];
+    return ranges.map((range) => {
+      const start = Number(range![1]);
+      const end = Number(range![2] || start);
+      return [Math.min(start, end), Math.max(start, end)];
+    });
+  }
+
+  const right = numericRanges(b);
+  return numericRanges(a).some(([start, end]) =>
+    right.some(([otherStart, otherEnd]) => start <= otherEnd && otherStart <= end)
+  );
+}
+
+function LaneStatus({ laneLabel, warnings }: { laneLabel?: string; warnings?: string[] }) {
+  return (
+    <span style={coachLabelsStyle}>
+      <span>Kulvar: <strong>{laneLabel || "Atanmamış"}</strong></span>
+      {warnings?.map((warning) => (
+        <span key={warning} style={{ color: "#92400e", fontWeight: 600 }}>{warning}</span>
+      ))}
+    </span>
+  );
+}
+
 async function kulvarKaydet(formData: FormData) {
   "use server";
   const profile = await requireProfile(["owner", "admin"]);
@@ -985,6 +1033,7 @@ export default async function OperasyonPlaniPage({
     return {
       groupCoachName: coachName(groupCoachId),
       sessionCoachName: sameCoach ? null : coachName(sessionCoachId),
+      primaryCoachId: sessionCoachId || groupCoachId,
       primaryCoachName: coachName(sessionCoachId || groupCoachId),
       backupCoachName: coachName(backupCoachId),
     };
@@ -1060,6 +1109,56 @@ export default async function OperasyonPlaniPage({
 
   const branchIdOf = (schedule: any) =>
     schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
+
+  const canEditLane = ["owner", "admin"].includes(profile.role);
+  const laneOf = (scheduleId: string): string =>
+    sharedPreferenceMap.get(scheduleId)?.lane_label?.trim() || "";
+
+  const assignmentsByDay = new Map<number, Array<{
+    id: string;
+    groupId: string;
+    branchId: string;
+    start: string;
+    end: string;
+    lane: string;
+    coachId?: string;
+  }>>();
+  for (const schedule of allSchedules) {
+    const day = displayWeekday(schedule.weekday);
+    const coach = scheduleCoaches(schedule).primaryCoachId;
+    const assignments = assignmentsByDay.get(day) || [];
+    assignments.push({
+      id: schedule.id,
+      groupId: schedule.group_id,
+      branchId: branchIdOf(schedule),
+      start: saatGoster(schedule.start_time),
+      end: saatGoster(schedule.end_time),
+      lane: laneOf(schedule.id),
+      coachId: coach ? coachMap.get(coach)?.id || coach : undefined,
+    });
+    assignmentsByDay.set(day, assignments);
+  }
+
+  const warningsBySchedule = new Map<string, string[]>();
+  for (const assignments of assignmentsByDay.values()) {
+    for (const item of assignments) {
+      const warnings = new Set<string>();
+      for (const other of assignments) {
+        if (item.id === other.id || item.groupId === other.groupId ||
+            item.start >= other.end || other.start >= item.end) continue;
+
+        const groupName = groupMap.get(other.groupId)?.name || "Diğer grup";
+        if (item.branchId && item.branchId === other.branchId && item.lane &&
+            other.lane && lanesOverlap(item.lane, other.lane)) {
+          warnings.add(`Kulvar çakışması · ${groupName}`);
+        }
+        if (item.coachId && item.coachId === other.coachId) {
+          warnings.add(`Ana eğitmen çakışması · ${groupName}`);
+        }
+      }
+      if (warnings.size) warningsBySchedule.set(item.id, [...warnings]);
+    }
+  }
 
   const slotKeyOf = (schedule: any) => [
     displayWeekday(schedule.weekday),
@@ -1979,6 +2078,7 @@ export default async function OperasyonPlaniPage({
                               {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
                             </small>
                             <CoachLabels {...groupRow} />
+                            <LaneStatus laneLabel={laneOf(groupRow.scheduleId)} warnings={warningsBySchedule.get(groupRow.scheduleId)} />
                           </span>
                           <span style={dailySharedOpenStyle}>Öğrenciler ⌄</span>
                         </summary>
@@ -2023,6 +2123,7 @@ export default async function OperasyonPlaniPage({
                               }))}
                             />
                           </div>
+                          {canEditLane && <LaneEditor scheduleId={groupRow.scheduleId} laneLabel={laneOf(groupRow.scheduleId)} />}
                           {groupRow.students.length ? (
                             groupRow.students.map((student: any) => (
                               <div key={student.id} style={dailySharedStudentRowStyle}>
@@ -2322,6 +2423,7 @@ export default async function OperasyonPlaniPage({
 
                       <div className="opSessionMeta" style={sessionSummaryItemStyle}>
                         <CoachLabels {...coachNames} />
+                        <LaneStatus laneLabel={laneOf(schedule.id)} warnings={warningsBySchedule.get(schedule.id)} />
                         {studentAllocationCoaches.length > 0 && (
                           <small style={sessionSummarySubStyle}>
                             Öğrenci bazlı atama: {studentAllocationCoaches
@@ -2605,17 +2707,10 @@ export default async function OperasyonPlaniPage({
                       </section>
                     )}
 
-                    {["owner", "admin"].includes(profile.role) && (
+                    {canEditLane && (
                       <section style={{ padding: "12px 0" }}>
                         <strong style={{ display: "block", marginBottom: 8 }}>Kulvar planı</strong>
-                        <form action={kulvarKaydet} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          <input type="hidden" name="schedule_id" value={schedule.id} />
-                          <input name="lane_label" aria-label="Kulvar veya havuz bölümü" maxLength={80}
-                            placeholder="Örn. Kulvar 1-2 / Eğitim havuzu"
-                            defaultValue={sharedPreferences.find((item: any) => item.schedule_id === schedule.id)?.lane_label || ""}
-                            style={{ ...compactInputStyle, flex: "1 1 180px" }} />
-                          <button type="submit" style={compactPrimaryButtonStyle}>Kulvarı kaydet</button>
-                        </form>
+                        <LaneEditor scheduleId={schedule.id} laneLabel={laneOf(schedule.id)} />
                       </section>
                     )}
 
