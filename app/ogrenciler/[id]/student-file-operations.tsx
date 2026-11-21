@@ -2,6 +2,7 @@
 
 import { reviewCollection } from "@/lib/payments/collection-review";
 
+import PaymentInfoShortcut from "../../components/payment-info-shortcut";
 import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { portalCredentialContact } from "@/app/veliler/portal-credential-actions";
@@ -568,6 +569,7 @@ export default function StudentFileOperations({
           <button
             type="button"
             className="payment"
+            data-student-finance-action="payment"
             onClick={() => {
               if (!enrollmentId && ["pre_registration", "waiting_payment", "waiting_approval"].includes(student.status || "")) {
                 router.push(`/kayit-tamamlama/${student.id}`);
@@ -584,6 +586,7 @@ export default function StudentFileOperations({
             </span>
           </button>
 
+          <PaymentInfoShortcut studentId={student.id} />
           <StudentRenewalButton />
           <button type="button" onClick={() => selectTab("general", "duzenle")}>
             <FileIcon name="edit" /> Bilgileri Düzenle
@@ -618,6 +621,7 @@ export default function StudentFileOperations({
 
           <button
             type="button"
+            data-student-finance-action="history"
             onClick={() => router.push(`/odemeler?student=${student.id}`)}
           >
             <FileIcon name="wallet" /> Ödeme Geçmişi

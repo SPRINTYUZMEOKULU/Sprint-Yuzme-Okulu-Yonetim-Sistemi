@@ -1,5 +1,6 @@
 "use client";
 
+import PaymentInfoShortcut from "../../components/payment-info-shortcut";
 import { reviewCollection } from "@/lib/payments/collection-review";
 
 import { formatDisplayDateTime } from "@/lib/dates/display";
@@ -176,25 +177,12 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const target = event.target as Element | null;
-      if (!target) return;
-      const button = target.closest<HTMLElement>(
-        ".fileCommandActions button, .fileCommandActions a",
-      );
-      const alert = target.closest<HTMLElement>(
-        ".smartAlertGrid a[href='#odeme'], .smartAlertGrid button",
-      );
-      if (!button && !alert) return;
-      const text = (button?.textContent || alert?.textContent || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLocaleLowerCase("tr-TR");
-      if (!text.includes("ödeme") && !text.includes("vade")) return;
+      const action = target?.closest<HTMLElement>("[data-student-finance-action]");
+      const tab = action?.dataset.studentFinanceAction;
+      if (tab !== "payment" && tab !== "history" && tab !== "due") return;
       event.preventDefault();
-      event.stopPropagation();
-      (event as any).stopImmediatePropagation?.();
-      if (text.includes("geçmiş")) void show("history");
-      else if (text.includes("vade")) void show("due");
-      else void show("payment");
+      event.stopImmediatePropagation();
+      void show(tab);
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
@@ -437,6 +425,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
             <button className={tab === "due" ? "active" : ""} onClick={() => setTab("due")}>Vade Belirle</button>
             <button className={tab === "debt" ? "active" : ""} onClick={() => setTab("debt")}>+ Borçlandır</button>
             <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Ödeme Geçmişi</button>
+            <PaymentInfoShortcut studentId={studentId} inFinancePanel />
           </nav>
 
           {message ? <div className={`sfcMessage ${error ? "error" : "success"}`}>{message}</div> : null}

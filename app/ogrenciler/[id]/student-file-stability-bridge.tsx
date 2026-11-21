@@ -66,7 +66,7 @@ export default function StudentFileStabilityBridge() {
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
         ".studentFilePage .smartAlertGrid a[href^='#']",
       );
-      if (!link) return;
+      if (!link || link.hasAttribute("data-student-finance-action")) return;
 
       const target = link.getAttribute("href")?.replace(/^#/, "") || "";
       if (!targetToTabLabel[target]) return;

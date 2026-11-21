@@ -52,12 +52,14 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
   const [confirmed, setConfirmed] = useState(false);
 
   async function prepare() {
+    if (busy || confirming) return;
     if (!studentId) return setStatus("Önce kursiyer seçiniz.");
     const parsedAmount = parseAmount(amount);
     if (Number.isNaN(parsedAmount)) return setStatus("Tutarı 1.500 veya 1.500,50 biçiminde giriniz.");
     setBusy(true);
     setStatus("Güvenli bağlantı oluşturuluyor…");
     setPrepared(null);
+    setConfirmed(false);
     try {
       const response = await fetch("/api/payment-document-request", {
         method: "POST",
@@ -116,21 +118,21 @@ export default function SecurePaymentLink({ studentId, studentName, phoneCandida
     <div style={{ display: "grid", gap: 10 }}>
       <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 800, color: "#173a59" }}>
         WhatsApp alıcısı
-        {phones.length > 0 ? <select value={phone} disabled={busy} onChange={e => { setPhone(e.target.value); setPrepared(null); setConfirmed(false); }} style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }}>
+        {phones.length > 0 ? <select value={phone} disabled={busy || confirming} onChange={e => { setPhone(e.target.value); setPrepared(null); setConfirmed(false); }} style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }}>
           {phones.map(x => <option key={normalizePhone(x.phone)} value={normalizePhone(x.phone)}>{x.label} · {x.phone}</option>)}
         </select> : <span style={{ color: "#a53b35" }}>Kayıtlı geçerli telefon yok. Bağlantıyı oluşturup manuel kopyalayabilirsiniz.</span>}
       </label>
       <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 800, color: "#173a59" }}>
         Ödenecek tutar (isteğe bağlı)
-        <input value={amount} disabled={busy} onChange={e => { setAmount(e.target.value); setPrepared(null); setConfirmed(false); }} inputMode="decimal" placeholder="Örn. 4.000,00" style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }} />
+        <input value={amount} disabled={busy || confirming} onChange={e => { setAmount(e.target.value); setPrepared(null); setConfirmed(false); }} inputMode="decimal" placeholder="Örn. 4.000,00" style={{ padding: 12, borderRadius: 11, border: "1px solid #cbdbe8" }} />
       </label>
-      <button type="button" onClick={prepare} disabled={busy} style={{ minHeight: 48, padding: 14, border: 0, borderRadius: 12, background: "#0a5da8", color: "#fff", fontWeight: 900, cursor: busy ? "wait" : "pointer" }}>
+      <button type="button" onClick={prepare} disabled={busy || confirming} style={{ minHeight: 48, padding: 14, border: 0, borderRadius: 12, background: "#0a5da8", color: "#fff", fontWeight: 900, cursor: busy ? "wait" : "pointer" }}>
         {busy ? "Bağlantı hazırlanıyor…" : "Güvenli Ödeme Bağlantısı Oluştur"}
       </button>
     </div>
     {status ? <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: "#244e74" }}>{status}</p> : null}
     {prepared ? <div style={{ marginTop: 12, display: "grid", gap: 10, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #c8e1d4" }}>
-      <b style={{ color: "#22613a" }}>Bağlantı hazır · WhatsApp'ta gönderim bekliyor</b>
+      <b style={{ color: "#22613a" }}>{confirmed ? "Gönderim onayı kaydedildi" : "Bağlantı hazır"}</b>
       <input readOnly aria-label="Güvenli ödeme bağlantısı" value={prepared.url} onFocus={e => e.currentTarget.select()} style={{ minWidth: 0, padding: 10, border: "1px solid #d9e5ed", borderRadius: 8 }} />
       {prepared.expiresAt ? <small style={{ color: "#61788d" }}>Son geçerlilik: {new Date(prepared.expiresAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })}</small> : null}
       {whatsappUrl ? <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" style={{ padding: 14, borderRadius: 10, background: "#16743d", color: "white", fontWeight: 900, textAlign: "center", textDecoration: "none" }}>WhatsApp'ta Aç ve Gönder</a> : null}
