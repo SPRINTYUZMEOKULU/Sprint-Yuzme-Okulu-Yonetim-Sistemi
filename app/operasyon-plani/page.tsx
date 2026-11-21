@@ -169,6 +169,28 @@ function initials(name?: string | null) {
   return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
 }
 
+type CoachNames = {
+  groupCoachName: string | null;
+  sessionCoachName: string | null;
+  backupCoachName: string | null;
+};
+
+function CoachLabels({ groupCoachName, sessionCoachName, backupCoachName }: CoachNames) {
+  return (
+    <span style={coachLabelsStyle}>
+      <span>
+        Grup eğitmeni: <strong>{groupCoachName || "Atanmamış"}</strong>
+      </span>
+      {sessionCoachName && (
+        <span>Seans eğitmeni: <strong>{sessionCoachName}</strong></span>
+      )}
+      {backupCoachName && (
+        <span>Yedek eğitmen: <strong>{backupCoachName}</strong></span>
+      )}
+    </span>
+  );
+}
+
 async function kulvarKaydet(formData: FormData) {
   "use server";
   const profile = await requireProfile(["owner", "admin"]);
@@ -933,6 +955,36 @@ export default async function OperasyonPlaniPage({
     }
   }
 
+  function coachName(id?: string | null): string | null {
+    if (!id) return null;
+    const coach = coachMap.get(id);
+    return coach?.full_name || coach?.email || "İsim bilgisi bulunamadı";
+  }
+
+  function scheduleCoaches(schedule: { id: string; group_id: string; coach_id?: string | null }) {
+    const assignments = staffAssignments
+      .filter((assignment) => assignment.schedule_id === schedule.id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const groupCoachId = groupMap.get(schedule.group_id)?.primary_coach_id;
+    const sessionCoachId =
+      assignments.find((assignment) => assignment.assignment_role === "coach")?.coach_id ||
+      schedule.coach_id;
+    const backupCoachId =
+      assignments.find((assignment) => assignment.assignment_role === "backup")?.coach_id;
+
+    const sameCoach = sessionCoachId === groupCoachId || Boolean(
+      sessionCoachId && groupCoachId && coachMap.get(sessionCoachId) &&
+      coachMap.get(sessionCoachId) === coachMap.get(groupCoachId)
+    );
+
+    return {
+      groupCoachName: coachName(groupCoachId),
+      sessionCoachName: sameCoach ? null : coachName(sessionCoachId),
+      primaryCoachName: coachName(sessionCoachId || groupCoachId),
+      backupCoachName: coachName(backupCoachId),
+    };
+  }
+
   const studentMap = new Map(
     students.map((item: any) => [
       item.id,
@@ -1366,24 +1418,6 @@ export default async function OperasyonPlaniPage({
             adSoyad(a).localeCompare(adSoyad(b), "tr")
           );
 
-        const slotStaff = staffAssignments.filter(
-          (assignment: any) => assignment.schedule_id === slotSchedule.id
-        );
-        const primaryAssignment = slotStaff.find(
-          (assignment: any) => assignment.assignment_role === "coach"
-        );
-        const backupAssignment = slotStaff.find(
-          (assignment: any) => assignment.assignment_role === "backup"
-        );
-        const primaryCoachId =
-          primaryAssignment?.coach_id ||
-          slotSchedule.coach_id ||
-          slotGroup?.primary_coach_id ||
-          null;
-        const backupCoachId = backupAssignment?.coach_id || null;
-        const primaryCoach = primaryCoachId ? coachMap.get(primaryCoachId) : null;
-        const backupCoach = backupCoachId ? coachMap.get(backupCoachId) : null;
-
         return {
           scheduleId: slotSchedule.id,
           groupId: slotSchedule.group_id,
@@ -1391,10 +1425,7 @@ export default async function OperasyonPlaniPage({
           courseType: slotGroup?.course_type || null,
           capacity: Number(slotGroup?.capacity || 0),
           students: dayStudents,
-          primaryCoachName:
-            primaryCoach?.full_name || primaryCoach?.email || null,
-          backupCoachName:
-            backupCoach?.full_name || backupCoach?.email || null,
+          ...scheduleCoaches(slotSchedule),
           sharedMode: sharedModeOf(slotSchedule.id),
         };
       });
@@ -1543,6 +1574,7 @@ export default async function OperasyonPlaniPage({
                               {groupRow.courseType || "Kurs"} · {groupRow.students.length}
                               {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
                             </small>
+                            <CoachLabels {...groupRow} />
                           </span>
                           <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
                             {canEdit ? (
@@ -2251,28 +2283,8 @@ export default async function OperasyonPlaniPage({
                   .map((id) => coachMap.get(id))
                   .filter(Boolean);
 
-                const primaryAssignment = explicitStaff.find(
-                  (assignment: any) => assignment.assignment_role === "coach"
-                );
-                const backupAssignment = explicitStaff.find(
-                  (assignment: any) => assignment.assignment_role === "backup"
-                );
-                const primaryCoachId =
-                  primaryAssignment?.coach_id ||
-                  schedule.coach_id ||
-                  group?.primary_coach_id ||
-                  null;
-                const backupCoachId = backupAssignment?.coach_id || null;
-                const primaryCoach = primaryCoachId
-                  ? coachMap.get(primaryCoachId)
-                  : null;
-                const backupCoach = backupCoachId
-                  ? coachMap.get(backupCoachId)
-                  : null;
-                const primaryCoachName =
-                  primaryCoach?.full_name || primaryCoach?.email || null;
-                const backupCoachName =
-                  backupCoach?.full_name || backupCoach?.email || null;
+                const coachNames = scheduleCoaches(schedule);
+                const { primaryCoachName, backupCoachName } = coachNames;
 
                 const sessionStudentAssignments =
                   studentAssignments.filter(
@@ -2363,6 +2375,7 @@ export default async function OperasyonPlaniPage({
                     );
 
                     return {
+                      ...scheduleCoaches(slotSchedule),
                       scheduleId: slotSchedule.id,
                       groupName: slotGroup?.name || "Grup Atanmamış",
                       courseType: slotGroup?.course_type || null,
@@ -2424,20 +2437,14 @@ export default async function OperasyonPlaniPage({
                       </div>
 
                       <div className="opSessionMeta" style={sessionSummaryItemStyle}>
-                        <span style={sessionSummaryLabelStyle}>EĞİTMEN</span>
-                        <strong
-                          style={{
-                            ...(sessionCoaches.length ? sessionCoachAssignedStyle : sessionCoachMissingStyle),
-                          }}
-                        >
-                          {sessionCoaches.length
-                            ? sessionCoaches
-                                .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
-                                .join(", ")
-                            : studentAllocationCoaches.length
-                              ? `Öğrenci dağılımı: ${studentAllocationCoaches.map((coach: any) => coach.full_name || coach.email || "Eğitmen").join(", ")} (seans sorumlusu atanmadı)`
-                              : "Atanmadı"}
-                        </strong>
+                        <CoachLabels {...coachNames} />
+                        {studentAllocationCoaches.length > 0 && (
+                          <small style={sessionSummarySubStyle}>
+                            Öğrenci bazlı atama: {studentAllocationCoaches
+                              .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
+                              .join(", ")}
+                          </small>
+                        )}
                       </div>
 
                       <div className="opSessionMeta opSessionStudentMetric" style={sessionStudentMetricStyle}>
@@ -2512,17 +2519,6 @@ export default async function OperasyonPlaniPage({
                             >
                               {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
                             </strong>
-                            <span
-                              style={{
-                                display: "block",
-                                marginTop: 5,
-                                color: "#6b7280",
-                                fontSize: 12,
-                                lineHeight: 1.45,
-                              }}
-                            >
-                              {sharedSlotRows.map((item: any) => item.groupName).join(" + ")} grupları bu saatte birlikte çalışıyor.
-                            </span>
                           </div>
 
                           <div
@@ -2614,6 +2610,7 @@ export default async function OperasyonPlaniPage({
                                     {item.capacity ? ` · kapasite ${item.capacity}` : ""}
                                     {item.courseType ? ` · ${item.courseType}` : ""}
                                   </span>
+                                  <CoachLabels {...item} />
                                   <span
                                     style={{
                                       display: "flex",
@@ -2913,8 +2910,11 @@ export default async function OperasyonPlaniPage({
                             assignmentTitleStyle
                           }
                         >
-                          Eğitmen Ataması · Ana / Yedek
+                          Seans Eğitmeni Ataması
                         </div>
+                        <Link href="/gruplar" style={{ color: "#1769e8", fontSize: 13 }}>
+                          Grup eğitmenlerini yönet
+                        </Link>
 
                         <form
                           action={
@@ -3962,25 +3962,14 @@ const sessionChevronStyle: React.CSSProperties = {
   textAlign: "center",
 };
 
-const sessionCoachAssignedStyle: React.CSSProperties = {
-  color: "#13233f",
-  fontSize: 11,
-  lineHeight: 1.25,
+const coachLabelsStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 3,
+  marginTop: 5,
+  color: "#334155",
+  fontSize: 12,
+  lineHeight: 1.4,
   overflowWrap: "anywhere",
-};
-
-const sessionCoachMissingStyle: React.CSSProperties = {
-  display: "inline-flex",
-  width: "max-content",
-  maxWidth: "100%",
-  padding: "4px 7px",
-  borderRadius: 999,
-  background: "#fff1f2",
-  border: "1px solid #fecdd3",
-  color: "#be123c",
-  fontSize: 9,
-  fontWeight: 900,
-  lineHeight: 1,
 };
 
 const sessionStudentMetricStyle: React.CSSProperties = {
