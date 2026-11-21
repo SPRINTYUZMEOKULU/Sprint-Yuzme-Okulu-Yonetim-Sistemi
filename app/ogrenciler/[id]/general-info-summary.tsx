@@ -87,18 +87,9 @@ function adaptAdultLabels(adult: boolean) {
 }
 
 function openFinanceCenter(action: "collect" | "history" | "due" = "collect") {
-  const labels =
-    action === "history"
-      ? ["Ödeme Geçmişi"]
-      : action === "due"
-        ? ["Vade", "Ödeme Al"]
-        : ["Ödeme Al"];
-  const quickAction = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      ".fileCommandActions button, .fileCommandActions a",
-    ),
-  ).find((item) =>
-    labels.some((label) => (item.textContent || "").includes(label)),
+  const tab = action === "collect" ? "payment" : action;
+  const quickAction = document.querySelector<HTMLElement>(
+    `.fileCommandActions [data-student-finance-action="${tab}"]`,
   );
 
   if (quickAction) {
@@ -148,11 +139,8 @@ function normalizePaymentAlert({
   const grid = document.querySelector<HTMLElement>(".smartAlertGrid");
   if (!grid) return;
 
-  const paymentAlerts = Array.from(grid.querySelectorAll<HTMLAnchorElement>("a")).filter(
-    (item) => {
-      const text = (item.textContent || "").toLocaleLowerCase("tr-TR");
-      return item.getAttribute("href") === "#odeme" || text.includes("ödeme");
-    },
+  const paymentAlerts = Array.from(
+    grid.querySelectorAll<HTMLAnchorElement>('a[href="#odeme"]'),
   );
 
   if (remaining <= 0) {
@@ -167,6 +155,7 @@ function normalizePaymentAlert({
   const primary = paymentAlerts[0];
   if (!primary) return;
 
+  primary.dataset.studentFinanceAction = overdue ? "due" : "payment";
   primary.classList.remove("danger", "warning", "financeCriticalAlert");
   primary.classList.add(overdue ? "danger" : "warning");
   if (overdue) primary.classList.add("financeCriticalAlert");

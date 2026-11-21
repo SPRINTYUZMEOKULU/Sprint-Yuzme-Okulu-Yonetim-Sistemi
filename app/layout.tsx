@@ -22,7 +22,6 @@ import SidebarBranchClickFix from "./components/sidebar-branch-click-fix";
 import GlobalMobileNav from "./components/global-mobile-nav";
 import GlobalDesktopNav from "./components/global-desktop-nav";
 import AttendanceAutomationCenter from "./components/attendance-automation-center";
-import PaymentInfoShortcut from "./components/payment-info-shortcut";
 import StudentPaymentStatusEnhancer from "./components/student-payment-status-enhancer";
 import StudentMessageHistoryEnhancer from "./components/student-message-history-enhancer";
 import WhatsAppSafeOpen from "./components/whatsapp-safe-open";
@@ -72,7 +71,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ModuleNavigationFeedback />
         <SidebarBranchClickFix />
         <AttendanceAutomationCenter />
-        <PaymentInfoShortcut />
         <StudentPaymentStatusEnhancer />
         <StudentMessageHistoryEnhancer />
         <FirstLessonStartEnhancer />

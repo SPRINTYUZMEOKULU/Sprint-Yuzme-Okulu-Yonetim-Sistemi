@@ -8,6 +8,7 @@ function getActionMessage(target: Element) {
   if (target.closest("[data-renewal-button='1']") || text.includes("kayıt yenile") || text.includes("onay bekliyor") || text.includes("onaylandı")) {
     return "Kayıt yenileme merkezi açılıyor…";
   }
+  if (text.includes("güvenli ödeme")) return "Güvenli ödeme bilgileri açılıyor…";
   if (text.includes("ödeme al")) return "Ödeme alma ekranı açılıyor…";
   if (text.includes("ödeme geçmişi")) return "Ödeme geçmişi açılıyor…";
   if (text.includes("bilgileri düzenle")) return "Öğrenci ve veli bilgileri açılıyor…";
@@ -17,7 +18,7 @@ function getActionMessage(target: Element) {
   if (text.includes("a4") || text.includes("çıktı")) return "A4 çıktı hazırlanıyor…";
   if (text.includes("sil") || text.includes("arşiv")) return "Silme / arşivleme işlemi açılıyor…";
   if (text.includes("işlemi aç")) {
-    const cardText = (target.closest(".smartAlertGrid")?.textContent || target.parentElement?.textContent || "").toLocaleLowerCase("tr-TR");
+    const cardText = (target.textContent || "").toLocaleLowerCase("tr-TR");
     if (cardText.includes("ödeme")) return "Ödeme işlemi açılıyor…";
     if (cardText.includes("ders hakkı") || cardText.includes("yenile")) return "Kayıt yenileme işlemi açılıyor…";
     if (cardText.includes("telefon")) return "İletişim bilgileri açılıyor…";

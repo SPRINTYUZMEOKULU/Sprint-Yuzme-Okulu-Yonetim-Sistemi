@@ -883,6 +883,9 @@ export default async function StudentFile({
                 key={`${alert.title}-${alert.target}`}
                 href={alert.target.startsWith("/") ? alert.target : `#${alert.target}`}
                 className={alert.tone}
+                data-student-finance-action={alert.target === "odeme"
+                  ? paymentOverdue && alert.tone === "danger" ? "due" : "payment"
+                  : undefined}
                 data-open-file-tab={
                   alert.target.startsWith("/") ? undefined : alert.target === "genel-bilgiler"
                     ? "general"
