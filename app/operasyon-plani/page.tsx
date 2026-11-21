@@ -32,6 +32,7 @@ const GUNLER: Record<number, string> = {
 
 type SearchParams = {
   tarih?: string;
+  seans?: string;
   sube?: string;
   saat?: string;
   egitmen?: string;
@@ -77,6 +78,10 @@ function dateForWeekday(baseDate: string, targetWeekday: number) {
     month: "2-digit",
     day: "2-digit",
   }).format(result);
+}
+
+function displayWeekday(value: number) {
+  return Number(value) === 0 ? 7 : Number(value);
 }
 
 function enrollmentWeekday(value: number) {
@@ -167,6 +172,28 @@ function initials(name?: string | null) {
   }
 
   return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
+}
+
+type CoachNames = {
+  groupCoachName: string | null;
+  sessionCoachName: string | null;
+  backupCoachName: string | null;
+};
+
+function CoachLabels({ groupCoachName, sessionCoachName, backupCoachName }: CoachNames) {
+  return (
+    <span style={coachLabelsStyle}>
+      <span>
+        Grup eğitmeni: <strong>{groupCoachName || "Atanmamış"}</strong>
+      </span>
+      {sessionCoachName && (
+        <span>Seans eğitmeni: <strong>{sessionCoachName}</strong></span>
+      )}
+      {backupCoachName && (
+        <span>Yedek eğitmen: <strong>{backupCoachName}</strong></span>
+      )}
+    </span>
+  );
 }
 
 async function kulvarKaydet(formData: FormData) {
@@ -900,7 +927,7 @@ export default async function OperasyonPlaniPage({
       ? allSchedules
       : allSchedules.filter(
           (schedule: any) =>
-            Number(schedule.weekday) === selectedWeekday
+            displayWeekday(schedule.weekday) === selectedWeekday
         );
 
   // Legacy personnel records may use staff.id while newer assignments use
@@ -931,6 +958,36 @@ export default async function OperasyonPlaniPage({
         coachMap.set(String(staff.auth_user_id), staffCoach);
       }
     }
+  }
+
+  function coachName(id?: string | null): string | null {
+    if (!id) return null;
+    const coach = coachMap.get(id);
+    return coach?.full_name || coach?.email || "İsim bilgisi bulunamadı";
+  }
+
+  function scheduleCoaches(schedule: { id: string; group_id: string; coach_id?: string | null }) {
+    const assignments = staffAssignments
+      .filter((assignment) => assignment.schedule_id === schedule.id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const groupCoachId = groupMap.get(schedule.group_id)?.primary_coach_id;
+    const sessionCoachId =
+      assignments.find((assignment) => assignment.assignment_role === "coach")?.coach_id ||
+      schedule.coach_id;
+    const backupCoachId =
+      assignments.find((assignment) => assignment.assignment_role === "backup")?.coach_id;
+
+    const sameCoach = sessionCoachId === groupCoachId || Boolean(
+      sessionCoachId && groupCoachId && coachMap.get(sessionCoachId) &&
+      coachMap.get(sessionCoachId) === coachMap.get(groupCoachId)
+    );
+
+    return {
+      groupCoachName: coachName(groupCoachId),
+      sessionCoachName: sameCoach ? null : coachName(sessionCoachId),
+      primaryCoachName: coachName(sessionCoachId || groupCoachId),
+      backupCoachName: coachName(backupCoachId),
+    };
   }
 
   const studentMap = new Map(
@@ -996,38 +1053,28 @@ export default async function OperasyonPlaniPage({
 
         const student = studentMap.get(membership.student_id);
         return ageMatchesFilter(
-          ageOnDate(student?.birth_date, selectedDate),
+          ageOnDate(student?.birth_date, dateForWeekday(selectedDate, displayWeekday(schedule.weekday))),
           params.yas
         );
       });
 
-  const isSharedScheduleCandidate = (schedule: any, source: any[]) => {
-    if (sharedModeOf(schedule.id) === "separate") return false;
+  const branchIdOf = (schedule: any) =>
+    schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
 
-    const scheduleBranchId =
-      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
-
-    return source.some((item: any) => {
-      if (item.id === schedule.id) return false;
-      if (sharedModeOf(item.id) === "separate") return false;
-
-      const itemBranchId =
-        item.branch_id || groupMap.get(item.group_id)?.branch_id || "";
-
-      return (
-        Number(item.weekday) === Number(schedule.weekday) &&
-        String(item.start_time || "").slice(0, 5) ===
-          String(schedule.start_time || "").slice(0, 5) &&
-        itemBranchId === scheduleBranchId
-      );
-    });
-  };
+  const slotKeyOf = (schedule: any) => [
+    displayWeekday(schedule.weekday),
+    branchIdOf(schedule),
+    saatGoster(schedule.start_time),
+    saatGoster(schedule.end_time),
+  ].join("|");
 
   let filteredSchedules =
     schedules.filter((schedule: any) => {
+      if (params.seans && schedule.id !== params.seans) return false;
+
       if (
         params.sube &&
-        schedule.branch_id !== params.sube
+        branchIdOf(schedule) !== params.sube
       ) {
         return false;
       }
@@ -1094,7 +1141,7 @@ export default async function OperasyonPlaniPage({
   // Tek ana plan görünümünde seanslar yalnızca gün ve saate göre sıralanır.
   // Eski görünüm sekmelerine ait özel sıralamalar kaldırıldı; filtreler veri kümesini daraltır.
   filteredSchedules = [...filteredSchedules].sort((a: any, b: any) => {
-    const dayDiff = Number(a.weekday || 0) - Number(b.weekday || 0);
+    const dayDiff = displayWeekday(a.weekday) - displayWeekday(b.weekday);
     if (dayDiff !== 0) return dayDiff;
     return String(a.start_time || "").localeCompare(String(b.start_time || ""));
   });
@@ -1271,45 +1318,19 @@ export default async function OperasyonPlaniPage({
   );
 
   /* =======================================================
-     SEÇİLİ GÜNÜN ORTAK SEANSLARI
+     ORTAK SEANSLAR
   ======================================================= */
 
-  const selectedDaySchedules = allSchedules.filter((schedule: any) => {
-    if (sharedModeOf(schedule.id) === "separate") return false;
-    if (Number(schedule.weekday) !== selectedWeekday) return false;
-
-    const scheduleBranchId =
-      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
-
-    if (params.sube && scheduleBranchId !== params.sube) return false;
-
-    if (
-      params.saat &&
-      String(schedule.start_time || "").slice(0, 5) !== params.saat
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const selectedDaySharedSlotsMap = new Map<string, any[]>();
-
-  selectedDaySchedules.forEach((schedule: any) => {
-    const scheduleBranchId =
-      schedule.branch_id || groupMap.get(schedule.group_id)?.branch_id || "";
-    const key = [
-      scheduleBranchId,
-      String(schedule.start_time || "").slice(0, 5),
-      String(schedule.end_time || "").slice(0, 5),
-    ].join("|");
-
-    const rows = selectedDaySharedSlotsMap.get(key) || [];
+  const sharedSchedulesBySlot = new Map<string, any[]>();
+  for (const schedule of filteredSchedules) {
+    if (sharedModeOf(schedule.id) === "separate") continue;
+    const key = slotKeyOf(schedule);
+    const rows = sharedSchedulesBySlot.get(key) || [];
     rows.push(schedule);
-    selectedDaySharedSlotsMap.set(key, rows);
-  });
+    sharedSchedulesBySlot.set(key, rows);
+  }
 
-  const selectedDaySharedSlots = Array.from(selectedDaySharedSlotsMap.entries())
+  const sharedSlots = Array.from(sharedSchedulesBySlot.entries())
     .map(([key, slotSchedules]) => {
       const uniqueGroupSchedules = Array.from(
         new Map(
@@ -1322,11 +1343,9 @@ export default async function OperasyonPlaniPage({
       if (uniqueGroupSchedules.length < 2) return null;
 
       const firstSchedule: any = uniqueGroupSchedules[0];
-      const branchId =
-        firstSchedule.branch_id ||
-        groupMap.get(firstSchedule.group_id)?.branch_id ||
-        "";
-      const branch = branchMap.get(branchId);
+      const branch = branchMap.get(branchIdOf(firstSchedule));
+      const weekday = displayWeekday(firstSchedule.weekday);
+      const date = dateForWeekday(selectedDate, weekday);
 
       const groupRows = uniqueGroupSchedules.map((slotSchedule: any) => {
         const slotGroup = groupMap.get(slotSchedule.group_id);
@@ -1353,12 +1372,16 @@ export default async function OperasyonPlaniPage({
             }
 
             const student = studentMap.get(membership.student_id);
-            if (!student) return null;
+            if (!student || (params.seviye && student.swimming_level !== params.seviye)) {
+              return null;
+            }
+            const age = ageOnDate(student.birth_date, date);
+            if (params.yas && !ageMatchesFilter(age, params.yas)) return null;
 
             return {
               ...student,
               enrollment,
-              age: ageOnDate(student.birth_date, selectedDate),
+              age,
             };
           })
           .filter(Boolean)
@@ -1366,41 +1389,20 @@ export default async function OperasyonPlaniPage({
             adSoyad(a).localeCompare(adSoyad(b), "tr")
           );
 
-        const slotStaff = staffAssignments.filter(
-          (assignment: any) => assignment.schedule_id === slotSchedule.id
-        );
-        const primaryAssignment = slotStaff.find(
-          (assignment: any) => assignment.assignment_role === "coach"
-        );
-        const backupAssignment = slotStaff.find(
-          (assignment: any) => assignment.assignment_role === "backup"
-        );
-        const primaryCoachId =
-          primaryAssignment?.coach_id ||
-          slotSchedule.coach_id ||
-          slotGroup?.primary_coach_id ||
-          null;
-        const backupCoachId = backupAssignment?.coach_id || null;
-        const primaryCoach = primaryCoachId ? coachMap.get(primaryCoachId) : null;
-        const backupCoach = backupCoachId ? coachMap.get(backupCoachId) : null;
-
         return {
           scheduleId: slotSchedule.id,
-          groupId: slotSchedule.group_id,
           groupName: slotGroup?.name || "Grup Atanmamış",
-          courseType: slotGroup?.course_type || null,
           capacity: Number(slotGroup?.capacity || 0),
           students: dayStudents,
-          primaryCoachName:
-            primaryCoach?.full_name || primaryCoach?.email || null,
-          backupCoachName:
-            backupCoach?.full_name || backupCoach?.email || null,
-          sharedMode: sharedModeOf(slotSchedule.id),
+          ...scheduleCoaches(slotSchedule),
         };
       });
 
       return {
         key,
+        date,
+        weekday,
+        scheduleIds: uniqueGroupSchedules.map((schedule: any) => schedule.id),
         branchName: branch?.name || "Şube / havuz",
         startTime: saatGoster(firstSchedule.start_time),
         endTime: saatGoster(firstSchedule.end_time),
@@ -1412,6 +1414,11 @@ export default async function OperasyonPlaniPage({
       };
     })
     .filter(Boolean) as any[];
+
+  const sharedScheduleIds = new Set(sharedSlots.flatMap((slot) => slot.scheduleIds));
+  const standaloneSchedules = filteredSchedules.filter(
+    (schedule) => !sharedScheduleIds.has(schedule.id)
+  );
 
   function dayShortcutHref(weekday: number) {
     const qp = new URLSearchParams();
@@ -1444,181 +1451,6 @@ export default async function OperasyonPlaniPage({
       <UstGezinme />
       <main style={pageStyle}>
       <div style={containerStyle}>
-        {selectedDaySharedSlots.length > 0 ? (
-          <section id="ortak-seanslar" style={dailySharedSectionStyle}>
-            <div style={dailySharedHeaderStyle}>
-              <div>
-                <div style={dailySharedEyebrowStyle}>SEÇİLİ GÜN · ORTAK SEANSLAR</div>
-                <strong style={dailySharedTitleStyle}>
-                  {GUNLER[selectedWeekday]} günü birlikte çalışan gruplar
-                </strong>
-                <p style={dailySharedTextStyle}>
-                  Yalnız bu günü kayıt sırasında seçmiş öğrenciler gösterilir. İki/üç günlük kayıt ayrımı, seviye ve yaş bilgisi öğrenci satırında görünür.
-                </p>
-              </div>
-              <span style={dailySharedCountStyle}>
-                {selectedDaySharedSlots.length} ortak saat
-              </span>
-            </div>
-
-            <div style={dailySharedGridStyle}>
-              {selectedDaySharedSlots.map((slot: any) => (
-                <details key={slot.key} style={dailySharedCardStyle}>
-                  <summary style={dailySharedSummaryStyle}>
-                    <span>
-                      <strong style={dailySharedTimeStyle}>
-                        {slot.startTime} – {slot.endTime}
-                      </strong>
-                      <small style={dailySharedPoolStyle}>{slot.branchName}</small>
-                    </span>
-                    <span style={dailySharedSummaryRightStyle}>
-                      <b>{slot.groups.length} grup</b>
-                      <small>{slot.totalStudents} öğrenci</small>
-                    </span>
-                  </summary>
-
-                  <div style={dailySharedBodyStyle}>
-                    <div style={dailySharedPrintRowStyle}>
-                      <SessionRosterPrintButton
-                        date={selectedDate}
-                        weekday={GUNLER[selectedWeekday]}
-                        pool={slot.branchName}
-                        startTime={slot.startTime}
-                        endTime={slot.endTime}
-                        primaryCoach={
-                          slot.groups.find((item: any) => item.primaryCoachName)?.primaryCoachName || null
-                        }
-                        backupCoach={
-                          slot.groups.find((item: any) => item.backupCoachName)?.backupCoachName || null
-                        }
-                        students={slot.groups.flatMap((item: any) =>
-                          item.students.map((student: any) => ({
-                            id: student.id,
-                            name: adSoyad(student),
-                            age: student.age,
-                            level: student.swimming_level || null,
-                            group: item.groupName,
-                          }))
-                        )}
-                        label="Ortak Seans Çıktısı"
-                      />
-                    </div>
-
-                    {allSchedules
-                      .filter(
-                        (candidate: any) =>
-                          sharedModeOf(candidate.id) === "separate" &&
-                          Number(candidate.weekday) === selectedWeekday &&
-                          String(candidate.start_time || "").slice(0, 5) === slot.startTime &&
-                          (candidate.branch_id || groupMap.get(candidate.group_id)?.branch_id) ===
-                            allSchedules.find((s: any) => s.id === slot.groups[0]?.scheduleId)?.branch_id
-                      )
-                      .map((candidate: any) => {
-                        const candidateGroup = groupMap.get(candidate.group_id);
-                        return (
-                          <div key={candidate.id} style={dailySharedSeparatedRowStyle}>
-                            <span>
-                              <strong>{candidateGroup?.name || "Grup"}</strong>
-                              <small>Ayrı tutuluyor · ortak seansa dahil değil</small>
-                            </span>
-                            {canEdit ? (
-                              <form action={ortakSeansModuAyarla}>
-                                <input type="hidden" name="schedule_id" value={candidate.id} />
-                                <input type="hidden" name="mode" value="shared" />
-                                <button type="submit" style={dailySharedJoinButtonStyle}>
-                                  Ortak Seansa Al
-                                </button>
-                              </form>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-
-                    {slot.groups.map((groupRow: any) => (
-                      <details key={groupRow.scheduleId} style={dailySharedGroupStyle}>
-                        <summary style={dailySharedGroupSummaryStyle}>
-                          <span>
-                            <strong>{groupRow.groupName}</strong>
-                            <small>
-                              {groupRow.courseType || "Kurs"} · {groupRow.students.length}
-                              {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
-                            </small>
-                          </span>
-                          <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                            {canEdit ? (
-                              <form action={ortakSeansModuAyarla}>
-                                <input type="hidden" name="schedule_id" value={groupRow.scheduleId} />
-                                <input type="hidden" name="mode" value="separate" />
-                                <button
-                                  type="submit"
-                                  style={dailySharedSeparateButtonStyle}
-                                  title="Bu grubu bu ortak seansın dışında tut"
-                                >
-                                  Ayrı Tut
-                                </button>
-                              </form>
-                            ) : null}
-                            <SessionRosterPrintButton
-                              compact
-                              date={selectedDate}
-                              weekday={GUNLER[selectedWeekday]}
-                              pool={slot.branchName}
-                              startTime={slot.startTime}
-                              endTime={slot.endTime}
-                              group={groupRow.groupName}
-                              primaryCoach={groupRow.primaryCoachName}
-                              backupCoach={groupRow.backupCoachName}
-                              students={groupRow.students.map((student: any) => ({
-                                id: student.id,
-                                name: adSoyad(student),
-                                age: student.age,
-                                level: student.swimming_level || null,
-                                group: groupRow.groupName,
-                              }))}
-                            />
-                            <span style={dailySharedOpenStyle}>Öğrencileri Aç</span>
-                          </span>
-                        </summary>
-
-                        <div style={dailySharedStudentListStyle}>
-                          {groupRow.students.length ? (
-                            groupRow.students.map((student: any) => (
-                              <div key={student.id} style={dailySharedStudentRowStyle}>
-                                <span style={{ minWidth: 0 }}>
-                                  <strong style={dailySharedStudentNameStyle}>
-                                    {adSoyad(student)}
-                                  </strong>
-                                  <small style={dailySharedStudentMetaStyle}>
-                                    {student.swimming_level || "Seviye yok"}
-                                    {" · "}
-                                    {student.age !== null ? `${student.age} yaş` : "Yaş bilgisi yok"}
-                                    {" · "}
-                                    {enrollmentDaysText(student.enrollment)}
-                                  </small>
-                                </span>
-                                <Link
-                                  href={`/ogrenciler/${student.id}`}
-                                  style={dailySharedStudentLinkStyle}
-                                >
-                                  Kartı Aç
-                                </Link>
-                              </div>
-                            ))
-                          ) : (
-                            <div style={smallEmptyStyle}>
-                              Bu gün için seçili öğrenci yok.
-                            </div>
-                          )}
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         {/* =================================================
             ÜST ALAN
         ================================================= */}
@@ -2081,6 +1913,154 @@ export default async function OperasyonPlaniPage({
         </section>
         )}
 
+        {params.kapsam !== "tumu" && sharedSlots.length > 0 ? (
+          <section id="ortak-seanslar" style={dailySharedSectionStyle}>
+            <div style={dailySharedHeaderStyle}>
+              <h2 style={dailySharedTitleStyle}>Ortak Seanslar</h2>
+              <span style={dailySharedCountStyle}>
+                {sharedSlots.length} ortak saat
+              </span>
+            </div>
+
+            <div style={dailySharedGridStyle}>
+              {sharedSlots.map((slot: any) => (
+                <details key={slot.key} style={dailySharedCardStyle}>
+                  <summary style={dailySharedSummaryStyle}>
+                    <span>
+                      <strong style={dailySharedTimeStyle}>
+                        {GUNLER[slot.weekday]} · {slot.startTime} – {slot.endTime}
+                      </strong>
+                      <small style={dailySharedPoolStyle}>{slot.branchName}</small>
+                    </span>
+                    <span style={dailySharedSummaryRightStyle}>
+                      <b>{slot.groups.length} grup</b>
+                      <small>{slot.totalStudents} öğrenci</small>
+                    </span>
+                  </summary>
+
+                  <div style={dailySharedBodyStyle}>
+                    <div style={dailySharedPrintRowStyle}>
+                      <SessionRosterPrintButton
+                        date={slot.date}
+                        weekday={GUNLER[slot.weekday]}
+                        pool={slot.branchName}
+                        startTime={slot.startTime}
+                        endTime={slot.endTime}
+                        primaryCoach={
+                          Array.from(new Set(slot.groups.map((item: any) => item.primaryCoachName).filter(Boolean))).join(", ") || null
+                        }
+                        backupCoach={
+                          Array.from(new Set(slot.groups.map((item: any) => item.backupCoachName).filter(Boolean))).join(", ") || null
+                        }
+                        students={slot.groups.flatMap((item: any) =>
+                          item.students.map((student: any) => ({
+                            id: student.id,
+                            name: adSoyad(student),
+                            age: student.age,
+                            level: student.swimming_level || null,
+                            group: item.groupName,
+                          }))
+                        )}
+                        label="Ortak Seans Çıktısı"
+                      />
+                    </div>
+
+                    {slot.groups.map((groupRow: any) => (
+                      <details key={groupRow.scheduleId} style={dailySharedGroupStyle}>
+                        <summary style={dailySharedGroupSummaryStyle}>
+                          <span>
+                            <strong style={{ display: "block", overflowWrap: "anywhere" }}>
+                              {groupRow.groupName.startsWith(`${slot.branchName} · `)
+                                ? groupRow.groupName.slice(slot.branchName.length + 3)
+                                : groupRow.groupName}
+                            </strong>
+                            <small>
+                              {groupRow.students.length}
+                              {groupRow.capacity ? ` / ${groupRow.capacity}` : ""} öğrenci
+                            </small>
+                            <CoachLabels {...groupRow} />
+                          </span>
+                          <span style={dailySharedOpenStyle}>Öğrenciler ⌄</span>
+                        </summary>
+
+                        <div style={dailySharedStudentListStyle}>
+                          <div style={sharedGroupActionsStyle}>
+                            <Link style={dailySharedStudentLinkStyle} href={`/yoklama?date=${slot.date}&scheduleId=${groupRow.scheduleId}`}>
+                              Yoklamaya Git
+                            </Link>
+                            <Link style={dailySharedStudentLinkStyle} href={`/operasyon-plani?tarih=${slot.date}&kapsam=gun&seans=${groupRow.scheduleId}#seans-plani`}>
+                              Seans İşlemleri
+                            </Link>
+                            {canEdit ? (
+                              <form action={ortakSeansModuAyarla}>
+                                <input type="hidden" name="schedule_id" value={groupRow.scheduleId} />
+                                <input type="hidden" name="mode" value="separate" />
+                                <button
+                                  type="submit"
+                                  style={dailySharedSeparateButtonStyle}
+                                  title="Bu grubu bu ortak seansın dışında tut"
+                                >
+                                  Ayrı Tut
+                                </button>
+                              </form>
+                            ) : null}
+                            <SessionRosterPrintButton
+                              compact
+                              date={slot.date}
+                              weekday={GUNLER[slot.weekday]}
+                              pool={slot.branchName}
+                              startTime={slot.startTime}
+                              endTime={slot.endTime}
+                              group={groupRow.groupName}
+                              primaryCoach={groupRow.primaryCoachName}
+                              backupCoach={groupRow.backupCoachName}
+                              students={groupRow.students.map((student: any) => ({
+                                id: student.id,
+                                name: adSoyad(student),
+                                age: student.age,
+                                level: student.swimming_level || null,
+                                group: groupRow.groupName,
+                              }))}
+                            />
+                          </div>
+                          {groupRow.students.length ? (
+                            groupRow.students.map((student: any) => (
+                              <div key={student.id} style={dailySharedStudentRowStyle}>
+                                <span style={{ minWidth: 0 }}>
+                                  <strong style={dailySharedStudentNameStyle}>
+                                    {adSoyad(student)}
+                                  </strong>
+                                  <small style={dailySharedStudentMetaStyle}>
+                                    {student.swimming_level || "Seviye yok"}
+                                    {" · "}
+                                    {student.age !== null ? `${student.age} yaş` : "Yaş bilgisi yok"}
+                                    {" · "}
+                                    {enrollmentDaysText(student.enrollment)}
+                                  </small>
+                                </span>
+                                <Link
+                                  href={`/ogrenciler/${student.id}`}
+                                  style={dailySharedStudentLinkStyle}
+                                >
+                                  Kartı Aç
+                                </Link>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={smallEmptyStyle}>
+                              Bu gün için seçili öğrenci yok.
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* =================================================
             SEANSLAR
         ================================================= */}
@@ -2103,10 +2083,19 @@ export default async function OperasyonPlaniPage({
               deneyebilirsiniz.
             </p>
           </section>
-        ) : (
-          <section className="opScheduleGrid" style={scheduleGridStyle}>
-            {filteredSchedules.map(
+        ) : standaloneSchedules.length > 0 ? (
+          <section id="seans-plani" className="opScheduleGrid" style={scheduleGridStyle}>
+            {params.seans ? (
+              <Link href={`/operasyon-plani?tarih=${selectedDate}&kapsam=gun#ortak-seanslar`} style={dailySharedStudentLinkStyle}>
+                Günlük Plana Dön
+              </Link>
+            ) : sharedSlots.length > 0 ? (
+              <h2 style={dailySharedTitleStyle}>Diğer Seanslar</h2>
+            ) : null}
+            {standaloneSchedules.map(
               (schedule: any) => {
+                const sessionWeekday = displayWeekday(schedule.weekday);
+                const sessionDate = dateForWeekday(selectedDate, sessionWeekday);
                 const group =
                   groupMap.get(
                     schedule.group_id
@@ -2167,7 +2156,7 @@ export default async function OperasyonPlaniPage({
                 if (params.yas) {
                   groupStudents = groupStudents.filter((student: any) =>
                     ageMatchesFilter(
-                      ageOnDate(student.birth_date, selectedDate),
+                      ageOnDate(student.birth_date, sessionDate),
                       params.yas
                     )
                   );
@@ -2251,28 +2240,8 @@ export default async function OperasyonPlaniPage({
                   .map((id) => coachMap.get(id))
                   .filter(Boolean);
 
-                const primaryAssignment = explicitStaff.find(
-                  (assignment: any) => assignment.assignment_role === "coach"
-                );
-                const backupAssignment = explicitStaff.find(
-                  (assignment: any) => assignment.assignment_role === "backup"
-                );
-                const primaryCoachId =
-                  primaryAssignment?.coach_id ||
-                  schedule.coach_id ||
-                  group?.primary_coach_id ||
-                  null;
-                const backupCoachId = backupAssignment?.coach_id || null;
-                const primaryCoach = primaryCoachId
-                  ? coachMap.get(primaryCoachId)
-                  : null;
-                const backupCoach = backupCoachId
-                  ? coachMap.get(backupCoachId)
-                  : null;
-                const primaryCoachName =
-                  primaryCoach?.full_name || primaryCoach?.email || null;
-                const backupCoachName =
-                  backupCoach?.full_name || backupCoach?.email || null;
+                const coachNames = scheduleCoaches(schedule);
+                const { primaryCoachName, backupCoachName } = coachNames;
 
                 const sessionStudentAssignments =
                   studentAssignments.filter(
@@ -2312,78 +2281,6 @@ export default async function OperasyonPlaniPage({
                       )
                     : 0;
 
-                const currentSharedMode = sharedModeOf(schedule.id);
-                const sharedSlotSchedules =
-                  currentSharedMode === "separate"
-                    ? []
-                    : filteredSchedules.filter(
-                        (item: any) =>
-                          item.id !== schedule.id &&
-                          sharedModeOf(item.id) !== "separate" &&
-                          Number(item.weekday) === Number(schedule.weekday) &&
-                          String(item.start_time || "").slice(0, 5) ===
-                            String(schedule.start_time || "").slice(0, 5) &&
-                          (item.branch_id || groupMap.get(item.group_id)?.branch_id) ===
-                            (schedule.branch_id || group?.branch_id)
-                      );
-
-                const sharedSlotRows = [schedule, ...sharedSlotSchedules].map(
-                  (slotSchedule: any) => {
-                    const slotGroup = groupMap.get(slotSchedule.group_id);
-                    const slotMemberships = memberships.filter(
-                      (membership: any) =>
-                        membership.group_id === slotSchedule.group_id
-                    );
-
-                    const slotStudents = slotMemberships
-                      .filter((membership: any) => {
-                        const enrollment = enrollments.find(
-                          (item: any) =>
-                            item.student_id === membership.student_id &&
-                            item.group_id === slotSchedule.group_id
-                        );
-
-                        return enrollmentIncludesScheduleDay(
-                          enrollment,
-                          Number(slotSchedule.weekday)
-                        );
-                      })
-                      .map((membership: any) => studentMap.get(membership.student_id))
-                      .filter(Boolean)
-                      .sort((a: any, b: any) =>
-                        adSoyad(a).localeCompare(adSoyad(b), "tr")
-                      );
-
-                    const slotLevels = Array.from(
-                      new Set(
-                        slotStudents
-                          .map((student: any) => student.swimming_level)
-                          .filter(Boolean)
-                      )
-                    );
-
-                    return {
-                      scheduleId: slotSchedule.id,
-                      groupName: slotGroup?.name || "Grup Atanmamış",
-                      courseType: slotGroup?.course_type || null,
-                      students: slotStudents,
-                      levels: slotLevels,
-                      studentCount: slotStudents.length,
-                      capacity: Number(slotGroup?.capacity || 0),
-                    };
-                  }
-                );
-
-                const sharedSlotTotalStudents = sharedSlotRows.reduce(
-                  (total: number, item: any) => total + item.studentCount,
-                  0
-                );
-
-                const sharedSlotTotalCapacity = sharedSlotRows.reduce(
-                  (total: number, item: any) => total + item.capacity,
-                  0
-                );
-
                 return (
                   <details
                     key={schedule.id}
@@ -2406,7 +2303,7 @@ export default async function OperasyonPlaniPage({
                           {saatGoster(schedule.start_time)} – {saatGoster(schedule.end_time)}
                         </strong>
                         <span style={sessionDayTextStyle}>
-                          {GUNLER[Number(schedule.weekday)] || "Ders"}
+                          {GUNLER[sessionWeekday] || "Ders"}
                         </span>
                       </div>
 
@@ -2424,20 +2321,14 @@ export default async function OperasyonPlaniPage({
                       </div>
 
                       <div className="opSessionMeta" style={sessionSummaryItemStyle}>
-                        <span style={sessionSummaryLabelStyle}>EĞİTMEN</span>
-                        <strong
-                          style={{
-                            ...(sessionCoaches.length ? sessionCoachAssignedStyle : sessionCoachMissingStyle),
-                          }}
-                        >
-                          {sessionCoaches.length
-                            ? sessionCoaches
-                                .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
-                                .join(", ")
-                            : studentAllocationCoaches.length
-                              ? `Öğrenci dağılımı: ${studentAllocationCoaches.map((coach: any) => coach.full_name || coach.email || "Eğitmen").join(", ")} (seans sorumlusu atanmadı)`
-                              : "Atanmadı"}
-                        </strong>
+                        <CoachLabels {...coachNames} />
+                        {studentAllocationCoaches.length > 0 && (
+                          <small style={sessionSummarySubStyle}>
+                            Öğrenci bazlı atama: {studentAllocationCoaches
+                              .map((coach: any) => coach.full_name || coach.email || "Eğitmen")
+                              .join(", ")}
+                          </small>
+                        )}
                       </div>
 
                       <div className="opSessionMeta opSessionStudentMetric" style={sessionStudentMetricStyle}>
@@ -2446,18 +2337,6 @@ export default async function OperasyonPlaniPage({
                       </div>
 
                       <div className="opSessionLevels" style={sessionLevelWrapStyle}>
-                        {sharedSlotSchedules.length > 0 ? (
-                          <span
-                            style={{
-                              ...levelBadgeStyle,
-                              background: "#f3e8ff",
-                              borderColor: "#e9d5ff",
-                              color: "#7e22ce",
-                            }}
-                          >
-                            Ortak seans · aynı havuz + aynı saat
-                          </span>
-                        ) : null}
                         {levelsInSession.length ? (
                           levelsInSession.slice(0, 2).map((level: any) => (
                             <span key={level} style={levelBadgeStyle}>{level}</span>
@@ -2470,301 +2349,14 @@ export default async function OperasyonPlaniPage({
                       <span className="opSessionChevron" style={sessionChevronStyle}>⌄</span>
                     </summary>
 
-                    {sharedSlotSchedules.length > 0 ? (
-                      <section
-                        style={{
-                          margin: "0 16px 14px",
-                          padding: "14px",
-                          borderRadius: 14,
-                          border: "1px solid #e9d5ff",
-                          background: "linear-gradient(135deg,#faf5ff 0%,#ffffff 100%)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 12,
-                            flexWrap: "wrap",
-                            marginBottom: 10,
-                          }}
-                        >
-                          <div>
-                            <span
-                              style={{
-                                display: "block",
-                                color: "#7e22ce",
-                                fontSize: 11,
-                                fontWeight: 900,
-                                letterSpacing: ".05em",
-                              }}
-                            >
-                              ORTAK SEANS
-                            </span>
-                            <strong
-                              style={{
-                                display: "block",
-                                marginTop: 2,
-                                color: "#2e1065",
-                                fontSize: 15,
-                              }}
-                            >
-                              {GUNLER[Number(schedule.weekday)] || "Ders"} · {saatGoster(schedule.start_time)} · {branch?.name || "Havuz"}
-                            </strong>
-                            <span
-                              style={{
-                                display: "block",
-                                marginTop: 5,
-                                color: "#6b7280",
-                                fontSize: 12,
-                                lineHeight: 1.45,
-                              }}
-                            >
-                              {sharedSlotRows.map((item: any) => item.groupName).join(" + ")} grupları bu saatte birlikte çalışıyor.
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <span
-                              style={{
-                                padding: "6px 9px",
-                                borderRadius: 999,
-                                background: "#ede9fe",
-                                color: "#6d28d9",
-                                fontSize: 11,
-                                fontWeight: 900,
-                              }}
-                            >
-                              {sharedSlotRows.length} grup
-                            </span>
-                            <span
-                              style={{
-                                padding: "6px 9px",
-                                borderRadius: 999,
-                                background: "#eff6ff",
-                                color: "#1d4ed8",
-                                fontSize: 11,
-                                fontWeight: 900,
-                              }}
-                            >
-                              Toplam {sharedSlotTotalStudents} öğrenci
-                            </span>
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-                            gap: 8,
-                          }}
-                        >
-                          {sharedSlotRows.map((item: any) => (
-                            <details
-                              key={item.scheduleId}
-                              style={{
-                                borderRadius: 11,
-                                border: "1px solid #e5e7eb",
-                                background: "#fff",
-                                minWidth: 0,
-                                overflow: "hidden",
-                              }}
-                            >
-                              <summary
-                                style={{
-                                  padding: "10px 12px",
-                                  cursor: "pointer",
-                                  listStyle: "none",
-                                  display: "grid",
-                                  gridTemplateColumns: "minmax(0,1fr) auto",
-                                  gap: 10,
-                                  alignItems: "center",
-                                }}
-                              >
-                                <span style={{ minWidth: 0 }}>
-                                  <strong
-                                    style={{
-                                      display: "block",
-                                      color: "#1f2937",
-                                      fontSize: 13,
-                                      lineHeight: 1.35,
-                                      overflowWrap: "anywhere",
-                                    }}
-                                  >
-                                    {item.groupName}
-                                  </strong>
-                                  <span
-                                    style={{
-                                      display: "block",
-                                      marginTop: 4,
-                                      color: "#64748b",
-                                      fontSize: 11,
-                                      fontWeight: 800,
-                                    }}
-                                  >
-                                    {item.studentCount} öğrenci
-                                    {item.capacity ? ` · kapasite ${item.capacity}` : ""}
-                                    {item.courseType ? ` · ${item.courseType}` : ""}
-                                  </span>
-                                  <span
-                                    style={{
-                                      display: "flex",
-                                      gap: 5,
-                                      flexWrap: "wrap",
-                                      marginTop: 7,
-                                    }}
-                                  >
-                                    {item.levels.length ? item.levels.map((level: string) => (
-                                      <span
-                                        key={level}
-                                        style={{
-                                          padding: "3px 7px",
-                                          borderRadius: 999,
-                                          background: "#f8fafc",
-                                          border: "1px solid #e2e8f0",
-                                          color: "#475569",
-                                          fontSize: 10,
-                                          fontWeight: 800,
-                                        }}
-                                      >
-                                        {level}
-                                      </span>
-                                    )) : (
-                                      <span style={{ color: "#94a3b8", fontSize: 10 }}>
-                                        Seviye bilgisi yok
-                                      </span>
-                                    )}
-                                  </span>
-                                </span>
-                                <span
-                                  style={{
-                                    padding: "7px 9px",
-                                    borderRadius: 9,
-                                    background: "#eef2ff",
-                                    color: "#4338ca",
-                                    fontSize: 10,
-                                    fontWeight: 900,
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  Öğrencileri Aç
-                                </span>
-                              </summary>
-
-                              <div
-                                style={{
-                                  padding: "0 12px 12px",
-                                  borderTop: "1px solid #f1f5f9",
-                                }}
-                              >
-                                {item.students.length ? (
-                                  <div
-                                    style={{
-                                      display: "grid",
-                                      gap: 6,
-                                      paddingTop: 10,
-                                    }}
-                                  >
-                                    {item.students.map((student: any) => (
-                                      <div
-                                        key={student.id}
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                          gap: 10,
-                                          padding: "8px 9px",
-                                          borderRadius: 9,
-                                          background: "#f8fafc",
-                                        }}
-                                      >
-                                        <span style={{ minWidth: 0 }}>
-                                          <strong
-                                            style={{
-                                              display: "block",
-                                              color: "#1e293b",
-                                              fontSize: 12,
-                                              overflowWrap: "anywhere",
-                                            }}
-                                          >
-                                            {adSoyad(student)}
-                                          </strong>
-                                          <small
-                                            style={{
-                                              display: "block",
-                                              marginTop: 2,
-                                              color: "#64748b",
-                                              fontSize: 10,
-                                            }}
-                                          >
-                                            {student.swimming_level || "Seviye yok"}
-                                            {student.student_number ? ` · ${student.student_number}` : ""}
-                                          </small>
-                                        </span>
-                                        <Link
-                                          href={`/ogrenciler/${student.id}`}
-                                          style={{
-                                            padding: "6px 8px",
-                                            borderRadius: 8,
-                                            border: "1px solid #dbeafe",
-                                            background: "#fff",
-                                            color: "#1d4ed8",
-                                            fontSize: 10,
-                                            fontWeight: 900,
-                                            textDecoration: "none",
-                                            whiteSpace: "nowrap",
-                                          }}
-                                        >
-                                          Kartı Aç
-                                        </Link>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div
-                                    style={{
-                                      paddingTop: 10,
-                                      color: "#94a3b8",
-                                      fontSize: 11,
-                                    }}
-                                  >
-                                    Bu gün için seçili öğrenci yok.
-                                  </div>
-                                )}
-                              </div>
-                            </details>
-                          ))}
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 10,
-                            paddingTop: 10,
-                            borderTop: "1px dashed #d8b4fe",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            flexWrap: "wrap",
-                            color: "#5b21b6",
-                            fontSize: 12,
-                            fontWeight: 900,
-                          }}
-                        >
-                          <span>Birlikte çalışacak öğrenci: {sharedSlotTotalStudents}</span>
-                          {sharedSlotTotalCapacity > 0 ? (
-                            <span>Toplam kapasite: {sharedSlotTotalCapacity}</span>
-                          ) : null}
-                        </div>
-                      </section>
-                    ) : null}
+                    {canEdit && sharedModeOf(schedule.id) === "separate" && (
+                      <form action={ortakSeansModuAyarla} style={dailySharedSeparatedRowStyle}>
+                        <input type="hidden" name="schedule_id" value={schedule.id} />
+                        <input type="hidden" name="mode" value="shared" />
+                        <strong>Bu grup ayrı planlanıyor</strong>
+                        <button type="submit" style={dailySharedJoinButtonStyle}>Ortak Seansa Al</button>
+                      </form>
+                    )}
 
                     {/* =====================================
                         SEVİYE + KAPASİTE
@@ -2874,21 +2466,21 @@ export default async function OperasyonPlaniPage({
                         </div>
                         <div style={sessionOperationButtonsStyle}>
                           <Link
-                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=cancel`}
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${sessionDate}&mode=cancel`}
                             style={sessionDangerButtonStyle}
                           >
                             <span>×</span>
                             <span><b>Ders Yapılmadı</b><small>Normal hak düşmesin</small></span>
                           </Link>
                           <Link
-                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${selectedDate}&mode=compensation`}
+                            href={`/ders-operasyonlari?groupId=${schedule.group_id}&scheduleId=${schedule.id}&date=${sessionDate}&mode=compensation`}
                             style={sessionPurpleButtonStyle}
                           >
                             <span>↻</span>
                             <span><b>Telafi Planla</b><small>Telafi hakkı / seansı oluştur</small></span>
                           </Link>
                           <Link
-                            href={`/yoklama?tarih=${selectedDate}&schedule_id=${schedule.id}`}
+                            href={`/yoklama?date=${sessionDate}&scheduleId=${schedule.id}`}
                             style={sessionNeutralButtonStyle}
                           >
                             <span>✓</span>
@@ -2913,8 +2505,11 @@ export default async function OperasyonPlaniPage({
                             assignmentTitleStyle
                           }
                         >
-                          Eğitmen Ataması · Ana / Yedek
+                          Seans Eğitmeni Ataması
                         </div>
+                        <Link href="/gruplar" style={{ color: "#1769e8", fontSize: 13 }}>
+                          Grup eğitmenlerini yönet
+                        </Link>
 
                         <form
                           action={
@@ -3228,8 +2823,8 @@ export default async function OperasyonPlaniPage({
                                                   student
                                                 )}
                                                 {" · "}
-                                                {ageOnDate(student.birth_date, selectedDate) !== null
-                                                  ? `${ageOnDate(student.birth_date, selectedDate)} yaş`
+                                                {ageOnDate(student.birth_date, sessionDate) !== null
+                                                  ? `${ageOnDate(student.birth_date, sessionDate)} yaş`
                                                   : "Yaş yok"}
                                               </span>
 
@@ -3348,8 +2943,8 @@ export default async function OperasyonPlaniPage({
                                       {student.student_number ||
                                         "Öğrenci No Yok"}
                                       {" · "}
-                                      {ageOnDate(student.birth_date, selectedDate) !== null
-                                        ? `${ageOnDate(student.birth_date, selectedDate)} yaş`
+                                      {ageOnDate(student.birth_date, sessionDate) !== null
+                                        ? `${ageOnDate(student.birth_date, sessionDate)} yaş`
                                         : "Yaş bilgisi yok"}
                                     </span>
                                   </div>
@@ -3515,8 +3110,8 @@ export default async function OperasyonPlaniPage({
 
                         <div style={footerRightActionsStyle}>
                           <SessionRosterPrintButton
-                            date={selectedDate}
-                            weekday={GUNLER[Number(schedule.weekday)] || "Ders"}
+                            date={sessionDate}
+                            weekday={GUNLER[sessionWeekday] || "Ders"}
                             pool={branch?.name || "Şube / havuz"}
                             startTime={saatGoster(schedule.start_time)}
                             endTime={saatGoster(schedule.end_time)}
@@ -3531,7 +3126,7 @@ export default async function OperasyonPlaniPage({
                               .map((student: any) => ({
                                 id: student.id,
                                 name: adSoyad(student),
-                                age: ageOnDate(student.birth_date, selectedDate),
+                                age: ageOnDate(student.birth_date, sessionDate),
                                 level: student.swimming_level || null,
                                 group: group?.name || null,
                               }))}
@@ -3539,7 +3134,7 @@ export default async function OperasyonPlaniPage({
                           />
 
                           <Link
-                            href={`/yoklama?grup=${schedule.group_id || ""}&seans=${schedule.id}&tarih=${selectedDate}`}
+                            href={`/yoklama?date=${sessionDate}&scheduleId=${schedule.id}`}
                             style={
                               attendanceButtonStyle
                             }
@@ -3555,7 +3150,7 @@ export default async function OperasyonPlaniPage({
               }
             )}
           </section>
-        ))}
+        ) : null)}
         </div>
       </main>
     </>
@@ -3962,25 +3557,14 @@ const sessionChevronStyle: React.CSSProperties = {
   textAlign: "center",
 };
 
-const sessionCoachAssignedStyle: React.CSSProperties = {
-  color: "#13233f",
-  fontSize: 11,
-  lineHeight: 1.25,
+const coachLabelsStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 3,
+  marginTop: 5,
+  color: "#334155",
+  fontSize: 12,
+  lineHeight: 1.4,
   overflowWrap: "anywhere",
-};
-
-const sessionCoachMissingStyle: React.CSSProperties = {
-  display: "inline-flex",
-  width: "max-content",
-  maxWidth: "100%",
-  padding: "4px 7px",
-  borderRadius: 999,
-  background: "#fff1f2",
-  border: "1px solid #fecdd3",
-  color: "#be123c",
-  fontSize: 9,
-  fontWeight: 900,
-  lineHeight: 1,
 };
 
 const sessionStudentMetricStyle: React.CSSProperties = {
@@ -4405,23 +3989,10 @@ const dailySharedHeaderStyle: React.CSSProperties = {
   flexWrap: "wrap",
   marginBottom: 12,
 };
-const dailySharedEyebrowStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: ".11em",
-  color: "#7e22ce",
-  marginBottom: 4,
-};
 const dailySharedTitleStyle: React.CSSProperties = {
-  display: "block",
+  margin: 0,
   color: "#172554",
-  fontSize: 16,
-};
-const dailySharedTextStyle: React.CSSProperties = {
-  margin: "4px 0 0",
-  color: "#64748b",
-  fontSize: 11,
-  lineHeight: 1.45,
+  fontSize: 17,
 };
 const dailySharedCountStyle: React.CSSProperties = {
   padding: "7px 10px",
@@ -4504,6 +4075,13 @@ const dailySharedPrintRowStyle: React.CSSProperties = {
   justifyContent: "flex-end",
   gap: 8,
   flexWrap: "wrap",
+};
+
+const sharedGroupActionsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 8,
 };
 
 const dailySharedStudentListStyle: React.CSSProperties = {
