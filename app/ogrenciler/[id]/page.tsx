@@ -813,6 +813,9 @@ export default async function StudentFile({
       </section> : null}
 
       <StudentFileOperations
+        guardianCenterHref={profile.is_super_user || ["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)
+          ? `/veliler/ogrenci/${student.id}`
+          : undefined}
         student={{
           id: student.id,
           first_name: student.first_name,

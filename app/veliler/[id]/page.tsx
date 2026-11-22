@@ -69,6 +69,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const activeLinks = links.filter((l: any) => studentMap.get(l.student_id)?.status === "active");
   const linkedIds = links.map((l: any) => l.student_id).filter(Boolean);
   const linkedIdSet = new Set(linkedIds);
+  const sourceStudentId = query.student && linkedIdSet.has(query.student) && studentMap.has(query.student) ? query.student : "";
   const visibleError = friendlyError(query.error);
 
   const [progressRes, messagesRes, announcementRes, consentsRes, documentsRes] = await Promise.all([
@@ -109,6 +110,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
             <Link className="primary" href={`/veli-paneli?previewGuardian=${id}`}><GuardianIcon name="file"/>Velinin Ekranını Gör</Link>
             <Link href="/veliler/icerik#duyurular">Duyuruları Yönet</Link>
             <Link href="/veliler/icerik#kurallar">Kuralları Yönet</Link>
+            {sourceStudentId && <Link href={`/ogrenciler/${sourceStudentId}`}><GuardianIcon name="file"/>Öğrenci Dosyasına Dön</Link>}
             <Link href="/veliler"><GuardianIcon name="users"/>Velilere Dön</Link>
             <Link className="primary" href={`/veli-talepleri?guardian=${id}`}><GuardianIcon name="message"/>Talepleri Aç</Link>
           </div>
@@ -211,7 +213,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
             <h2>Gelişim notu ekle</h2>
             <form action={addGuardianProgressNote} className="guardianForm">
               <input type="hidden" name="guardian_profile_id" value={id} />
-              <label>Öğrenci<select name="student_id" required defaultValue=""><option value="" disabled>Öğrenci seçin</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
+              <label>Öğrenci<select name="student_id" required defaultValue={sourceStudentId}><option value="" disabled>Öğrenci seçin</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
               <label>Gelişim Notu<textarea name="note" rows={5} placeholder="Teknik gelişim, dersteki ilerleme, dikkat edilmesi gereken konu..." required /></label>
               <label>Sonraki Hedef<textarea name="target" rows={3} placeholder="Örn. nefes koordinasyonu, serbest stil kol tekniği..." /></label>
               <div className="guardianChecks"><label><input type="checkbox" name="visible_to_guardian" defaultChecked /> Veli portalında göster</label></div>
@@ -224,7 +226,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
             <h2>Veliye portal mesajı gönder</h2>
             <form action={sendGuardianPortalMessage} className="guardianForm">
               <input type="hidden" name="guardian_profile_id" value={id} />
-              <label>İlgili Öğrenci<select name="student_id" defaultValue=""><option value="">Genel veli mesajı</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
+              <label>İlgili Öğrenci<select name="student_id" defaultValue={sourceStudentId}><option value="">Genel veli mesajı</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
               <label>Mesaj Türü<select name="message_type" defaultValue="information"><option value="information">Bilgilendirme</option><option value="progress">Gelişim</option><option value="payment">Ödeme</option><option value="schedule">Program / Seans</option><option value="warning">Önemli Uyarı</option></select></label>
               <label>Başlık<input name="title" placeholder="Mesaj başlığı" required /></label>
               <label>Mesaj<textarea name="body" rows={6} placeholder="Veli portalında gösterilecek mesajı yazın..." required /></label>

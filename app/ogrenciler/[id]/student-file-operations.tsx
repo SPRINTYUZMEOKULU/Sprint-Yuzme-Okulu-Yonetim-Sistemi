@@ -53,6 +53,7 @@ type Props = {
     group_id?: string | null;
     group_name?: string | null;
   };
+  guardianCenterHref?: string;
   enrollmentId?: string | null;
   activeWeekdays?: number[];
   remainingPayment?: number;
@@ -97,7 +98,7 @@ function normalizePhone(value?: string | null) {
 }
 
 type FileIconName =
-  "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print" | "key";
+  "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print" | "key" | "users";
 function FileIcon({ name }: { name: FileIconName }) {
   const base = {
     width: 18,
@@ -111,6 +112,7 @@ function FileIcon({ name }: { name: FileIconName }) {
     "aria-hidden": true,
   };
   const p: Record<FileIconName, ReactNode> = {
+    users: (<><circle cx="9" cy="7" r="4" /><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2m6 0v-2a4 4 0 0 0-3-4m-3-12a4 4 0 0 1 0 8" /></>),
     key: (<><circle cx="8" cy="9" r="4" /><path d="m11 12 9 9m-3-3 3-3m-6 0 3-3" /></>),
     edit: (
       <>
@@ -165,6 +167,7 @@ function FileIcon({ name }: { name: FileIconName }) {
 
 export default function StudentFileOperations({
   student,
+  guardianCenterHref,
   enrollmentId,
   activeWeekdays = [],
   remainingPayment = 0,
@@ -614,6 +617,12 @@ export default function StudentFileOperations({
           <button type="button" className="orange" onClick={openMessage}>
             <FileIcon name="message" /> Mesaj / WhatsApp
           </button>
+
+          {guardianCenterHref && (
+            <button type="button" className="blue" onClick={() => router.push(guardianCenterHref)}>
+              <FileIcon name="users" /> Veli Merkezi
+            </button>
+          )}
 
           <button type="button" className="portalLaunch" onClick={() => setPortalOpen(true)}>
             <FileIcon name="key" /> Giriş Bilgilerini Gönder
