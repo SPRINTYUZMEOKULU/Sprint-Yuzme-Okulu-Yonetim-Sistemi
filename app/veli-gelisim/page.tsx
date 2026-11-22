@@ -1,7 +1,35 @@
-import GuardianSectionHeading from "@/app/veli-paneli/section-heading";
-import {loadGuardianPage} from "@/lib/guardian/page-context";
+import { loadGuardianPage, type GuardianPageQuery } from "@/lib/guardian/page-context";
 import { formatDate } from "@/lib/guardian/data";
-import { EmptyGuardian, GuardianHeader } from "@/app/veli-paneli/guardian-ui";
+import { EmptyGuardian, GuardianHeader, GuardianIcon } from "@/app/veli-paneli/guardian-ui";
 import "@/app/veli-paneli/veli.css";
-export const dynamic="force-dynamic";
-export default async function Page({searchParams}:{searchParams:Promise<{child?:string;previewGuardian?:string}>}){const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"progress");return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name||"Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={data.selected?.id}/><div className="guardianContent"><GuardianSectionHeading icon="progress" title="Gelişim Merkezi" description="Eğitmenin veliyle paylaşmayı onayladığı teknik gelişim notları ve hedefler."/>{!data.selected?<EmptyGuardian title="Öğrenci bulunamadı" text="Öğrenci bağlantısı tamamlandığında gelişim notları burada görünecek."/>:<section className="guardianCard"><div className="guardianCardHeader"><h2>{data.selected.first_name} için gelişim notları</h2></div>{data.progress.map((n:any)=><article className="noteCard" key={n.id}><h3>{n.target||"Gelişim Notu"}</h3><p>{n.note}</p><div className="noteMeta"><span>{formatDate(n.created_at)}</span><span>Veliyle paylaşıldı</span></div></article>)}{!data.progress.length?<p className="guardianSectionLead">Henüz paylaşılmış gelişim notu bulunmuyor.</p>:null}</section>}</div></main>}
+import "@/app/veli-paneli/course-summary.css";
+
+export const dynamic = "force-dynamic";
+
+export default async function Page({ searchParams }: { searchParams: Promise<GuardianPageQuery> }) {
+  const { profile, data, previewGuardian } = await loadGuardianPage(await searchParams, "progress");
+  const student = data.selected;
+  const progressUnavailable = data.issues.some(issue => issue.startsWith("Gelişim"));
+
+  return <main className="guardianShell">
+    <GuardianHeader previewGuardian={previewGuardian} name={profile.full_name || "Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={student?.id} />
+    <div className="guardianContent">
+      <header className="courseIdentity">
+        <span className="courseMonogram"><GuardianIcon name="progress" size={24} /></span>
+        <div><h1>Gelişim Merkezi</h1>{student && <p>{student.first_name} {student.last_name}</p>}</div>
+      </header>
+      {!student ? <EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantısı tamamlandığında gelişim notları burada görünecek." /> :
+        <section className="guardianCard courseProgress" aria-labelledby="progress-notes">
+          <h2 id="progress-notes">Eğitmen notları</h2>
+          {progressUnavailable ? <p>Sayfayı yenileyerek tekrar deneyebilirsiniz.</p> :
+            data.progress.length ? <ul className="courseProgressNotes">
+              {data.progress.map(note => <li key={note.id}>
+                <span className="courseProgressDate">{formatDate(note.created_at)}</span>
+                <h3>{note.target || "Gelişim notu"}</h3>
+                <p>{note.note}</p>
+              </li>)}
+            </ul> : <p>Eğitmeniniz bir gelişim notu paylaştığında burada görebilirsiniz.</p>}
+        </section>}
+    </div>
+  </main>;
+}
