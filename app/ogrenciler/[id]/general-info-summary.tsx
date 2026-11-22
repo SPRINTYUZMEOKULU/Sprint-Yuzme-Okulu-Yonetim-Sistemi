@@ -17,15 +17,6 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
-function money(value: unknown) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
-
 function dateText(value?: string | null) {
   if (!value) return "—";
   const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
@@ -86,96 +77,6 @@ function adaptAdultLabels(adult: boolean) {
   });
 }
 
-function openFinanceCenter(action: "collect" | "history" | "due" = "collect") {
-  const tab = action === "collect" ? "payment" : action;
-  const quickAction = document.querySelector<HTMLElement>(
-    `.fileCommandActions [data-student-finance-action="${tab}"]`,
-  );
-
-  if (quickAction) {
-    quickAction.click();
-    return;
-  }
-
-  const url = new URL(window.location.href);
-  url.searchParams.set("payment", action);
-  url.hash = "";
-  window.location.assign(url.toString());
-}
-
-function bindFinanceActions(target: HTMLElement) {
-  target
-    .querySelectorAll<HTMLButtonElement>("[data-finance-action]")
-    .forEach((button) => {
-      button.addEventListener("click", () => {
-        openFinanceCenter(
-          (button.dataset.financeAction || "collect") as
-            | "collect"
-            | "history"
-            | "due",
-        );
-      });
-    });
-}
-
-function syncAlertCount() {
-  const head = document.querySelector<HTMLElement>(".smartAlertHead > strong");
-  if (!head) return;
-  const count = Array.from(
-    document.querySelectorAll<HTMLElement>(".smartAlertGrid > a"),
-  ).filter((item) => item.dataset.financeAlertHidden !== "1").length;
-  head.textContent = count ? `${count} işlem bekliyor` : "✓ Her şey yolunda";
-}
-
-function normalizePaymentAlert({
-  remaining,
-  overdue,
-  statusMessage,
-}: {
-  remaining: number;
-  overdue: boolean;
-  statusMessage: string;
-}) {
-  const grid = document.querySelector<HTMLElement>(".smartAlertGrid");
-  if (!grid) return;
-
-  const paymentAlerts = Array.from(
-    grid.querySelectorAll<HTMLAnchorElement>('a[href="#odeme"]'),
-  );
-
-  if (remaining <= 0) {
-    paymentAlerts.forEach((item) => {
-      item.style.display = "none";
-      item.dataset.financeAlertHidden = "1";
-    });
-    syncAlertCount();
-    return;
-  }
-
-  const primary = paymentAlerts[0];
-  if (!primary) return;
-
-  primary.dataset.studentFinanceAction = overdue ? "due" : "payment";
-  primary.classList.remove("danger", "warning", "financeCriticalAlert");
-  primary.classList.add(overdue ? "danger" : "warning");
-  if (overdue) primary.classList.add("financeCriticalAlert");
-
-  const icon = primary.querySelector("i");
-  const title = primary.querySelector("b");
-  const description = primary.querySelector("small");
-  if (icon) icon.textContent = overdue ? "!" : "•";
-  if (title) title.textContent = overdue ? "Ödeme vadesi geçti" : "Ödeme bekliyor";
-  if (description) description.textContent = statusMessage;
-
-  primary.style.removeProperty("display");
-  delete primary.dataset.financeAlertHidden;
-  paymentAlerts.slice(1).forEach((item) => {
-    item.style.display = "none";
-    item.dataset.financeAlertHidden = "1";
-  });
-  syncAlertCount();
-}
-
 export default function GeneralInfoSummary() {
   useEffect(() => {
     const panel = document.querySelector<HTMLElement>("#duzenle.panel");
@@ -198,10 +99,10 @@ export default function GeneralInfoSummary() {
       ];
       const summary = document.createElement("div");
       summary.className = "professionalGeneralSummary";
-      summary.innerHTML = `<div class="professionalSummaryHead"><div><span>KURSİYER BİLGİ MERKEZİ</span><strong>Bilgiler ve ayarlar</strong><small>Düzenlemek için bir bilgiye dokunun. Tüm değişiklikleri tek seferde kaydedin.</small></div><button type="button" data-open-profile-center="1">Tüm Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, name, field]) => { const raw=valueOf(form,name); const value=name==="birth_date"&&raw!=="—"?dateText(raw):raw; return `<button type="button" data-open-profile-center="1" data-profile-field="${field}" aria-label="${escapeHtml(label)} düzenle"><span>${escapeHtml(label)} <i aria-hidden="true">✎</i></span><strong>${escapeHtml(value==="—"?"Bilgi ekle":value)}</strong></button>`; }).join("")}</div><button type="button" class="professionalSummaryNote" data-open-profile-center="1" data-profile-field="generalNote"><span>Genel Yönetim Notu · Düzenle</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></button>`;
+      summary.innerHTML = `<div class="professionalSummaryHead"><button type="button" data-open-profile-center="1">Bilgileri Düzenle</button></div><div class="professionalSummaryGrid">${rows.map(([label, name, field]) => { const raw=valueOf(form,name); const value=name==="birth_date"&&raw!=="—"?dateText(raw):raw; return `<button type="button" data-open-profile-center="1" data-profile-field="${field}" aria-label="${escapeHtml(label)} düzenle"><span>${escapeHtml(label)} <i aria-hidden="true">✎</i></span><strong>${escapeHtml(value==="—"?"Bilgi ekle":value)}</strong></button>`; }).join("")}</div><button type="button" class="professionalSummaryNote" data-open-profile-center="1" data-profile-field="generalNote"><span>Genel Yönetim Notu · Düzenle</span><p>${escapeHtml(valueOf(form, "general_note"))}</p></button>`;
       const shortcuts=document.createElement("div");
       shortcuts.className="studentSettingsShortcuts";
-      shortcuts.innerHTML='<a href="#tum-bilgiler">Tüm bilgileri tek sayfada aç</a><a href="#kurs-kaydi" data-open-file-tab="registration" data-target-id="kurs-kaydi">Kayıt ve program</a><a href="#ders-hareketleri" data-open-file-tab="lessons" data-target-id="ders-hareketleri">Telafileri düzenle</a><a href="#saglik" data-open-file-tab="health" data-target-id="saglik">Sağlık ve beyanlar</a><a href="#odeme" data-open-file-tab="finance" data-target-id="odeme">Ödeme ve kasa</a><a href="#notlar" data-open-file-tab="notes" data-target-id="notlar">Not ve hatırlatmalar</a>';
+      shortcuts.innerHTML='<a href="#kurs-kaydi" data-open-file-tab="registration" data-target-id="kurs-kaydi">Kayıt ve program</a><a href="#ders-hareketleri" data-open-file-tab="lessons" data-target-id="ders-hareketleri">Telafileri düzenle</a><a href="#saglik" data-open-file-tab="health" data-target-id="saglik">Sağlık ve beyanlar</a><a href="#odeme" data-open-file-tab="finance" data-target-id="odeme">Ödeme ve kasa</a><a href="#notlar" data-open-file-tab="notes" data-target-id="notlar">Not ve hatırlatmalar</a>';
       summary.appendChild(shortcuts);
       form.hidden = true;
       form.setAttribute("aria-hidden", "true");
@@ -213,97 +114,6 @@ export default function GeneralInfoSummary() {
           window.setTimeout(() => adaptAdultLabels(adultCourse), 50);
         });
     }
-
-    if (!document.getElementById("student-finance-status-style")) {
-      const style = document.createElement("style");
-      style.id = "student-finance-status-style";
-      style.textContent = `
-        .studentFinanceStatusCard{border:1px solid #d9e5f3;border-radius:20px;padding:18px;background:#f8fbff;display:grid;gap:13px}
-        .studentFinanceStatusHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.studentFinanceStatusHead span{display:block;color:#6c7f98;font-size:12px;font-weight:900;letter-spacing:1.4px}.studentFinanceStatusHead strong{display:block;color:#132f52;font-size:20px;margin-top:5px}
-        .studentFinanceStatusBadge{border-radius:999px;padding:8px 11px;font-size:12px;font-weight:900;white-space:nowrap}.studentFinanceStatusMeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.studentFinanceStatusMeta>div{background:#fff;border:1px solid #e2ebf6;border-radius:14px;padding:12px;min-width:0}.studentFinanceStatusMeta span{display:block;color:#75879d;font-size:11px;font-weight:800;text-transform:uppercase}.studentFinanceStatusMeta b{display:block;color:#183655;margin-top:5px;font-size:14px;overflow-wrap:anywhere}
-        .studentFinanceStatusMessage{border-radius:14px;padding:13px 14px;font-weight:800;line-height:1.45}.studentFinanceStatusActions{display:flex;gap:9px;flex-wrap:wrap}.studentFinanceStatusActions button{border:0;border-radius:13px;padding:11px 14px;font-weight:900;cursor:pointer}.studentFinanceStatusActions .primary{background:#176fe8;color:#fff}.studentFinanceStatusActions .secondary{background:#eaf1fa;color:#294b71}
-        .studentFinanceStatusCard.paid{border-color:#bce3ca;background:#f1fbf5}.studentFinanceStatusCard.paid .studentFinanceStatusBadge,.studentFinanceStatusCard.paid .studentFinanceStatusMessage{background:#daf3e4;color:#176c42}.studentFinanceStatusCard.unpaid{border-color:#f2d593;background:#fffaf0}.studentFinanceStatusCard.unpaid .studentFinanceStatusBadge,.studentFinanceStatusCard.unpaid .studentFinanceStatusMessage{background:#fff0c8;color:#8a5d00}.studentFinanceStatusCard.overdue{border-color:#ef9c9c;background:#fff4f4}.studentFinanceStatusCard.overdue .studentFinanceStatusBadge,.studentFinanceStatusCard.overdue .studentFinanceStatusMessage{background:#ffe0e0;color:#a82935}
-        .studentFinanceLiveTarget{margin-top:18px}.studentFinanceLegacyHidden{display:none!important}.financeCriticalAlert{border-color:#e56565!important;box-shadow:0 0 0 3px rgba(229,101,101,.12)!important}
-        @media(max-width:720px){.studentFinanceStatusMeta{grid-template-columns:1fr 1fr}.studentFinanceStatusHead{flex-direction:column}.studentFinanceStatusActions button{flex:1 1 130px}}
-      `;
-      document.head.appendChild(style);
-    }
-
-    const studentId =
-      window.location.pathname.match(/\/ogrenciler\/([^/]+)/)?.[1] || "";
-    let cancelled = false;
-
-    async function loadFinanceSummary() {
-      if (!studentId) return;
-      try {
-        const response = await fetch(
-          `/api/student-payment-center?studentId=${encodeURIComponent(studentId)}`,
-          { cache: "no-store" },
-        );
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (cancelled || !payload?.ok || !payload?.enrollment) return;
-
-        const enrollment = payload.enrollment;
-        const total = Number(enrollment.totalAmount || 0);
-        const paid = Number(enrollment.totalReceived || 0);
-        const remaining = Math.max(0, Number(enrollment.remainingPayment || 0));
-        const due = enrollment.paymentDueDate || null;
-        const dueTimestamp = due
-          ? new Date(`${String(due).slice(0, 10)}T23:59:59+03:00`).getTime()
-          : Number.NaN;
-        const overdue =
-          remaining > 0 &&
-          Number.isFinite(dueTimestamp) &&
-          dueTimestamp < Date.now();
-        const lessonCount = Number(enrollment.lessonCount || 0);
-        const packageName = enrollment.packageName || "Aktif kurs paketi";
-        const periodText = `${dateText(enrollment.startDate)} - ${dateText(enrollment.plannedEndDate)}`;
-        const packageText =
-          lessonCount > 0 ? `${lessonCount} derslik ${packageName}` : packageName;
-        const statusClass = remaining <= 0 ? "paid" : overdue ? "overdue" : "unpaid";
-        const statusLabel =
-          remaining <= 0 ? "ÖDENDİ" : overdue ? "VADESİ GEÇTİ" : "ÖDEME BEKLİYOR";
-        const statusMessage =
-          remaining <= 0
-            ? `${periodText} tarihleri arasındaki ${packageText} ücreti ödendi.${paid > total ? ` Paket tutarını aşan tahsilat: ${money(paid - total)}. Çok dönemli ödeme açıklamasını kontrol edin.` : ""}`
-            : `${periodText} tarihleri arasındaki ${packageText} ücreti ödenmedi. Açık borç ${money(remaining)}${due ? ` · Vade ${dateText(due)}` : ""}.`;
-
-        const cardHtml = `<section class="studentFinanceStatusCard ${statusClass}"><div class="studentFinanceStatusHead"><div><span>AKTİF PAKET</span><strong>${escapeHtml(packageText)}</strong></div><div class="studentFinanceStatusBadge">${escapeHtml(statusLabel)}</div></div><div class="studentFinanceStatusMeta"><div><span>Dönem</span><b>${escapeHtml(periodText)}</b></div><div><span>Paket Ücreti</span><b>${escapeHtml(money(total))}</b></div><div><span>Ödenen</span><b>${escapeHtml(money(paid))}</b></div><div><span>Kalan Borç</span><b>${escapeHtml(money(remaining))}</b></div></div><div class="studentFinanceStatusMessage">${escapeHtml(statusMessage)}</div><div class="studentFinanceStatusActions"><button type="button" class="primary" data-finance-action="collect">Ödeme / Peşin Tahsilat</button>${remaining > 0 ? '<button type="button" class="secondary" data-finance-action="due">Vade Belirle</button>' : ""}<button type="button" class="secondary" data-finance-action="history">Ödeme Geçmişi</button></div></section>`;
-
-        const financePanel = document.querySelector<HTMLElement>("#odeme");
-        if (financePanel) {
-          let liveTarget =
-            financePanel.querySelector<HTMLElement>("[data-student-finance-live]");
-          if (!liveTarget) {
-            liveTarget = document.createElement("div");
-            liveTarget.className = "studentFinanceLiveTarget";
-            liveTarget.dataset.studentFinanceLive = "1";
-            financePanel
-              .querySelector(".panelHead")
-              ?.insertAdjacentElement("afterend", liveTarget);
-          }
-          liveTarget.innerHTML = cardHtml;
-          bindFinanceActions(liveTarget);
-
-          Array.from(financePanel.children).forEach((child) => {
-            if (!(child instanceof HTMLElement)) return;
-            if (child === liveTarget || child.classList.contains("panelHead")) return;
-            child.classList.add("studentFinanceLegacyHidden");
-          });
-          const totalLabel =
-            financePanel.querySelector<HTMLElement>(".panelHead > strong");
-          if (totalLabel) totalLabel.textContent = `Toplam Tahsilat: ${money(paid)}`;
-        }
-
-        normalizePaymentAlert({ remaining, overdue, statusMessage });
-      } catch {
-        // Ana kursiyer dosyası finans servisi geçici hata verse bile kullanılabilir kalır.
-      }
-    }
-
-    void loadFinanceSummary();
-    window.addEventListener("sprint:payment-updated", loadFinanceSummary);
 
     const openProfileForMissingPhone = (event: MouseEvent) => {
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
@@ -343,8 +153,6 @@ export default function GeneralInfoSummary() {
       if(panel) delete panel.dataset.professionalSummary;
       if(form){form.hidden=false;form.removeAttribute("aria-hidden");}
       window.removeEventListener("student-profile-saved",syncSavedProfile);
-      window.removeEventListener("sprint:payment-updated", loadFinanceSummary);
-      cancelled = true;
       window.clearTimeout(adultLabelTimer);
       document.removeEventListener("click", openProfileForMissingPhone, true);
     };

@@ -1,3 +1,5 @@
+import { loadStudentObligations, loadStudentPaymentCenter } from "@/lib/payments/student-finance";
+import { summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { visibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
@@ -289,6 +291,17 @@ export default async function StudentFile({
   if (!student) {
     notFound();
   }
+
+  const canReadFinance = ["owner", "admin", "branch_manager", "registration_staff", "accounting"].includes(profile.role);
+  const financePromise = canReadFinance && profile.organization_id
+    ? Promise.all([
+        loadStudentPaymentCenter(profile.organization_id, id, "", false),
+        loadStudentObligations(profile.organization_id, id),
+      ]).catch((error) => {
+        console.error("Student file finance summary failed", error);
+        return null;
+      })
+    : Promise.resolve(null);
 
   const studentAge = ageFromBirthDate(student.birth_date);
   const canManageCompensation = ["owner", "admin", "branch_manager"].includes(String(profile.role));
@@ -590,30 +603,15 @@ export default async function StudentFile({
   const compensationBalance=rights.compensation;
   const totalRights=rights.total;
 
-  const packagePrice = Number(
-    packageInfo?.price ??
-      packageInfo?.amount ??
-      packageInfo?.package_price ??
-      packageInfo?.sale_price ??
-      enrollment?.package_price ??
-      0,
-  );
-
-  const activeEnrollmentPayments = payments.filter(
-    (payment: any) =>
-      (!enrollment?.id || payment.enrollment_id === enrollment.id) &&
-      payment.payment_status !== "cancelled",
-  );
-
-  const activeEnrollmentTotalReceived = activeEnrollmentPayments.reduce(
-    (sum: number, payment: any) => sum + Number(payment.amount || 0),
-    0,
-  );
-
-  const activeEnrollmentRemainingPayment = Math.max(
-    0,
-    packagePrice - activeEnrollmentTotalReceived,
-  );
+  const finance = await financePromise;
+  const financeEnrollment = finance?.[0]?.enrollment ?? null;
+  const financeAvailable = Boolean(finance?.[0]);
+  const debt = financeAvailable
+    ? summarizeStudentDebt(financeEnrollment?.id ? financeEnrollment : null, finance?.[1] ?? [])
+    : null;
+  const activeEnrollmentTotalReceived = financeEnrollment?.totalReceived ?? 0;
+  const activeEnrollmentRemainingPayment = financeEnrollment?.remainingPayment ?? 0;
+  const packagePrice = financeEnrollment?.totalAmount ?? 0;
 
   /*
    * =========================================================
@@ -686,17 +684,6 @@ export default async function StudentFile({
   const warningClass =
     totalRights <= 0 ? "danger" : normalRemaining <= 2 ? "warning" : "success";
 
-  const paymentDueDate =
-    enrollment?.payment_due_date ?? enrollment?.start_date ?? null;
-  const paymentDueTimestamp = paymentDueDate
-    ? new Date(paymentDueDate).getTime()
-    : Number.NaN;
-  const paymentOverdue = Boolean(
-    Number.isFinite(paymentDueTimestamp) &&
-    activeEnrollmentRemainingPayment > 0 &&
-    paymentDueTimestamp < Date.now(),
-  );
-
   const registrationPending = ["pre_registration", "waiting_payment", "waiting_approval"].includes(student.status || "") && !enrollment;
   const smartAlerts = [
     renewal ? {tone: "info", title: "Yeni kayıt yapıldı", description: `${fmtDate(renewal.startDate)} – ${fmtDate(renewal.endDate)} · ${renewal.lessons} ders. Mevcut dönem tamamlandıktan sonra yeni kayıttan devam edilecek.`, target: "kurs-kaydi"} : null,
@@ -708,21 +695,19 @@ export default async function StudentFile({
           target: `/kayit-tamamlama/${student.id}`,
         }
       : null,
-    paymentOverdue
+    debt && debt.totalDebt > 0
       ? {
-          tone: "danger",
-          title: "Ödeme vadesi geçti",
-          description: `${activeEnrollmentRemainingPayment.toLocaleString("tr-TR")} TL tahsilat bekliyor.`,
+          tone: debt.overdue ? "danger" : "warning",
+          title: debt.overdue ? "Ödeme vadesi geçti" : "Ödeme bekliyor",
+          description: [
+            `Açık borç ${money(debt.totalDebt)}`,
+            debt.packageDebt > 0 && debt.extraDebt > 0
+              ? `Paket ${money(debt.packageDebt)} · Ek borç ${money(debt.extraDebt)}`
+              : debt.extraDebt > 0 ? "Ek borç" : "Paket borcu",
+            debt.dueDate ? `Vade ${fmtDate(debt.dueDate)}` : "Vade belirlenmedi",
+          ].join(" · "),
           target: "odeme",
-        }
-      : null,
-    !activeEnrollmentPayments.length && packagePrice > 0
-      ? {
-          tone: "warning",
-          title: "Henüz ödeme kaydı yok",
-          description:
-            "Bu aktif kayıt dönemi için ödeme hareketi oluşturulmamış.",
-          target: "odeme",
+          financeAction: debt.extraDebt > 0 && debt.packageDebt === 0 ? "debt" : "payment",
         }
       : null,
     !renewal && student.status !== "registration_declined" && enrollment && !registrationPending && normalRemaining <= 3
@@ -759,6 +744,7 @@ export default async function StudentFile({
     title: string;
     description: string;
     target: string;
+    financeAction?: string;
   }>;
 
   return (
@@ -836,9 +822,7 @@ export default async function StudentFile({
         activeWeekdays={planDays}
         totalReceived={activeEnrollmentTotalReceived}
         remainingPayment={activeEnrollmentRemainingPayment}
-        paymentDueDate={fmtDate(
-          enrollment?.payment_due_date ?? enrollment?.start_date,
-        )}
+        paymentDueDate={fmtDate(financeEnrollment?.paymentDueDate)}
         branches={operationBranches}
         groups={operationGroups}
         schedules={operationSchedules}
@@ -875,7 +859,7 @@ export default async function StudentFile({
           <strong>
             {smartAlerts.some(alert => alert.tone !== "info")
               ? `${smartAlerts.filter(alert => alert.tone !== "info").length} işlem bekliyor`
-              : "✓ Her şey yolunda"}
+              : canReadFinance && !financeAvailable ? "Ödeme kontrolü yapılamadı" : "✓ Her şey yolunda"}
           </strong>
         </div>
 
@@ -886,9 +870,7 @@ export default async function StudentFile({
                 key={`${alert.title}-${alert.target}`}
                 href={alert.target.startsWith("/") ? alert.target : `#${alert.target}`}
                 className={alert.tone}
-                data-student-finance-action={alert.target === "odeme"
-                  ? paymentOverdue && alert.tone === "danger" ? "due" : "payment"
-                  : undefined}
+                data-student-finance-action={alert.financeAction}
                 data-open-file-tab={
                   alert.target.startsWith("/") ? undefined : alert.target === "genel-bilgiler"
                     ? "general"
@@ -908,10 +890,11 @@ export default async function StudentFile({
             ))}
           </div>
         ) : (
-          <div className="smartAlertEmpty">
-            Bu öğrenci için açık ödeme, program veya iletişim uyarısı
-            bulunmuyor.
-          </div>
+          financeAvailable || !canReadFinance ? (
+            <div className="smartAlertEmpty">
+              {financeAvailable ? "Açık ödeme, program veya iletişim uyarısı bulunmuyor." : "Açık program veya iletişim uyarısı bulunmuyor."}
+            </div>
+          ) : null
         )}
       </section>
 
@@ -964,7 +947,6 @@ export default async function StudentFile({
         <section className="panel" id="duzenle" data-file-panel="general">
           <div className="panelHead">
             <div>
-              <p>GENEL BİLGİLER</p>
               <h2>Öğrenci ve veli bilgileri</h2>
             </div>
           </div>
@@ -1229,10 +1211,27 @@ export default async function StudentFile({
           </div>
 
           <strong>
-            Toplam Tahsilat: {money(activeEnrollmentTotalReceived)}
+            {financeAvailable ? `Paket Tahsilatı: ${money(activeEnrollmentTotalReceived)}` : "Ödeme özeti bulunmuyor"}
           </strong>
         </div>
 
+        {debt && (
+          <>
+            <div className="infoRows">
+              <div><span>Paket Ücreti</span><strong>{money(packagePrice)}</strong></div>
+              <div><span>Kalan Paket Borcu</span><strong>{money(debt.packageDebt)}</strong></div>
+              <div><span>Ek Borç</span><strong>{money(debt.extraDebt)}</strong></div>
+              <div><span>Toplam Açık Borç</span><strong>{money(debt.totalDebt)}</strong></div>
+              {debt.dueDate && <div><span>İlk Açık Vade</span><strong>{fmtDate(debt.dueDate)}</strong></div>}
+            </div>
+            <div className="studentFileFinanceActions">
+              {financeEnrollment?.id && <button type="button" className="primaryButton" data-student-finance-action="payment">Ödeme Al</button>}
+              <button type="button" data-student-finance-action="debt">Ek Borçlar</button>
+              {debt.packageDebt > 0 && financeEnrollment?.id && <button type="button" data-student-finance-action="due">Vade Belirle</button>}
+              <button type="button" data-student-finance-action="history">Ödeme Geçmişi</button>
+            </div>
+          </>
+        )}
         {activeEnrollmentTotalReceived > packagePrice ? <p>Paket tutarını aşan tahsilat: <strong>{money(activeEnrollmentTotalReceived - packagePrice)}</strong>. Çok dönemli ödeme açıklaması ödeme geçmişinde saklanır.</p> : null}
         <div className="list">
           {payments.map((payment: any) => (

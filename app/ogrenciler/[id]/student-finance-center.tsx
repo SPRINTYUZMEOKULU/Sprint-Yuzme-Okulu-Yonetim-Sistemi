@@ -1,6 +1,7 @@
 "use client";
 
 import PaymentInfoShortcut from "../../components/payment-info-shortcut";
+import { openStudentObligations, summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { reviewCollection } from "@/lib/payments/collection-review";
 
 import { formatDisplayDateTime } from "@/lib/dates/display";
@@ -179,7 +180,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
       const target = event.target as Element | null;
       const action = target?.closest<HTMLElement>("[data-student-finance-action]");
       const tab = action?.dataset.studentFinanceAction;
-      if (tab !== "payment" && tab !== "history" && tab !== "due") return;
+      if (tab !== "payment" && tab !== "history" && tab !== "due" && tab !== "debt") return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void show(tab);
@@ -350,22 +351,8 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     : Number.NaN;
   const packagePaymentOverdue =
     packageRemaining > 0 && Number.isFinite(paymentDueTime) && paymentDueTime < Date.now();
-  const openObligations = obligations.filter(
-    (item) => !["paid", "cancelled"].includes(String(item.status || "").toLowerCase()),
-  );
-  const openDebts = openObligations.filter(
-    (item) =>
-      !(
-        item.obligation_type === "installment" &&
-        String(item.title || "").toLocaleLowerCase("tr-TR").startsWith("paket ücreti")
-      ),
-  );
-  const extraRemaining = openDebts.reduce(
-    (sum, item) =>
-      sum + Math.max(0, Number(item.remaining_amount ?? Number(item.amount) - Number(item.paid_amount || 0))),
-    0,
-  );
-  const totalDebt = packageRemaining + extraRemaining;
+  const openDebts = openStudentObligations(obligations);
+  const { extraDebt: extraRemaining, totalDebt } = summarizeStudentDebt(data?.enrollment?.id ? data.enrollment : null, obligations);
   const fullName = data
     ? `${data.student.first_name || ""} ${data.student.last_name || ""}`.trim()
     : "Öğrenci";

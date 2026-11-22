@@ -1327,3 +1327,21 @@
 #mesajlar .contactMessageDetails[open] .contactMessagePreview,
 #mesajlar .contactMessageDetails[open] .contactMessageExpand { display: none; }
 #mesajlar .contactMessageDetails[open] .contactMessageCollapse { display: inline-block; }
+
+.studentFileFinanceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.studentFileFinanceActions button:not(.primaryButton) {
+  padding: 11px 14px;
+  border: 1px solid #cfdbe8;
+  border-radius: 13px;
+  background: #f4f8fd;
+  color: #173f69;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
