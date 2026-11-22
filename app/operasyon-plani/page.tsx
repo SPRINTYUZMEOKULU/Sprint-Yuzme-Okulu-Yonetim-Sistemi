@@ -257,12 +257,6 @@ async function personelAta(formData: FormData) {
     formData.get("coach_id") || ""
   );
 
-  const groupId =
-    String(formData.get("group_id") || "") || null;
-
-  const branchId =
-    String(formData.get("branch_id") || "") || null;
-
   const assignmentRole = String(
     formData.get("assignment_role") || "coach"
   );
@@ -279,61 +273,17 @@ async function personelAta(formData: FormData) {
 
   const supabase = await createClient();
 
-  const { error: deactivateError } = await supabase
-    .from("lesson_staff_assignments")
-    .update({
-      is_active: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("organization_id", organizationId)
-    .eq("schedule_id", scheduleId)
-    .eq("assignment_role", assignmentRole)
-    .eq("is_active", true);
-
-  if (deactivateError) {
-    throw new Error(
-      `Mevcut eğitmen ataması güncellenemedi: ${deactivateError.message}`
-    );
-  }
-
-  const { error } = await supabase
-    .from("lesson_staff_assignments")
-    .upsert(
-      {
-        organization_id: organizationId,
-        branch_id: branchId,
-        schedule_id: scheduleId,
-        group_id: groupId,
-        coach_id: coachId,
-        assignment_role: assignmentRole,
-        is_active: true,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "schedule_id,coach_id",
-      }
-    );
+  const { error } = await supabase.rpc("set_session_coach", {
+    p_schedule_id: scheduleId,
+    p_coach_id: coachId,
+    p_assignment_role: assignmentRole,
+  });
 
   if (error) {
-    throw new Error(
-      `Personel atanamadı: ${error.message}`
-    );
+    throw new Error(`Personel atanamadı: ${error.message}`);
   }
 
-  if (assignmentRole === "coach") {
-    const { error: scheduleCoachError } = await supabase
-      .from("lesson_schedules")
-      .update({ coach_id: coachId })
-      .eq("id", scheduleId)
-      .eq("organization_id", organizationId);
-
-    if (scheduleCoachError) {
-      throw new Error(
-        `Ana eğitmen seansa işlenemedi: ${scheduleCoachError.message}`
-      );
-    }
-  }
-
+  revalidatePath("/gruplar");
   revalidatePath("/operasyon-plani");
   revalidatePath("/yoklama");
   revalidatePath("/");
@@ -2524,25 +2474,6 @@ export default async function OperasyonPlaniPage({
                             name="schedule_id"
                             value={
                               schedule.id
-                            }
-                          />
-
-                          <input
-                            type="hidden"
-                            name="group_id"
-                            value={
-                              schedule.group_id ||
-                              ""
-                            }
-                          />
-
-                          <input
-                            type="hidden"
-                            name="branch_id"
-                            value={
-                              schedule.branch_id ||
-                              group?.branch_id ||
-                              ""
                             }
                           />
 
