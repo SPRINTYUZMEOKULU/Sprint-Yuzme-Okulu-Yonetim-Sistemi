@@ -1,0 +1,65 @@
+.messageCard .noteReply {
+  margin-top: 14px;
+  border: 1px solid #dae5f2;
+  border-radius: 14px;
+  background: #f5f8fc;
+}
+
+.messageCard .noteReply summary {
+  min-height: 44px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  border-radius: 13px;
+}
+
+.noteReplyForm {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-top: 1px solid #dae5f2;
+}
+
+.noteReplyForm label {
+  color: #203b59;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.noteReplyForm textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid #94abc5;
+  border-radius: 10px;
+  background: #fff;
+  color: #12213d;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.noteReplyForm textarea::placeholder { color: #526782; }
+
+.messageCard .noteReply summary:focus-visible,
+.noteReplyForm textarea:focus-visible {
+  outline: 2px solid #0965ca;
+  outline-offset: 2px;
+}
+
+.noteReplyForm .guardianPortalButton {
+  justify-self: end;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 2px;
+}
+
+.noteReplyForm .guardianPortalButton:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+@media (max-width: 600px) {
+  .noteReplyForm .guardianPortalButton { width: 100%; }
+}
