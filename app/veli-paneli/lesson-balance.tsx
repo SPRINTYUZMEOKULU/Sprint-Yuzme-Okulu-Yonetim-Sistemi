@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import "./lesson-balance.css";
 
-export default function LessonBalance({ normal, makeup, ready, alertKey, attendanceUrl, requestUrl }: {
+export default function LessonBalance({ normal, makeup, ready, alertKey, attendanceUrl, requestUrl, attendanceLabel = "Ders takvimini gör", showRequestLink = true }: {
   normal: number;
   makeup: number;
   ready: boolean;
   alertKey?: string;
   attendanceUrl: string;
   requestUrl: string;
+  attendanceLabel?: string;
+  showRequestLink?: boolean;
 }) {
   const total = normal + makeup;
   const tone = !ready ? "unknown" : normal <= 1 ? "critical" : normal === 2 ? "warning" : "standard";
@@ -32,7 +34,7 @@ export default function LessonBalance({ normal, makeup, ready, alertKey, attenda
 
   return <section className="guardianLessonCard" data-tone={tone} aria-labelledby="lesson-balance-heading">
     <div className="guardianLessonCardHeader">
-      <div><h2 id="lesson-balance-heading">Kalan ders hakları</h2><Link href={attendanceUrl}>Ders takvimini gör</Link></div>
+      <div><h2 id="lesson-balance-heading">Kalan ders hakları</h2><Link href={attendanceUrl}>{attendanceLabel}</Link></div>
       <div className="guardianLessonTotal"><span>Toplam</span><strong>{ready ? total : "—"}</strong></div>
     </div>
     <dl className="guardianLessonCounters">
@@ -41,7 +43,7 @@ export default function LessonBalance({ normal, makeup, ready, alertKey, attenda
     </dl>
     {message && <div className="guardianLessonWarning" role="status">
       <strong>{message}</strong>
-      {ready && <Link href={requestUrl}>{total === 0 ? "Kayıt yenileme için yönetime yaz" : "Yönetime yaz"}</Link>}
+      {ready && showRequestLink && <Link href={requestUrl}>{total === 0 ? "Kayıt yenileme için yönetime yaz" : "Yönetime yaz"}</Link>}
     </div>}
     {noticeKey && notice === noticeKey && <aside className="guardianLessonToast" role="status">
       <strong>{message}</strong>

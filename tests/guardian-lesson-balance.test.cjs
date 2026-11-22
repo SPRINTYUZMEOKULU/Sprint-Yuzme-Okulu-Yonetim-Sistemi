@@ -16,9 +16,9 @@ new Function("require", "module", "exports", js)(
   moduleValue, moduleValue.exports,
 );
 
-function render(normal, makeup, ready = true) {
+function render(normal, makeup, ready = true, options = {}) {
   return renderToStaticMarkup(React.createElement(moduleValue.exports.default, {
-    normal, makeup, ready, attendanceUrl: "/veli-devam", requestUrl: "/veli-talepleri",
+    normal, makeup, ready, attendanceUrl: "/veli-devam", requestUrl: "/veli-talepleri", ...options,
   }));
 }
 
@@ -38,4 +38,15 @@ test("Warnings escalate and two exhausted balances display as zeros", () => {
 test("Unverified balances display placeholders without a renewal warning", () => {
   assert.match(render(0, 0, false), /<dd>—<\/dd>.*<dd>—<\/dd>.*Ders hakları şu anda doğrulanamadı/);
   assert.doesNotMatch(render(0, 0, false), /Kalan ders hakkınız bitti/);
+});
+
+test("Management balance keeps the live counters and opens the staff lesson workflow", () => {
+  const markup = render(0, 3, true, {
+    attendanceUrl: "/ogrenciler/student#ders-hareketleri",
+    attendanceLabel: "Ders hakları ve telafiyi yönet",
+    showRequestLink: false,
+  });
+  assert.match(markup, /<strong>3<\/strong>/);
+  assert.match(markup, /href="\/ogrenciler\/student#ders-hareketleri"/);
+  assert.doesNotMatch(markup, /href="\/veli-talepleri"/);
 });

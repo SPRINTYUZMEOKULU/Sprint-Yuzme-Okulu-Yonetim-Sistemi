@@ -1,0 +1,30 @@
+.guardianFileHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.guardianFileHeading h1 { margin: 0 0 4px; font-size: clamp(24px, 4vw, 34px); }
+.guardianFileHeading p { margin: 0; color: #526985; overflow-wrap: anywhere; }
+.guardianFileLinks { display: flex; gap: 8px; flex-wrap: wrap; }
+.guardianFileOverview > nav { margin-block: 16px; }
+.guardianFileStudentSelect { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.guardianFileStudentSelect select {
+  flex: 1;
+  min-width: 0;
+  max-width: 360px;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid #d7e2ef;
+  border-radius: 12px;
+  background: white;
+  color: #173a63;
+}
+.guardianAdminPage :is(#veli-hesabi, #ogrenci-baglantilari, #gelisim-notu, #portal-mesaji) { scroll-margin-top: 100px; }
+@media (max-width: 600px) {
+  .guardianFileHeading .guardianFileLinks { width: 100%; }
+  .guardianFileLinks a { flex: 1 1 42%; text-align: center; }
+}

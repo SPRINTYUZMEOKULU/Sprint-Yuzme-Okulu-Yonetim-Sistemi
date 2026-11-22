@@ -1,3 +1,7 @@
+import GuardianOverviewCards from "@/app/veli-paneli/guardian-overview-cards";
+import { getGuardianContext } from "@/lib/guardian/data";
+import "@/app/veli-paneli/veli.css";
+import "./guardian-file.css";
 import PortalDataMap from "../portal-data-map";
 import { formatDisplayDateTime } from "@/lib/dates/display";
 import Link from "next/link";
@@ -50,7 +54,7 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const org = profile.organization_id!;
 
   const [guardianRes, guardianRecordRes, studentsRes, requestsRes] = await Promise.all([
-    admin.from("profiles").select("id,full_name,phone,email,is_active,last_sign_in_at,created_at").eq("organization_id", org).eq("role", "guardian").eq("id", id).maybeSingle(),
+    admin.from("profiles").select("id,full_name,phone,email,is_active,last_sign_in_at,created_at,organization_id,role").eq("organization_id", org).eq("role", "guardian").eq("id", id).maybeSingle(),
     admin.from("guardians").select("id,auth_user_id,login_enabled,is_active").eq("organization_id", org).eq("auth_user_id", id).maybeSingle(),
     admin.from("students").select("id,first_name,last_name,student_number,status,guardian_name,guardian_phone").eq("organization_id", org).eq("is_deleted", false).order("first_name"),
     admin.from("guardian_requests").select("id,request_number,category,subject,status,priority,created_at,updated_at").eq("organization_id", org).eq("guardian_id", id).order("created_at", { ascending: false }).limit(30),
@@ -70,9 +74,14 @@ export default async function GuardianFile({ params, searchParams }: { params: P
   const linkedIds = links.map((l: any) => l.student_id).filter(Boolean);
   const linkedIdSet = new Set(linkedIds);
   const sourceStudentId = query.student && linkedIdSet.has(query.student) && studentMap.has(query.student) ? query.student : "";
+  const linkedStudents = students.filter(student => linkedIdSet.has(student.id));
+  const selectedStudent = studentMap.get(sourceStudentId) || linkedStudents.find(student =>
+    student.status === "active" && links.some(link => link.student_id === student.id && link.portal_access),
+  ) || linkedStudents[0];
+  const selectedId = selectedStudent?.id;
   const visibleError = friendlyError(query.error);
 
-  const [progressRes, messagesRes, announcementRes, consentsRes, documentsRes] = await Promise.all([
+  const [progressRes, messagesRes, announcementRes, consentsRes, documentsRes, overview] = await Promise.all([
     linkedIds.length
       ? admin.from("student_notes").select("id,student_id,body,target,is_guardian_visible,created_at,author_id,note_type").eq("organization_id", org).eq("note_type", "coach").in("student_id", linkedIds).order("created_at", { ascending: false }).limit(60)
       : Promise.resolve({ data: [] as any[], error: null }),
@@ -80,8 +89,10 @@ export default async function GuardianFile({ params, searchParams }: { params: P
     admin.from("announcements").select("id,title,body,audience,is_published,published_at,created_at").eq("organization_id", org).eq("is_published", true).order("published_at", { ascending: false }).limit(10),
     admin.from("guardian_consents").select("id,student_id,document_id,document_version,accepted_at").eq("organization_id",org).eq("guardian_id",id).order("accepted_at",{ascending:false}),
     admin.from("guardian_documents").select("id,title,version,is_active").eq("organization_id",org),
+    selectedId ? getGuardianContext(id, selectedId, "overview", undefined, guardian) : null,
   ]);
 
+  const overviewAvailable = overview && overview.selected?.id === selectedId;
   const progress = progressRes.data || [];
   const messages = messagesRes.data || [];
   const announcements = announcementRes.data || [];
@@ -100,28 +111,145 @@ export default async function GuardianFile({ params, searchParams }: { params: P
     <UstGezinme />
     <main className="guardianAdminPage">
       <div className="guardianAdminWrap">
-        <header className="guardianHero">
+        <header className="guardianFileHeading">
           <div>
-            <small>SPRİNTOS · DİJİTAL VELİ DOSYASI</small>
-            <h1>{guardian.full_name || "Veli Hesabı"}</h1>
-            <p>{guardian.phone || "Telefon yok"} · Son giriş: {date(guardian.last_sign_in_at)}</p>
+            <h1>Veli Merkezi</h1>
+            <p>{guardian.full_name || "Veli Hesabı"} · {guardian.phone || "Telefon yok"}</p>
           </div>
-          <div className="guardianHeroActions">
-            <Link className="primary" href={`/veli-paneli?previewGuardian=${id}`}><GuardianIcon name="file"/>Velinin Ekranını Gör</Link>
-            <Link href="/veliler/icerik#duyurular">Duyuruları Yönet</Link>
-            <Link href="/veliler/icerik#kurallar">Kuralları Yönet</Link>
-            {sourceStudentId && <Link href={`/ogrenciler/${sourceStudentId}`}><GuardianIcon name="file"/>Öğrenci Dosyasına Dön</Link>}
-            <Link href="/veliler"><GuardianIcon name="users"/>Velilere Dön</Link>
-            <Link className="primary" href={`/veli-talepleri?guardian=${id}`}><GuardianIcon name="message"/>Talepleri Aç</Link>
+          <div className="guardianFileLinks">
+            <Link className="guardianButton" href="/veliler">Velilere Dön</Link>
+            {(!selectedId || overviewAvailable) && <Link className="guardianButton primary" href={`/veli-paneli?previewGuardian=${id}${selectedId ? `&child=${selectedId}` : ""}`}>Veli Görünümü</Link>}
           </div>
         </header>
+        {linkedStudents.length > 1 && <form className="guardianFileStudentSelect">
+          <label htmlFor="guardian-file-student">Kursiyer</label>
+          <select id="guardian-file-student" name="student" defaultValue={selectedId}>
+            {linkedStudents.map(student => <option key={student.id} value={student.id}>{childName(student.id)}</option>)}
+          </select>
+          <button className="guardianButton" type="submit">Göster</button>
+        </form>}
 
         {query.saved ? <div className="guardianNotice">{query.saved}</div> : null}
         {visibleError ? <div className="guardianNotice error">{visibleError}</div> : null}
         {!canonicalGuardianId ? <div className="guardianNotice error">Portal hesabının ana veli kaydı bulunamadı. Öğrenci bağlantısı oluşturulmadan önce hesap kaydı eşleştirilmelidir.</div> : null}
 
-        <div className="guardianDetailGrid">
+        <div className="guardianOverview guardianFileOverview">
+          {overviewAvailable
+            ? <GuardianOverviewCards data={overview} accountId={id} management />
+            : <section className="guardianPanel">
+                <h2>{selectedId ? childName(selectedId) : "Bağlı kursiyer yok"}</h2>
+                <p>{overview?.issues[0] || (selectedId ? "Bu kursiyerin portal özeti şu anda gösterilemiyor." : "Öğrenci Bağlantıları bölümünden bir kursiyer bağlayabilirsiniz.")}</p>
+              </section>}
+          <nav className="guardianFileLinks" aria-label="Veli yönetim işlemleri">
+            {selectedId && <Link className="guardianButton primary" href={`/ogrenciler/${selectedId}#genel-bilgiler`}>Kursiyeri Düzenle</Link>}
+            {selectedId && !overviewAvailable && <>
+              <Link className="guardianButton" href={`/ogrenciler/${selectedId}#kurs-kaydi`}>Kayıt ve Program</Link>
+              <Link className="guardianButton" href={`/ogrenciler/${selectedId}#odeme`}>Ödemeler</Link>
+              <Link className="guardianButton" href={`/ogrenciler/${selectedId}#yoklama`}>Yoklama</Link>
+            </>}
+            <Link className="guardianButton" href="#gelisim-notu">Gelişim Notu</Link>
+            <Link className="guardianButton" href="#portal-mesaji">Portal Mesajı</Link>
+            <Link className="guardianButton" href={`/veli-talepleri?guardian=${id}`}>Talepler</Link>
+            <Link className="guardianButton" href="/veliler/icerik#duyurular">Duyurular</Link>
+            <Link className="guardianButton" href="/veliler/icerik#kurallar">Kurallar</Link>
+            <Link className="guardianButton" href="#veli-hesabi">Veli Hesabı ve Şifre</Link>
+            <Link className="guardianButton" href="#ogrenci-baglantilari">Öğrenci Bağlantıları</Link>
+          </nav>
+        </div>
+
+        <section className="guardianPanel" style={{marginTop:16}}><div className="guardianEyebrow">BELGE ONAY GEÇMİŞİ</div><h2>Velinin onayladığı belgeler</h2>{(consentsRes.data || []).map((consent:any)=>{const doc=(documentsRes.data || []).find((doc:any)=>doc.id===consent.document_id);return <article className="guardianRequest" key={consent.id}><strong>{doc?.title || "Belge"} · Sürüm {consent.document_version}</strong><p>{childName(consent.student_id)} · {date(consent.accepted_at)}</p><small>{doc?.version===consent.document_version?"Güncel sürüm onaylı":"Önceki sürüm onayı"}</small></article>;})}{!consentsRes.data?.length?<p>Henüz belge onayı bulunmuyor.</p>:null}</section>
+        <section className="guardianPanel" style={{ marginTop: 16 }}>
+          <div className="guardianCardHead">
+            <div><div className="guardianEyebrow">VELİ PORTAL YÖNETİMİ</div><h2>Portal içerik özeti</h2></div>
+            <span className="guardianPill">{portalEnabled ? "Portal Aktif" : "Portal Pasif"}</span>
+          </div>
+          <div className="guardianDetailGrid">
+            <div className="guardianChild"><span><b>{activeLinks.filter((l: any) => l.portal_access).length}</b><small>Portala açık öğrenci</small></span></div>
+            <div className="guardianChild"><span><b>{visibleProgressCount}</b><small>Veliye açık gelişim notu</small></span></div>
+            <div className="guardianChild"><span><b>{messages.length}</b><small>Portal mesajı · {unreadMessageCount} okunmamış</small></span></div>
+            <div className="guardianChild"><span><b>{announcements.length}</b><small>Son yayınlanan duyurular · okul geneli</small></span></div>
+          </div>
+          <div className="guardianNotice" style={{ marginTop: 14 }}>
+            Veli portalında yalnızca aktif ve portal erişimi açık öğrenciler, veliyle paylaşılmış gelişim notları, bu veliye gönderilen mesajlar ve yayınlanmış duyurular görünür.
+          </div>
+        </section>
+
+        <div className="guardianDetailGrid" style={{ marginTop: 16 }}>
+          <section className="guardianPanel" id="gelisim-notu">
+            <div className="guardianEyebrow">GELİŞİM MERKEZİ</div>
+            <h2>Gelişim notu ekle</h2>
+            <form action={addGuardianProgressNote} className="guardianForm">
+              <input type="hidden" name="guardian_profile_id" value={id} />
+              <label>Öğrenci<select name="student_id" required defaultValue={selectedId || ""}><option value="" disabled>Öğrenci seçin</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
+              <label>Gelişim Notu<textarea name="note" rows={5} placeholder="Teknik gelişim, dersteki ilerleme, dikkat edilmesi gereken konu..." required /></label>
+              <label>Sonraki Hedef<textarea name="target" rows={3} placeholder="Örn. nefes koordinasyonu, serbest stil kol tekniği..." /></label>
+              <div className="guardianChecks"><label><input type="checkbox" name="visible_to_guardian" defaultChecked /> Veli portalında göster</label></div>
+              <PendingSubmitButton className="guardianButton primary" pendingText="Gelişim notu kaydediliyor…">Gelişim Notunu Kaydet</PendingSubmitButton>
+            </form>
+          </section>
+
+          <section className="guardianPanel" id="portal-mesaji">
+            <div className="guardianEyebrow">MESAJ MERKEZİ</div>
+            <h2>Veliye portal mesajı gönder</h2>
+            <form action={sendGuardianPortalMessage} className="guardianForm">
+              <input type="hidden" name="guardian_profile_id" value={id} />
+              <label>İlgili Öğrenci<select name="student_id" defaultValue={selectedId || ""}><option value="">Genel veli mesajı</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
+              <label>Mesaj Türü<select name="message_type" defaultValue="information"><option value="information">Bilgilendirme</option><option value="progress">Gelişim</option><option value="payment">Ödeme</option><option value="schedule">Program / Seans</option><option value="warning">Önemli Uyarı</option></select></label>
+              <label>Başlık<input name="title" placeholder="Mesaj başlığı" required /></label>
+              <label>Mesaj<textarea name="body" rows={6} placeholder="Veli portalında gösterilecek mesajı yazın..." required /></label>
+              <PendingSubmitButton className="guardianButton primary" pendingText="Mesaj gönderiliyor…">Portala Mesaj Gönder</PendingSubmitButton>
+            </form>
+          </section>
+        </div>
+
+        <div className="guardianDetailGrid" style={{ marginTop: 16 }}>
           <section className="guardianPanel">
+            <div className="guardianCardHead"><div><div className="guardianEyebrow">GELİŞİM GEÇMİŞİ</div><h2>Son gelişim notları</h2></div></div>
+            <div className="guardianRequestList">
+              {progress.slice(0, 12).map((n: any) => <article className="guardianRequest" key={n.id}>
+                <div className="guardianRequestHead"><div><small>{childName(n.student_id)}</small><h3>{n.target || "Gelişim Notu"}</h3></div><span className="guardianPill">{n.is_guardian_visible ? "Veli görüyor" : "Yönetim notu"}</span></div>
+                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{n.body}</p>
+                <div className="guardianRequestMeta"><span>{date(n.created_at)}</span><span>Dijital Kursiyer Dosyası ile ortak kayıt</span></div>
+                <form action={toggleGuardianProgressVisibility} style={{ marginTop: 10 }}>
+                  <input type="hidden" name="guardian_profile_id" value={id} />
+                  <input type="hidden" name="student_id" value={n.student_id} />
+                  <input type="hidden" name="note_id" value={n.id} />
+                  <button className="guardianButton">{n.is_guardian_visible ? "Veli Portalından Gizle" : "Veliyle Paylaş"}</button>
+                </form>
+              </article>)}
+              {!progress.length ? <div className="guardianEmpty">Henüz gelişim notu yok.</div> : null}
+            </div>
+          </section>
+
+          <section className="guardianPanel">
+            <div className="guardianCardHead"><div><div className="guardianEyebrow">MESAJ GEÇMİŞİ</div><h2>Veliye gönderilenler</h2></div></div>
+            <div className="guardianRequestList">
+              {messages.slice(0, 12).map((m: any) => <article className="guardianRequest" key={m.id}>
+                <div className="guardianRequestHead"><div><small>{childName(m.student_id)}</small><h3>{m.title}</h3></div><span className="guardianPill">{m.read_at ? "Okundu" : "Okunmadı"}</span></div>
+                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{m.body}</p>
+                <div className="guardianRequestMeta"><span>{m.message_type}</span><span>{date(m.sent_at || m.created_at)}</span></div>
+              </article>)}
+              {!messages.length ? <div className="guardianEmpty">Bu veliye henüz portal mesajı gönderilmemiş.</div> : null}
+            </div>
+          </section>
+        </div>
+
+        <section className="guardianPanel" style={{ marginTop: 16 }}>
+          <div className="guardianCardHead">
+            <div><div className="guardianEyebrow">TALEP VE GÖRÜŞ GEÇMİŞİ</div><h2>Veli talepleri</h2></div>
+            <Link className="guardianButton" href={`/veli-talepleri?guardian=${id}`}>Tümünü Yönet</Link>
+          </div>
+          <div className="guardianRequestList">
+            {(requestsRes.data || []).map((r: any) => <article className={`guardianRequest ${r.priority}`} key={r.id}>
+              <div className="guardianRequestHead"><div><small>{r.request_number}</small><h3>{r.subject}</h3></div><span className="guardianPill">{r.status}</span></div>
+              <div className="guardianRequestMeta"><span>{r.category}</span><span>{r.priority}</span><span>{date(r.created_at)}</span></div>
+            </article>)}
+            {requestsRes.error ? <div className="guardianNotice error">Talep modülü için 015 SQL kurulumu gereklidir.</div> : null}
+            {!requestsRes.data?.length && !requestsRes.error ? <div className="guardianEmpty">Henüz veli talebi bulunmuyor.</div> : null}
+          </div>
+        </section>
+        <div className="guardianDetailGrid">
+          <section className="guardianPanel" id="veli-hesabi">
             <div className="guardianEyebrow">HESAP VE GÜVENLİK</div>
             <h2>Veli bilgileri</h2>
             <form action={updateGuardian} className="guardianForm">
@@ -190,97 +318,6 @@ export default async function GuardianFile({ params, searchParams }: { params: P
         </div>
 
         <PortalDataMap/>
-        <section className="guardianPanel" style={{marginTop:16}}><div className="guardianEyebrow">BELGE ONAY GEÇMİŞİ</div><h2>Velinin onayladığı belgeler</h2>{(consentsRes.data || []).map((consent:any)=>{const doc=(documentsRes.data || []).find((doc:any)=>doc.id===consent.document_id);return <article className="guardianRequest" key={consent.id}><strong>{doc?.title || "Belge"} · Sürüm {consent.document_version}</strong><p>{childName(consent.student_id)} · {date(consent.accepted_at)}</p><small>{doc?.version===consent.document_version?"Güncel sürüm onaylı":"Önceki sürüm onayı"}</small></article>;})}{!consentsRes.data?.length?<p>Henüz belge onayı bulunmuyor.</p>:null}</section>
-        <section className="guardianPanel" style={{ marginTop: 16 }}>
-          <div className="guardianCardHead">
-            <div><div className="guardianEyebrow">VELİ PORTAL YÖNETİMİ</div><h2>Portal içerik özeti</h2></div>
-            <span className="guardianPill">{portalEnabled ? "Portal Aktif" : "Portal Pasif"}</span>
-          </div>
-          <div className="guardianDetailGrid">
-            <div className="guardianChild"><span><b>{activeLinks.filter((l: any) => l.portal_access).length}</b><small>Portala açık öğrenci</small></span></div>
-            <div className="guardianChild"><span><b>{visibleProgressCount}</b><small>Veliye açık gelişim notu</small></span></div>
-            <div className="guardianChild"><span><b>{messages.length}</b><small>Portal mesajı · {unreadMessageCount} okunmamış</small></span></div>
-            <div className="guardianChild"><span><b>{announcements.length}</b><small>Son yayınlanan duyurular · okul geneli</small></span></div>
-          </div>
-          <div className="guardianNotice" style={{ marginTop: 14 }}>
-            Veli portalında yalnızca aktif ve portal erişimi açık öğrenciler, veliyle paylaşılmış gelişim notları, bu veliye gönderilen mesajlar ve yayınlanmış duyurular görünür.
-          </div>
-        </section>
-
-        <div className="guardianDetailGrid" style={{ marginTop: 16 }}>
-          <section className="guardianPanel">
-            <div className="guardianEyebrow">GELİŞİM MERKEZİ</div>
-            <h2>Gelişim notu ekle</h2>
-            <form action={addGuardianProgressNote} className="guardianForm">
-              <input type="hidden" name="guardian_profile_id" value={id} />
-              <label>Öğrenci<select name="student_id" required defaultValue={sourceStudentId}><option value="" disabled>Öğrenci seçin</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
-              <label>Gelişim Notu<textarea name="note" rows={5} placeholder="Teknik gelişim, dersteki ilerleme, dikkat edilmesi gereken konu..." required /></label>
-              <label>Sonraki Hedef<textarea name="target" rows={3} placeholder="Örn. nefes koordinasyonu, serbest stil kol tekniği..." /></label>
-              <div className="guardianChecks"><label><input type="checkbox" name="visible_to_guardian" defaultChecked /> Veli portalında göster</label></div>
-              <PendingSubmitButton className="guardianButton primary" pendingText="Gelişim notu kaydediliyor…">Gelişim Notunu Kaydet</PendingSubmitButton>
-            </form>
-          </section>
-
-          <section className="guardianPanel">
-            <div className="guardianEyebrow">MESAJ MERKEZİ</div>
-            <h2>Veliye portal mesajı gönder</h2>
-            <form action={sendGuardianPortalMessage} className="guardianForm">
-              <input type="hidden" name="guardian_profile_id" value={id} />
-              <label>İlgili Öğrenci<select name="student_id" defaultValue={sourceStudentId}><option value="">Genel veli mesajı</option>{links.map((l: any) => <option key={l.student_id} value={l.student_id}>{childName(l.student_id)}</option>)}</select></label>
-              <label>Mesaj Türü<select name="message_type" defaultValue="information"><option value="information">Bilgilendirme</option><option value="progress">Gelişim</option><option value="payment">Ödeme</option><option value="schedule">Program / Seans</option><option value="warning">Önemli Uyarı</option></select></label>
-              <label>Başlık<input name="title" placeholder="Mesaj başlığı" required /></label>
-              <label>Mesaj<textarea name="body" rows={6} placeholder="Veli portalında gösterilecek mesajı yazın..." required /></label>
-              <PendingSubmitButton className="guardianButton primary" pendingText="Mesaj gönderiliyor…">Portala Mesaj Gönder</PendingSubmitButton>
-            </form>
-          </section>
-        </div>
-
-        <div className="guardianDetailGrid" style={{ marginTop: 16 }}>
-          <section className="guardianPanel">
-            <div className="guardianCardHead"><div><div className="guardianEyebrow">GELİŞİM GEÇMİŞİ</div><h2>Son gelişim notları</h2></div></div>
-            <div className="guardianRequestList">
-              {progress.slice(0, 12).map((n: any) => <article className="guardianRequest" key={n.id}>
-                <div className="guardianRequestHead"><div><small>{childName(n.student_id)}</small><h3>{n.target || "Gelişim Notu"}</h3></div><span className="guardianPill">{n.is_guardian_visible ? "Veli görüyor" : "Yönetim notu"}</span></div>
-                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{n.body}</p>
-                <div className="guardianRequestMeta"><span>{date(n.created_at)}</span><span>Dijital Kursiyer Dosyası ile ortak kayıt</span></div>
-                <form action={toggleGuardianProgressVisibility} style={{ marginTop: 10 }}>
-                  <input type="hidden" name="guardian_profile_id" value={id} />
-                  <input type="hidden" name="student_id" value={n.student_id} />
-                  <input type="hidden" name="note_id" value={n.id} />
-                  <button className="guardianButton">{n.is_guardian_visible ? "Veli Portalından Gizle" : "Veliyle Paylaş"}</button>
-                </form>
-              </article>)}
-              {!progress.length ? <div className="guardianEmpty">Henüz gelişim notu yok.</div> : null}
-            </div>
-          </section>
-
-          <section className="guardianPanel">
-            <div className="guardianCardHead"><div><div className="guardianEyebrow">MESAJ GEÇMİŞİ</div><h2>Veliye gönderilenler</h2></div></div>
-            <div className="guardianRequestList">
-              {messages.slice(0, 12).map((m: any) => <article className="guardianRequest" key={m.id}>
-                <div className="guardianRequestHead"><div><small>{childName(m.student_id)}</small><h3>{m.title}</h3></div><span className="guardianPill">{m.read_at ? "Okundu" : "Okunmadı"}</span></div>
-                <p style={{ margin: "8px 0", whiteSpace: "pre-wrap" }}>{m.body}</p>
-                <div className="guardianRequestMeta"><span>{m.message_type}</span><span>{date(m.sent_at || m.created_at)}</span></div>
-              </article>)}
-              {!messages.length ? <div className="guardianEmpty">Bu veliye henüz portal mesajı gönderilmemiş.</div> : null}
-            </div>
-          </section>
-        </div>
-
-        <section className="guardianPanel" style={{ marginTop: 16 }}>
-          <div className="guardianCardHead">
-            <div><div className="guardianEyebrow">TALEP VE GÖRÜŞ GEÇMİŞİ</div><h2>Veli talepleri</h2></div>
-            <Link className="guardianButton" href={`/veli-talepleri?guardian=${id}`}>Tümünü Yönet</Link>
-          </div>
-          <div className="guardianRequestList">
-            {(requestsRes.data || []).map((r: any) => <article className={`guardianRequest ${r.priority}`} key={r.id}>
-              <div className="guardianRequestHead"><div><small>{r.request_number}</small><h3>{r.subject}</h3></div><span className="guardianPill">{r.status}</span></div>
-              <div className="guardianRequestMeta"><span>{r.category}</span><span>{r.priority}</span><span>{date(r.created_at)}</span></div>
-            </article>)}
-            {requestsRes.error ? <div className="guardianNotice error">Talep modülü için 015 SQL kurulumu gereklidir.</div> : null}
-            {!requestsRes.data?.length && !requestsRes.error ? <div className="guardianEmpty">Henüz veli talebi bulunmuyor.</div> : null}
-          </div>
-        </section>
       </div>
     </main>
   </>;
