@@ -45,6 +45,10 @@ function logicalKey(item: LiveNotification) {
   return item.id;
 }
 
+function isLoginSupport(item: LiveNotification) {
+  return item.eventKey?.startsWith("login_support_") === true;
+}
+
 export default function LiveNotificationCenter() {
   const pathname=usePathname();
   const portalRoute=pathname.startsWith("/veli-")||["/login","/on-kayit","/portal-rehberi"].includes(pathname);
@@ -89,14 +93,16 @@ export default function LiveNotificationCenter() {
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok || !Array.isArray(data.notifications)) return;
 
-      const active=currentRef.current;
-      if(active){
-        if(data.notifications.some((item:LiveNotification)=>item.id===active.id))return;
-        currentRef.current=null;setCurrent(null);
+      const notifications: LiveNotification[] = data.notifications;
+      const active = currentRef.current;
+      let next = notifications.find((item) => !seenRef.current.has(logicalKey(item)));
+      if (active && notifications.some((item) => item.id === active.id)) {
+        if (isLoginSupport(active)) return;
+        next = notifications.find((item) => isLoginSupport(item) && !seenRef.current.has(logicalKey(item)));
+      } else if (active) {
+        currentRef.current = null;
+        setCurrent(null);
       }
-      const next = data.notifications.find(
-        (item: LiveNotification) => !seenRef.current.has(logicalKey(item)),
-      ) as LiveNotification | undefined;
       if (!next) return;
 
       currentRef.current = next;
@@ -104,7 +110,7 @@ export default function LiveNotificationCenter() {
       setCurrent(next);
       void playEventNotificationSound(next);
 
-      if ("Notification" in window && Notification.permission === "granted") {
+      if (!isLoginSupport(next) && "Notification" in window && Notification.permission === "granted") {
         try {
           const n = new Notification(formatDatesInText(next.title), {
             body: `${next.authorName?`Yazan: ${next.authorName}\n`:""}${formatDatesInText(next.body)}`,

@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+
+import { deliverLoginSupportPush } from "@/lib/notifications/create-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +99,7 @@ export async function POST(request: Request) {
 
     const { data: managers, error: managersError } = await admin
       .from("profiles")
-      .select("id")
+      .select("id,role")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .in("role", MANAGEMENT_ROLES);
@@ -107,8 +109,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Yönetici hesapları okunamadı." }, { status: 500 });
     }
 
-    const managerIds = (managers || []).map((item) => String(item.id));
-    if (!managerIds.length) {
+    if (!managers?.length) {
       return NextResponse.json({ ok: false, message: "Destek talebini alacak yönetici bulunamadı." }, { status: 500 });
     }
 
@@ -124,13 +125,10 @@ export async function POST(request: Request) {
     const targetPath = account
       ? `/kullanicilar-ve-yetkiler?profile=${encodeURIComponent(account.id)}`
       : "/bildirimler";
-    const requestBody = `${roleLabel} giriş ekranından destek talebi gönderildi. ${message}`;
     const requestMessage =
       `${kindLabel}\nKullanıcı: ${accountLabel}\nİletişim: ${identifier}\nRol: ${roleLabel}\nMesaj: ${message}`;
 
-    // Login destek akışı oturum açmadan çalıştığı için genel bildirim yönlendirme
-    // motoruna bağımlı değildir. Böylece tercih/kapsam/push tarafındaki bir hata,
-    // kullanıcının destek talebini kaybetmesine yol açmaz.
+    // Save the request before attempting device delivery.
     const duplicateSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let duplicateQuery = admin
       .from("system_notifications")
@@ -157,13 +155,13 @@ export async function POST(request: Request) {
     }
 
     if (!recentDuplicate) {
-      const rows = managerIds.map((managerId) => ({
+      const rows = managers.map((manager) => ({
         organization_id: organizationId,
-        recipient_profile_id: managerId,
-        recipient_user_id: managerId,
+        recipient_profile_id: manager.id,
+        recipient_user_id: manager.id,
         notification_type: "login_support_request",
         title: `${kindLabel}: ${accountLabel}`,
-        body: requestBody,
+        body: requestMessage,
         message: requestMessage,
         priority: kind === "password" || kind === "login_error" ? "high" : "normal",
         severity: kind === "login_error" ? "warning" : "info",
@@ -171,11 +169,11 @@ export async function POST(request: Request) {
         student_id: null,
         source_type: "login_support",
         source_id: account?.id || null,
-        target_path: targetPath,
+        target_path: manager.role === "branch_manager" ? "/bildirimler" : targetPath,
         event_key: eventKey,
         is_read: false,
-        push_required: false,
-        push_requested: false,
+        push_required: true,
+        push_requested: true,
         push_sent: false,
         push_sent_at: null,
         entity_type: account ? "profile" : "login_contact",
@@ -192,7 +190,10 @@ export async function POST(request: Request) {
         created_by: null,
       }));
 
-      const { error: insertError } = await admin.from("system_notifications").insert(rows);
+      const { data: notifications, error: insertError } = await admin
+        .from("system_notifications")
+        .insert(rows)
+        .select("id,recipient_profile_id");
       if (insertError) {
         console.error("SPRINTOS LOGIN SUPPORT INSERT", insertError);
         return NextResponse.json(
@@ -200,6 +201,23 @@ export async function POST(request: Request) {
           { status: 500 }
         );
       }
+
+      after(async () => {
+        try {
+          await deliverLoginSupportPush((notifications ?? []).map((notification) => ({
+            organizationId,
+            profileId: notification.recipient_profile_id,
+            notificationId: notification.id,
+            title: kindLabel,
+            body: "Yeni bir destek talebi var. Ayrıntıları SprintOS'ta açabilirsiniz.",
+            category: "accounts",
+            severity: "info",
+            targetPath: "/bildirimler",
+          })));
+        } catch (error) {
+          console.error("SPRINTOS LOGIN SUPPORT PUSH", error);
+        }
+      });
     }
 
     return NextResponse.json({

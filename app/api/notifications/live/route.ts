@@ -151,20 +151,48 @@ export async function GET(){
  try{
   const profile=await requireProfile([...ROLES]); if(!profile.organization_id) return NextResponse.json({ok:true,notifications:[]});
   const supabase=await createClient(); const manager=["owner","admin"].includes(String((profile as any).role||""));
-  await Promise.all([
+  const backgroundResults = await Promise.allSettled([
     resolveStartedRenewalNotifications(supabase, profile.organization_id),
     ...(["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)
       ? [runRegistrationBackground(supabase, profile.organization_id)] : []),
     syncPaymentDueNotifications(supabase,profile.organization_id),
     syncStartingStudentNotifications(supabase,profile.organization_id),
   ]);
+  for (const result of backgroundResults) {
+    if (result.status === "rejected") console.error("SprintOS live notification sync:", result.reason);
+  }
   const recipientFilter=`recipient_profile_id.eq.${profile.id},recipient_user_id.eq.${profile.id},and(recipient_profile_id.is.null,recipient_user_id.is.null)`;
   const since=new Date(Date.now()-48*60*60*1000).toISOString(); const nowIso=new Date().toISOString();
-  const [notificationResult,dueReminderResult]=await Promise.all([
-   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
+  const supportRequests = ["owner", "admin", "branch_manager"].includes(profile.role)
+    ? supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,target_path,created_at")
+      .eq("organization_id", profile.organization_id)
+      .eq("recipient_profile_id", profile.id)
+      .eq("notification_type", "login_support_request")
+      .eq("is_read", false)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(12)
+    : Promise.resolve({ data: [], error: null });
+  const [notificationResult,dueReminderResult,supportResult]=await Promise.all([
+   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).neq("notification_type","login_support_request").or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
    supabase.from("student_activity_logs").select("id,student_id,title,description,reminder_at,performed_by,source_type,source_id,new_value").eq("organization_id",profile.organization_id).in("activity_type",["registration_note","student_note_reminder"]).eq("reminder_completed",false).eq("performed_by",profile.id).not("reminder_at","is",null).lte("reminder_at",nowIso).order("reminder_at",{ascending:true}).limit(20),
+   supportRequests,
   ]);
-  const {data,error}=notificationResult; if(error) return NextResponse.json({ok:false,error:error.message},{status:500});
+  if (supportResult.error) console.error("SprintOS live support requests:", supportResult.error);
+  const supportNotifications = (supportResult.data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    body: row.message || row.body,
+    severity: row.severity,
+    priority: row.priority,
+    eventKey: row.event_key,
+    targetPath: row.target_path || "/bildirimler",
+    createdAt: row.created_at,
+  }));
+  const {data,error}=notificationResult; if(error) {
+    if (supportNotifications.length) return NextResponse.json({ ok: true, notifications: supportNotifications });
+    return NextResponse.json({ok:false,error:error.message},{status:500});
+  }
   let rows=await decorateNoteReminders(supabase,profile.organization_id,data||[]);
   rows=rows.filter((row:any)=>!row.reminderCompleted);
   const attendanceWarnings=rows.filter(row=>row.event_key==="attendance_missing");
@@ -199,7 +227,7 @@ export async function GET(){
   for(const handled of handledResult.data||[]){if(handled.source_id)scheduledSourceIds.add(String(handled.source_id));if(handled.entity_id)scheduledSourceIds.add(String(handled.entity_id));}
   const fallbackReminders=(dueReminderResult.data||[]).filter((item:any)=>!item.new_value?.reminder_dismissed_profiles?.includes(profile.id)).filter((item:any)=>!scheduledSourceIds.has(String(item.id))&&!(item.source_type==="student_note"&&scheduledSourceIds.has(String(item.source_id)))).map((item:any)=>({id:`reminder:${item.id}`,dedupeKey:`registration_note_reminder:${item.id}`,title:item.title||"Öğrenci notu hatırlatması",body:item.description||"Takip zamanı gelen bir öğrenci notunuz var.",severity:"warning",priority:"normal",eventKey:"registration_note_reminder",targetPath:`/ogrenciler/${item.student_id}#notlar`,createdAt:item.reminder_at,notification_type:item.activity_type==="registration_note"?"registration_note_reminder":"student_note_reminder",student_id:item.student_id,source_id:item.id,entity_id:item.source_type==="student_note"?item.source_id:null}));
   const fallback=await decorateNoteReminders(supabase,profile.organization_id,fallbackReminders);
-  return NextResponse.json({ok:true,notifications:[...fallback.filter((row:any)=>!row.reminderCompleted),...scheduledNotifications].slice(0,12)});
+  return NextResponse.json({ok:true,notifications:[...supportNotifications,...fallback.filter((row:any)=>!row.reminderCompleted),...scheduledNotifications].slice(0,12)});
  }catch(error){ return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Bildirimler alınamadı."},{status:500}); }
 }
 
