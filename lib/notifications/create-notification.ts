@@ -283,7 +283,7 @@ async function deactivateDeadSubscription(subscriptionId: string) {
   if (error) console.error("SprintOS dead push subscription deactivate:", error);
 }
 
-async function sendPushToProfile(params: {
+type NotificationPushTarget = {
   organizationId: string;
   profileId: string;
   notificationId: string;
@@ -292,7 +292,10 @@ async function sendPushToProfile(params: {
   category: string;
   severity: string;
   targetPath: string | null;
-}) {
+  urgency?: "high";
+};
+
+async function sendPushToProfile(params: NotificationPushTarget) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from("push_subscriptions")
@@ -317,7 +320,8 @@ async function sendPushToProfile(params: {
     try {
       await webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth_key } },
-        payload
+        payload,
+        params.urgency ? { urgency: params.urgency, timeout: 5000 } : undefined
       );
       sent += 1;
     } catch (error: unknown) {
@@ -345,6 +349,26 @@ async function updatePushStatus(notificationId: string, sent: boolean) {
     .update({ push_sent: sent, push_sent_at: sent ? new Date().toISOString() : null })
     .eq("id", notificationId);
   if (error) console.error("SprintOS push status update:", error);
+}
+
+export async function deliverLoginSupportPush(targets: NotificationPushTarget[]) {
+  if (!targets.length) return;
+  if (!configureWebPush()) {
+    console.error("SprintOS login support: VAPID configuration is missing.");
+    return;
+  }
+
+  await Promise.all(targets.map(async (target) => {
+    const result = await sendPushToProfile({ ...target, urgency: "high" });
+    if (!result.sent) {
+      console.warn("SprintOS login support: push was not accepted.", {
+        notificationId: target.notificationId,
+        failedDevices: result.failed,
+      });
+      return;
+    }
+    await updatePushStatus(target.notificationId, true);
+  }));
 }
 
 export function notificationDedupeId(organizationId: string, key: string, recipientId: string) {

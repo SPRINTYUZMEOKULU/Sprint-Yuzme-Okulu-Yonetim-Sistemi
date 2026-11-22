@@ -15,7 +15,7 @@ function getAdminClient() {
   return createAdminClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-export default async function PermissionsSettingsContent({ embedded = false }: { embedded?: boolean } = {}) {
+export default async function PermissionsSettingsContent({ embedded = false, initialProfileId }: { embedded?: boolean; initialProfileId?: string } = {}) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) return <main style={{ padding: 40 }}>Giriş yapmanız gerekiyor.</main>;
@@ -59,7 +59,7 @@ export default async function PermissionsSettingsContent({ embedded = false }: {
             <p style={{ margin: "7px 0 0", color: "#64748b", fontSize: 13 }}>Personel ve portal hesaplarını, şube erişimlerini ve güvenliği tek merkezden yönetin.</p>
           </div>
         </header>
-        <YetkiPaneliClient profiles={profiles} staffRows={staffResult.data ?? []} branches={branchesResult.data ?? []} permissionDefinitions={permissionDefinitionsResult.data ?? []} staffBranches={staffBranchesResult.data ?? []} staffPermissions={staffPermissionsResult.data ?? []} auditLogs={auditLogsResult.data ?? []} />
+        <YetkiPaneliClient key={initialProfileId} initialProfileId={initialProfileId} profiles={profiles} staffRows={staffResult.data ?? []} branches={branchesResult.data ?? []} permissionDefinitions={permissionDefinitionsResult.data ?? []} staffBranches={staffBranchesResult.data ?? []} staffPermissions={staffPermissionsResult.data ?? []} auditLogs={auditLogsResult.data ?? []} />
         <PasswordWhatsAppBridge profiles={profiles.map((profile) => ({ id: profile.id, full_name: profile.full_name, phone: profile.phone }))} />
       </div>
     </main>

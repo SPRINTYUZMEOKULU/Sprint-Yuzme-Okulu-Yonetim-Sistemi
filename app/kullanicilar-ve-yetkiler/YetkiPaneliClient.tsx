@@ -207,15 +207,17 @@ function Toast({
 
 export default function YetkiPaneliClient({
   profiles,
+  initialProfileId,
   staffRows,
   branches,
   permissionDefinitions,
   staffBranches,
   staffPermissions,
   auditLogs,
-}: YetkiPaneliClientProps) {
+}: YetkiPaneliClientProps & { initialProfileId?: string }) {
   const router = useRouter();
-  const [mobileDetail, setMobileDetail] = useState(false);
+  const linkedProfile = profiles.find((profile) => profile.id === initialProfileId);
+  const [mobileDetail, setMobileDetail] = useState(Boolean(linkedProfile));
   const detailRef = useRef<HTMLElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   function openDetails() {
@@ -235,7 +237,7 @@ export default function YetkiPaneliClient({
   }
   const [isPending, startTransition] = useTransition();
 
-  const [selectedId, setSelectedId] = useState(profiles[0]?.id || "");
+  const [selectedId, setSelectedId] = useState(linkedProfile?.id || profiles[0]?.id || "");
   const [activeTab, setActiveTab] = useState<
     "genel" | "subeler" | "yetkiler" | "guvenlik" | "gecmis"
   >("genel");

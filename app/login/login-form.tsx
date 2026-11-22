@@ -80,14 +80,16 @@ export default function LoginForm() {
     setSupportLoading(true);
     setSupportStatus("");
     try {
+      const identifier = supportIdentifier.trim();
+      const supportMethod = identifier.includes("@") ? "email" : "phone";
       const response = await fetch("/api/auth/support-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: supportKind, role, method, identifier: supportIdentifier.trim(), message: supportMessage.trim() }),
+        body: JSON.stringify({ kind: supportKind, role, method: supportMethod, identifier, message: supportMessage.trim() }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) throw new Error(result?.message || "Talep gönderilemedi.");
-      setSupportStatus("Talebiniz Sprint yönetim ekranına gönderildi. Yönetici uygulama içinden işlemi tamamlayabilir.");
+      setSupportStatus(result.message);
     } catch (supportError) {
       setSupportStatus(supportError instanceof Error ? supportError.message : "Talep gönderilemedi.");
     } finally {
