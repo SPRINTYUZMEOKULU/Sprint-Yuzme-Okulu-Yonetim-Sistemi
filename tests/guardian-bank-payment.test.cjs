@@ -56,7 +56,7 @@ function fixture(options = {}) {
 
 test('Guardian payment derives the selected unpaid item amount and uses the invoice queue', async () => {
   const { submit, writes, filters } = fixture();
-  await assert.rejects(submit('child', 'gear'), error => /^\/odeme-belge\/[\da-f-]{36}$/.test(error.url));
+  await assert.rejects(submit('child', 'gear'), error => /^\/odeme-belge\/[\da-f-]{36}\?kaynak=veli$/.test(error.url));
   assert.equal(writes[0].row.expected_amount, 11900);
   assert.equal(writes[0].row.enrollment_id, 'gear-enrollment');
   assert.equal(writes[0].row.status, 'waiting_customer');
@@ -77,6 +77,6 @@ test('Opening the same pending transfer reuses its existing link', async () => {
     id: 'prior', public_token: 'token', status: 'waiting_payment', expected_amount: '4000',
     enrollment_id: 'package-enrollment', expires_at: new Date(Date.now() + 60_000).toISOString(),
   } });
-  await assert.rejects(submit('child', 'package'), error => error.url === '/odeme-belge/token');
+  await assert.rejects(submit('child', 'package'), error => error.url === '/odeme-belge/token?kaynak=veli');
   assert.equal(writes.length, 0);
 });

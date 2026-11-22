@@ -59,3 +59,43 @@ test("settled payment alerts do not hide the pending registration alert", () => 
   assert.equal(window.document.querySelector('a[href^="/kayit-tamamlama"]').style.display, "");
   window.close();
 });
+
+test("A direct payment link and a guardian portal payment each render a working return link", async () => {
+  const source = fs.readFileSync("app/odeme-belge/[token]/page.tsx", "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  });
+  const query = {
+    select: () => query,
+    eq: () => query,
+    maybeSingle: async () => ({ data: { status: "cancelled" } }),
+  };
+  const imports = {
+    "@supabase/supabase-js": { createClient: () => ({ from: () => query }) },
+    "@/lib/payments/document-state": { publicDocumentState: () => "cancelled" },
+    "./copy-iban": {},
+    "./customer-document-form": {},
+    "./document-details-toggle": {},
+    "./style.css": {},
+  };
+  const exports = {};
+  new Function("require", "exports", outputText)(
+    name => name in imports ? imports[name] : require(name), exports,
+  );
+  const { renderToStaticMarkup } = require("react-dom/server");
+  for (const [searchParams, href] of [
+    [{}, "https://wa.me/905518968319"],
+    [{ kaynak: "veli" }, "/veli-odemeler#guvenli-odeme"],
+    [{ kaynak: "https://example.com" }, "https://wa.me/905518968319"],
+  ]) {
+    const page = await exports.default({
+      params: Promise.resolve({ token: "test-token" }),
+      searchParams: Promise.resolve(searchParams),
+    });
+    const { window } = new JSDOM(renderToStaticMarkup(page));
+    const link = window.document.querySelector("nav a");
+    assert.equal(link.getAttribute("href"), href);
+    if (href.startsWith("https:")) assert.equal(link.getAttribute("rel"), "noreferrer");
+    window.close();
+  }
+});
