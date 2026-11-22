@@ -191,16 +191,16 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     ? base("student_payment_plans","id,total_amount,status").eq("enrollment_id",enrollment.id).maybeSingle()
     : emptyOne());
 
-  const installmentsPromise = planPromise.then(({data: paymentPlan}) => paymentPlan?.id && paymentPlan.status !== "cancelled"
+  const installmentsPromise = planPromise.then(async ({data: paymentPlan}) => paymentPlan?.id && paymentPlan.status !== "cancelled"
     ? admin.from("student_payment_installments").select("id,sequence_no,due_date,amount,paid_amount,status").eq("plan_id",paymentPlan.id).order("sequence_no")
     : empty());
   const branchIdPromise = groupPromise.then(({data: group}) => group?.branch_id || selected.branch_id);
-  const branchPromise = branchIdPromise.then(branchId => plan.branch && branchId
+  const branchPromise = branchIdPromise.then(async branchId => plan.branch && branchId
     ? admin.from("branches").select("id,name,address,location_url,phone").eq("organization_id",profile.organization_id).eq("id",branchId).maybeSingle()
     : emptyOne());
   const currentAssignmentsPromise = Promise.all([groupPromise, assignmentsPromise]).then(([group, assignments]) =>
     (assignments.data || []).filter((row:any) => row.group_id === group.data?.id));
-  const coachesPromise = Promise.all([groupPromise, currentAssignmentsPromise]).then(([groupResult, currentAssignments]) => {
+  const coachesPromise = Promise.all([groupPromise, currentAssignmentsPromise]).then(async ([groupResult, currentAssignments]) => {
     const group = groupResult.data;
     const coachIds = [...new Set(currentAssignments.map((row:any) => row.coach_id).filter(Boolean))];
     if (!coachIds.length && group?.primary_coach_id) coachIds.push(group.primary_coach_id);
@@ -208,7 +208,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
       ? admin.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",coachIds)
       : empty();
   });
-  const announcementsPromise = Promise.all([groupPromise, branchIdPromise]).then(([groupResult, branchId]) => {
+  const announcementsPromise = Promise.all([groupPromise, branchIdPromise]).then(async ([groupResult, branchId]) => {
     if (!plan.announcements) return empty();
     const scopes = ["and(group_id.is.null,branch_id.is.null)"];
     if (branchId) scopes.push(`and(group_id.is.null,branch_id.eq.${branchId})`);
@@ -238,6 +238,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes],["Ödeme ek borçları",obligationsRes],["Ödeme eşleştirmeleri",obligationPaymentsRes]] as const)report(label,result);
   if(enrollment&&rights)enrollment.lesson_rights=rights;
   const group = groupRes.data || null;
+  const branchId = group?.branch_id || selected.branch_id;
   for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Duyuru",announcementsRes]] as const)report(label,result);
   const progress=(notesRes.data||[]).map((item:any)=>({...item,note:item.body,visible_to_guardian:item.is_guardian_visible,coach_id:item.author_id}));
   const obligationPaymentIds=new Set((obligationPaymentsRes.data||[]).map((row:any)=>row.new_value?.payment_id).filter(Boolean));
