@@ -6,7 +6,7 @@ export type PortalCredential = {
     password: string;
     revision: string;
 };
-export function portalMessage(input: Pick<PortalCredential, 'fullName' | 'phone' | 'email' | 'password'>, origin: string) {
+export function portalMessage(input: Pick<PortalCredential, 'fullName' | 'phone'> & { setupPath: string }, origin: string) {
     const base=origin.replace(/\/$/,'');
     return [
         '*SPRINT Yüzme Okulu*\n*Veli / Kursiyer Portalına Hoş Geldiniz*',
@@ -14,9 +14,9 @@ export function portalMessage(input: Pick<PortalCredential, 'fullName' | 'phone'
         'Ders programınızı, kalan derslerinizi, telafilerinizi, yoklama ve ödeme bilgilerinizi SPRINT portalından takip edebilirsiniz. Duyuruları okuyabilir, yönetime talep iletebilirsiniz.',
         `*Giriş bağlantınız*\n${base}/login`,
         `*Giriş telefonu*\n${input.phone}`,
-        '*Size özel giriş şifreniz*\niPhone’da mesajın üzerine, ardından şifre satırına basılı tutun. Şifrenin tamamını seçip Kopyala’ya dokunun.\n```' + input.password + '```',
-        '*İlk giriş · 3 adım*\n1. Bağlantıyı açıp *Veli Girişi* bölümünü seçin. Yetişkin kursiyerlerimiz de bu bölümü kullanır.\n2. *Telefon ile giriş* seçeneğinde yukarıdaki telefon numarasını girin ve şifreyi yapıştırın veya yazın.\n3. *Veli Girişi* düğmesine dokunun. Birden fazla kursiyer bağlıysa üst bölümden ilgili ismi seçin.',
-        '*Şifrenizi kendiniz belirleyin*\nGiriş yaptıktan sonra *Tüm Menü → Hesabım ve Şifrem* bölümünden mevcut şifrenizi ve yeni şifrenizi girerek değiştirebilirsiniz. Aynı hesaba bağlı kursiyerler için tek şifre kullanılır.',
+        `*Şifrenizi oluşturun*\n${base}${input.setupPath}\nBu bağlantı süreli ve tek kullanımlıktır. Lütfen paylaşmayın.`,
+        '*İlk giriş · 3 adım*\n1. Yukarıdaki bağlantıyla şifrenizi oluşturun. Giriş ekranında *Veli Girişi* bölümünü seçin. Yetişkin kursiyerlerimiz de bu bölümü kullanır.\n2. *Telefon ile giriş* seçeneğinde yukarıdaki telefon numarasını girin ve oluşturduğunuz şifreyi girin.\n3. *Veli Girişi* düğmesine dokunun. Birden fazla kursiyer bağlıysa üst bölümden ilgili ismi seçin.',
+        '*Şifre değiştirme*\nGiriş yaptıktan sonra *Tüm Menü → Hesabım ve Şifrem* bölümünden mevcut şifrenizi ve yeni şifrenizi girerek değiştirebilirsiniz. Aynı hesaba bağlı kursiyerler için tek şifre kullanılır.',
         `*Telefona ekleyin*\niPhone’da Safari → Paylaş → Ana Ekrana Ekle. Android’de Chrome → ⋮ → Uygulamayı yükle veya Ana ekrana ekle. Ardından telefonunuzdaki *SPRINT* simgesinden açın.\nResimli adımlar: ${base}/portal-rehberi#telefona-ekle`,
         `*Görsel kullanım rehberi*\n${base}/portal-rehberi`,
         'Girişte sorun yaşarsanız *Şifremi unuttum* üzerinden talep bırakabilir veya bize yazabilirsiniz. Giriş bilgilerinizi yalnızca hesabınızı kullanacak kişiyle paylaşın.',

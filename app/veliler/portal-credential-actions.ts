@@ -1,6 +1,7 @@
 "use server";
 import { createClient } from '@supabase/supabase-js';
 import { requireProfile } from '@/lib/auth/profile';
+import { sealSetupToken } from '@/lib/guardian/setup-token';
 import { revalidateGuardianConnection } from '@/lib/guardian/revalidate';
 const roles = ['owner', 'admin', 'branch_manager', 'registration_staff'] as const;
 export async function portalCredentialContact(input: {
@@ -62,5 +63,24 @@ export async function savePortalCredential(input: {
         }
     } catch { /* Authentication succeeded; audit availability must not misreport it. */ }
     revalidateGuardianConnection(contact.accountId, input.studentId || '');
-    return { ...contact, password, revision: data.user.updated_at || data.user.created_at, message: 'Şifre kaydedildi; aşağıdaki giriş bilgileri bu şifreyi kullanır.' };
+    return { ...contact, password, revision: data.user.updated_at || data.user.created_at, message: 'Şifre kaydedildi.' };
+}
+
+export async function createPortalSetupLink(input: { accountId?: string; studentId?: string }) {
+    const contact = await portalCredentialContact(input);
+    if (!contact.ok) return contact;
+    if (!contact.phone) return { ok: false as const, message: 'Kayıtlı WhatsApp telefonu bulunamadı.' };
+
+    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: account } = await admin.auth.admin.getUserById(contact.accountId);
+    if (!account.user?.email) return { ok: false as const, message: 'Portal hesabının giriş kimliği bulunamadı.' };
+
+    const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email: account.user.email });
+    const token = data?.properties?.hashed_token;
+    if (error || data.user?.id !== contact.accountId || !token) {
+        return { ok: false as const, message: 'Şifre oluşturma bağlantısı hazırlanamadı.' };
+    }
+    return { ...contact, setupPath: '/portal-sifre#' + sealSetupToken(token) };
 }
