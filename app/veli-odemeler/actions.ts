@@ -37,7 +37,7 @@ export async function openGuardianBankPayment(studentId: string, formData: FormD
   if (latest && !latest.payment_id &&
       ["waiting_customer", "customer_completed", "waiting_payment", "error"].includes(latest.status)) {
     const valid = Date.parse(latest.expires_at) > Date.now();
-    if (valid && Number(latest.expected_amount) === amount && latest.enrollment_id === enrollmentId) redirect(`/odeme-belge/${latest.public_token}`);
+    if (valid && Number(latest.expected_amount) === amount && latest.enrollment_id === enrollmentId) redirect(`/odeme-belge/${latest.public_token}?kaynak=veli`);
     if (latest.status !== "waiting_customer") {
       return back("Önceki havale işleminizin durumu için Sprint yönetimiyle iletişime geçiniz.");
     }
@@ -72,5 +72,5 @@ export async function openGuardianBankPayment(studentId: string, formData: FormD
       opened.enrollment_id !== enrollmentId || Number(opened.expected_amount) !== amount) {
     return back("Başka bir ödeme işlemi hazırlanmış. Lütfen sayfayı yenileyip tekrar deneyiniz.");
   }
-  redirect(`/odeme-belge/${token}`);
+  redirect(`/odeme-belge/${token}?kaynak=veli`);
 }
