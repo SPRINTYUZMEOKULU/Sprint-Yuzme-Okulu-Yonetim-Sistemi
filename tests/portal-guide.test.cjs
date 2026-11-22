@@ -17,5 +17,7 @@ test('guide remains accessible before login without granting access to account s
  function request(path){const url=new URL('https://sprint.test'+path);url.clone=()=>new URL(url.href);return {nextUrl:url,headers:new Headers(),cookies:{getAll:()=>[],set(){}}};}
  assert.equal((await middleware(request('/portal-rehberi'))).status,200);
  assert.equal((await middleware(request('/portal-sifre'))).status,200);
+ assert.equal((await middleware(request('/s'))).status,200);
+ assert.equal((await middleware(request('/settings'))).status,307);
  for(const path of ['/veli-hesabim','/api/guardian-account/password','/ogrenciler'])assert.equal((await middleware(request(path))).status,307);
 });
