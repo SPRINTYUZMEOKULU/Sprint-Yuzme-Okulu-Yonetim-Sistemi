@@ -1,3 +1,4 @@
+import { loadStudentObligations } from "@/lib/payments/student-finance";
 import { notifyGuardianFinance } from "@/lib/guardian/finance-notifications";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
@@ -31,15 +32,8 @@ export async function GET(request: NextRequest) {
     if (!studentId || !profile.organization_id) {
       return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 400 });
     }
-    const supabase = adminClient();
-    const { data, error } = await supabase
-      .from("student_financial_obligation_summary")
-      .select("*")
-      .eq("organization_id", profile.organization_id)
-      .eq("student_id", studentId)
-      .order("due_date", { ascending: true });
-    if (error) throw error;
-    return NextResponse.json({ obligations: data || [] });
+    const obligations = await loadStudentObligations(profile.organization_id, studentId);
+    return NextResponse.json({ obligations });
   } catch (error) {
     console.error("student obligations GET error", error);
     return NextResponse.json({ error: "Borç kayıtları yüklenemedi." }, { status: 500 });

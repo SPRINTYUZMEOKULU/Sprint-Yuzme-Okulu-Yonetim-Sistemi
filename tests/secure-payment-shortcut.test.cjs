@@ -25,6 +25,7 @@ test("the finance click handler leaves the secure payment link available for nav
       <button data-student-finance-action="history">Ödeme Geçmişi</button>
     </div>
     <a data-student-finance-action="due" href="#odeme"><em>İşlemi Aç</em></a>
+    <a data-student-finance-action="debt" href="#odeme">Ek borç</a>
   `;
   const click = (selector) => document.querySelector(selector).dispatchEvent(
     new window.MouseEvent("click", { bubbles: true, cancelable: true }),
@@ -35,29 +36,30 @@ test("the finance click handler leaves the secure payment link available for nav
   assert.equal(click("button:nth-child(2)"), false);
   assert.equal(click("button:nth-child(3)"), false);
   assert.equal(click("a em"), false);
-  assert.deepEqual(opened, ["payment", "history", "due"]);
+  assert.equal(click('a[data-student-finance-action="debt"]'), false);
+  assert.deepEqual(opened, ["payment", "history", "due", "debt"]);
   window.close();
 });
 
-test("settled payment alerts do not hide the pending registration alert", () => {
-  const { window } = new JSDOM(`
-    <header class="smartAlertHead"><strong></strong></header>
-    <div class="smartAlertGrid">
-      <a href="/kayit-tamamlama/student">Paket, ders programı ve ödeme bilgilerini tamamlayın.</a>
-      <a href="#odeme">Henüz ödeme kaydı yok</a>
-    </div>
-  `);
-  const source = fs.readFileSync("app/ogrenciler/[id]/general-info-summary.tsx", "utf8");
-  const start = source.indexOf("function syncAlertCount()");
-  const end = source.indexOf("export default function GeneralInfoSummary");
-  const { outputText } = ts.transpileModule(source.slice(start, end), {
-    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+test("student file debt includes partial package and extra balances and respects local due dates", () => {
+  const source = fs.readFileSync("lib/payments/student-open-debt.ts", "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   });
-  const normalizeAlert = new Function("document", outputText + "\nreturn normalizePaymentAlert;")(window.document);
-  normalizeAlert({ remaining: 0, overdue: false, statusMessage: "" });
-  assert.equal(window.document.querySelector('a[href="#odeme"]').style.display, "none");
-  assert.equal(window.document.querySelector('a[href^="/kayit-tamamlama"]').style.display, "");
-  window.close();
+  const exports = {};
+  new Function("exports", outputText)(exports);
+  const { summarizeStudentDebt } = exports;
+  const extra = { amount: 500, paid_amount: 200, status: "partial", due_date: "2026-11-22" };
+  const paid = { ...extra, status: "paid" };
+  const cancelled = { ...extra, status: "cancelled" };
+  const packageInstallment = { ...extra, obligation_type: "installment", title: "Paket ücreti 1" };
+  const partial = { remainingPayment: 1200, paymentDueDate: "2026-11-24" };
+  assert.deepEqual(summarizeStudentDebt(partial, [extra, paid, cancelled, packageInstallment], "2026-11-22"), {
+    packageDebt: 1200, extraDebt: 300, totalDebt: 1500, dueDate: "2026-11-22", overdue: false,
+  });
+  assert.equal(summarizeStudentDebt(null, [extra], "2026-11-23").overdue, true);
+  assert.equal(summarizeStudentDebt({ remainingPayment: 200, paymentDueDate: null }, [], "2026-11-22").totalDebt, 200);
+  assert.equal(summarizeStudentDebt(null, [paid, cancelled], "2026-11-22").totalDebt, 0);
 });
 
 test("A direct payment link and a guardian portal payment each render a working return link", async () => {

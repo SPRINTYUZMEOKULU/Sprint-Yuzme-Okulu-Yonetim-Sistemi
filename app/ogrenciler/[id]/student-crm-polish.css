@@ -52,5 +52,3 @@
 @media(max-width:380px){.studentFilePage .professionalSummaryGrid{grid-template-columns:1fr}}
 
 .studentSettingsShortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.studentSettingsShortcuts a{padding:12px;border:1px solid #c8dcee;border-radius:11px;background:white;color:#18568c;text-decoration:none;font-size:12px;font-weight:700}
-
-.studentFilePage[data-active-file-tab="all"] [data-file-panel]{display:block!important}.studentFilePage[data-active-file-tab="all"] .metricGrid{display:grid!important}
