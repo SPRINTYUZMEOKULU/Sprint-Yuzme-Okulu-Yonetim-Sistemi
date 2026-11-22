@@ -14,8 +14,27 @@
 .courseDetails .guardianCardHeader a { display:inline-flex; align-items:center; gap:5px; min-height:44px; }
 .courseFacts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:14px 0; }
 .courseFacts > div { min-width:0; }
-.courseFacts > div:nth-child(-n+2), .courseFacts > div:last-child { grid-column:1/-1; }
+.courseFacts > div:first-child { grid-column:1/-1; }
 .courseFacts dt { color:#53677c; font-size:13px; margin-bottom:4px; }
 .courseFacts dd { margin:0; color:#162f48; font-size:16px; line-height:1.45; font-weight:650; overflow-wrap:anywhere; }
 .courseTimes { border-top:1px solid #dbe6ef; padding-top:14px; }
 .courseTimes h3 { margin:0 0 8px; color:#28445e; font-size:14px; }
+
+.guardianShell .guardianPortalMark { background: #fff; box-shadow: none; border: 1px solid #e4eaf2; }
+.guardianPortalMark img { display: block; object-fit: contain; }
+.guardianOverview .guardianGrid { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+.courseFacts > div:not(:first-child) { border-top: 1px solid #e8eef5; padding-top: 10px; }
+.courseAttendance { display: grid; gap: 8px; margin-bottom: 12px; font-size: 13px; color: #53677c; }
+.courseProgress, .courseIdentity + .guardianEmpty { margin-top: 16px; }
+.courseProgress h2 { margin: 0 0 12px; font-size: 18px; }
+.courseProgress p { margin: 0; color: #53677c; line-height: 1.55; }
+.courseProgressNotes { list-style: none; padding: 0; margin: 0; }
+.courseProgressNotes li { padding: 16px 0; border-top: 1px solid #e4eaf2; overflow-wrap: anywhere; }
+.courseProgressNotes li:last-child { padding-bottom: 0; }
+.courseProgressNotes h3 { margin: 5px 0; font-size: 16px; }
+.courseProgressNotes p { white-space: pre-wrap; }
+.courseProgressDate { font-size: 12px; color: #53677c; font-weight: 650; }
+.guardianLoading .guardianLoadingBar, .guardianLoading .guardianLoadingPanel { animation: none; }
+@media (max-width: 900px) {
+  .guardianOverview .guardianGrid { grid-template-columns: minmax(0,1fr); }
+}

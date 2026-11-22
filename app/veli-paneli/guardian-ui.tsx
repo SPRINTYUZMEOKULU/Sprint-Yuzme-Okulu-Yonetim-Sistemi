@@ -52,7 +52,7 @@ export function GuardianHeader({ name, students, selectedId, issues = [], previe
     {previewGuardian?<div className="guardianPreviewBanner"><strong>Yönetici Önizlemesi · Velinin gördüğü güncel ekran</strong><span>Bu görünümde veli adına onay veya okundu işlemi yapılmaz.</span><Link href={`/veliler/${previewGuardian}`}>Veli Dosyasına Dön</Link><Link href="/veliler/icerik">Portal İçeriklerini Yönet</Link></div>:null}
     <header className="guardianTop">
       <Link prefetch={false} href={href("/veli-paneli", selectedId)} className="guardianBrand" aria-label="Sprint Yüzme Okulu portal ana sayfası">
-        <span className="guardianBrandMark" style={{background:"#fff",overflow:"hidden",padding:3}}><img src="/sprint-logo.png?v=6" alt="Sprint Yüzme Okulu" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}} /></span>
+        <span className="guardianBrandMark guardianPortalMark"><img src="/sprint-portal-logo.webp" width={32} height={32} alt="" /></span>
         <span><strong>SPRİNT</strong><small>Yüzme Okulu Portalı</small></span>
       </Link>
       <div className="guardianTopRight">

@@ -181,38 +181,63 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     if(plan.overview)return q.not("status","in","(resolved,rejected,archived)");
     return q.order("updated_at",{ascending:false}).limit(200);
   };
-  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes,schedulesRes]=await Promise.all([
+  const groupPromise = Promise.resolve(plan.group && enrollment?.group_id
+    ? admin.from("training_groups").select("id,name,branch_id,primary_coach_id").eq("organization_id",profile.organization_id).eq("id",enrollment.group_id).maybeSingle()
+    : emptyOne());
+  const assignmentsPromise = Promise.resolve(plan.schedule
+    ? base("lesson_student_assignments","coach_id,schedule_id,group_id").eq("is_active",true)
+    : empty());
+  const planPromise = Promise.resolve(plan.finance && enrollment
+    ? base("student_payment_plans","id,total_amount,status").eq("enrollment_id",enrollment.id).maybeSingle()
+    : emptyOne());
+
+  const installmentsPromise = planPromise.then(({data: paymentPlan}) => paymentPlan?.id && paymentPlan.status !== "cancelled"
+    ? admin.from("student_payment_installments").select("id,sequence_no,due_date,amount,paid_amount,status").eq("plan_id",paymentPlan.id).order("sequence_no")
+    : empty());
+  const branchIdPromise = groupPromise.then(({data: group}) => group?.branch_id || selected.branch_id);
+  const branchPromise = branchIdPromise.then(branchId => plan.branch && branchId
+    ? admin.from("branches").select("id,name,address,location_url,phone").eq("organization_id",profile.organization_id).eq("id",branchId).maybeSingle()
+    : emptyOne());
+  const currentAssignmentsPromise = Promise.all([groupPromise, assignmentsPromise]).then(([group, assignments]) =>
+    (assignments.data || []).filter((row:any) => row.group_id === group.data?.id));
+  const coachesPromise = Promise.all([groupPromise, currentAssignmentsPromise]).then(([groupResult, currentAssignments]) => {
+    const group = groupResult.data;
+    const coachIds = [...new Set(currentAssignments.map((row:any) => row.coach_id).filter(Boolean))];
+    if (!coachIds.length && group?.primary_coach_id) coachIds.push(group.primary_coach_id);
+    return plan.coach && coachIds.length
+      ? admin.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",coachIds)
+      : empty();
+  });
+  const announcementsPromise = Promise.all([groupPromise, branchIdPromise]).then(([groupResult, branchId]) => {
+    if (!plan.announcements) return empty();
+    const scopes = ["and(group_id.is.null,branch_id.is.null)"];
+    if (branchId) scopes.push(`and(group_id.is.null,branch_id.eq.${branchId})`);
+    if (groupResult.data?.id) scopes.push(`group_id.eq.${groupResult.data.id}`);
+    return admin.from("announcements").select("id,title,body,branch_id,group_id,published_at,created_at").eq("organization_id",profile.organization_id).eq("is_published",true).or(scopes.join(",")).order("published_at",{ascending:false}).limit(200);
+  });
+
+  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,currentAssignments,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes,schedulesRes,installmentsRes,branchRes,coachesRes,announcementsRes]=await Promise.all([
     attendance(),noteQuery(),
     plan.finance&&enrollment?allRows("student_payments",plan.full?"id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at":"id,enrollment_id,amount,payment_status,cancelled_at",q=>(plan.full?q:q.eq("enrollment_id",enrollment.id)).order("id")):empty(),
     messageQuery(),
     plan.documents?admin.from("guardian_documents").select(plan.overview?"id,version,requires_consent":"*").eq("organization_id",profile.organization_id).eq("is_active",true).order("sort_order").order("created_at",{ascending:false}):empty(),
     plan.documents?admin.from("guardian_consents").select("id,document_id,document_version,accepted_at,student_id").eq("organization_id",profile.organization_id).eq("guardian_id",userId).eq("student_id",selected.id).order("accepted_at",{ascending:false}):empty(),
     requestQuery(),
-    plan.finance&&enrollment?base("student_payment_plans","id,total_amount,status").eq("enrollment_id",enrollment.id).maybeSingle():emptyOne(),
-    plan.group&&enrollment?.group_id?admin.from("training_groups").select("id,name,branch_id,primary_coach_id").eq("organization_id",profile.organization_id).eq("id",enrollment.group_id).maybeSingle():emptyOne(),
+    planPromise,
+    groupPromise,
     plan.finance&&enrollment?.package_id?admin.from("course_packages").select("id,name,price,lesson_count").eq("organization_id",profile.organization_id).eq("id",enrollment.package_id).maybeSingle():emptyOne(),
-    plan.schedule?base("lesson_student_assignments","coach_id,schedule_id,group_id").eq("is_active",true):empty(),
+    assignmentsPromise,
+    currentAssignmentsPromise,
     plan.paymentHistory?base("student_payments","id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at").order("received_at",{ascending:false}).order("id").range((historyPage-1)*HISTORY_PAGE_SIZE,historyPage*HISTORY_PAGE_SIZE):empty(),
     currentRights(),
     plan.finance?allRows("student_financial_obligations","id,enrollment_id,title,amount,paid_amount,due_date,status,obligation_type",q=>q.order("due_date").order("id")):empty(),
     plan.finance?allRows("student_activity_logs","new_value",q=>q.eq("activity_type","financial_obligation_payment").order("id")):empty(),
     plan.schedule&&enrollment?.group_id?admin.from("lesson_schedules").select("id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("group_id",enrollment.group_id).eq("is_active",true):empty(),
+    installmentsPromise,branchPromise,coachesPromise,announcementsPromise,
   ]);
   for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes],["Ödeme ek borçları",obligationsRes],["Ödeme eşleştirmeleri",obligationPaymentsRes]] as const)report(label,result);
   if(enrollment&&rights)enrollment.lesson_rights=rights;
-  const group=groupRes.data||null,branchId=group?.branch_id||selected.branch_id;
-  const currentAssignments=(assignmentsRes.data||[]).filter((row:any)=>row.group_id===group?.id);
-  const coachIds=[...new Set(currentAssignments.map((row:any)=>row.coach_id).filter(Boolean))];
-  if(!coachIds.length&&group?.primary_coach_id)coachIds.push(group.primary_coach_id);
-  const scopes=["and(group_id.is.null,branch_id.is.null)"];
-  if(branchId)scopes.push(`and(group_id.is.null,branch_id.eq.${branchId})`);
-  if(group?.id)scopes.push(`group_id.eq.${group.id}`);
-  const [installmentsRes,branchRes,coachesRes,announcementsRes]=await Promise.all([
-    planRes.data?.id&&planRes.data.status!=="cancelled"?admin.from("student_payment_installments").select("id,sequence_no,due_date,amount,paid_amount,status").eq("plan_id",planRes.data.id).order("sequence_no"):empty(),
-    plan.branch&&branchId?admin.from("branches").select("id,name,address,location_url,phone").eq("organization_id",profile.organization_id).eq("id",branchId).maybeSingle():emptyOne(),
-    plan.coach&&coachIds.length?admin.from("profiles").select("id,full_name").eq("organization_id",profile.organization_id).in("id",coachIds):empty(),
-    plan.announcements?admin.from("announcements").select("id,title,body,branch_id,group_id,published_at,created_at").eq("organization_id",profile.organization_id).eq("is_published",true).or(scopes.join(",")).order("published_at",{ascending:false}).limit(200):empty(),
-  ]);
+  const group = groupRes.data || null;
   for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Duyuru",announcementsRes]] as const)report(label,result);
   const progress=(notesRes.data||[]).map((item:any)=>({...item,note:item.body,visible_to_guardian:item.is_guardian_visible,coach_id:item.author_id}));
   const obligationPaymentIds=new Set((obligationPaymentsRes.data||[]).map((row:any)=>row.new_value?.payment_id).filter(Boolean));
