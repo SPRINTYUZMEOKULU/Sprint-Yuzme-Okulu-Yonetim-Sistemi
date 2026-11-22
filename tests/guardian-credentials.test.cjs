@@ -14,7 +14,7 @@ test('Opening share by account or student does not reset the password',async()=>
 test('The chosen password is saved exactly once and returned unchanged for the message',async()=>{const {actions,writes}=harness();const result=await actions.savePortalCredential({studentId:'child'},'Chosen-Test-94!');assert.equal(result.ok,true);assert.equal(result.password,'Chosen-Test-94!');assert.equal(result.revision,'new');assert.deepEqual(writes,[{id:'account',input:{password:'Chosen-Test-94!'}}]);});
 test('Inactive, disabled, unrelated and foreign organization accounts cannot be changed',async()=>{for(const options of [{active:false},{portal:false},{org:'other'}]){const {actions,writes}=harness(options);assert.equal((await actions.savePortalCredential({accountId:'account'},'Chosen-Test-94!')).ok,false);assert.equal(writes.length,0);}const {actions,writes}=harness();assert.equal((await actions.savePortalCredential({studentId:'stranger'},'Chosen-Test-94!')).ok,false);assert.equal(writes.length,0);});
 test('Invalid password is rejected without writing; authentication failure returns no credential',async()=>{const {actions,writes}=harness();for(const p of ['short',' leading-space','new\npassword','back`tick','a'.repeat(101)])assert.equal((await actions.savePortalCredential({accountId:'account'},p)).ok,false);assert.equal(writes.length,0);const failed=await harness({updateError:true}).actions.savePortalCredential({accountId:'account'},'Chosen-Test-94!');assert.equal(failed.ok,false);assert.equal(failed.password,undefined);});
-test('The WhatsApp message contains the setup link and omits the password',()=>{const {portalMessage}=load('lib/guardian/portal-message.ts');const msg=portalMessage({fullName:'Test',phone:'+905550000000',password:'Chosen-Test-94!',setupPath:'/portal-sifre#example-token'},'https://example.test');assert.match(msg,/https:\/\/example.test\/portal-sifre#example-token/);assert.doesNotMatch(msg,/Chosen-Test-94!|undefined/);});
+test('The WhatsApp message contains the setup link and omits the password',()=>{const {portalMessage}=load('lib/guardian/portal-message.ts');const msg=portalMessage({fullName:'Test',phone:'+905550000000',password:'Chosen-Test-94!',setupPath:'/s#Abcdefghijklmnopqrstuv'},'https://example.test');assert.match(msg,/https:\/\/example.test\/s#Abcdefghijklmnopqrstuv/);assert.doesNotMatch(msg,/Chosen-Test-94!|undefined/);});
 test('Saved credentials are reused across screens by account, and invalidated after another password change',()=>{
  const listeners=[];global.window={dispatchEvent:event=>listeners.push(event)};global.CustomEvent=class{constructor(type,options){this.type=type;this.detail=options.detail;}};
  const drafts=load('lib/guardian/credential-draft.ts');const value={accountId:'same-parent',revision:'first',password:'Chosen-Test-94!',phone:'+905550000000',fullName:'Veli'};
@@ -42,4 +42,13 @@ test('Password setup links reject tampering and expire after one hour', (t) => {
  assert.equal(openSetupToken((token[0]==='a'?'b':'a')+token.slice(1)),null);
  now.mock.mockImplementation(()=>100+60*60*1000);
  assert.equal(openSetupToken(token),null);
+});
+
+test('Short links use a URL-safe 128-bit code and a distinct database lookup hash', () => {
+ const {newShortSetupCode,shortSetupCodePattern,hashShortSetupCode}=load('lib/guardian/setup-token.ts',{'node:crypto':require('node:crypto')});
+ const code=newShortSetupCode();
+ assert.match(code,shortSetupCodePattern);
+ assert.equal(Buffer.from(code,'base64url').length,16);
+ assert.match(hashShortSetupCode(code),/^[a-f0-9]{64}$/);
+ assert.notEqual(hashShortSetupCode(code),hashShortSetupCode(code+'a'));
 });

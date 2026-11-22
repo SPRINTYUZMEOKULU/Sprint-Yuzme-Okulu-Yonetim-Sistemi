@@ -1,7 +1,7 @@
 "use server";
 import { createClient } from '@supabase/supabase-js';
 import { requireProfile } from '@/lib/auth/profile';
-import { sealSetupToken } from '@/lib/guardian/setup-token';
+import { hashShortSetupCode, newShortSetupCode, sealSetupToken, setupLinkLifetimeMs } from '@/lib/guardian/setup-token';
 import { revalidateGuardianConnection } from '@/lib/guardian/revalidate';
 const roles = ['owner', 'admin', 'branch_manager', 'registration_staff'] as const;
 export async function portalCredentialContact(input: {
@@ -82,5 +82,16 @@ export async function createPortalSetupLink(input: { accountId?: string; student
     if (error || data.user?.id !== contact.accountId || !token) {
         return { ok: false as const, message: 'Şifre oluşturma bağlantısı hazırlanamadı.' };
     }
-    return { ...contact, setupPath: '/portal-sifre#' + sealSetupToken(token) };
+    const code = newShortSetupCode();
+    const { error: linkError } = await admin.from('guardian_setup_links').insert({
+        code_hash: hashShortSetupCode(code),
+        account_id: contact.accountId,
+        sealed_token: sealSetupToken(token),
+        expires_at: new Date(Date.now() + setupLinkLifetimeMs).toISOString(),
+    });
+    if (linkError) return { ok: false as const, message: 'Şifre oluşturma bağlantısı kaydedilemedi. Tekrar deneyin.' };
+
+    await admin.from('guardian_setup_links').delete()
+        .eq('account_id', contact.accountId).lte('expires_at', new Date().toISOString());
+    return { ...contact, setupPath: '/s#' + code };
 }

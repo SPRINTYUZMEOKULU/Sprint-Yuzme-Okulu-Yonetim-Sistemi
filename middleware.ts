@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/portal-rehberi",
   "/portal-sifre",
+  "/s",
   "/on-kayit",
   "/auth/signout",
   "/yetkisiz",

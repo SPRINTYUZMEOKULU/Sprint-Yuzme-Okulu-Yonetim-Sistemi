@@ -24,5 +24,5 @@ export function portalMessage(input: Pick<PortalCredential, 'fullName' | 'phone'
     ].join('\n\n');
 }
 export function portalGuideMessage(origin:string){
-    return `*SPRINT Yüzme Okulu | PORTAL KULLANIM REHBERİ*\n\nDers, telafi, yoklama ve ödeme bilgilerinize nasıl ulaşacağınızı; telefona ekleme, giriş ve şifre değiştirme adımlarını görsel rehberimizden inceleyebilirsiniz.\n\n${origin.replace(/\/$/,'')}/portal-rehberi\n\nGirişte size özel iletilen telefon numarası ve şifreyi kullanın. Yetişkin kursiyerlerimiz de *Veli Girişi* bölümünden giriş yapar.\n\n*Destek:* 0551 896 83 19`;
+    return `*SPRINT Yüzme Okulu | PORTAL KULLANIM REHBERİ*\n\nDers, telafi, yoklama ve ödeme bilgilerinize nasıl ulaşacağınızı; telefona ekleme, giriş ve şifre değiştirme adımlarını görsel rehberimizden inceleyebilirsiniz.\n\n${origin.replace(/\/$/,'')}/portal-rehberi\n\nGirişte WhatsApp mesajındaki telefon numarasını ve oluşturduğunuz şifreyi kullanın. Yetişkin kursiyerlerimiz de *Veli Girişi* bölümünden giriş yapar.\n\n*Destek:* 0551 896 83 19`;
 }
