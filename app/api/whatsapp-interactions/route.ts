@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
+import { deliverPortalMessage, messageDeliveryIdPattern } from "@/lib/messaging/deliver-portal-message";
 import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_ROLES = [
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
     interactionId?: string;
     templateKey?: string;
     templateTitle?: string;
+    portalDeliveryId?: string;
   } | null;
 
   const suppliedStudentId = String(body?.studentId || "").trim();
@@ -188,7 +190,19 @@ export async function POST(request: Request) {
       ]);
       if(results.some(r=>r.error))return NextResponse.json({ok:false,message:"Geçmişin bir bölümü kaydedilemedi. Onayı tekrar deneyin."},{status:500});
     }
-    return NextResponse.json({ok:true,studentId,messageLogId:id,status:confirmed?"sent":existing?.status||"opened"});
+    let portalFailed = false;
+    if (confirmed) {
+      try {
+        const delivery = await deliverPortalMessage({
+          organizationId, studentId, actorId: profile.id, title, message,
+          deliveryId: messageDeliveryIdPattern.test(body.portalDeliveryId || "") ? body.portalDeliveryId! : id,
+        });
+        portalFailed = delivery.failed > 0;
+      } catch {
+        portalFailed = true;
+      }
+    }
+    return NextResponse.json({ok:true,portalFailed,studentId,messageLogId:id,status:confirmed?"sent":existing?.status||"opened"});
   }
 
   if (!studentId && recipient) {
@@ -213,7 +227,7 @@ export async function POST(request: Request) {
   if(makeupLookupError) return NextResponse.json({ok:false,message:"Mesaj durumu doğrulanamadı."},{status:500});
   const normalizeMessage=(value:string)=>String(value||"").replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ]/g,"");
   const makeupMessage=(makeupMessages||[]).find(row=>normalizeMessage(row.message_body)===normalizeMessage(message));
-  if(makeupMessage) return NextResponse.json({ok:true,studentId,type:"compensation_plan_change",status:makeupMessage.status,opened:true});
+  if(makeupMessage) return NextResponse.json({ok:true,studentId,type:"compensation_plan_change",messageLogId:makeupMessage.id,status:makeupMessage.status,opened:true});
 
   if(sourcePath === "/ders-operasyonlari") {
     // Opening a prepared cancellation is an interaction, not delivery confirmation.
@@ -226,7 +240,7 @@ export async function POST(request: Request) {
       if(original.status!=="prepared") return NextResponse.json({ok:true,duplicate:true,studentId});
       const {error:updateError}=await supabase.from("message_logs").update({metadata:{...original.metadata,delivery_confirmation:"whatsapp_opened",opened_at:new Date().toISOString()}})
         .eq("organization_id",organizationId).eq("id",original.id).eq("status","prepared");
-      return NextResponse.json({ok:!updateError,studentId,type:"lesson_cancellation_compensation"},{status:updateError?500:200});
+      return NextResponse.json({ok:!updateError,studentId,messageLogId:original.id,type:"lesson_cancellation_compensation"},{status:updateError?500:200});
     }
   }
 
@@ -235,7 +249,7 @@ export async function POST(request: Request) {
 
   const { data: duplicate } = await supabase
     .from("message_logs")
-    .select("id")
+    .select("id,metadata")
     .eq("organization_id", organizationId)
     .eq("student_id", studentId)
     .eq("channel", "whatsapp")
@@ -245,7 +259,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (duplicate) {
-    return NextResponse.json({ ok: true, duplicate: true, studentId });
+    return NextResponse.json({ ok: true, duplicate: true, studentId, messageLogId: duplicate.id });
   }
 
   const kind = classify(message, sourcePath);
@@ -269,7 +283,7 @@ export async function POST(request: Request) {
       prepared_by: profile.id,
       prepared_at: openedAt,
       metadata,
-    }),
+    }).select("id").maybeSingle(),
     supabase.from("student_activity_logs").insert({
       organization_id: organizationId,
       student_id: studentId,
@@ -298,5 +312,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, studentId, openedAt, type: kind.contactType });
+  return NextResponse.json({ ok: true, studentId, messageLogId: messageLog.data?.id, openedAt, type: kind.contactType });
 }

@@ -6,7 +6,7 @@ test('global WhatsApp wrapper verifies student and falls back when popups are bl
   const win={location:{origin:'https://example.test',pathname:path,search:'',assign:url=>destinations.push(url)},open:()=>null,alert:msg=>{throw Error(msg)}};
   const helpers={exports:{}};new Function('module','exports','window','fetch',code('lib/messaging/current-recipient.ts'))(helpers,helpers.exports,win,async()=>({ok:true,json:async()=>({ok:true,recipient:'905050001122'})}));
   const mod={exports:{}};
-  new Function('require','module','exports','window','document','fetch',code('app/components/whatsapp-safe-open.tsx'))(name=>name==='react'?{useEffect:fn=>{cleanup=fn()}}:helpers.exports,mod,mod.exports,win,{addEventListener(){},removeEventListener(){}},async(url,opts)=>{requests.push(JSON.parse(opts.body));return {ok:true}});
+  new Function('require','module','exports','window','document','fetch',code('app/components/whatsapp-safe-open.tsx'))(name=>name==='react'?{useEffect:fn=>{cleanup=fn()},useState:value=>[value,()=>{}]}:helpers.exports,mod,mod.exports,win,{addEventListener(){},removeEventListener(){}},async(url,opts)=>{requests.push(JSON.parse(opts.body));return {ok:true}});
   mod.exports.default();win.open('https://wa.me/905550001122?text=Test');await new Promise(r=>setImmediate(r));
   assert.equal(destinations.length,1);assert.ok(destinations[0].includes(path.includes('ogrenciler')?'905050001122':'905550001122'));assert.equal(requests.length,1);cleanup();
  }
