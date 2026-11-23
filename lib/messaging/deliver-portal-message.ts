@@ -18,7 +18,7 @@ export async function deliverPortalMessage(input: {
   const result = { saved: 0, push: 0, failed: 0 };
 
   // Authentication links and credentials belong to the separate account flow.
-  if (/şifre|sifre|password|doğrulama kodu|dogrulama kodu|\botp\b|giriş bilg|giris bilg|\/s[#/?]|[?&](?:token|code)=/iu.test(message + "\n" + title)) {
+  if (/şifre|sifre|password|doğrulama kodu|dogrulama kodu|\botp\b|giriş bilg|giris bilg|\/s[#/?]|\/odeme-belge\/|[?&](?:token|code)=/iu.test(message + "\n" + title)) {
     return { ...result, skipped: true };
   }
 

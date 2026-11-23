@@ -138,6 +138,18 @@ export async function POST(request: Request) {
     if (!data) return NextResponse.json({ok:false,message:"Kursiyer doğrulanamadı."},{status:400});
   }
 
+  async function sendPortalCopy(deliveryId: string | undefined, title: string) {
+    if (!deliveryId || !organizationId || !recipient) return false;
+    try {
+      const delivery = await deliverPortalMessage({
+        organizationId, studentId, actorId: profile.id, title, message, deliveryId,
+      });
+      return delivery.failed > 0;
+    } catch {
+      return true;
+    }
+  }
+
   // The registration wizard records explicit opening and staff confirmation separately.
   if (/^\/kayit-tamamlama\/[^/]+$/.test(sourcePath) && !body?.queueEvent) {
     return NextResponse.json({ok:true,skipped:true,reason:"registration_requires_explicit_confirmation"});
@@ -190,18 +202,10 @@ export async function POST(request: Request) {
       ]);
       if(results.some(r=>r.error))return NextResponse.json({ok:false,message:"Geçmişin bir bölümü kaydedilemedi. Onayı tekrar deneyin."},{status:500});
     }
-    let portalFailed = false;
-    if (confirmed) {
-      try {
-        const delivery = await deliverPortalMessage({
-          organizationId, studentId, actorId: profile.id, title, message,
-          deliveryId: messageDeliveryIdPattern.test(body.portalDeliveryId || "") ? body.portalDeliveryId! : id,
-        });
-        portalFailed = delivery.failed > 0;
-      } catch {
-        portalFailed = true;
-      }
-    }
+    const portalFailed = await sendPortalCopy(
+      messageDeliveryIdPattern.test(body.portalDeliveryId || "") ? body.portalDeliveryId! : id,
+      title,
+    );
     return NextResponse.json({ok:true,portalFailed,studentId,messageLogId:id,status:confirmed?"sent":existing?.status||"opened"});
   }
 
@@ -227,7 +231,7 @@ export async function POST(request: Request) {
   if(makeupLookupError) return NextResponse.json({ok:false,message:"Mesaj durumu doğrulanamadı."},{status:500});
   const normalizeMessage=(value:string)=>String(value||"").replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ]/g,"");
   const makeupMessage=(makeupMessages||[]).find(row=>normalizeMessage(row.message_body)===normalizeMessage(message));
-  if(makeupMessage) return NextResponse.json({ok:true,studentId,type:"compensation_plan_change",messageLogId:makeupMessage.id,status:makeupMessage.status,opened:true});
+  if(makeupMessage) return NextResponse.json({ok:true,portalFailed:await sendPortalCopy(makeupMessage.id,"Telafi bilgilendirmesi"),studentId,type:"compensation_plan_change",messageLogId:makeupMessage.id,status:makeupMessage.status,opened:true});
 
   if(sourcePath === "/ders-operasyonlari") {
     // Opening a prepared cancellation is an interaction, not delivery confirmation.
@@ -237,10 +241,10 @@ export async function POST(request: Request) {
     const normalize=(value:string)=>value.replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ]/g,"");
     const original=(prepared||[]).find(row=>normalize(row.message_body)===normalize(message));
     if(!error && original) {
-      if(original.status!=="prepared") return NextResponse.json({ok:true,duplicate:true,studentId});
+      if(original.status!=="prepared") return NextResponse.json({ok:true,duplicate:true,portalFailed:await sendPortalCopy(original.id,"Ders iptali ve telafi"),studentId});
       const {error:updateError}=await supabase.from("message_logs").update({metadata:{...original.metadata,delivery_confirmation:"whatsapp_opened",opened_at:new Date().toISOString()}})
         .eq("organization_id",organizationId).eq("id",original.id).eq("status","prepared");
-      return NextResponse.json({ok:!updateError,studentId,messageLogId:original.id,type:"lesson_cancellation_compensation"},{status:updateError?500:200});
+      return NextResponse.json({ok:!updateError,portalFailed:!updateError && await sendPortalCopy(original.id,"Ders iptali ve telafi"),studentId,messageLogId:original.id,type:"lesson_cancellation_compensation"},{status:updateError?500:200});
     }
   }
 
@@ -259,7 +263,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (duplicate) {
-    return NextResponse.json({ ok: true, duplicate: true, studentId, messageLogId: duplicate.id });
+    return NextResponse.json({ ok: true, duplicate: true, portalFailed: await sendPortalCopy(duplicate.id, "SPRINT Yüzme Okulu"), studentId, messageLogId: duplicate.id });
   }
 
   const kind = classify(message, sourcePath);
@@ -312,5 +316,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, studentId, messageLogId: messageLog.data?.id, openedAt, type: kind.contactType });
+  return NextResponse.json({ ok: true, portalFailed: await sendPortalCopy(messageLog.data?.id, "SPRINT Yüzme Okulu"), studentId, messageLogId: messageLog.data?.id, openedAt, type: kind.contactType });
 }

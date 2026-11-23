@@ -30,11 +30,11 @@ test('queue logs opened separately, confirms once, and never downgrades sent',as
  const db=database(),post=compileRoute('app/api/whatsapp-interactions/route.ts','POST',db,async input=>{deliveries.push(input);return {failed:0};});
  const send=body=>post({json:async()=>body});
  assert.equal((await send({...payload,queueEvent:'opened'})).status,200);
- assert.equal(deliveries.length,0);
+ assert.equal(deliveries.length,1);
  assert.equal(db.tables.message_logs[0].status,'opened');assert.equal(db.tables.student_contact_logs.length,0);
  assert.equal((await send({...payload,queueEvent:'confirmed'})).status,200);
  await send({...payload,queueEvent:'confirmed'});await send({...payload,queueEvent:'opened'});
- assert.equal(deliveries.length,2);
+ assert.equal(deliveries.length,4);
  assert.equal(deliveries[0].deliveryId,deliveries[1].deliveryId);
  assert.equal(deliveries[0].message,payload.message);
  assert.equal(db.tables.message_logs.length,1);assert.equal(db.tables.message_logs[0].status,'sent');
