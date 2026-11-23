@@ -3,6 +3,7 @@ begin;
 alter table public.student_enrollments
   add column freeze_start_date date,
   add column freeze_resume_date date,
+  add column freeze_callback_pending boolean not null default false,
   add constraint enrollment_freeze_dates_check check (
     (freeze_start_date is null and freeze_resume_date is null)
     or (freeze_start_date is not null and freeze_resume_date > freeze_start_date and freeze_resume_date is not null)
@@ -30,10 +31,10 @@ returns trigger language plpgsql set search_path = '' as $$
 begin
   if current_user in ('authenticated', 'anon') then
     if tg_op = 'INSERT' then
-      if new.freeze_start_date is not null or new.freeze_resume_date is not null
+      if new.freeze_start_date is not null or new.freeze_resume_date is not null or new.freeze_callback_pending
       then raise exception 'Dondurma tarihleri yönetici onayıyla kaydedilir.'; end if;
-    elsif (new.freeze_start_date, new.freeze_resume_date)
-      is distinct from (old.freeze_start_date, old.freeze_resume_date)
+    elsif (new.freeze_start_date, new.freeze_resume_date, new.freeze_callback_pending)
+      is distinct from (old.freeze_start_date, old.freeze_resume_date, old.freeze_callback_pending)
     then raise exception 'Dondurma tarihleri yönetici onayıyla kaydedilir.'; end if;
   end if;
   return new;
@@ -46,7 +47,7 @@ for each row execute function public.guard_enrollment_freeze_dates();
 
 create function public.process_enrollment_freeze(
   p_action text, p_id uuid, p_start date default null, p_resume date default null,
-  p_note text default null
+  p_note text default null, p_callback boolean default false
 ) returns jsonb
 language plpgsql security definer set search_path = ''
 as $$
@@ -70,17 +71,25 @@ begin
   if p_action = 'request' then
     select * into e from public.student_enrollments
     where id = p_id and organization_id = actor.organization_id for update;
-  elsif p_action in ('approve','reject') then
+  elsif p_action in ('approve','reject','confirm_resume') then
     select * into r from public.approval_requests
     where id = p_id and organization_id = actor.organization_id
-      and request_type = 'enrollment_freeze' and status = 'pending' for update;
+      and request_type = 'enrollment_freeze'
+      and status = case when p_action = 'confirm_resume' then 'approved' else 'pending' end for update;
     if not found then raise exception 'Bekleyen dondurma talebi bulunamadı.'; end if;
-    if p_action = 'approve' then
+    if p_action <> 'reject' then
       select * into e from public.student_enrollments
       where id = r.entity_id::uuid and student_id = r.student_id
         and organization_id = actor.organization_id for update;
       p_start := (r.new_values->>'freeze_start_date')::date;
-      p_resume := (r.new_values->>'freeze_resume_date')::date;
+      p_callback := coalesce((r.new_values->>'callback_pending')::boolean,false);
+      if p_action = 'confirm_resume' then
+        if not p_callback or e.freeze_resume_date is null or local_today > e.freeze_resume_date
+          or p_resume is null or p_resume < local_today or p_resume > e.freeze_resume_date
+        then raise exception 'Dönüş tarihi, telefon teyidi bekleyen kaydın onaylı süresi içinde olmalıdır.'; end if;
+      else
+        p_resume := (r.new_values->>'freeze_resume_date')::date;
+      end if;
     end if;
   else raise exception 'Geçersiz işlem.'; end if;
 
@@ -90,11 +99,16 @@ begin
         and s.organization_id = e.organization_id and s.status = 'active' and not s.is_deleted
     ) then raise exception 'Aktif kayıt bulunamadı.'; end if;
 
+    if p_action = 'request' and p_callback then
+      p_resume := (p_start + interval '1 month')::date;
+    end if;
     if p_start is null or p_resume is null or not isfinite(p_start) or not isfinite(p_resume)
-      or p_start < local_today or p_resume <= p_start or p_start < e.start_date
-    then raise exception 'Dondurma başlangıcı bugün veya ileri bir tarih, yeniden başlama ise daha sonraki bir tarih olmalıdır.'; end if;
+      or (p_action <> 'confirm_resume' and p_start < local_today)
+      or p_resume <= p_start or p_start < e.start_date
+      or p_resume > (p_start + interval '1 month')::date
+    then raise exception 'Dondurma ileriye dönük planlanır ve en fazla bir takvim ayı sürer.'; end if;
 
-    if exists (select 1 from public.student_enrollments f
+    if p_action <> 'confirm_resume' and exists (select 1 from public.student_enrollments f
       where f.organization_id = e.organization_id and f.student_id = e.student_id and f.freeze_start_date is not null)
     then raise exception 'Kursiyer tek seferlik dondurma hakkını kullanmış.'; end if;
 
@@ -113,13 +127,14 @@ begin
       or public.scheduled_used_lessons(e.id, now()) >= e.total_lessons
     then raise exception 'Dondurulabilecek ders hakkı bulunamadı.'; end if;
 
-    if p_start = local_today and exists (
+    if ((p_action <> 'confirm_resume' and p_start = local_today)
+        or (p_action = 'confirm_resume' and p_resume = local_today and p_resume < e.freeze_resume_date)) and exists (
       select 1 from public.lesson_schedules ls
       where ls.organization_id = e.organization_id and ls.group_id = e.group_id and ls.is_active
-        and (case when ls.weekday = 7 then 0 else ls.weekday end) = extract(dow from p_start)
-        and extract(dow from p_start)::smallint = any(weekdays)
+        and (case when ls.weekday = 7 then 0 else ls.weekday end) = extract(dow from local_today)
+        and extract(dow from local_today)::smallint = any(weekdays)
         and ls.start_time <= (now() at time zone 'Europe/Istanbul')::time
-    ) then raise exception 'Bugünkü seans başladı. İleri bir başlangıç tarihi seçin.'; end if;
+    ) then raise exception 'Bugünkü seans başladı. İleri bir tarih seçin.'; end if;
 
     if exists (select 1 from public.attendance_records a
       where a.organization_id = e.organization_id and a.student_id = e.student_id
@@ -141,7 +156,7 @@ begin
     ) exclusions;
 
     new_end := public.calculate_package_end_date(e.start_date, weekdays, e.total_lessons, excluded_dates);
-    if new_end is null or new_end < p_resume or new_end <= previous_end
+    if new_end is null or new_end < p_resume or (p_action <> 'confirm_resume' and new_end <= previous_end)
     then raise exception 'Seçilen tarih aralığında ertelenebilecek ders bulunamadı.'; end if;
   end if;
 
@@ -154,13 +169,14 @@ begin
       e.organization_id, e.student_id, e.branch_id, e.group_id, 'enrollment_freeze', 'Kayıt Dondurma',
       'enrollment', 'high', 'student_enrollment', e.id::text, actor.id, actor.full_name, nullif(btrim(left(p_note,1000)), ''),
       jsonb_build_object('planned_end_date', previous_end),
-      jsonb_build_object('freeze_start_date', p_start, 'freeze_resume_date', p_resume, 'planned_end_date', new_end),
+      jsonb_build_object('freeze_start_date', p_start, 'freeze_resume_date', p_resume, 'planned_end_date', new_end, 'callback_pending', p_callback),
       'pending', now()
     ) returning * into r;
   else
-    if p_action = 'approve' then
+    if p_action <> 'reject' then
       end_shift := new_end - previous_end;
       update public.student_enrollments set freeze_start_date = p_start, freeze_resume_date = p_resume,
+        freeze_callback_pending = p_callback and p_action = 'approve',
         planned_end_date = new_end, normal_end_date = new_end,
         compensation_end_date = case when compensation_end_date is not null
           then greatest(new_end, compensation_end_date + end_shift) end,
@@ -171,7 +187,31 @@ begin
           then greatest(new_end, compensation_planned_end_date + end_shift) end,
         updated_by = actor.id
       where organization_id = e.organization_id and enrollment_id = e.id;
-      r.new_values := r.new_values || jsonb_build_object('planned_end_date', new_end);
+      r.new_values := r.new_values || jsonb_build_object('planned_end_date', new_end, 'freeze_resume_date', p_resume);
+    end if;
+
+    if p_action = 'confirm_resume' then
+      update public.approval_requests set new_values = r.new_values || jsonb_build_object('callback_pending', false)
+        where id = r.id returning * into r;
+      update public.student_activity_logs set reminder_completed = true, reminder_completed_at = now(),
+        reminder_completed_by = actor.id
+        where organization_id = r.organization_id and source_type = 'approval_request'
+          and source_id = r.id and activity_type = 'student_note_reminder';
+      insert into public.student_activity_logs (organization_id, student_id, activity_type, title,
+        old_value, new_value, source_type, source_id, performed_by, performed_at)
+      values (r.organization_id, r.student_id, 'approval_applied', 'Dönüş tarihi telefonla teyit edildi',
+        jsonb_build_object('freeze_resume_date', e.freeze_resume_date), r.new_values, 'approval_request', r.id, actor.id, now());
+      return jsonb_build_object('id', r.id, 'student_id', r.student_id, 'status', 'resume_confirmed',
+        'requested_by', r.requested_by, 'new_values', r.new_values);
+    end if;
+
+    if p_action = 'approve' and p_callback then
+      insert into public.student_activity_logs (organization_id, student_id, activity_type, title, description,
+        source_type, source_id, performed_by, performed_at, reminder_at, reminder_completed)
+      values (r.organization_id, r.student_id, 'student_note_reminder', 'Kursiyerin dönüş tarihini telefonla teyit edin',
+        'Kursiyer dosyasındaki Kayıt Dondur / Başlat bölümünden teyit edilen tarihi kaydedin.',
+        'approval_request', r.id, actor.id, now(),
+        greatest(now(), ((p_resume - 3) + time '10:00') at time zone 'Europe/Istanbul'), false);
     end if;
 
     update public.approval_requests set
@@ -208,8 +248,8 @@ exception when unique_violation then
   raise exception 'Kursiyerin bekleyen dondurma talebi var veya dondurma hakkı kullanılmış.';
 end;
 $$;
-revoke all on function public.process_enrollment_freeze(text,uuid,date,date,text) from public;
-grant execute on function public.process_enrollment_freeze(text,uuid,date,date,text) to authenticated;
+revoke all on function public.process_enrollment_freeze(text,uuid,date,date,text,boolean) from public;
+grant execute on function public.process_enrollment_freeze(text,uuid,date,date,text,boolean) to authenticated;
 
 CREATE OR REPLACE FUNCTION public.scheduled_used_lessons(p_enrollment_id uuid, p_as_of timestamp with time zone DEFAULT now())
  RETURNS integer

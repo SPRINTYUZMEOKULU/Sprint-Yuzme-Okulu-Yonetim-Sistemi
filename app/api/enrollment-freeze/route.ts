@@ -1,3 +1,4 @@
+import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { publishEventNotification } from "@/lib/notifications/publish-event";
@@ -27,23 +28,34 @@ export async function GET(request: NextRequest) {
     .eq("request_type", "enrollment_freeze").in("status", ["pending","approved"])
     .maybeSingle();
   if (error) return NextResponse.json({ error: "Dondurma durumu yüklenemedi." }, { status: 500 });
-  return NextResponse.json({ item: data });
+  return NextResponse.json({ item: data, canConfirm: ["owner", "admin"].includes(profile.role) });
 }
 
 export async function POST(request: NextRequest) {
   const { db, profile } = await context();
   if (!profile?.organization_id) return NextResponse.json({ error: "Yetkiniz bulunmuyor." }, { status: 403 });
   const body = await request.json().catch(() => null);
-  if (!uuid.test(body?.enrollmentId || "") || !date.test(body?.start || "") || !date.test(body?.resume || "")) {
-    return NextResponse.json({ error: "Başlangıç ve yeniden başlama tarihlerini girin." }, { status: 400 });
+  const confirm = body?.action === "confirm_resume";
+  const callback = !confirm && body?.callback === true;
+  const recordId = confirm ? body?.requestId : body?.enrollmentId;
+  if (!uuid.test(recordId || "") || (!confirm && !date.test(body?.start || "")) ||
+      (!callback && !date.test(body?.resume || ""))) {
+    return NextResponse.json({ error: "Dondurma ve dönüş tarihlerini kontrol edin." }, { status: 400 });
   }
   const { data: item, error } = await db.rpc("process_enrollment_freeze", {
-    p_action: "request", p_id: body.enrollmentId, p_start: body.start, p_resume: body.resume,
-    p_note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : null,
+    p_action: confirm ? "confirm_resume" : "request", p_id: recordId,
+    p_start: confirm ? null : body.start, p_resume: callback ? null : body.resume,
+    p_callback: callback, p_note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : null,
   });
   if (error) {
     const message = error.code === "P0001" ? error.message : "Dondurma talebi kaydedilemedi.";
     return NextResponse.json({ error: message }, { status: 409 });
+  }
+
+  if (confirm) {
+    revalidateStudentSurfaces(item.student_id);
+    const delivery = await publishEnrollmentFreeze(profile.organization_id, profile.id, item);
+    return NextResponse.json({ item: { ...item, status: "approved" }, delivery });
   }
 
   const [delivery, staff] = await Promise.all([

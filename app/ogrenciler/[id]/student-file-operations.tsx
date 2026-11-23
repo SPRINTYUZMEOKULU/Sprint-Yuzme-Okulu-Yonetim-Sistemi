@@ -618,7 +618,7 @@ export default function StudentFileOperations({
             <FileIcon name="plus" /> Bireysel Telafi
           </button>
 
-          {canRequestFreeze && <button type="button" className="blue" onClick={() => { setResult(""); setPanel("freeze"); }}>
+          {canRequestFreeze && <button id="kayit-dondurma" type="button" className="blue" onClick={() => { setResult(""); setPanel("freeze"); }}>
             <FileIcon name="freeze" /> Kayıt Dondur / Başlat
           </button>}
 
