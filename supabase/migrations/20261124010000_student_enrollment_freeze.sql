@@ -342,4 +342,13 @@ begin
   return least(used_count,e.total_lessons);
 end $function$;
 
+update public.guardian_documents
+set body = replace(body,
+  'Bireysel nedenlerle kayıt dondurma, kullanılmayan dersleri ileri tarihe aktarma veya pakete ek ders tanımlama yapılmaz.',
+  'Her kursiyer yönetici onayıyla bir kez, en fazla bir takvim ayı kayıt dondurabilir. Onaylı dondurma süresindeki ders hakları korunur. Bireysel devamsızlık nedeniyle ders aktarımı veya pakete ek ders tanımlaması yapılmaz.')
+where organization_id = '2aa21b5f-ba88-484e-b450-e50bcc7f2f7d'
+  and title = 'Sprint Yüzme Okulu Kurs Kuralları'
+  and document_type = 'information' and not requires_consent and is_active
+  and body like '%Bireysel nedenlerle kayıt dondurma, kullanılmayan dersleri ileri tarihe aktarma veya pakete ek ders tanımlama yapılmaz.%';
+
 commit;
