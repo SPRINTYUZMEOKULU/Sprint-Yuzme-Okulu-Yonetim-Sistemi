@@ -1,7 +1,7 @@
 "use client";
 
 import { currentRecipient, navigateWhatsapp } from "@/lib/messaging/current-recipient";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 function sanitizeWhatsAppText(value: string) {
   return String(value || "")
@@ -72,9 +72,7 @@ function extractWhatsAppPayload(input: string | URL) {
 
 const recentlyLogged = new Map<string, number>();
 
-type PortalCopy = { studentId: string; message: string; deliveryId: string };
-
-function logWhatsAppInteraction(input: string | URL, offerPortalCopy: (copy: PortalCopy) => void) {
+function logWhatsAppInteraction(input: string | URL) {
   if (!isWhatsAppUrl(input)) return;
   // The ready-message queue logs explicit student IDs and delivery confirmation itself.
   if (window.location.pathname === "/hazir-mesajlar") return;
@@ -98,47 +96,10 @@ function logWhatsAppInteraction(input: string | URL, offerPortalCopy: (copy: Por
       sourcePath: `${window.location.pathname}${window.location.search}`,
     }),
     keepalive: true,
-  }).then(async response => {
-    if (!response.ok || /şifre|sifre|password|doğrulama kodu|giriş bilg|giris bilg|\/s[#/?]|[?&](?:token|code)=/iu.test(payload.message)) return;
-    const result = await response.json();
-    if (result?.studentId) {
-      offerPortalCopy({ studentId: result.studentId, message: payload.message, deliveryId: result.messageLogId || crypto.randomUUID() });
-    }
   }).catch(() => undefined);
 }
 
 export default function WhatsAppSafeOpen() {
-  const [copy, setCopy] = useState<PortalCopy | null>(null);
-  const [sending, setSending] = useState(false);
-  const [feedback, setFeedback] = useState("");
-
-  function offerPortalCopy(next: PortalCopy) {
-    setCopy(next);
-    setFeedback("");
-  }
-
-  async function sendPortalCopy() {
-    if (!copy || sending) return;
-    setSending(true);
-    setFeedback("");
-    try {
-      const response = await fetch("/api/message-center/portal", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "SPRINT Yüzme Okulu", deliveryId: copy.deliveryId, messages: [copy] }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Uygulama gönderimi tamamlanamadı.");
-      setFeedback(result.saved
-        ? result.failed ? "Mesaj uygulamaya kaydedildi. Cihaz bildirimi tamamlanamadı." : "Mesaj uygulamaya kaydedildi."
-        : result.failed ? "Uygulama gönderimi tamamlanamadı. Tekrar deneyin." : "Bu mesaj için uygun bir portal alıcısı bulunamadı.");
-      if (!result.failed) setCopy(null);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Uygulama gönderimi tamamlanamadı.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   useEffect(() => {
     const originalOpen = window.open;
 
@@ -156,7 +117,7 @@ export default function WhatsAppSafeOpen() {
         const payload=extractWhatsAppPayload(safeUrl);
         void currentRecipient(studentId,payload.recipient).then(recipient=>{
           const resolved=`https://wa.me/${recipient}?text=${encodeURIComponent(payload.message)}`;
-          logWhatsAppInteraction(resolved, offerPortalCopy);
+          logWhatsAppInteraction(resolved);
           navigateWhatsapp(popup,resolved);
         }).catch(error=>{popup?.close();window.alert(error.message);});
         return popup;
@@ -166,7 +127,7 @@ export default function WhatsAppSafeOpen() {
         // a usable handle, then sever its opener before navigation.
         const popup=originalOpen.call(window,"about:blank","_blank");
         if(popup)popup.opener=null;
-        logWhatsAppInteraction(safeUrl, offerPortalCopy);
+        logWhatsAppInteraction(safeUrl);
         navigateWhatsapp(popup,String(safeUrl));
         return popup;
       }
@@ -186,7 +147,7 @@ export default function WhatsAppSafeOpen() {
       }
       const safeHref = sanitizeWhatsAppUrl(anchor.href);
       if (safeHref !== anchor.href) anchor.href = safeHref;
-      logWhatsAppInteraction(safeHref, offerPortalCopy);
+      logWhatsAppInteraction(safeHref);
     };
 
     document.addEventListener("click", onClick, true);
@@ -197,12 +158,5 @@ export default function WhatsAppSafeOpen() {
     };
   }, []);
 
-  if (!copy && !feedback) return null;
-  return (
-    <aside aria-label="SprintOS mesajı" style={{ position: "fixed", bottom: 24, right: 16, zIndex: 1000, maxWidth: "calc(100vw - 32px)", padding: 16, borderRadius: 12, background: "#10243b", color: "white", boxShadow: "0 8px 32px #0004" }}>
-      {copy && <button type="button" disabled={sending} onClick={sendPortalCopy}>{sending ? "Gönderiliyor…" : "Uygulamaya da Gönder"}</button>}
-      <button type="button" disabled={sending} aria-label="Mesaj seçeneğini kapat" onClick={() => { setCopy(null); setFeedback(""); }}>Kapat</button>
-      {feedback && <p role="status">{feedback}</p>}
-    </aside>
-  );
+  return null;
 }

@@ -300,7 +300,9 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       navigateWhatsapp(popup,`https://wa.me/${item.phone}?text=${encodeURIComponent(item.message)}`);
       setQueue(next.map((q,i)=>i===index?{...q,status:"opened"}:q));
       popup=null;
-      try{await recordQueueEvent(item,"opened");}
+      try{
+        if (await recordQueueEvent(item,"opened")) setPortalResult("Uygulama kopyası veya cihaz bildirimi tamamlanamadı.");
+      }
       catch{setQueueError("WhatsApp açıldı; geçmiş kaydı henüz alınamadı. Gönderimi onayladığınızda yeniden kaydedilecek.");}
     }catch(error){
       popup?.close();
@@ -422,7 +424,7 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
           {portalSending ? "Uygulamaya gönderiliyor…" : "Uygulamadan Gönder"}
         </button>
         {portalResult && <p className={styles.note} role="status">{portalResult}</p>}
-        <p className={styles.note}>WhatsApp gönderimi onaylandığında mesaj SprintOS’a da eklenir.</p>
+        <p className={styles.note}>WhatsApp mesajı açıldığında SprintOS kopyası otomatik gönderilir.</p>
         {whatsappApiReady ? <button className={styles.whatsapp} disabled={apiSending||!sendableCount} onClick={sendViaApi}>{apiSending?"Toplu gönderiliyor…":`${sendableCount} Kişiye Toplu Gönder`}</button> : <button className={styles.whatsapp} onClick={buildQueue} disabled={queue.length>0||!sendableCount}>{sendableCount} Kişilik WhatsApp Kuyruğu Oluştur</button>}
         {apiResult&&<div className={apiResult.includes("başarısız")?styles.error:styles.success}>{apiResult}</div>}
         <p className={styles.note}>{whatsappApiReady?"API aktif olduğunda gönderim sunucu üzerinden yapılır. Meta'nın müşteri hizmeti penceresi ve onaylı şablon kuralları yine geçerlidir.":"Gerçek tek-tuş toplu gönderim için Meta WhatsApp Business Cloud API telefon numarası ve erişim anahtarı Vercel ortam değişkenlerine bağlanmalıdır. API hazır olana kadar güvenli gönderim kuyruğu kullanılabilir."}</p>
