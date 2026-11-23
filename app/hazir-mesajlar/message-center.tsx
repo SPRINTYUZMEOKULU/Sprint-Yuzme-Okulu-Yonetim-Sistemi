@@ -18,7 +18,7 @@ type Student = { id:string; first_name:string; last_name:string; phone?:string|n
 type Membership = { student_id:string; group_id:string; is_active:boolean };
 type AttendancePlan = { student_id:string; group_id?:string|null; selected_weekdays?:number[]|null; is_active:boolean };
 type Props = { templates?:SprintMessageTemplate[]; branches:Branch[]; groups:Group[]; schedules:Schedule[]; students:Student[]; memberships:Membership[]; attendancePlans:AttendancePlan[]; whatsappApiReady?:boolean };
-type QueueItem = { interactionId?:string; templateKey?:string; templateTitle?:string; studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
+type QueueItem = { interactionId?:string; portalDeliveryId?:string; templateKey?:string; templateTitle?:string; studentId:string; studentName:string; phone:string; message:string; status:"waiting"|"opened"|"sent"|"error" };
 
 const STATUS_LABELS:Record<string,string>={sent:"Gönderildi",confirmed:"Gönderim onaylandı",opened:"WhatsApp açıldı · Onay bekliyor",failed:"Gönderilemedi",prepared:"Hazırlandı"};
 const CATEGORY_LABELS:Record<string,string>={registration:"Kayıt ve yenileme",lesson:"Ders ve katılım",payment:"Ödeme ve banka",operation:"Program ve duyurular",gift:"Hediye ders",general:"Genel iletişim"};
@@ -107,6 +107,10 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       setSelected(restored.map((q:QueueItem)=>q.studentId));
     }catch{ /* Ignore an unavailable or invalid saved queue. */ }
   },[students]);
+  const deliveryDraft = useRef<{ key: string; id: string } | null>(null);
+  const portalSendingLock = useRef(false);
+  const [portalSending, setPortalSending] = useState(false);
+  const [portalResult, setPortalResult] = useState("");
   const [apiSending,setApiSending] = useState(false);
   const [apiResult,setApiResult] = useState<string>("");
   const [pending,startTransition] = useTransition();
@@ -188,6 +192,46 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
 
   function toggleStudent(id:string){ setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]); setQueue([]); }
 
+  function portalPayload(){
+    const title = templates.find(template => template.key === templateKey)?.title || "SPRINT Yüzme Okulu";
+    const messages = activeStudents.map(student => ({
+      studentId: student.id,
+      message: renderSprintMessage(message, variablesFor(student)) + (mediaUrl ? `\n\n${mediaUrl}` : ""),
+    }));
+    const key = JSON.stringify([title, messages]);
+    if (deliveryDraft.current?.key !== key) deliveryDraft.current = { key, id: crypto.randomUUID() };
+    return { title, messages, deliveryId: deliveryDraft.current.id };
+  }
+
+  async function sendToPortal(){
+    if (portalSendingLock.current || !validateMessage() || !activeStudents.length) return;
+    const { title, messages, deliveryId } = portalPayload();
+    if (!window.confirm(`${messages.length} kursiyerin bağlı portal hesaplarına mesaj gönderilsin mi?`)) return;
+    portalSendingLock.current = true;
+    setPortalSending(true);
+    const total = { saved: 0, push: 0, skipped: 0, failed: 0 };
+    try {
+      for (let index = 0; index < messages.length; index += 20) {
+        const response = await fetch("/api/message-center/portal", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, deliveryId, messages: messages.slice(index, index + 20) }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Uygulama gönderimi tamamlanamadı.");
+        total.saved += result.saved;
+        total.push += result.push;
+        total.skipped += result.skipped;
+        total.failed += result.failed;
+      }
+      setPortalResult(`${total.saved} portal mesajı · ${total.push} cihaz bildirimi · ${total.skipped} atlandı · ${total.failed} işlem hatası`);
+    } catch (error) {
+      setPortalResult(`${total.saved} portal mesajı işlendi. ${error instanceof Error ? error.message : "Gönderim tamamlanamadı."}`);
+    } finally {
+      portalSendingLock.current = false;
+      setPortalSending(false);
+    }
+  }
+
   function buildQueue(){
     if(!validateMessage())return;
     const previous=queueRef.current;
@@ -198,8 +242,9 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
         : `Gönderim devam ediyor (${confirmed}/${previous.length} onaylandı). Aynı kişilere tekrar mesaj açılmaması için mevcut kuyruktan devam edin.`);
       return;
     }
+    const { deliveryId } = portalPayload();
     const prepared:QueueItem[] = activeStudents.map(s=>({
-      interactionId:crypto.randomUUID(), templateKey, templateTitle:templates.find(t=>t.key===templateKey)?.title,
+      portalDeliveryId:deliveryId, interactionId:crypto.randomUUID(), templateKey, templateTitle:templates.find(t=>t.key===templateKey)?.title,
       studentId:s.id,
       studentName:studentName(s),
       phone:cleanPhone(s.guardian_phone)||cleanPhone(s.phone),
@@ -217,10 +262,11 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
       method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
       body:JSON.stringify({studentId:item.studentId,recipient:item.phone,message:item.message,
         sourcePath:"/hazir-mesajlar",queueEvent:event,interactionId:item.interactionId,
-        templateKey:item.templateKey,templateTitle:item.templateTitle}),
+        templateKey:item.templateKey,templateTitle:item.templateTitle,portalDeliveryId:item.portalDeliveryId}),
     });
     const data=await response.json().catch(()=>null);
     if(!response.ok||!data?.ok)throw new Error(data?.message||"Mesaj geçmişi kaydedilemedi. Tekrar deneyin.");
+    return data.portalFailed === true;
   }
 
   async function advanceQueue(){
@@ -243,7 +289,8 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
     queueBusyRef.current=true;setQueueBusy(true);
     try{
       if(opened>=0){
-        await recordQueueEvent(next[opened],"confirmed");
+        const portalFailed = await recordQueueEvent(next[opened],"confirmed");
+        if (portalFailed) setPortalResult("WhatsApp onaylandı. Uygulama kopyası veya cihaz bildirimi tamamlanamadı.");
         next=next.map((q,i)=>i===opened?{...q,status:"sent" as const}:q);
         setQueue(next);
       }
@@ -273,10 +320,11 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
     if(!window.confirm(`${payload.length} kişiye WhatsApp Business API üzerinden gönderim başlatılsın mı?`)) return;
     setApiSending(true); setApiResult("");
     try{
-      const res=await fetch("/api/whatsapp/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:payload,templateKey,mediaUrl:mediaUrl||null})});
+      const res=await fetch("/api/whatsapp/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:payload,templateKey,mediaUrl:mediaUrl||null,portalDeliveryId:portalPayload().deliveryId})});
       const data=await res.json();
       if(!res.ok) throw new Error(data?.message||"WhatsApp gönderimi başarısız.");
-      setApiResult(`${data.sent||0} gönderildi${data.failed?`, ${data.failed} başarısız`:""}.`);
+      setApiResult(`${data.sent||0} WhatsApp mesajı gönderildi${data.failed?`, ${data.failed} başarısız`:""}.`);
+      if (data.portalFailed) setPortalResult(`${data.portalFailed} uygulama kopyası veya cihaz bildirimi tamamlanamadı.`);
     }catch(error){ setApiResult(error instanceof Error?error.message:"WhatsApp gönderimi başarısız."); }
     finally{ setApiSending(false); }
   }
@@ -370,6 +418,11 @@ export default function MessageCenter({templates=SPRINT_MESSAGE_TEMPLATES,branch
           </div>
         </div>
         <div className={styles.sendBox}><div><b>{whatsappApiReady?"WhatsApp Business API hazır":"Manuel gönderim kuyruğu hazır"}</b><small>{sendableCount} gönderilebilir · {missingPhoneCount} telefon eksik</small></div></div>
+        <button className={styles.primary} disabled={portalSending || !activeStudents.length} onClick={sendToPortal}>
+          {portalSending ? "Uygulamaya gönderiliyor…" : "Uygulamadan Gönder"}
+        </button>
+        {portalResult && <p className={styles.note} role="status">{portalResult}</p>}
+        <p className={styles.note}>WhatsApp gönderimi onaylandığında mesaj SprintOS’a da eklenir.</p>
         {whatsappApiReady ? <button className={styles.whatsapp} disabled={apiSending||!sendableCount} onClick={sendViaApi}>{apiSending?"Toplu gönderiliyor…":`${sendableCount} Kişiye Toplu Gönder`}</button> : <button className={styles.whatsapp} onClick={buildQueue} disabled={queue.length>0||!sendableCount}>{sendableCount} Kişilik WhatsApp Kuyruğu Oluştur</button>}
         {apiResult&&<div className={apiResult.includes("başarısız")?styles.error:styles.success}>{apiResult}</div>}
         <p className={styles.note}>{whatsappApiReady?"API aktif olduğunda gönderim sunucu üzerinden yapılır. Meta'nın müşteri hizmeti penceresi ve onaylı şablon kuralları yine geçerlidir.":"Gerçek tek-tuş toplu gönderim için Meta WhatsApp Business Cloud API telefon numarası ve erişim anahtarı Vercel ortam değişkenlerine bağlanmalıdır. API hazır olana kadar güvenli gönderim kuyruğu kullanılabilir."}</p>

@@ -6,11 +6,11 @@ const {stripTypeScriptTypes}=require('node:module');
 const {createHash}=require('node:crypto');
 const root=path.join(__dirname,'..');
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
-function compileRoute(p,name,client){
+function compileRoute(p,name,client,deliverPortalMessage=async()=>({failed:0})){
   const source=read(p).replace(/^import .*;\n/gm,'').replace('export async function '+name,'async function '+name);
-  return new Function('NextResponse','requireProfile','createClient','createHash',stripTypeScriptTypes(source)+';return '+name)(
+  return new Function('NextResponse','requireProfile','createClient','createHash','deliverPortalMessage','messageDeliveryIdPattern',stripTypeScriptTypes(source)+';return '+name)(
     {json:(data,options={})=>({status:options.status||200,data})},
-    async()=>({id:'staff',organization_id:'org'}),async()=>client,createHash);
+    async()=>({id:'staff',organization_id:'org'}),async()=>client,createHash,deliverPortalMessage,/^[0-9a-f-]{36}$/i);
 }
 function database(){
  const tables={students:[{id:'student-a',organization_id:'org'},{id:'student-b',organization_id:'org'}],message_logs:[],student_contact_logs:[],student_activity_logs:[]};
@@ -26,12 +26,17 @@ function database(){
 }
 const payload={studentId:'student-a',recipient:'05000000000',message:'Test message',sourcePath:'/hazir-mesajlar',interactionId:'10000000-0000-4000-8000-000000000001',templateKey:'payment',templateTitle:'Ödeme Bilgilendirmesi'};
 test('queue logs opened separately, confirms once, and never downgrades sent',async()=>{
- const db=database(),post=compileRoute('app/api/whatsapp-interactions/route.ts','POST',db);
+ const deliveries=[];
+ const db=database(),post=compileRoute('app/api/whatsapp-interactions/route.ts','POST',db,async input=>{deliveries.push(input);return {failed:0};});
  const send=body=>post({json:async()=>body});
  assert.equal((await send({...payload,queueEvent:'opened'})).status,200);
+ assert.equal(deliveries.length,0);
  assert.equal(db.tables.message_logs[0].status,'opened');assert.equal(db.tables.student_contact_logs.length,0);
  assert.equal((await send({...payload,queueEvent:'confirmed'})).status,200);
  await send({...payload,queueEvent:'confirmed'});await send({...payload,queueEvent:'opened'});
+ assert.equal(deliveries.length,2);
+ assert.equal(deliveries[0].deliveryId,deliveries[1].deliveryId);
+ assert.equal(deliveries[0].message,payload.message);
  assert.equal(db.tables.message_logs.length,1);assert.equal(db.tables.message_logs[0].status,'sent');
  assert.equal(db.tables.message_logs[0].metadata.delivery_confirmation,'manual_confirmed');
  assert.equal(db.tables.student_contact_logs.length,1);assert.equal(db.tables.student_activity_logs.length,1);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "@/lib/auth/profile";
+import { deliverPortalMessage, messageDeliveryIdPattern } from "@/lib/messaging/deliver-portal-message";
 import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_ROLES = ["owner","admin","branch_manager","registration_staff"] as const;
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as {
     messages?: BulkMessage[];
     templateKey?: string;
+    portalDeliveryId?: string;
     mediaUrl?: string | null;
   } | null;
 
@@ -142,6 +144,7 @@ export async function POST(request: Request) {
     error?: string;
   }> = [];
 
+  let portalFailed = 0;
   for (const item of verified) {
     try {
       if (mediaUrl) {
@@ -191,6 +194,21 @@ export async function POST(request: Request) {
         providerMessageId,
         error,
       });
+
+      if (textResult.ok && (providerMessageId || body?.portalDeliveryId)) {
+        try {
+          const deliveryId = messageDeliveryIdPattern.test(body?.portalDeliveryId || "") ? body!.portalDeliveryId! : providerMessageId;
+          if (deliveryId) {
+            const delivery = await deliverPortalMessage({
+              organizationId, studentId: item.studentId, actorId: profile.id, deliveryId,
+              title: "SPRINT Yüzme Okulu", message: item.message,
+            });
+            if (delivery.failed) portalFailed++;
+          }
+        } catch {
+          portalFailed++;
+        }
+      }
 
       const status = textResult.ok ? "sent" : "failed";
       const metadata = {
@@ -312,6 +330,7 @@ export async function POST(request: Request) {
     sent,
     failed,
     rejected: rejectedCount,
+    portalFailed,
     attempted: results.length,
     message:
       failed === 0 && rejectedCount === 0
