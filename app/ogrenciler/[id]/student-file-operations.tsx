@@ -3,6 +3,7 @@
 import { reviewCollection } from "@/lib/payments/collection-review";
 
 import PaymentInfoShortcut from "../../components/payment-info-shortcut";
+import EnrollmentFreezeForm from "./enrollment-freeze-form";
 import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { portalCredentialContact } from "@/app/veliler/portal-credential-actions";
@@ -55,6 +56,7 @@ type Props = {
   };
   guardianCenterHref?: string;
   enrollmentId?: string | null;
+  canRequestFreeze?: boolean;
   activeWeekdays?: number[];
   remainingPayment?: number;
   totalReceived?: number;
@@ -98,7 +100,7 @@ function normalizePhone(value?: string | null) {
 }
 
 type FileIconName =
-  "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print" | "key" | "users";
+  "freeze" | "edit" | "transfer" | "plus" | "message" | "wallet" | "trash" | "print" | "key" | "users";
 function FileIcon({ name }: { name: FileIconName }) {
   const base = {
     width: 18,
@@ -112,6 +114,7 @@ function FileIcon({ name }: { name: FileIconName }) {
     "aria-hidden": true,
   };
   const p: Record<FileIconName, ReactNode> = {
+    freeze: <><circle cx="12" cy="12" r="9" /><path d="M10 9v6m4-6v6" /></>,
     users: (<><circle cx="9" cy="7" r="4" /><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2m6 0v-2a4 4 0 0 0-3-4m-3-12a4 4 0 0 1 0 8" /></>),
     key: (<><circle cx="8" cy="9" r="4" /><path d="m11 12 9 9m-3-3 3-3m-6 0 3-3" /></>),
     edit: (
@@ -169,6 +172,7 @@ export default function StudentFileOperations({
   student,
   guardianCenterHref,
   enrollmentId,
+  canRequestFreeze,
   activeWeekdays = [],
   remainingPayment = 0,
   totalReceived = 0,
@@ -180,7 +184,7 @@ export default function StudentFileOperations({
   const router = useRouter();
 
   const [panel, setPanel] = useState<
-    "payment" | "transfer" | "compensation" | "message" | "delete" | null
+    "payment" | "transfer" | "compensation" | "message" | "freeze" | "delete" | null
   >(null);
 
   const [portalOpen, setPortalOpen] = useState(false);
@@ -614,6 +618,10 @@ export default function StudentFileOperations({
             <FileIcon name="plus" /> Bireysel Telafi
           </button>
 
+          {canRequestFreeze && <button id="kayit-dondurma" type="button" className="blue" onClick={() => { setResult(""); setPanel("freeze"); }}>
+            <FileIcon name="freeze" /> Kayıt Dondur / Başlat
+          </button>}
+
           <button type="button" className="orange" onClick={openMessage}>
             <FileIcon name="message" /> Mesaj / WhatsApp
           </button>
@@ -736,7 +744,7 @@ export default function StudentFileOperations({
       {panel && (
         <div className="fileOpsOverlay" onClick={() => setPanel(null)}>
           <aside
-            className="fileOpsPanel"
+            className="fileOpsPanel" role="dialog" aria-modal="true" aria-labelledby="file-action-title"
             onClick={(event) => event.stopPropagation()}
           >
             <header>
@@ -750,9 +758,10 @@ export default function StudentFileOperations({
                         ? "BİREYSEL TELAFİ"
                         : panel === "message"
                           ? "İLETİŞİM MERKEZİ"
+                          : panel === "freeze" ? "KAYIT DONDURMA VE YENİDEN BAŞLATMA"
                           : "YÖNETİCİ ONAYLI ARŞİVLEME"}
                 </span>
-                <h3>{fullName}</h3>
+                <h3 id="file-action-title">{fullName}</h3>
               </div>
               <button type="button" onClick={() => setPanel(null)}>
                 ×
@@ -965,6 +974,8 @@ export default function StudentFileOperations({
                 </>
               )}
 
+              {panel === "freeze" && <EnrollmentFreezeForm studentId={student.id} enrollmentId={enrollmentId} phone={phone} />}
+
               {panel === "message" && (
                 <>
                   <div className="proInfo whatsappInfo">
@@ -1038,7 +1049,7 @@ export default function StudentFileOperations({
                 className="ghost"
                 onClick={() => setPanel(null)}
               >
-                Vazgeç
+                {panel === "freeze" ? "Kapat" : "Vazgeç"}
               </button>
 
               {panel === "transfer" && (
@@ -1531,6 +1542,18 @@ export default function StudentFileOperations({
           font-weight: 800;
         }
 
+        .fileOpsFreezeForm, .fileOpsFreezeDates {
+          display: grid;
+          gap: 14px;
+        }
+        .fileOpsFreezeDates {
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+        }
+        .fileOpsFreezeForm button {
+          background: #175da8;
+          color: #fff;
+          padding: 12px 16px;
+        }
         .fileOpsPanel > footer {
           display: flex;
           justify-content: flex-end;

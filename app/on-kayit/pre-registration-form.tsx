@@ -1480,9 +1480,9 @@ export default function PreRegistrationForm() {
 
             <p>
               <strong>2. Kayıt dondurma ve ders ekleme:</strong>{" "}
-              Bireysel nedenlerle kayıt dondurma,
-              kullanılmayan dersleri ileri tarihe aktarma
-              veya pakete ek ders tanımlama yapılmaz.
+              Her kursiyer yönetici onayıyla bir kez, en fazla bir takvim ayı kayıt dondurabilir.
+              Onaylı dondurma süresindeki ders hakları korunur.
+              Bireysel devamsızlık nedeniyle ders aktarımı veya pakete ek ders tanımlaması yapılmaz.
             </p>
 
             <p>

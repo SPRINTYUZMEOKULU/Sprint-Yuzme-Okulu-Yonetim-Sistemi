@@ -1,3 +1,5 @@
+import { publishEnrollmentFreeze } from "@/lib/messaging/publish-enrollment-freeze";
+import { enrollmentFreezeMessage } from "@/lib/messaging/enrollment-freeze-message";
 import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
@@ -519,6 +521,31 @@ export async function POST(request: NextRequest) {
       const oldValues = asObject(approvalRequest.old_values);
       const newValues = asObject(approvalRequest.new_values);
       const decidedAt = new Date().toISOString();
+
+      if (requestType === "enrollment_freeze") {
+        const { data: item, error } = await supabase.rpc("process_enrollment_freeze", {
+          p_action: action, p_id: id, p_note: reviewNote,
+        });
+        if (error) return NextResponse.json({
+          ok: false, error: error.code === "P0001" ? error.message : "Dondurma talebi sonuçlandırılamadı.",
+        }, { status: 409 });
+
+        revalidateStudentSurfaces(item.student_id);
+        const title = item.status === "approved" ? "Kayıt dondurma onaylandı" : "Kayıt dondurma reddedildi";
+        const [delivery] = await Promise.all([
+          publishEnrollmentFreeze(organizationId, actorId, item),
+          publishEventNotification({
+            organization_id: organizationId, recipient_profile_id: item.requested_by,
+            student_id: item.student_id, created_by: actorId, category: "approvals",
+            source_type: "approval_request", source_id: id, event_key: `enrollment_freeze_${item.status}`,
+            title, message: enrollmentFreezeMessage(item.status, item.new_values),
+            target_path: `/ogrenciler/${item.student_id}`,
+          }),
+        ]);
+        return NextResponse.json({ ok: true, action: item.status, source, id,
+          student_id: item.student_id, suggested_message: enrollmentFreezeMessage(item.status, item.new_values),
+          message: `${title}. ${delivery}` });
+      }
 
       /* ---------------- REDDET ---------------- */
 
@@ -2272,7 +2299,9 @@ export async function GET(request: NextRequest) {
           student,
           recipient_phone: recipient.phone,
           recipient_type: recipient.type,
-          suggested_message: buildSuggestedMessage({
+          suggested_message: item.request_type === "enrollment_freeze"
+            ? enrollmentFreezeMessage(item.status, newValues)
+            : buildSuggestedMessage({
             student,
             requestType: item.request_type ?? "approval_request",
             source: "approval_request",

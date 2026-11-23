@@ -58,6 +58,7 @@ type ApprovalRequest = {
 };
 
 type ApiResponse = {
+  suggested_message?: string;
   ok: boolean;
   error?: string;
   details?: string;
@@ -304,9 +305,10 @@ export default function ApprovalCenterClientV2({initialStatus,initialRequestId,i
       if (!response.ok || !data.ok) throw new Error(data.details || data.error || "İşlem tamamlanamadı.");
       setSuccessMessage(data.message || (action === "approve" ? "Talep onaylandı." : "Talep reddedildi."));
       await loadRequests();
-      if (action === "approve" && request.recipient_phone && request.suggested_message) {
+      const whatsappMessage = data.suggested_message || request.suggested_message;
+      if (action === "approve" && request.recipient_phone && whatsappMessage) {
         const send = window.confirm("Talep onaylandı.\n\nKursiyere / veliye WhatsApp bilgilendirme mesajı göndermek ister misiniz?");
-        if (send) window.open(createWhatsAppUrl(request.recipient_phone, request.suggested_message), "_blank", "noopener,noreferrer");
+        if (send) window.open(createWhatsAppUrl(request.recipient_phone, whatsappMessage), "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "İşlem sırasında hata oluştu.");

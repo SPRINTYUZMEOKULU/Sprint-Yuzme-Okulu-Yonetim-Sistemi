@@ -391,6 +391,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         continue;
       }
 
+      if (enrollment.freeze_resume_date && input.effectiveDate < enrollment.freeze_resume_date) {
+        failed.push({ studentId, reason: "Aktarım tarihini onaylı dondurma sonrasına planlayın." });
+        continue;
+      }
+
       const oldTotalLessons = Math.max(Number(enrollment.total_lessons || 0), 0);
       const usedLessons = Math.max(Number(enrollment.used_lessons || 0), 0);
       const oldRemainingLessons = Math.max(oldTotalLessons - usedLessons, 0);

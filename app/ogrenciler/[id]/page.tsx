@@ -818,6 +818,7 @@ export default async function StudentFile({
           group_id: groupInfo?.id ?? null,
           group_name: activeGroupName || null,
         }}
+        canRequestFreeze={["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)}
         enrollmentId={enrollment?.id ?? null}
         activeWeekdays={planDays}
         totalReceived={activeEnrollmentTotalReceived}
