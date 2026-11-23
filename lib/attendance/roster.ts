@@ -1,4 +1,4 @@
-type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
+type Enrollment={id:string;freeze_start_date?:string|null;freeze_resume_date?:string|null;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Student={id:string;status?:string|null;first_name?:string|null;last_name?:string|null};
 type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolean|null};
 type Compensation={enrollment_id?:string|null;student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
@@ -8,6 +8,9 @@ function newestEnrollment(rows:Enrollment[]){return [...rows].sort((a,b)=>enroll
 
 // Shared by the daily attendance screen and dashboard counters.
 export function attendanceRoster<S extends Student,E extends Enrollment>(p:{students:S[];enrollments:E[];memberships:Membership[];compensationLessons:Compensation[]},groupId:string,scheduleId:string,date:string,day:number){
+   const frozenStudentIds = new Set(p.enrollments.filter(e =>
+     e.freeze_start_date && e.freeze_resume_date && date >= e.freeze_start_date && date < e.freeze_resume_date
+   ).map(e => e.student_id));
    const enrollmentRows=p.enrollments.filter(e=>e.group_id===groupId&&["active","scheduled"].includes(e.status||"")&&(!e.start_date||e.start_date<=date)&&(!e.planned_end_date||date<=e.planned_end_date));
    const enrollmentByStudent=new Map<string,E>();
    for(const enrollment of enrollmentRows){const studentId=enrollment.student_id||"";if(!studentId)continue;const current=enrollmentByStudent.get(studentId);enrollmentByStudent.set(studentId,current?newestEnrollment([current,enrollment]) as E:enrollment)}
@@ -20,7 +23,7 @@ export function attendanceRoster<S extends Student,E extends Enrollment>(p:{stud
      const source=c.enrollment_id?sourceEnrollments.get(c.enrollment_id):undefined;
      return (!source || ((!source.start_date || source.start_date<=date) &&
        (!source.start_confirmation_required || Boolean(source.actual_started_at)))) && ["planned","completed"].includes(c.status)&&c.target_group_id===groupId&&c.lesson_date===date&&(!c.target_schedule_id||c.target_schedule_id===scheduleId);}).map(c=>c.student_id));
-   const ids=new Set([...memberIds,...compensationIds]);
+   const ids=new Set([...memberIds,...compensationIds].filter(id => !frozenStudentIds.has(id)));
    const students=p.students.filter(s=>{const e=enrollmentByStudent.get(s.id);const priorCompensation=compensationIds.has(s.id)&&p.compensationLessons.some(c=>c.student_id===s.id&&c.enrollment_id&&c.enrollment_id!==e?.id&&["planned","completed"].includes(c.status)&&c.target_group_id===groupId&&c.lesson_date===date&&(!c.target_schedule_id||c.target_schedule_id===scheduleId));return priorCompensation||!e?.start_confirmation_required||Boolean(e.actual_started_at)}).filter(s=>ids.has(s.id)&&String(s.status||"active").toLocaleLowerCase("tr-TR")!=="passive").sort((a,b)=>`${a.first_name||""} ${a.last_name||""}`.trim().localeCompare(`${b.first_name||""} ${b.last_name||""}`.trim(),"tr"));
    return {students,enrollmentByStudent,compensationIds};
 }
