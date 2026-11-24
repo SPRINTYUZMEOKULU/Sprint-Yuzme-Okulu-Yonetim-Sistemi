@@ -1,4 +1,5 @@
-import { createNotification } from "@/lib/notifications/create-notification";
+import { readSettings } from "@/lib/settings/server";
+import { createNotification, notificationDedupeId } from "@/lib/notifications/create-notification";
 import { loadAttendanceEligibility, missingAttendanceStudents } from "@/lib/notifications/attendance-eligibility";
 // @ts-nocheck
 import { NextResponse } from "next/server";
@@ -37,9 +38,11 @@ export async function GET(){
     const error=scheduleResult.error||attendanceResult.error||historyResult.error||groupResult.error||studentResult.error||existingMissingResult.error||existingFirstResult.error;
     if(error)return NextResponse.json({ok:false,error:error.message},{status:500});
 
-    const eligibility=await loadAttendanceEligibility(supabase,organizationId);
-    const attendedScheduleIds=new Set((attendanceResult.data||[]).map((r:any)=>String(r.schedule_id||"")).filter(Boolean));
-    const attendedGroupIds=new Set((attendanceResult.data||[]).map((r:any)=>String(r.group_id||"")).filter(Boolean));
+    const [eligibility, {values: settings}]=await Promise.all([
+      loadAttendanceEligibility(supabase,organizationId),
+      readSettings(supabase,organizationId,"ders"),
+    ]);
+    const warningMinutes=Number(settings.missing_alert_minutes);
     const groupMap=new Map((groupResult.data||[]).map((g:any)=>[String(g.id),g.name||"Grup"]));
     const studentMap=new Map((studentResult.data||[]).map((s:any)=>[String(s.id),`${s.first_name||""} ${s.last_name||""}`.trim()||"Kursiyer"]));
     const key=(scheduleId:any,date:any)=>`${String(scheduleId||"")}:${String(date||"")}`;
@@ -47,7 +50,7 @@ export async function GET(){
 
     const overdue=(scheduleResult.data||[]).filter((s:any)=>{
       const start=minutes(s.start_time);
-      if(now.minutes<start+15)return false;
+      if(!settings.missing_alert_enabled || now.minutes<start+warningMinutes)return false;
       return missingAttendanceStudents(eligibility,s,now.date,attendanceResult.data||[]).length>0;
     });
 
@@ -65,7 +68,7 @@ export async function GET(){
         category:"attendance",
         event_key:"attendance_missing",
         title:"Yoklama alınmadı",
-        body:`${groupName} · ${time} dersi başlayalı 15 dakikadan fazla oldu. Yoklama henüz kaydedilmedi.`,
+        body:`${groupName} · ${time} dersi başlayalı ${warningMinutes} dakikadan fazla oldu. Yoklama henüz kaydedilmedi.`,
         message:`${groupName} · ${time} dersi için yoklama alınmadı.`,
         priority:"high",
         severity:"warning",
@@ -110,6 +113,7 @@ export async function GET(){
           : `${name}, ${groupName} grubundaki ilk dersinde izinli olarak işaretlendi.`;
 
       firstLessonInserts.push({
+        id:notificationDedupeId(organizationId,`first_lesson:${firstKey}`,"organization"),
         organization_id:organizationId,
         recipient_profile_id:null,
         recipient_user_id:null,
@@ -127,7 +131,8 @@ export async function GET(){
         entity_type:"student",
         entity_id:studentId,
         target_path:`/ogrenciler/${encodeURIComponent(studentId)}`,
-        is_read:false,
+        is_read:present,
+        read_at:present ? new Date().toISOString() : null,
         push_required:false,
         push_requested:false,
         metadata:{lesson_date:now.date,group_id:row.group_id,schedule_id:row.schedule_id,status:row.status,first_lesson:true},
@@ -139,7 +144,7 @@ export async function GET(){
       const result=await createNotification({organizationId,title:row.title,body:row.body,category:"attendance",eventKey:"attendance_missing",notificationType:"attendance_missing",priority:"high",severity:"warning",sourceType:"lesson_schedule",sourceId:row.source_id,entityType:"lesson_schedule",entityId:row.entity_id,targetPath:row.target_path,metadata:row.metadata,createdBy:profile.id,push:true});
       if(!result.ok)throw new Error(result.message);
     }
-    if(firstLessonInserts.length){const {error:insertError}=await supabase.from("system_notifications").insert(firstLessonInserts);if(insertError)return NextResponse.json({ok:false,error:insertError.message},{status:500});}
+    if(firstLessonInserts.length){const {error:insertError}=await supabase.from("system_notifications").upsert(firstLessonInserts,{onConflict:"id",ignoreDuplicates:true});if(insertError)return NextResponse.json({ok:false,error:insertError.message},{status:500});}
 
     return NextResponse.json({
       ok:true,

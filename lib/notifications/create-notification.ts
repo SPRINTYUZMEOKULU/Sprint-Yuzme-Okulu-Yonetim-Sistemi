@@ -47,6 +47,7 @@ export type CreateNotificationInput = {
   createdBy?: string | null;
   recipientProfileIds?: string[];
   push?: boolean;
+  historyOnly?: boolean;
   dedupeKey?: string;
 };
 
@@ -99,6 +100,7 @@ type NotificationInsertRow = {
   target_path: string | null;
   event_key: string | null;
   is_read: boolean;
+  read_at?: string;
   push_required: boolean;
   push_requested: boolean;
   push_sent: boolean;
@@ -382,7 +384,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   if (!input.title?.trim()) throw new Error("Bildirim başlığı zorunludur.");
   if (!input.category) throw new Error("Bildirim kategorisi zorunludur.");
 
-  const pushRequested = input.push === true;
+  const pushRequested = input.push === true && !input.historyOnly;
   const severity = input.severity ?? "info";
   const priority = input.priority ?? "normal";
   const notificationType = input.notificationType ?? input.eventKey ?? input.category;
@@ -419,7 +421,8 @@ export async function createNotification(input: CreateNotificationInput): Promis
     entity_id: input.entityId ?? null,
     target_path: input.targetPath ?? "/bildirimler",
     event_key: input.eventKey ?? null,
-    is_read: false,
+    is_read: input.historyOnly === true,
+    ...(input.historyOnly ? { read_at: new Date().toISOString() } : {}),
     push_required: route.pushEnabled,
     push_requested: pushRequested,
     push_sent: false,
