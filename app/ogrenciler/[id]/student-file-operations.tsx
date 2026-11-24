@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { portalCredentialContact } from "@/app/veliler/portal-credential-actions";
 import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
 import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { prepareGuardianAccountBatch, type GuardianBulkResult } from "../../veliler/ogrenciden-olustur/bulk-account-actions";
@@ -741,7 +742,7 @@ export default function StudentFileOperations({
         </button>
       </nav>
 
-      {panel && (
+      {panel && createPortal(
         <div className="fileOpsOverlay" onClick={() => setPanel(null)}>
           <aside
             className="fileOpsPanel" role="dialog" aria-modal="true" aria-labelledby="file-action-title"
@@ -1112,7 +1113,8 @@ export default function StudentFileOperations({
               )}
             </footer>
           </aside>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <style jsx>{`
@@ -1348,7 +1350,7 @@ export default function StudentFileOperations({
         .fileOpsOverlay {
           position: fixed;
           inset: 0;
-          z-index: 1200;
+          z-index: 10000;
           display: flex;
           justify-content: flex-end;
           background: rgba(5, 22, 42, 0.62);
@@ -1368,7 +1370,8 @@ export default function StudentFileOperations({
           display: flex;
           justify-content: space-between;
           gap: 15px;
-          padding: 23px;
+          padding: max(23px, env(safe-area-inset-top)) 23px 23px;
+          flex-shrink: 0;
           background: linear-gradient(135deg, #082442, #0d5792);
           color: #fff;
         }
@@ -1542,23 +1545,12 @@ export default function StudentFileOperations({
           font-weight: 800;
         }
 
-        .fileOpsFreezeForm, .fileOpsFreezeDates {
-          display: grid;
-          gap: 14px;
-        }
-        .fileOpsFreezeDates {
-          grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-        }
-        .fileOpsFreezeForm button {
-          background: #175da8;
-          color: #fff;
-          padding: 12px 16px;
-        }
         .fileOpsPanel > footer {
           display: flex;
           justify-content: flex-end;
           gap: 9px;
-          padding: 15px 18px;
+          padding: 15px 18px max(15px, env(safe-area-inset-bottom));
+          flex-shrink: 0;
           border-top: 1px solid #d9e3ed;
           background: #fff;
         }

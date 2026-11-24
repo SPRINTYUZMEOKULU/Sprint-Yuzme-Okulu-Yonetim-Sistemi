@@ -356,8 +356,11 @@ export default async function StudentsPage() {
   // Keep the existing SQL consumption rules without updating archived students.
   // Bound concurrency so a larger list cannot flood the database connection pool.
   const currentEnrollments = (enrollmentsResult.data || []).filter((row: any) => row.status === "active");
-  for (let offset = 0; offset < currentEnrollments.length; offset += 8) {
-    await Promise.all(currentEnrollments.slice(offset, offset + 8).map(async (enrollment: any) => {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+  const frozenIds = new Set(currentEnrollments.filter(row => row.freeze_restart_pending && row.freeze_start_date <= today).map(row => row.student_id));
+  const listedEnrollments = currentEnrollments.filter(row => !frozenIds.has(row.student_id));
+  for (let offset = 0; offset < listedEnrollments.length; offset += 8) {
+    await Promise.all(listedEnrollments.slice(offset, offset + 8).map(async (enrollment: any) => {
       const result = await supabase.rpc("scheduled_used_lessons", { p_enrollment_id: enrollment.id });
       if (result.error) throw new Error("Ders sayacı doğrulanamadı: " + result.error.message);
       enrollment.used_lessons = result.data;
@@ -456,7 +459,7 @@ export default async function StudentsPage() {
     }
   }
 
-  const preparedStudents: StudentListItem[] = students.map(
+  const preparedStudents: StudentListItem[] = students.filter(student => !frozenIds.has(student.id)).map(
     (student) => {
       const enrollment = enrollmentMap.get(student.id) as any;
       const membership = membershipMap.get(student.id) as any;
@@ -725,7 +728,7 @@ export default async function StudentsPage() {
       ) : (
         <StudentsClient
           students={preparedStudents}
-          passiveCount={passiveCountResult.count ?? 0}
+          passiveCount={(passiveCountResult.count ?? 0) + frozenIds.size}
           canManageStart={["owner","admin","branch_manager","registration_staff","accounting"].includes(profile.role)}
           branches={branches}
           groups={groups}

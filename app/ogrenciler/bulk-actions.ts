@@ -391,6 +391,11 @@ export async function bulkTransferStudents(input: BulkTransferInput) {
         continue;
       }
 
+      if (enrollment.freeze_restart_pending) {
+        failed.push({ studentId, reason: "Grup veya şube değişikliğinden önce dondurulan kaydı başlatın." });
+        continue;
+      }
+
       if (enrollment.freeze_resume_date && input.effectiveDate < enrollment.freeze_resume_date) {
         failed.push({ studentId, reason: "Aktarım tarihini onaylı dondurma sonrasına planlayın." });
         continue;

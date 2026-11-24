@@ -19,18 +19,24 @@ export default async function PassiveCenterPage({searchParams}:{searchParams:Pro
   const supabase=await createClient();
   const organizationId=profile.organization_id;
 
-  const [studentsRes,branchesRes,groupsRes,membershipsRes,requestsRes,portalLinksRes]=await Promise.all([
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+  const [studentsRes,branchesRes,groupsRes,membershipsRes,requestsRes,portalLinksRes,freezeRes]=await Promise.all([
     supabase.from("students").select("id,first_name,last_name,student_number,status,branch_id,phone,guardian_phone,created_at,is_deleted").eq("organization_id",organizationId).eq("is_deleted",false).in("status",["active","passive"]).order("first_name"),
     supabase.from("branches").select("id,name").eq("organization_id",organizationId),
     supabase.from("training_groups").select("id,name").eq("organization_id",organizationId),
     supabase.from("student_group_memberships").select("student_id,group_id,started_at").eq("organization_id",organizationId).eq("is_active",true).order("started_at",{ascending:false}),
     supabase.from("student_status_change_requests").select("id,student_id,request_type,reason,description,status,requested_at,created_at,reviewed_at").eq("organization_id",organizationId).in("request_type",["deactivate","activate"]).order("created_at",{ascending:false}),
     supabase.from("guardian_students").select("student_id,portal_access"),
+    supabase.from("student_enrollments").select("id,student_id,freeze_start_date,freeze_resume_date")
+      .eq("organization_id",organizationId).eq("status","active").eq("freeze_restart_pending",true)
+      .lte("freeze_start_date",today),
   ]);
 
   if(studentsRes.error)throw new Error("Kursiyer listesi alınamadı: "+studentsRes.error.message);
   if(requestsRes.error)throw new Error("Durum talepleri alınamadı: "+requestsRes.error.message);
 
+  if(freezeRes.error)throw new Error("Dondurulan kayıtlar alınamadı: "+freezeRes.error.message);
+  const frozenByStudent = new Map((freezeRes.data ?? []).map(row=>[row.student_id,row]));
   const branchMap=new Map(((branchesRes.data||[]) as SimpleRow[]).map(x=>[x.id,x.name]));
   const groupMap=new Map(((groupsRes.data||[]) as SimpleRow[]).map(x=>[x.id,x.name]));
   const membershipMap=new Map<string,MembershipRow>();
@@ -54,6 +60,7 @@ export default async function PassiveCenterPage({searchParams}:{searchParams:Pro
       last_name:student.last_name||"",
       student_number:student.student_number||null,
       status:student.status||"active",
+      freeze: student.status === "active" ? frozenByStudent.get(student.id) ?? null : null,
       branch_id:student.branch_id||null,
       branch_name:student.branch_id?branchMap.get(student.branch_id)||null:null,
       group_id:membership?.group_id||null,
@@ -69,5 +76,5 @@ export default async function PassiveCenterPage({searchParams}:{searchParams:Pro
     };
   });
 
-  return <PassiveCenterClient students={students} canApprove={["owner","admin"].includes(profile.role)} initialStudentId={params.studentId||""} key={params.studentId||"all"} />;
+  return <PassiveCenterClient students={students} today={today} canApprove={["owner","admin"].includes(profile.role)} initialStudentId={params.studentId||""} key={params.studentId||"all"} />;
 }

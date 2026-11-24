@@ -54,7 +54,7 @@ export default function GuardianOverviewCards({ data, accountId, previewGuardian
     {data.enrollment?.freeze_start_date && data.enrollment?.freeze_resume_date && (
       <div className="guardianFooterNote" role="status">
         <strong>Onaylı kayıt dondurma</strong>
-        <p>Dondurma başlangıcı {formatDate(data.enrollment.freeze_start_date)}. {data.enrollment.freeze_callback_pending ? "En geç dönüş" : "Yeniden başlama"} {formatDate(data.enrollment.freeze_resume_date)}. Dersler seans günlerinde devam eder.</p>
+        <p>Dondurma başlangıcı {formatDate(data.enrollment.freeze_start_date)}. {data.enrollment.freeze_restart_pending ? "Planlanan dönüş" : "Yeniden başlama"} {formatDate(data.enrollment.freeze_resume_date)}. {data.enrollment.freeze_restart_pending ? "Dersler, yönetim kaydı yeniden başlattığında devam eder." : "Dersler seans günlerinde devam eder."}</p>
       </div>
     )}
     {latestAbsence ? <section className="guardianAttendanceAlert" style={{margin:"0 0 16px",padding:"15px 17px",border:"1px solid #f3c9c9",borderRadius:16,background:"#fff7f7",color:"#7f1d1d"}}>

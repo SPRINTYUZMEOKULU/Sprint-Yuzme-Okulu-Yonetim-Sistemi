@@ -117,7 +117,7 @@ export async function PATCH(request:NextRequest){
     let mutation=ctx.admin.from("student_compensation_lessons").update(changes).eq("id",id).eq("organization_id",ctx.organizationId).eq("status","planned");
     if(current.updated_at) mutation=mutation.eq("updated_at",current.updated_at);
     const {data:changed,error}=await mutation.select("id").maybeSingle();
-    if(error) return NextResponse.json({ok:false,error:error.message},{status:500});
+    if(error) return NextResponse.json({ok:false,error:error.message},{status:error.code==="P0001"?409:500});
     if(!changed) return NextResponse.json({ok:false,error:"Kayıt değişmiş. Sayfayı yenileyin."},{status:409});
     const {error:logError}=await ctx.admin.from("student_activity_logs").insert({organization_id:ctx.organizationId,student_id:current.student_id,activity_type:moving?"compensation_rescheduled":"compensation_cancelled",title:moving?"Bireysel telafi planı değiştirildi":"Telafi iptal edildi",description:moving?`${current.lesson_date} tarihli telafi ${changes.lesson_date} tarihine taşındı.`:`${current.lesson_date} tarihli telafi iptal edildi.`,old_value:current,new_value:changes,source_type:"student_compensation_lessons",source_id:id,performed_by:ctx.userId,performed_at:now});
     // Supersede unsent change notices, so old plans cannot be confirmed as current.
