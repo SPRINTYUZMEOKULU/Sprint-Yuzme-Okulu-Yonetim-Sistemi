@@ -148,6 +148,12 @@ export async function createGroup(formData: FormData) {
 
   await validateGroupLevel(supabase, organizationId, levelId);
 
+  const dayPlans = weekdays.map(weekday => {
+    const start = toTime(formData.get(`day_start_${weekday}`)) || startTime;
+    const end = toTime(formData.get(`day_end_${weekday}`)) || endTime;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || end <= start) throw new Error("Gün bazlı ders saatleri geçersiz.");
+    return { weekday, start, end };
+  });
   const createdGroupIds: string[] = [];
 
   try {
@@ -181,13 +187,13 @@ export async function createGroup(formData: FormData) {
 
       createdGroupIds.push(group.id);
 
-      const scheduleRows = weekdays.map((weekday) => ({
+      const scheduleRows = dayPlans.map(({weekday, start, end}) => ({
         organization_id: organizationId,
         branch_id: branchId,
         group_id: group.id,
         weekday,
-        start_time: startTime,
-        end_time: endTime,
+        start_time: start,
+        end_time: end,
         is_active: true,
       }));
 
