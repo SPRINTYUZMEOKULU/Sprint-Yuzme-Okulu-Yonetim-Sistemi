@@ -1,3 +1,4 @@
+import { completedApprovalEvents } from "@/lib/notifications/completed-approvals";
 import { resolveStartedRenewalNotifications } from "@/lib/enrollment/renewal-lifecycle";
 import { runRegistrationBackground } from "@/lib/notifications/registration-background";
 import {decorateNoteReminders} from "@/lib/notifications/note-reminder-state";
@@ -174,7 +175,7 @@ export async function GET(){
       .limit(12)
     : Promise.resolve({ data: [], error: null });
   const [notificationResult,dueReminderResult,supportResult]=await Promise.all([
-   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).neq("notification_type","login_support_request").or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
+   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).neq("notification_type","login_support_request").or(`event_key.is.null,event_key.not.in.(${[...completedApprovalEvents].join(",")})`).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
    supabase.from("student_activity_logs").select("id,student_id,title,description,reminder_at,performed_by,source_type,source_id,new_value").eq("organization_id",profile.organization_id).in("activity_type",["registration_note","student_note_reminder"]).eq("reminder_completed",false).eq("performed_by",profile.id).not("reminder_at","is",null).lte("reminder_at",nowIso).order("reminder_at",{ascending:true}).limit(20),
    supportRequests,
   ]);

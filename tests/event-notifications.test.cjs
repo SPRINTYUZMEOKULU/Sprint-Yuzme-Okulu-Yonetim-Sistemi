@@ -10,6 +10,7 @@ function publisher() {
   const client={from(table){const q={select(){return q},eq(k,v){filters.push([k,v]);return q},in(){return q},then(resolve){return Promise.resolve({data:[{id:'owner'},{id:'admin'}],error:null}).then(resolve)}};return q}};
   const api=load('lib/notifications/publish-event.ts',name=>{
     if(name==='server-only')return {};
+    if(name==='./completed-approvals')return load('lib/notifications/completed-approvals.ts',require);
     if(name==='@/lib/supabase/server')return {createClient:async()=>client};
     if(name==='./create-notification')return {createNotification(){throw Error('real sender forbidden')}};
     throw Error(name);
@@ -27,10 +28,10 @@ test('explicit push-off and private recipient survive central routing',async()=>
   let delivered;await publisher().publishEventNotification({...event,category:'approval',recipient_profile_id:'requester',push_requested:false},async value=>{delivered=value;return success});
   assert.equal(delivered.category,'approvals');assert.equal(delivered.push,false);assert.deepEqual(delivered.recipientProfileIds,['requester']);
 });
-test('bulk compensation creates one phone summary with individual student references',async()=>{
-  const calls=[];const rows=['s1','s2','s3'].map(student_id=>({...event,category:undefined,notification_type:'bulk_compensation_approved',source_id:'request',student_id,body:'2 telafi dersi'}));
+test('bulk compensation records one silent history summary with individual student references',async()=>{
+  const calls=[];const rows=['s1','s2','s3'].map(student_id=>({...event,category:undefined,event_key:undefined,notification_type:'bulk_compensation_approved',source_id:'request',student_id,body:'2 telafi dersi'}));
   await publisher().publishEventNotification(rows,async value=>{calls.push(value);return success});
-  assert.equal(calls.length,1);assert.equal(calls[0].studentId,null);assert.equal(calls[0].metadata.affected_student_count,3);assert.deepEqual(calls[0].metadata.affected_student_ids,['s1','s2','s3']);assert.match(calls[0].body,/3 kursiyer/);
+  assert.equal(calls.length,1);assert.equal(calls[0].push,false);assert.equal(calls[0].historyOnly,true);assert.equal(calls[0].studentId,null);assert.equal(calls[0].metadata.affected_student_count,3);assert.deepEqual(calls[0].metadata.affected_student_ids,['s1','s2','s3']);assert.match(calls[0].body,/3 kursiyer/);
 });
 test('request owner joins organization managers and keeps role preferences in the sender',async()=>{
   const api=publisher();let delivered;
@@ -55,4 +56,16 @@ test('repeated pending/approved cash actions do not update payments or notify ag
     });
     assert.equal((await api[action]('payment')).ok,true);assert.equal(writes,0);assert.equal(pushes,0);
   }
+});
+
+test('completed makeup is silent and approvals requiring registration still notify',async()=>{
+  const calls=[];
+  const send=async value=>{calls.push(value);return success};
+  const publish=publisher().publishEventNotification;
+  await publish({...event,event_key:'compensation_approved'},send);
+  await publish({...event,notification_type:'approval_approved',event_key:'registration_custom_lesson_count_approved'},send);
+  assert.deepEqual(calls.map(({push,historyOnly})=>({push,historyOnly})),[
+    {push:false,historyOnly:true},
+    {push:true,historyOnly:false},
+  ]);
 });

@@ -1528,6 +1528,12 @@ export async function POST(request: NextRequest) {
     if(individual.request_type==="individual_compensation") {
       const {data,error}=await attendanceOperationsDb().rpc("decide_individual_compensation",{p_actor:actorId,p_request:id,p_action:action,p_review:reviewNote});
       if(error || !data?.ok)return NextResponse.json({ok:false,error:error?.message||"Telafi kararı kaydedilemedi."},{status:error?.code==="42501"?403:409});
+      const {error: resolveError} = await attendanceOperationsDb().from("system_notifications")
+        .update({is_read:true,read_at:new Date().toISOString()})
+        .eq("organization_id",profile.organization_id)
+        .eq("source_type","lesson_adjustment").eq("source_id",id)
+        .eq("notification_type","individual_compensation_requested").eq("is_read",false);
+      if(resolveError) console.error("SprintOS telafi onay bildirimi kapatılamadı:",resolveError.message);
       let warning: string | undefined;
       if(!data.duplicate){
         const notice=await publishEventNotification({organization_id:profile.organization_id,category:"approvals",notification_type:action==="approve"?"compensation_approved":"lesson_adjustment_rejected",

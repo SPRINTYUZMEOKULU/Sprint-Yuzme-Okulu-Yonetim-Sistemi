@@ -1,4 +1,5 @@
 import "server-only";
+import { completedApprovalEvents } from "./completed-approvals";
 import { createClient } from "@/lib/supabase/server";
 import { createNotification, type CreateNotificationInput, type CreateNotificationResult, type NotificationCategory } from "./create-notification";
 
@@ -54,16 +55,19 @@ export async function publishEventNotification(input: EventRow | EventRow[], sen
         if (error) throw new Error("Bildirim alıcıları doğrulanamadı.");
         recipients = [...new Set([...(data || []).map(profile => profile.id), row.include_requester])];
       }
+      const eventKey = row.event_key || row.notification_type || null;
+      const historyOnly = eventKey !== null && completedApprovalEvents.has(eventKey);
       const result = await send({ organizationId: row.organization_id, title: row.title,
         body: row.body || row.message, message: row.message || row.body,
-        category, eventKey: row.event_key || row.notification_type || null,
+        category, eventKey,
         notificationType: row.notification_type || row.event_key || category,
         severity: row.severity || "success", priority: row.priority || "normal",
         studentId, entityType: row.entity_type, entityId: row.entity_id,
         sourceType: row.source_type || row.entity_type, sourceId: row.source_id || row.entity_id,
         targetPath: row.target_path || (category === "approvals" ? "/onay-merkezi" : row.student_id ? `/ogrenciler/${row.student_id}?payment=history` : "/odemeler"),
         recipientProfileIds: recipients,
-        push: row.push_requested ?? row.push_required ?? true,
+        push: !historyOnly && (row.push_requested ?? row.push_required ?? true),
+        historyOnly,
         metadata: row.metadata || {}, createdBy: row.created_by,
       });
       results.push(result);
