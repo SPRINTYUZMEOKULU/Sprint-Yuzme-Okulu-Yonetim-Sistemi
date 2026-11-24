@@ -1,5 +1,7 @@
 "use server";
 
+import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
+import { resolveAttendanceWarning } from "@/lib/notifications/resolve-attendance-warning";
 import { verifyAttendanceRows } from "@/lib/attendance/integrity";
 import { attendanceRoster } from "@/lib/attendance/roster";
 import { createClient as createAuditClient } from "@supabase/supabase-js";
@@ -515,6 +517,12 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {ok:false,count:0,message:"Yoklama yazıldı ancak kayıt sonucu doğrulanamadı. Yenileyip kontrol edin; taslağınızı silmeyin."};
     }
 
+    try {
+      await resolveAttendanceWarning(attendanceOperationsDb(), organizationId, schedule, input.lessonDate);
+    } catch (notificationError) {
+      console.error("Yoklama uyarısı kapatılamadı:", notificationError);
+    }
+
     const auditOk=await auditAttendance(profile,"save",input.scheduleId,{lessonDate:input.lessonDate,groupId:input.groupId,before:previousAttendance||[],after:rows,count:rows.length});
 
     /*
@@ -590,6 +598,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
           body,
           category: "attendance",
           eventKey: `attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
+          dedupeKey: `attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
           notificationType: "attendance_absent",
           severity: "warning",
           priority: "high",
@@ -635,6 +644,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
               body: `${studentName}, ${input.lessonDate} tarihli derse katılmadı. Detayları Dersler & Yoklama ekranından görebilirsiniz.`,
               category: "attendance",
               eventKey: `guardian_attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
+              dedupeKey: `guardian_attendance_absent:${record.studentId}:${input.lessonDate}:${input.scheduleId}`,
               notificationType: "guardian_attendance_absent",
               severity: "warning",
               priority: "high",

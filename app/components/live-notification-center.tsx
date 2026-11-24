@@ -105,12 +105,14 @@ export default function LiveNotificationCenter() {
       }
       if (!next) return;
 
+      const isAttendanceWarning = next.eventKey === "attendance_missing";
+      if (isAttendanceWarning) rememberHandled(logicalKey(next));
       currentRef.current = next;
       setExpanded(false);
       setCurrent(next);
       void playEventNotificationSound(next);
 
-      if (!isLoginSupport(next) && "Notification" in window && Notification.permission === "granted") {
+      if (!isAttendanceWarning && !isLoginSupport(next) && "Notification" in window && Notification.permission === "granted") {
         try {
           const n = new Notification(formatDatesInText(next.title), {
             body: `${next.authorName?`Yazan: ${next.authorName}\n`:""}${formatDatesInText(next.body)}`,
@@ -144,6 +146,7 @@ export default function LiveNotificationCenter() {
     const onFocus = () => void check();
     const onCompleted=()=>void check();
     window.addEventListener("sprintos-note-completed",onCompleted);
+    window.addEventListener("sprintos-attendance-saved",onCompleted);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -153,6 +156,7 @@ export default function LiveNotificationCenter() {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("sprintos-note-completed",onCompleted);
+      window.removeEventListener("sprintos-attendance-saved",onCompleted);
     };
   }, [check,portalRoute]);
 

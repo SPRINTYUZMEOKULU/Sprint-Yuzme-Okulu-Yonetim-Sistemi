@@ -175,7 +175,7 @@ export async function GET(){
       .limit(12)
     : Promise.resolve({ data: [], error: null });
   const [notificationResult,dueReminderResult,supportResult]=await Promise.all([
-   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).neq("notification_type","login_support_request").or(`event_key.is.null,event_key.not.in.(${[...completedApprovalEvents].join(",")})`).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
+   supabase.from("system_notifications").select("id,title,body,message,severity,priority,event_key,notification_type,target_path,student_id,entity_id,source_type,source_id,metadata,created_at,is_read,recipient_profile_id,recipient_user_id").eq("organization_id",profile.organization_id).eq("is_read",false).neq("notification_type","login_support_request").or(`event_key.is.null,event_key.not.in.(${[...completedApprovalEvents,"attendance_saved","attendance_completed","first_lesson_attended"].join(",")})`).or(`created_at.gte.${since},notification_type.eq.registration_note_reminder,notification_type.eq.student_note_reminder,notification_type.eq.payment_due,notification_type.eq.registration_completion_required,notification_type.eq.starting_students_one_hour`).or(recipientFilter).order("created_at",{ascending:false}).limit(50),
    supabase.from("student_activity_logs").select("id,student_id,title,description,reminder_at,performed_by,source_type,source_id,new_value").eq("organization_id",profile.organization_id).in("activity_type",["registration_note","student_note_reminder"]).eq("reminder_completed",false).eq("performed_by",profile.id).not("reminder_at","is",null).lte("reminder_at",nowIso).order("reminder_at",{ascending:true}).limit(20),
    supportRequests,
   ]);
@@ -199,15 +199,16 @@ export async function GET(){
   const attendanceWarnings=rows.filter(row=>row.event_key==="attendance_missing");
   if(attendanceWarnings.length){
     const {values:attendanceSettings}=await readSettings(supabase,profile.organization_id,"ders");
+    const lessonDates=[...new Set(attendanceWarnings.map(row=>row.metadata?.lesson_date).filter(date=>typeof date==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(date)))];
     const [eligibility,schedules,records]=await Promise.all([
       loadAttendanceEligibility(supabase,profile.organization_id),
       supabase.from("lesson_schedules").select("id,group_id,start_time").eq("organization_id",profile.organization_id),
-      supabase.from("attendance_records").select("student_id,schedule_id,group_id,lesson_date").eq("organization_id",profile.organization_id).gte("lesson_date",since.slice(0,10))
+      lessonDates.length ? supabase.from("attendance_records").select("student_id,schedule_id,group_id,lesson_date").eq("organization_id",profile.organization_id).in("lesson_date",lessonDates) : Promise.resolve({data:[],error:null})
     ]);
     if(schedules.error||records.error)throw new Error("Yoklama uyarıları doğrulanamadı.");
     const obsolete=new Set<string>();
     for(const row of attendanceWarnings){const schedule=(schedules.data||[]).find(s=>s.id===row.entity_id);const date=row.metadata?.lesson_date;
-      if(!attendanceSettings.missing_alert_enabled || (schedule&&date&&(Date.now()<trTimestamp(date,String(schedule.start_time).slice(0,5))+Number(attendanceSettings.missing_alert_minutes)*60000 || !missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length))){obsolete.add(row.id);await supabase.from("system_notifications").update({is_read:true,metadata:{...(row.metadata||{}),resolved_reason:"cancelled_or_no_pending_attendance"}}).eq("organization_id",profile.organization_id).eq("id",row.id);}
+      if(!attendanceSettings.missing_alert_enabled || (schedule&&date&&(Date.now()<trTimestamp(date,String(schedule.start_time).slice(0,5))+Number(attendanceSettings.missing_alert_minutes)*60000 || !missingAttendanceStudents(eligibility,schedule,date,records.data||[]).length))){obsolete.add(row.id);await supabase.from("system_notifications").update({is_read:true,read_at:nowIso,metadata:{...(row.metadata||{}),resolved_reason:"cancelled_or_no_pending_attendance"}}).eq("organization_id",profile.organization_id).eq("id",row.id);}
     }rows=rows.filter(row=>!obsolete.has(row.id));
   }
   const renewalApprovalIds=rows.filter((row:any)=>row.event_key==="registration_custom_lesson_count_approved"&&row.entity_id).map((row:any)=>row.entity_id as string);

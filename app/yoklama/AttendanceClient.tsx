@@ -1272,6 +1272,7 @@ export default function AttendanceClient({
         void playEventNotificationSound(result.ok ? {eventKey:"attendance_saved"} : {severity:"error"});
 
         if (result.ok) {
+          window.dispatchEvent(new Event("sprintos-attendance-saved"));
           setHasSaved(true);
         }
       }
