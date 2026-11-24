@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import styles from "./enrollment-freeze-form.module.css";
 import { enrollmentFreezeMessage } from "@/lib/messaging/enrollment-freeze-message";
 
@@ -14,7 +15,7 @@ function oneCalendarMonthAfter(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
-type FreezeItem = { id: string; status: string; new_values: Record<string, unknown> };
+type FreezeItem = { id: string; restartPending?: boolean; status: string; new_values: Record<string, unknown> };
 
 export default function EnrollmentFreezeForm({ studentId, enrollmentId, phone }: {
   studentId: string;
@@ -87,11 +88,13 @@ export default function EnrollmentFreezeForm({ studentId, enrollmentId, phone }:
     const first = String(item.new_values.freeze_start_date || "");
     const status = item.status === "pending" ? "Yönetici onayı bekleniyor"
       : today < first ? "Dondurma planlandı"
+      : item.new_values.restarted ? "Kayıt yeniden başlatıldı"
       : today < latest ? "Kayıt donduruldu"
-      : "Dondurma süresi sona erdi";
+      : item.restartPending ? "Başlatma bekliyor" : "Dondurma süresi sona erdi";
     return <div className={styles.result}>
       <strong>{status}</strong>
       <p>{message}</p>
+      {item.status === "approved" && <Link href={`/ogrenciler/pasif-merkezi?studentId=${studentId}`}>Pasif Merkezi’nde aç</Link>}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
       {item.status === "approved" && item.new_values.callback_pending === true && latest >= today && (
@@ -114,7 +117,7 @@ export default function EnrollmentFreezeForm({ studentId, enrollmentId, phone }:
   if (!enrollmentId) return <p>Dondurma talebi için aktif kayıt gerekir.</p>;
 
   return <form className={styles.form} onSubmit={submit}>
-    <p>Her kursiyerin yönetici onaylı bir dondurma hakkı vardır. Kayıt öğrenci dosyasında kalır. Dönüş tarihinden itibaren dersler mevcut seans günlerinde otomatik devam eder.</p>
+    <p>Her kursiyerin yönetici onaylı bir dondurma hakkı vardır. Kayıt öğrenci dosyasında kalır. Dönüş gerçekleştiğinde yönetici Pasif Merkezi’ndeki Kaydı Başlat işlemini kullanır.</p>
     <div className={styles.dates}>
       <label><span>Dondurma başlangıcı</span><input type="date" name="start" required min={today} value={start} onChange={event => setStart(event.target.value)} /></label>
       {!callback && <label><span>Yeniden başlama tarihi</span><input type="date" name="resume" required min={start || today} max={oneCalendarMonthAfter(start)} /></label>}

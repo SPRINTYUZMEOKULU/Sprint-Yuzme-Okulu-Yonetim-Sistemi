@@ -23,18 +23,33 @@ export async function GET(request: NextRequest) {
   if (!profile?.organization_id) return NextResponse.json({ error: "Yetkiniz bulunmuyor." }, { status: 403 });
   const student = request.nextUrl.searchParams.get("student") || "";
   if (!uuid.test(student)) return NextResponse.json({ error: "Kursiyer bulunamadı." }, { status: 400 });
-  const { data, error } = await db.from("approval_requests").select("id,status,new_values")
+  const { data, error } = await db.from("approval_requests").select("id,status,new_values,entity_id")
     .eq("organization_id", profile.organization_id).eq("student_id", student)
     .eq("request_type", "enrollment_freeze").in("status", ["pending","approved"])
     .maybeSingle();
   if (error) return NextResponse.json({ error: "Dondurma durumu yüklenemedi." }, { status: 500 });
-  return NextResponse.json({ item: data, canConfirm: ["owner", "admin"].includes(profile.role) });
+  let restartPending = false;
+  if (data?.status === "approved") {
+    const result = await db.from("student_enrollments").select("freeze_restart_pending")
+      .eq("organization_id", profile.organization_id).eq("student_id", student).eq("id", data.entity_id).maybeSingle();
+    if (result.error) return NextResponse.json({ error: "Dondurma durumu yüklenemedi." }, { status: 500 });
+    restartPending = result.data?.freeze_restart_pending === true;
+  }
+  return NextResponse.json({ item: data ? { ...data, restartPending } : null, canConfirm: ["owner", "admin"].includes(profile.role) });
 }
 
 export async function POST(request: NextRequest) {
   const { db, profile } = await context();
   if (!profile?.organization_id) return NextResponse.json({ error: "Yetkiniz bulunmuyor." }, { status: 403 });
   const body = await request.json().catch(() => null);
+  if (body?.action === "restart") {
+    if (!["owner", "admin"].includes(profile.role)) return NextResponse.json({ error: "Yönetici yetkisi gerekiyor." }, { status: 403 });
+    if (!uuid.test(body.enrollmentId || "")) return NextResponse.json({ error: "Kayıt bulunamadı." }, { status: 400 });
+    const { data: restart, error } = await db.rpc("restart_frozen_enrollment", { p_enrollment_id: body.enrollmentId });
+    if (error) return NextResponse.json({ error: error.code === "P0001" ? error.message : "Kayıt başlatılamadı." }, { status: error.code === "42501" ? 403 : 409 });
+    revalidateStudentSurfaces(restart.student_id);
+    return NextResponse.json(restart);
+  }
   const confirm = body?.action === "confirm_resume";
   const callback = !confirm && body?.callback === true;
   const recordId = confirm ? body?.requestId : body?.enrollmentId;
@@ -55,7 +70,7 @@ export async function POST(request: NextRequest) {
   if (confirm) {
     revalidateStudentSurfaces(item.student_id);
     const delivery = await publishEnrollmentFreeze(profile.organization_id, profile.id, item);
-    return NextResponse.json({ item: { ...item, status: "approved" }, delivery });
+    return NextResponse.json({ item: { ...item, status: "approved", restartPending: true }, delivery });
   }
 
   const [delivery, staff] = await Promise.all([

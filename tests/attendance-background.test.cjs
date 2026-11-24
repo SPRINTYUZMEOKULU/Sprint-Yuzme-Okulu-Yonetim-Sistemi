@@ -33,3 +33,15 @@ test('approved freeze suppresses missing attendance and resumes on the return da
  assert.equal((await runAttendanceBackground(p.client,'org','2026-10-14',21*60+20,p.notify)).created,0);
  assert.equal((await runAttendanceBackground(p.client,'org','2026-10-21',21*60+20,p.notify)).created,1);
 });
+
+test('an approved manual freeze stays out of attendance past the planned date until restarted',async()=>{
+ const p=fixture();
+ const enrollment=p.tables.student_enrollments[0];
+ Object.assign(enrollment,{
+   freeze_start_date:'2026-10-14',freeze_resume_date:'2026-10-21',freeze_restart_pending:true,
+ });
+ assert.equal((await runAttendanceBackground(p.client,'org','2026-10-21',21*60+20,p.notify)).created,0);
+ Object.assign(enrollment,{freeze_resume_date:'2026-10-28',freeze_restart_pending:false});
+ assert.equal((await runAttendanceBackground(p.client,'org','2026-10-21',21*60+20,p.notify)).created,0);
+ assert.equal((await runAttendanceBackground(p.client,'org','2026-10-28',21*60+20,p.notify)).created,1);
+});
