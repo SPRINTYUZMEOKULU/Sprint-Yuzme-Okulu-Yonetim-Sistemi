@@ -1010,7 +1010,7 @@ export default async function GroupsPage({
                   </option>
                 ))}
               </select>
-              <Link href="/ayarlar/seviyeler" target="_blank" rel="noopener noreferrer" style={{fontSize: 12, color: "#1768ce"}}>Seviyeleri Yönet ↗</Link>
+              <Link href="/ayarlar/seviyeler" style={{display:"inline-flex",alignItems:"center",alignSelf:"flex-start",marginTop:8,padding:"6px 10px",border:"1px solid #d6e7fd",borderRadius:8,fontSize:12,color:"#1768ce",textDecoration:"none"}}>Seviyeleri Yönet</Link>
             </label>
 
             <label>
