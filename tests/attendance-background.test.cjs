@@ -24,3 +24,12 @@ test('saving a completed session clears only that date and session for every rec
  assert.deepEqual(warnings.map(row=>row.is_read),[true,true,false,false]);
  assert.ok(warnings[0].read_at);
 });
+
+test('approved freeze suppresses missing attendance and resumes on the return date',async()=>{
+ const p=fixture();
+ Object.assign(p.tables.student_enrollments[0],{
+   freeze_start_date:'2026-10-14',freeze_resume_date:'2026-10-21',
+ });
+ assert.equal((await runAttendanceBackground(p.client,'org','2026-10-14',21*60+20,p.notify)).created,0);
+ assert.equal((await runAttendanceBackground(p.client,'org','2026-10-21',21*60+20,p.notify)).created,1);
+});

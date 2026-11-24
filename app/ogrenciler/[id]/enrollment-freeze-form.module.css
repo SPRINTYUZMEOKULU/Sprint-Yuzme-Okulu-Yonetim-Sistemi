@@ -1,0 +1,80 @@
+.form,
+.dates,
+.form label,
+.result {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.form,
+.dates,
+.result {
+  gap: 16px;
+}
+
+.dates {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+
+.form p,
+.result p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.form label {
+  font-weight: 650;
+  color: #294968;
+}
+
+.form input[type="date"],
+.form textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #ccd9e8;
+  border-radius: 11px;
+  background: #fff;
+  color: #143759;
+  font: inherit;
+  font-size: 16px;
+}
+
+.form textarea {
+  resize: vertical;
+}
+
+.form .check {
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d9e3ed;
+  border-radius: 11px;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #175da8;
+}
+
+.form button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 11px;
+  background: #175da8;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.form button:disabled {
+  opacity: .65;
+}
