@@ -1054,6 +1054,15 @@ export default async function GroupsPage({
             ))}
           </fieldset>
 
+          <details style={{margin:"12px 0",padding:12,border:"1px solid #dbe6f3",borderRadius:12}}>
+            <summary style={{cursor:"pointer",fontWeight:700}}>Günlere özel ders saatleri</summary>
+            <p>Yalnızca seçili günler uygulanır. Boş saatler varsayılan programdan alınır.</p>
+            {[1,2,3,4,5,6,0].map(day => <div key={day} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8,marginTop:12}}>
+              <strong style={{gridColumn:"1/-1"}}>{dayNames[day]}</strong>
+              <label>Başlangıç<input style={{width:"100%",minWidth:0,boxSizing:"border-box"}} type="time" name={`day_start_${day}`} /></label>
+              <label>Bitiş<input style={{width:"100%",minWidth:0,boxSizing:"border-box"}} type="time" name={`day_end_${day}`} /></label>
+            </div>)}
+          </details>
           <label className="publishToggle">
             <input type="checkbox" name="public_registration" defaultChecked />
             <span>
