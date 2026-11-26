@@ -1396,11 +1396,26 @@ export default async function OperasyonPlaniPage({
     return `/operasyon-plani?${qp.toString()}`;
   }
 
+  const oneOffResult = profile.role === "coach" ? {data:[],error:null} : await supabase.from("lesson_schedules")
+    .select("id,group_id,branch_id,start_time,end_time,makeup_date,student_compensation_lessons!student_compensation_lessons_target_schedule_id_fkey!inner(id)")
+    .eq("organization_id",organizationId).eq("makeup_date",selectedDate)
+    .in("student_compensation_lessons.status",["planned","completed"]).order("start_time");
+  const oneOffRows = oneOffResult.data || [];
+
   return (
     <>
       <UstGezinme />
       <main style={pageStyle}>
       <div style={containerStyle}>
+        {oneOffResult.error && <p role="status">Tek seferlik telafi seansları yüklenemedi.</p>}
+        {oneOffRows.length>0 && <section aria-label="Tek seferlik telafi seansları" style={{padding:"16px",marginBottom:"16px",border:"1px solid #dbe7f5",background:"#fff",borderRadius:"14px"}}>
+          <h2>Tek seferlik telafi seansları</h2>
+          <ul>{oneOffRows.map(row=><li key={row.id}>
+            <Link href={`/yoklama?date=${selectedDate}&scheduleId=${row.id}`}>
+              {String(row.start_time).slice(0,5)}–{String(row.end_time).slice(0,5)} · {(groupsResult.data||[]).find(group=>group.id===row.group_id)?.name||"Telafi seansı"} · Yoklamayı aç
+            </Link>
+          </li>)}</ul>
+        </section>}
         {/* =================================================
             ÜST ALAN
         ================================================= */}

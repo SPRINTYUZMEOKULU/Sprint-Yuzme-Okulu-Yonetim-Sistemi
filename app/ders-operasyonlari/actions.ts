@@ -263,6 +263,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     const now = new Date().toISOString();
     let processed = 0;
     let skipped = 0;
+    let already = 0;
     let compensationCreated = 0;
 
     for (const student of studentsResult.data || []) {
@@ -289,9 +290,14 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         .eq("organization_id",organizationId).eq("student_id",student.id)
         .eq("activity_type","lesson_cancellation_compensation").eq("source_id",input.scheduleId)
         .eq("old_value->>cancelled_lesson_date",input.cancelledDate).maybeSingle();
-      if(previousError||previousOperation){
+      if(previousOperation && !previousError){
+        already++;
+        outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"already",reason:"Bu telafi zaten kayıtlı. Mesajını İşlem Geçmişi’nden hazırlayabilirsiniz."});
+        continue;
+      }
+      if(previousError){
         skipped++;
-        outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:previousError?"Önceki iptal kaydı doğrulanamadı; mükerrer telafiyi önlemek için işlem durduruldu.":"Bu dersin iptal / telafi işlemi zaten kayıtlı. Mevcut telafiyi kursiyer dosyasından düzenleyin."});
+        outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:"Önceki iptal kaydı doğrulanamadı; mükerrer telafiyi önlemek için işlem durduruldu."});
         continue;
       }
 
@@ -475,17 +481,19 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     revalidatePath("/");
 
     return {
-      ok: processed > 0,
+      ok: processed > 0 || already > 0,
       message:
         `${processed} ${selectedStudentIds.length ? "seçili " : ""}kursiyer için ders iptali işlendi. ` +
         (input.compensationMode === "reserve"
           ? "Telafi hakları planlama bekliyor."
           : `${compensationCreated} telafi dersi oluşturuldu.`) +
+        (already ? ` ${already} kursiyerin telafisi zaten kayıtlı.` : "") +
         (skipped ? ` ${skipped} kursiyere işlem uygulanmadı; isim ve gerekçeler aşağıda.` : "") +
         (skippedHistory.error ? " Atlanan kursiyerler işlem geçmişine kaydedilemedi; bu ekrandaki listeyi kontrol edin." : ""),
       processedCount: processed,
       compensationCreated,
       skippedCount: skipped,
+      alreadyCount: already,
       outcomes,
       preparedMessages,
       source: {
@@ -588,6 +596,18 @@ export async function startingCancellationMessages(input: {
   return {ok:true,message:input.prepare ? `${messages.length} başlangıç bilgilendirme mesajı hazırlandı.` : "",messages};
 }
 
+export async function prepareSavedMakeupMessages(input: {scheduleId: string; date: string}) {
+  await requireProfile([...ALLOWED_ROLES]);
+  if (!UUID_RE.test(input.scheduleId) || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return {ok:false,message:"Ders tarihi veya seansı geçersiz."};
+  }
+  const db = await createClient();
+  const result = await db.rpc("prepare_saved_makeup_messages",{p_source:input.scheduleId,p_date:input.date});
+  if(result.error) return {ok:false,message:"Kayıtlı telafi mesajları hazırlanamadı. İşlem geçmişini yenileyip tekrar deneyin."};
+  revalidatePath("/ders-operasyonlari/gecmis");
+  return {ok:true,message:result.data ? `${result.data} WhatsApp mesajı hazırlandı.` : "Hazırlanmayı bekleyen doğrulanmış telafi mesajı bulunamadı."};
+}
+
 export async function verifyCancellationMessage(input: {studentId: string; message: string}) {
   const profile = await requireProfile([...ALLOWED_ROLES]);
   const db = await createClient();
@@ -616,6 +636,12 @@ export async function verifyCancellationMessage(input: {studentId: string; messa
     if (makeupId) query = query.eq("id",makeupId);
     const lesson = await query.maybeSingle();
     if (lesson.error || !lesson.data) return stale;
+    if (details.planned_start_time && details.planned_end_time) {
+      const target = await db.from("lesson_schedules").select("start_time,end_time,is_active,makeup_date")
+        .eq("organization_id",profile.organization_id).eq("id",scheduleId).maybeSingle();
+      if (target.error || !target.data || (!target.data.is_active && target.data.makeup_date!==details.compensation_date)
+        || target.data.start_time!==details.planned_start_time || target.data.end_time!==details.planned_end_time) return stale;
+    }
   } else if (activity.data.new_value?.compensation_mode !== "reserve" || activity.data.new_value?.compensation_date) {
     return stale;
   }

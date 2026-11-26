@@ -2,7 +2,7 @@ export type HistoryStudent = {studentId:string;name:string;status:"processed"|"s
 export type HistorySession = {key:string;date:string;scheduleId:string;groupName:string;time:string;performedAt:string;hasSkippedRecords:boolean;students:HistoryStudent[]};
 export function buildCancellationHistory(logs:any[],messages:any[],names:Map<string,string>,schedules:Map<string,any>,groups:Map<string,string>,changes:any[]=[]):HistorySession[]{
  const sessions=new Map<string,HistorySession>();
- for(const log of [...logs].sort((a,b)=>String(b.performed_at).localeCompare(String(a.performed_at)))){
+ for(const log of [...logs].sort((a,b)=>Number(b.activity_type==="lesson_cancellation_compensation")-Number(a.activity_type==="lesson_cancellation_compensation") || String(b.performed_at).localeCompare(String(a.performed_at)))){
   const date=log.old_value?.cancelled_lesson_date,scheduleId=log.source_id||log.old_value?.schedule_id;
   if(!date||!scheduleId||!log.student_id)continue;
   const key=`${date}:${scheduleId}`;const schedule=schedules.get(scheduleId);
@@ -13,7 +13,7 @@ export function buildCancellationHistory(logs:any[],messages:any[],names:Map<str
   const matches=messages.filter(m=>m.student_id===log.student_id&&m.metadata?.cancelled_date===date&&m.metadata?.source_schedule_id===scheduleId).sort((a,b)=>String(b.prepared_at).localeCompare(String(a.prepared_at)));
   let compensationDate=log.new_value?.compensation_date||null;
   let targetSchedule=log.new_value?.target_schedule_id||null;
-  let compensationId:string|null=null;
+  let compensationId:string|null=log.new_value?.compensation_id||null;
   // Replay exact plan changes; another cancellation for this student must not move this one.
   for(const change of [...changes].sort((a,b)=>String(a.performed_at).localeCompare(String(b.performed_at)))){
    if(change.student_id!==log.student_id)continue;

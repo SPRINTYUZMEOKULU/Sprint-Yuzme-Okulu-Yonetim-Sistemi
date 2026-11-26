@@ -28,7 +28,7 @@ test('first planning message distinguishes a cancelled source lesson from a prev
 });
 function apiHarness({role='admin',rpcError=null}={}){
  const calls=[];
- const db={auth:{getUser:async()=>({data:{user:{id:'actor'}}})},from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{id:'actor',role,organization_id:'org'}})}),rpc:async(name,args)=>{calls.push({name,args});return {data:rpcError?null:{student_id:'student',duplicate:false,previous:{},current:{}},error:rpcError};}};
+ const db={auth:{getUser:async()=>({data:{user:{id:'actor'}}})},from:table=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='student_activity_logs'?{new_value:{group_id:'saved-group'},old_value:{cancelled_lesson_date:'2099-01-01'}}:{id:'actor',role,organization_id:'org',is_active:true}})}),rpc:async(name,args)=>{calls.push({name,args});return {data:name==='ensure_one_off_makeup_session'?{id:'special-slot'}:rpcError?null:{student_id:'student',duplicate:false,previous:{},current:{}},error:rpcError};}};
  const api=load('app/api/compensation-management/route.ts',{'next/server':{NextResponse:{json:(body,{status=200}={})=>({body,status})}},'@supabase/supabase-js':{createClient:()=>db},'@/lib/supabase/server':{createClient:async()=>db},'next/cache':{revalidatePath(){}},'@/lib/students/revalidate':{revalidateStudentSurfaces(){}},'@/lib/students/compensation-message':{compensationChangeMessage},'@/lib/students/compensation-management':{currentMakeupNotice}});
  process.env.NEXT_PUBLIC_SUPABASE_URL='test';process.env.SUPABASE_SERVICE_ROLE_KEY='test';
  return {calls,post:(body)=>api.POST({json:async()=>body})};
@@ -43,4 +43,11 @@ test('unauthorized and incomplete requests never invoke planning',async()=>{
 });
 test('planning conflict is surfaced without claiming success',async()=>{
  const h=apiHarness({rpcError:{message:'Bu seansta zaten telafi kaydı var.'}});const result=await h.post({action:'plan_reserved',id:'reserve',lesson_date:'2099-01-04',target_schedule_id:'schedule'});assert.equal(result.status,409);assert.equal(result.body.ok,false);
+});
+
+test('one-off reserved makeup derives the group from the stored right',async()=>{
+ const h=apiHarness();
+ const result=await h.post({action:'plan_reserved',id:'reserve',lesson_date:'2099-01-04',one_off:{start:'19:00',end:'20:00',group:'forged'},prepare_message:false});
+ assert.equal(result.status,200);
+ assert.deepEqual(h.calls,[{name:'ensure_one_off_makeup_session',args:{p_group:'saved-group',p_date:'2099-01-04',p_start:'19:00',p_end:'20:00'}},{name:'plan_reserved_compensation',args:{p_actor:'actor',p_log:'reserve',p_date:'2099-01-04',p_schedule:'special-slot'}}]);
 });

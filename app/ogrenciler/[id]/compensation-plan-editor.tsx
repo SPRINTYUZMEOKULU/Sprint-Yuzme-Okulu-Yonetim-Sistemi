@@ -2,7 +2,7 @@
 import {openCurrentWhatsapp} from "@/lib/messaging/current-recipient";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-type Schedule={id:string;group_id:string;weekday:number;start_time:string;end_time:string};
+type Schedule={id:string;group_id:string;weekday:number;makeup_date?:string|null;start_time:string;end_time:string};
 export type CompensationNotification={id:string;body:string;recipient:string;status:string};
 export default function CompensationPlanEditor({id,date,status="planned",notification:initialNotification=null,studentId,canPrepare=false,schedules,groups,branches,onChanged}:{id:string;date:string;status?:string;notification?:CompensationNotification|null;studentId:string;canPrepare?:boolean;schedules:Schedule[];groups:{id:string;name:string;branch_id:string}[];branches:{id:string;name:string}[];onChanged?:()=>void}){
  const router=useRouter();
@@ -12,7 +12,7 @@ export default function CompensationPlanEditor({id,date,status="planned",notific
  const [notification,setNotification]=useState<CompensationNotification|null>(initialNotification);
  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul"}).format(new Date());
  const weekday=new Date(`${day}T12:00:00Z`).getUTCDay();
- const choices=schedules.filter(s=>(Number(s.weekday)%7)===weekday&&groups.some(g=>g.id===s.group_id));
+ const choices=schedules.filter(s=>!s.makeup_date&&(Number(s.weekday)%7)===weekday&&groups.some(g=>g.id===s.group_id));
  async function submit(action:"cancel"|"reschedule"){
   if(busy)return;setBusy(true);setMessage("");
   try{

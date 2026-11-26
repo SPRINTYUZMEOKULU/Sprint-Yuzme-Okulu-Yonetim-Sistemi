@@ -1,4 +1,4 @@
-export type MakeupSchedule = {id:string;group_id:string;weekday:number;start_time:string;end_time:string};
+export type MakeupSchedule = {id:string;group_id:string;weekday:number;makeup_date?:string|null;start_time:string;end_time:string};
 export type MakeupGroup = {id:string;name:string;branch_id:string};
 export type MakeupBranch = {id:string;name:string};
 export type MakeupNotice = {id:string;body:string;recipient:string;status:string};

@@ -303,6 +303,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     }
   }
 
+  const alreadyCount = outcomes.filter(item => item.status === "already").length;
   const skippedOutcomes = outcomes.filter(item => item.status === "skipped");
   const processedOutcomes = outcomes.filter(item => item.status === "processed");
   const warningCount = outcomes.filter(item => item.warning).length;
@@ -570,7 +571,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
 
           {result && <div className="resultBox" role="status">{result}</div>}
           {outcomes.length > 0 && <div className="operationResults">
-            <div className="outcomeStats"><strong>{processedOutcomes.length} kursiyere işlem uygulandı</strong><span>{skippedOutcomes.length} kursiyere işlem uygulanmadı</span>{warningCount > 0 && <span role="alert">{warningCount} kursiyerin mesajı hazırlanamadı; aşağıdaki işlem listesini kontrol edin.</span>}</div>
+            <div className="outcomeStats"><a href="/ders-operasyonlari/gecmis">Kayıtlı telafiler ve WhatsApp mesajları →</a><strong>{processedOutcomes.length} kursiyere işlem uygulandı</strong>{alreadyCount>0&&<span>{alreadyCount} kursiyerin telafisi zaten kayıtlı</span>}<span>{skippedOutcomes.length} kursiyere işlem uygulanmadı</span>{warningCount > 0 && <span role="alert">{warningCount} kursiyerin mesajı hazırlanamadı; aşağıdaki işlem listesini kontrol edin.</span>}</div>
             {skippedOutcomes.length > 0 && <details className="outcomeDetails skippedDetails" open>
               <summary>İşlem uygulanmayan kursiyerler ({skippedOutcomes.length})</summary>
               <p>Bu listedeki kursiyerlere iptal / telafi işlemi uygulanmadı. Gerekçeyi kontrol ederek kursiyer dosyasından ilerleyebilirsiniz.</p>

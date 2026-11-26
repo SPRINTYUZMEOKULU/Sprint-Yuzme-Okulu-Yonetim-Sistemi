@@ -19,3 +19,5 @@ test('rescheduling follows the exact makeup chain and hides stale messages',()=>
  const rows=build([original],[msg],new Map(),new Map(),new Map(),[change('2026-10-25','2026-10-26'),change('2026-10-26','2026-10-27'),change('2026-10-27','2026-10-28','other')]);
  assert.equal(rows[0].students[0].compensationDate,'2026-10-27');assert.equal(rows[0].students[0].message,null);
 });
+
+test('a repeat skip cannot hide a previously saved makeup or its message',()=>{const [s]=run([log('a'),log('a','lesson_cancellation_skipped','2026-10-22T13:00:00Z')]);assert.equal(s.students.length,1);assert.equal(s.students[0].status,'processed');});

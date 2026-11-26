@@ -2,7 +2,7 @@ export type CancellationOutcome = {
   studentId: string;
   studentName: string;
   groupName: string;
-  status: "processed" | "skipped";
+  status: "processed" | "skipped" | "already";
   reason: string;
   warning?: boolean;
 };

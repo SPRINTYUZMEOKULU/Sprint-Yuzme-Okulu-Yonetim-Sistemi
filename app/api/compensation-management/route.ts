@@ -21,8 +21,8 @@ async function context(){
   const {data:{user}}=await supabase.auth.getUser();
   if(!user) return null;
   const admin=adminClient();
-  const {data:profile}=await admin.from("profiles").select("id,role,organization_id").eq("id",user.id).maybeSingle();
-  if(!profile?.organization_id) return null;
+  const {data:profile}=await admin.from("profiles").select("id,role,organization_id,is_active").eq("id",user.id).maybeSingle();
+  if(!profile?.organization_id || !profile.is_active) return null;
   return {admin,userId:user.id,role:String(profile.role) as Role,organizationId:String(profile.organization_id)};
 }
 
@@ -57,7 +57,7 @@ export async function GET(){
     const [lessons,reserves,schedules,groups,branches,logs,changes]=await Promise.all([
       ctx.admin.from("student_compensation_lessons").select("id,student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status,note,created_at,updated_at").eq("organization_id",org).in("status",["planned","cancelled","completed"]).order("lesson_date",{ascending:false}).limit(1000),
       ctx.admin.from("student_activity_logs").select("id,student_id,old_value,new_value,description").eq("organization_id",org).eq("activity_type","lesson_cancellation_compensation").eq("new_value->>compensation_mode","reserve").order("performed_at",{ascending:false}).limit(1000),
-      ctx.admin.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time").eq("organization_id",org).eq("is_active",true),
+      ctx.admin.from("lesson_schedules").select("id,group_id,weekday,start_time,end_time,makeup_date").eq("organization_id",org).or("is_active.eq.true,makeup_date.not.is.null"),
       ctx.admin.from("training_groups").select("id,name,branch_id").eq("organization_id",org).eq("is_active",true),
       ctx.admin.from("branches").select("id,name").eq("organization_id",org).eq("is_active",true),
       ctx.admin.from("message_logs").select("id,message_body,recipient,status,metadata").eq("organization_id",org).eq("template_key","compensation_plan_change").in("status",["prepared","sent"]).order("prepared_at",{ascending:false}).limit(1000),
@@ -153,8 +153,23 @@ export async function POST(request:NextRequest){
   if(!ctx||!manageRoles.includes(ctx.role)) return NextResponse.json({ok:false,error:"Yetkisiz."},{status:403});
   const body=await request.json();
   if(body.action==="plan_reserved"){
-    const date=String(body.lesson_date||""),schedule=String(body.target_schedule_id||""),id=String(body.id||"");
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!id||!schedule)return NextResponse.json({ok:false,error:"Telafi hakkı, tarih ve seans seçin."},{status:400});
+    const date=String(body.lesson_date||""),id=String(body.id||"");
+    let schedule=String(body.target_schedule_id||"");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!id||(!schedule&&!body.one_off))return NextResponse.json({ok:false,error:"Telafi hakkı, tarih ve seans seçin."},{status:400});
+    if(body.one_off){
+      const {start,end}=body.one_off;
+      if(typeof start!=="string" || typeof end!=="string" || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start>=end)
+        return NextResponse.json({ok:false,error:"Geçerli bir başlangıç ve bitiş saati girin."},{status:400});
+      const reserve=await ctx.admin.from("student_activity_logs").select("new_value,old_value")
+        .eq("organization_id",ctx.organizationId).eq("id",id).eq("activity_type","lesson_cancellation_compensation")
+        .eq("new_value->>compensation_mode","reserve").maybeSingle();
+      if(reserve.error||!reserve.data?.new_value?.group_id||reserve.data.new_value.compensation_date||date<=reserve.data.old_value?.cancelled_lesson_date)
+        return NextResponse.json({ok:false,error:"Planlanabilir bir saklı hak ve iptalden sonraki bir tarih seçin."},{status:409});
+      const db=await createClient();
+      const target=await db.rpc("ensure_one_off_makeup_session",{p_group:reserve.data.new_value.group_id,p_date:date,p_start:start,p_end:end});
+      if(target.error||!target.data?.id)return NextResponse.json({ok:false,error:target.error?.message||"Tek seferlik telafi seansı oluşturulamadı."},{status:409});
+      schedule=target.data.id;
+    }
     const {data,error}=await ctx.admin.rpc("plan_reserved_compensation",{p_actor:ctx.userId,p_log:id,p_date:date,p_schedule:schedule});
     if(error)return NextResponse.json({ok:false,error:error.message},{status:409});
     let notification=null,messageWarning="";
