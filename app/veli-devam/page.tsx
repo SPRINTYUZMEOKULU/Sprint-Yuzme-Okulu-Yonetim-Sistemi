@@ -10,7 +10,18 @@ export default async function Page({ searchParams }:{searchParams:Promise<{child
  const query=await searchParams; const {profile,data,previewGuardian}=await loadGuardianPage(query,"attendance");
  return <main className="guardianShell"><GuardianHeader previewGuardian={previewGuardian} name={profile.full_name||"Değerli Velimiz"} issues={data.issues} students={data.students} selectedId={data.selected?.id}/><div className="guardianContent"><GuardianSectionHeading icon="calendar" title="Dersler ve Yoklama" description="Planlanan ders günleri, katılım geçmişi ve eğitmen notları."/>{!data.selected?<EmptyGuardian title="Öğrenci bulunamadı" text="Öğrenci bağlantısı tamamlandığında ders kayıtları burada görünecek."/>:<><section className="guardianCard"><div className="guardianCardHeader"><h2>Haftalık Program</h2></div>{data.enrollment?.freeze_start_date && <p className="guardianSectionLead">Dondurma başlangıcı {formatDate(data.enrollment.freeze_start_date)} · {data.enrollment.freeze_restart_pending ? "Planlanan dönüş" : "Yeniden başlama"} {formatDate(data.enrollment.freeze_resume_date)}{data.enrollment.freeze_restart_pending ? " · Yönetici kaydı yeniden başlatır" : ""}</p>}{data.schedules.length ? <ul className="lessonWeek">{data.schedules.map((lesson:any) =>
   <li key={lesson.id}><strong>{weekdayLabel(Number(lesson.weekday))}</strong><span>{String(lesson.start_time).slice(0,5)} – {String(lesson.end_time).slice(0,5)}</span></li>)}</ul>
-  : <p className="lessonEmpty">{data.issues.some(issue => issue.startsWith("Ders programı") || issue.startsWith("Grup") || issue.startsWith("Kayıt")) ? "Ders programı yüklenemedi." : "Henüz ders programı tanımlanmadı."}</p>}</section><section className="guardianCard" style={{marginTop:18}}><div className="guardianCardHeader"><h2>Yoklama Geçmişi</h2></div>{data.attendance.length > 0 && <ul className="lessonHistory">{data.attendance.map((record:any) => {
+  : <p className="lessonEmpty">{data.issues.some(issue => issue.startsWith("Ders programı") || issue.startsWith("Grup") || issue.startsWith("Kayıt")) ? "Ders programı yüklenemedi." : "Henüz ders programı tanımlanmadı."}</p>}</section>
+  <section className="guardianCard" style={{marginTop:18}}>
+    <div className="guardianCardHeader"><h2>Planlanan Telafi Dersleri</h2></div>
+    {data.upcomingMakeups.length ? <ul className="lessonWeek">{data.upcomingMakeups.map(lesson =>
+      <li key={lesson.id}>
+        <strong><time dateTime={lesson.lesson_date}>{formatDate(lesson.lesson_date)}</time></strong>
+        <span>{lesson.schedule?.start_time && lesson.schedule?.end_time
+          ? `${lesson.schedule.start_time.slice(0,5)} – ${lesson.schedule.end_time.slice(0,5)}`
+          : "Seans saati doğrulanamadı"}</span>
+      </li>)}</ul> : <p className="lessonEmpty">{data.issues.some(issue=>issue.startsWith("Telafi programı")) ? "Telafi programı yüklenemedi." : "Planlanan telafi dersi bulunmuyor."}</p>}
+  </section>
+  <section className="guardianCard" style={{marginTop:18}}><div className="guardianCardHeader"><h2>Yoklama Geçmişi</h2></div>{data.attendance.length > 0 && <ul className="lessonHistory">{data.attendance.map((record:any) => {
   const status = attendancePresentation(record.status);
   return <li key={record.id}><div><time dateTime={record.lesson_date}>{formatDate(record.lesson_date)}</time><StatusPill tone={status.tone}>{status.label}</StatusPill></div>
     {record.coach_note && <p><strong>Eğitmen notu</strong> {record.coach_note}</p>}</li>;
