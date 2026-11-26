@@ -14,6 +14,7 @@ type Checkin = {
   attendance_status: string;
   approval_status: string;
   manager_note?: string | null;
+  completed_at: string | null;
 };
 
 type TodayRow = {
@@ -40,6 +41,8 @@ type PayrollRow = {
   lessonCount: number;
   totalMinutes: number;
   estimatedAmount: number;
+  paidAmount: number;
+  paymentStatus: string | null;
 };
 
 type DashboardData = {
@@ -47,8 +50,19 @@ type DashboardData = {
   isManager: boolean;
   currentStaffId: string | null;
   date: string;
+  currentDate: string;
   today: TodayRow[];
   payroll: PayrollRow[];
+  lessons: Array<{
+    id: string;
+    lesson_date: string;
+    planned_start: string;
+    planned_end: string;
+    duration: number;
+    amount: number | null;
+    training_groups: { name: string } | null;
+    branches: { name: string } | null;
+  }>;
   summary: {
     planned: number;
     checkedIn: number;
@@ -68,7 +82,7 @@ function money(value: number) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "TRY",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(value || 0);
 }
 
@@ -105,12 +119,14 @@ function statusMeta(checkin: Checkin | null) {
   if (!checkin) return { label: "Giriş bekleniyor", tone: "waiting" };
   if (checkin.approval_status === "pending") return { label: "Yönetici onayı", tone: "pending" };
   if (checkin.approval_status === "rejected") return { label: "Reddedildi", tone: "danger" };
+  if (checkin.completed_at) return { label: "Ders tamamlandı", tone: "success" };
   if (checkin.attendance_status === "late") return { label: "Geç giriş", tone: "late" };
   return { label: "Geldi", tone: "success" };
 }
 
-export default function PersonelPuantajClient({ currentRole }: { currentRole: UserRole }) {
+export default function PersonelPuantajClient({ currentRole, coachHome = false }: { currentRole: UserRole; coachHome?: boolean }) {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -118,47 +134,37 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
   const [activeTab, setActiveTab] = useState<"today" | "payroll">("today");
   const [clockTick, setClockTick] = useState(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/personel-puantaj", { cache: "no-store" });
+      const query = date ? `?${new URLSearchParams({ date })}` : "";
+      const response = await fetch(`/api/personel-puantaj${query}`, { cache: "no-store", signal });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Veriler alınamadı.");
       setData(payload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Veriler alınamadı.");
+      if (!signal?.aborted) setError(err instanceof Error ? err.message : "Veriler alınamadı.");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, []);
-
-  const syncAlerts = useCallback(async () => {
-    try {
-      await fetch("/api/personel-puantaj/alerts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch {
-      // Görsel seans uyarıları istemci tarafında çalışmaya devam eder.
-    }
-  }, []);
+  }, [date]);
 
   useEffect(() => {
-    void load();
-    void syncAlerts();
-  }, [load, syncAlerts]);
-
-  useEffect(() => {
+    const request = new AbortController();
+    void load(request.signal);
     const timer = window.setInterval(() => {
       setClockTick((value) => value + 1);
-      void syncAlerts();
-      void load();
+      void load(request.signal);
     }, 60_000);
-    return () => window.clearInterval(timer);
-  }, [load, syncAlerts]);
+    return () => { request.abort(); window.clearInterval(timer); };
+  }, [load]);
 
-  const currentMinute = useMemo(() => istanbulMinutesNow(), [clockTick, data]);
+  const currentMinute = useMemo(() => {
+    if (data && data.date < data.currentDate) return 1440;
+    if (data && data.date > data.currentDate) return -1440;
+    return istanbulMinutesNow();
+  }, [clockTick, data]);
 
   const myUpcomingWarnings = useMemo(() => {
     if (!data) return [] as Array<{ row: TodayRow; diff: number }>;
@@ -174,12 +180,12 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
     return data.today
       .filter((row) => row.isMine && !row.checkin)
       .map((row) => ({ row, lateBy: currentMinute - minutes(row.startTime) }))
-      .filter(({ lateBy }) => lateBy >= 0)
+      .filter(({ row, lateBy }) => lateBy >= 0 && currentMinute < minutes(row.endTime))
       .sort((a, b) => b.lateBy - a.lateBy);
   }, [data, currentMinute]);
 
   const managerMissing = useMemo(() => {
-    if (!data?.isManager) return [] as Array<{ row: TodayRow; lateBy: number }>;
+    if (!data?.isManager || data.date !== data.currentDate) return [] as Array<{ row: TodayRow; lateBy: number }>;
     return data.today
       .filter((row) => !row.checkin)
       .map((row) => ({ row, lateBy: currentMinute - minutes(row.startTime) }))
@@ -258,6 +264,29 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
     }
   }, [load]);
 
+  async function complete(row: TodayRow) {
+    setBusyKey(row.scheduleId);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/personel-puantaj", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete", scheduleId: row.scheduleId, lessonDate: data?.date }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Ders tamamlanamadı.");
+      setMessage(row.checkin?.approval_status === "pending"
+        ? "Ders tamamlandı. Giriş onaylandığında puantaja yansıyacak."
+        : "Ders tamamlandı ve puantaja işlendi.");
+      await load();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Ders tamamlanamadı.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   const totalPayroll = useMemo(
     () => (data?.payroll || []).reduce((sum, row) => sum + Number(row.estimatedAmount || 0), 0),
     [data]
@@ -273,8 +302,8 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
 
   return (
     <div className="ppContent">
-      {message ? <div className="ppNotice success">{message}</div> : null}
-      {error ? <div className="ppNotice danger">{error}</div> : null}
+      {message ? <div className="ppNotice success" role="status">{message}</div> : null}
+      {error ? <div className="ppNotice danger" role="alert">{error}</div> : null}
 
       {myUpcomingWarnings.map(({ row, diff }) => (
         <div className="ppSessionAlert warning" key={`upcoming-${row.scheduleId}`}>
@@ -296,7 +325,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
           <div>
             <strong>Seans başladı · girişiniz bulunmuyor</strong>
             <p>{row.branchName} · {row.groupName} · {row.startTime}–{row.endTime}</p>
-            <span>{lateBy > 0 ? `${lateBy} dakika geçti. ` : "Ders saati geldi. "}Yönetici bilgilendirildi. Lütfen tesisteyseniz girişinizi hemen yapın.</span>
+            <span>{lateBy > 0 ? `${lateBy} dakika geçti. ` : "Ders saati geldi. "}Tesisteyseniz konumlu girişinizi yapın.</span>
           </div>
           <button onClick={() => void checkin(row)} disabled={busyKey === row.scheduleId}>
             {busyKey === row.scheduleId ? "Konum alınıyor…" : "Şimdi Giriş Yap"}
@@ -322,23 +351,27 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
         </section>
       ) : null}
 
-      <section className="ppStats">
+      {!coachHome ? <section className="ppStats">
         <article><span>Bugünkü Antrenör Planı</span><strong>{data.summary.planned}</strong><small>atanmış antrenör / seans</small></article>
         <article><span>Derse Gelen Antrenör</span><strong>{data.summary.checkedIn}</strong><small>bugün giriş yapan</small></article>
         <article><span>Konum Onayı Bekleyen</span><strong>{data.summary.pending}</strong><small>yönetici kontrolü</small></article>
         <article className={managerMissing.length ? "alert" : ""}><span>Giriş Yapmayan Antrenör</span><strong>{managerMissing.length || data.summary.missing}</strong><small>başlayan seans / giriş yok</small></article>
-      </section>
+      </section> : null}
 
+      <div className="ppDateTools">
+        <label>Ders tarihi <input type="date" value={date || data.date} disabled={busyKey !== null} onChange={(event) => setDate(event.target.value)} /></label>
+        {data.date !== data.currentDate ? <button type="button" onClick={() => setDate("")} disabled={busyKey !== null}>Bugüne Dön</button> : null}
+      </div>
       <div className="ppTabs" role="tablist" aria-label="Personel puantaj bölümleri">
-        <button className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>Bugünkü Antrenör & Ders Planı</button>
-        <button className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>Aylık Puantaj & Hakediş</button>
+        <button className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>{coachHome ? "Ders Programım" : "Bugünkü Antrenör & Ders Planı"}</button>
+        <button className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>{coachHome ? "Puantaj ve Ödemelerim" : "Aylık Puantaj & Hakediş"}</button>
         <button className="ppRefresh" onClick={() => void load()} disabled={loading}>{loading ? "Yenileniyor…" : "Yenile"}</button>
       </div>
 
       {activeTab === "today" ? (
         <section className="ppPanel">
           <div className="ppPanelHead">
-            <div><p>BUGÜN</p><h2>Antrenör, havuz ve ders planı</h2></div>
+            <h2>{coachHome ? "Atandığınız dersler" : "Antrenör, havuz ve ders planı"}</h2>
             <span>{formatDisplayDate(data.date)}</span>
           </div>
 
@@ -346,7 +379,13 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
             <div className="ppLessonList">
               {data.today.map((row) => {
                 const meta = statusMeta(row.checkin);
-                const canCheckin = row.isMine && !row.checkin;
+                const canCheckin = row.isMine && !row.checkin && data.date === data.currentDate &&
+                  currentMinute >= minutes(row.startTime) - 30 && currentMinute < minutes(row.endTime);
+                const canComplete = row.isMine && row.checkin && !row.checkin.completed_at &&
+                  row.checkin.approval_status !== "rejected" && currentMinute >= minutes(row.endTime);
+                const attendanceUrl = `/yoklama?${new URLSearchParams({
+                  date: data.date, branchId: row.branchId, time: row.startTime, scheduleId: row.scheduleId,
+                })}`;
                 const canApprove = data.isManager && row.checkin?.approval_status === "pending";
                 const lateBy = currentMinute - minutes(row.startTime);
                 const isMissingStarted = !row.checkin && lateBy >= 0;
@@ -355,10 +394,10 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                     <div className="ppTimeBox"><strong>{row.startTime}</strong><span>{row.endTime}</span></div>
                     <div className="ppLessonMain">
                       <div className="ppLessonTitle">
-                        <strong>{row.staffName}</strong>
+                        <strong>{coachHome ? row.groupName : row.staffName}</strong>
                         <span className={`ppStatus ${isMissingStarted ? "danger" : meta.tone}`}>{isMissingStarted ? "Giriş yapılmadı" : meta.label}</span>
                       </div>
-                      <p>{row.branchName} · {row.groupName}</p>
+                      <p>{row.branchName}{coachHome ? "" : ` · ${row.groupName}`}</p>
                       <small>{row.assignmentRole === "backup" ? "Yedek Eğitmen" : "Ana Eğitmen"} · {row.title || "Eğitmen"}</small>
                       {row.checkin ? (
                         <div className="ppCheckMeta">
@@ -367,7 +406,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                           {typeof row.checkin.distance_m === "number" ? <span>Mesafe: {Math.round(row.checkin.distance_m)} m</span> : null}
                         </div>
                       ) : isMissingStarted ? (
-                        <div className="ppMissingMeta">Planlanan seans başladı · {lateBy > 0 ? `${lateBy} dk geçti` : "giriş bekleniyor"}</div>
+                        <div className="ppMissingMeta">Planlanan seans başladı · {data.date !== data.currentDate ? "giriş kaydı yok" : lateBy > 0 ? `${lateBy} dk geçti` : "giriş bekleniyor"}</div>
                       ) : !row.branchLocationConfigured ? (
                         <div className="ppBranchWarn">Bu şube için havuz koordinatı henüz tanımlı değil; giriş yönetici onayına düşer.</div>
                       ) : null}
@@ -380,10 +419,17 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                       ) : null}
                       {canApprove && row.checkin ? (
                         <button className="ppApprove" onClick={() => void approve(row.checkin!.id)} disabled={busyKey === row.checkin.id}>
-                          {busyKey === row.checkin.id ? "Onaylanıyor…" : "Puantaja Onayla"}
+                          {busyKey === row.checkin.id ? "Onaylanıyor…" : "Konum Girişini Onayla"}
                         </button>
                       ) : null}
-                      {!canCheckin && !canApprove ? <span className="ppDone">{row.checkin ? "Kayıt tamamlandı" : isMissingStarted ? "Yönetici takibinde" : "Planlandı"}</span> : null}
+                      {row.isMine ? <Link className="ppApprove" href={attendanceUrl}>Öğrenciler ve Yoklama</Link> : null}
+                      {canComplete ? (
+                        <button className="ppPrimary" disabled={busyKey === row.scheduleId} onClick={() => void complete(row)}>
+                          {busyKey === row.scheduleId ? "Kaydediliyor…" : "Dersi Tamamla"}
+                        </button>
+                      ) : null}
+                      {row.isMine && !row.checkin && data.date === data.currentDate && currentMinute < minutes(row.startTime) - 30
+                        ? <span className="ppDone">Konumlu giriş 30 dakika kala açılır.</span> : null}
                       {data.isManager ? (
                         <Link
                           className="ppApprove"
@@ -399,7 +445,7 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
             </div>
           ) : (
             <div className="ppEmpty">
-              <strong>Bugün için atanmış aktif antrenör/seans bulunmuyor.</strong>
+              <strong>Bu tarih için atanmış ders bulunmuyor.</strong>
               {data.isManager ? (
                 <div style={{ marginTop: 12 }}>
                   <Link className="ppApprove" href={`/operasyon-plani?tarih=${encodeURIComponent(data.date)}`}>
@@ -413,13 +459,13 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
       ) : (
         <section className="ppPanel">
           <div className="ppPanelHead">
-            <div><p>AYLIK ÖZET</p><h2>Puantaj ve tahmini hakediş</h2></div>
+            <div><p>{new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(`${data.date}T12:00:00`))}</p><h2>Puantaj ve hakediş</h2></div>
             {data.isManager ? <strong className="ppTotal">Toplam {money(totalPayroll)}</strong> : null}
           </div>
 
           <div className="ppPayrollTableWrap">
             <table className="ppPayrollTable">
-              <thead><tr><th>Personel</th><th>Ücret modeli</th><th>Onaylı ders</th><th>Süre</th><th>Hakediş</th></tr></thead>
+              <thead><tr><th>Personel</th><th>Ücret modeli</th><th>Onaylı ders</th><th>Süre</th><th>Hakediş</th><th>Ödeme</th></tr></thead>
               <tbody>
                 {data.payroll.map((row) => (
                   <tr key={row.staffId}>
@@ -428,11 +474,32 @@ export default function PersonelPuantajClient({ currentRole }: { currentRole: Us
                     <td>{row.lessonCount}</td>
                     <td>{Math.floor(row.totalMinutes / 60)} sa {row.totalMinutes % 60} dk</td>
                     <td><strong>{money(row.estimatedAmount)}</strong></td>
+                    <td>{row.paymentStatus === "paid" || (row.paymentStatus === "archived" && row.paidAmount > 0)
+                      ? `Ödendi · ${money(row.paidAmount)}`
+                      : row.paymentStatus === "awaiting_payment" ? "Ödeme bekliyor" : "Dönem açık"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {coachHome && data.lessons.length > 0 ? (
+            <section className="ppLessonHistory" aria-label="Tamamlanan dersler">
+              <h3>Tamamlanan dersler</h3>
+              <p>Ders tutarları güncel ücret ayarlarına göre gösterilir. Kesin ödeme tutarı aylık özette yer alır.</p>
+              <ul>
+                {[...data.lessons].sort((a, b) => b.lesson_date.localeCompare(a.lesson_date) ||
+                  b.planned_start.localeCompare(a.planned_start)).map((lesson) => (
+                  <li key={lesson.id}>
+                    <strong>{lesson.training_groups?.name || "Yüzme dersi"}</strong>
+                    <span>{formatDisplayDate(lesson.lesson_date)} · {lesson.planned_start.slice(0, 5)}–{lesson.planned_end.slice(0, 5)} · {lesson.duration} dk</span>
+                    {lesson.branches?.name ? <small>{lesson.branches.name}</small> : null}
+                    {lesson.amount !== null ? <b>{money(lesson.amount)}</b> : <small>Aylık ücrete dahil</small>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="ppInfo">
             <strong>Hesaplama kuralı</strong>

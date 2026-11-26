@@ -40,7 +40,7 @@ async function renderHome(failedTable) {
     if (name.endsWith('.css')) return {};
     return require(name);
   });
-  return { html: renderToStaticMarkup(await m.exports.default()), queries };
+  return { html: renderToStaticMarkup(await m.exports.default({ searchParams: Promise.resolve({}) })), queries };
 }
 
 test('home uses the real cash handover source and scopes counts to the organization', async () => {
