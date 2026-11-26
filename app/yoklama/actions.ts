@@ -426,14 +426,20 @@ export async function saveAttendance(input: SaveAttendanceInput) {
 
     // Rebuild the eligible roster on the server: stale screens cannot save a
     // normal lesson on a day that was not selected in the registration.
-    const [rosterStudents, rosterEnrollments, rosterMemberships, rosterCompensations] = await Promise.all([
+    const [rosterStudents, rosterEnrollments, rosterMemberships, rosterCompensations, rosterCancellations] = await Promise.all([
       supabase.from("students").select("id,status").eq("organization_id", organizationId).eq("is_deleted", false).in("id", studentIds),
       supabase.from("student_enrollments").select("id,student_id,group_id,status,lesson_weekdays,start_date,planned_end_date,created_at,updated_at,start_confirmation_required,actual_started_at,freeze_start_date,freeze_resume_date,freeze_restart_pending").eq("organization_id", organizationId).in("status", ["active", "scheduled", "completed"]).in("student_id", studentIds),
       supabase.from("student_group_memberships").select("student_id,group_id,is_active").eq("organization_id", organizationId).eq("group_id", input.groupId).eq("is_active", true).in("student_id", studentIds),
       supabase.from("student_compensation_lessons").select("student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id", organizationId).eq("lesson_date", input.lessonDate).in("status", ["planned", "completed"]).in("student_id", studentIds),
+      attendanceOperationsDb().from("student_activity_logs").select("student_id").eq("organization_id", organizationId)
+        .eq("activity_type", "lesson_cancellation_compensation").eq("source_id", input.scheduleId)
+        .eq("old_value->>cancelled_lesson_date", input.lessonDate).in("student_id", studentIds),
     ]);
-    if (rosterStudents.error || rosterEnrollments.error || rosterMemberships.error || rosterCompensations.error) {
+    if (rosterStudents.error || rosterEnrollments.error || rosterMemberships.error || rosterCompensations.error || rosterCancellations.error) {
       return {ok:false,count:0,message:"Öğrencilerin kayıt günleri doğrulanamadı. Yoklama kaydedilmedi."};
+    }
+    if (rosterCancellations.data?.length) {
+      return {ok:false,count:0,message:"Bu seans için iptal kaydı olan öğrenci var. Yoklamayı yenileyin."};
     }
     const lessonDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
     const roster = attendanceRoster({students:rosterStudents.data||[],enrollments:rosterEnrollments.data||[],memberships:schedule.makeup_date ? [] : rosterMemberships.data||[],compensationLessons:rosterCompensations.data||[]}, input.groupId, input.scheduleId, input.lessonDate, lessonDay===0?7:lessonDay);

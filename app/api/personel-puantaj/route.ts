@@ -70,7 +70,7 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
 
   const [sessions, staffResult, todayResult, monthResult, periodResult] = await Promise.all([
     loadPersonnelSessions(admin, organizationId, dateKey),
-    admin.from("staff").select("id, first_name, last_name, title, auth_user_id, pay_type, per_lesson_rate, hourly_rate, monthly_salary, payroll_active").eq("organization_id", organizationId).eq("is_active", true),
+    admin.from("staff").select("id, first_name, last_name, title, auth_user_id, login_enabled, pay_type, per_lesson_rate, hourly_rate, monthly_salary, payroll_active").eq("organization_id", organizationId).eq("is_active", true),
     admin.from("staff_checkins").select("id, staff_id, schedule_id, checked_in_at, distance_m, location_verified, attendance_status, approval_status, manager_note, completed_at").eq("organization_id", organizationId).eq("lesson_date", dateKey),
     admin.from("staff_checkins").select("id, staff_id, planned_start, planned_end, lesson_date, training_groups(name), branches(name)").eq("organization_id", organizationId).gte("lesson_date", monthStart).lt("lesson_date", nextMonth).not("completed_at", "is", null).in("approval_status", ["auto_approved", "approved"]),
     admin.from("staff_payroll_periods").select("staff_id, status, approved_lesson_count, approved_minutes, total_amount, paid_amount").eq("organization_id", organizationId).eq("period_month", monthStart),
@@ -122,6 +122,16 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
 
   rows.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.staffName).localeCompare(String(b.staffName), "tr"));
 
+  const unassigned = manager && !previewStaffId ? sessions.filter((session) =>
+    ![...session.coaches.keys()].some((id) => {
+      const person = staffIdentityMap.get(id);
+      return person?.auth_user_id && person.login_enabled;
+    })
+  ).map((session) => ({
+    id: session.id, branchId: session.branch_id, groupName: session.group.name,
+    branchName: session.branch.short_name || session.branch.name, startTime: session.start_time.slice(0, 5),
+  })) : [];
+
   const approved = monthResult.data || [];
   const payroll = (staffRows || [])
     .filter((s) => manager || s.id === currentStaff?.id)
@@ -159,6 +169,7 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
     date: dateKey,
     currentDate: today,
     today: rows,
+    unassigned,
     payroll,
     lessons: approved.filter((row) => row.staff_id === currentStaff?.id).map((row) => {
       const duration = Math.max(0, minutes(row.planned_end) - minutes(row.planned_start));

@@ -570,6 +570,16 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           </button>
 
           {result && <div className="resultBox" role="status">{result}</div>}
+          {result && (pendingCount > 0 || missingPhoneCount > 0) && (
+            <div className="resultBox" role="status">
+              <strong>Veli bilgilendirmesi bekliyor</strong>
+              {pendingCount > 0 && <p>{pendingCount} mesajın gönderim onayı bekleniyor.</p>}
+              {missingPhoneCount > 0 && <p>{missingPhoneCount} mesaj için telefon bilgisi eksik.</p>}
+              <p>{[...new Set(preparedMessages.filter(item => !sentMessageKeys.includes(item.studentId + item.message))
+                .map(item => item.studentName))].join(", ")}</p>
+              <a href="#iptal-mesajlari">Bekleyen mesajları aç</a>
+            </div>
+          )}
           {outcomes.length > 0 && <div className="operationResults">
             <div className="outcomeStats"><a href="/ders-operasyonlari/gecmis">Kayıtlı telafiler ve WhatsApp mesajları →</a><strong>{processedOutcomes.length} kursiyere işlem uygulandı</strong>{alreadyCount>0&&<span>{alreadyCount} kursiyerin telafisi zaten kayıtlı</span>}<span>{skippedOutcomes.length} kursiyere işlem uygulanmadı</span>{warningCount > 0 && <span role="alert">{warningCount} kursiyerin mesajı hazırlanamadı; aşağıdaki işlem listesini kontrol edin.</span>}</div>
             {skippedOutcomes.length > 0 && <details className="outcomeDetails skippedDetails" open>
@@ -583,7 +593,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       </section>
 
       {preparedMessages.length > 0 && (
-        <section className="lessonOpsCard messageSection">
+        <section id="iptal-mesajlari" className="lessonOpsCard messageSection">
           <div className="messageHead">
             <div>
               <span>3 · VELİ BİLGİLENDİRME</span>

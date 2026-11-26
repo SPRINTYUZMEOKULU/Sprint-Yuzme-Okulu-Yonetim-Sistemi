@@ -52,6 +52,7 @@ type DashboardData = {
   date: string;
   currentDate: string;
   today: TodayRow[];
+  unassigned?: Array<{ id: string; branchId: string; groupName: string; branchName: string; startTime: string }>;
   payroll: PayrollRow[];
   lessons: Array<{
     id: string;
@@ -378,6 +379,17 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
             <span>{formatDisplayDate(data.date)}</span>
           </div>
 
+          {data.unassigned?.length ? (
+            <div className="ppInfo">
+              <strong>{data.unassigned.length} seans eğitmen ataması bekliyor</strong>
+              <p>Seansı, girişi açık bir eğitmen hesabına bağlayın.</p>
+              <ul>{data.unassigned.map((row) => <li key={row.id}>
+                <Link href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, sube: row.branchId, saat: row.startTime })}`}>
+                  {row.startTime} · {row.branchName} · {row.groupName}
+                </Link>
+              </li>)}</ul>
+            </div>
+          ) : null}
           {data.today.length ? (
             <div className="ppLessonList">
               {data.today.map((row) => {
@@ -388,6 +400,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                   row.checkin.approval_status !== "rejected" && currentMinute >= minutes(row.endTime);
                 const attendanceUrl = `/yoklama?${new URLSearchParams({
                   date: data.date, branchId: row.branchId, time: row.startTime, scheduleId: row.scheduleId,
+                  ...(previewStaffId || (currentRole === "coach" && row.isMine) ? { personel: row.staffId } : {}),
                 })}`;
                 const canApprove = data.isManager && row.checkin?.approval_status === "pending";
                 const lateBy = currentMinute - minutes(row.startTime);
