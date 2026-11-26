@@ -9,3 +9,30 @@
 .lessonOpsShell .fieldGrid label.groupChoice small{display:block;margin-top:5px;font-size:12px;line-height:1.4;color:#526980}
 .lessonOpsShell .fieldGrid label.groupChoice:has(input:checked){border-color:#1268d6;background:#eaf3ff;box-shadow:0 0 0 1px #1268d6}
 .lessonOpsShell .groupChoices>button{width:100%;min-height:44px;padding:10px 14px;border:1px solid #b8d1ee;border-radius:12px;background:#edf5ff;color:#1260b6;font-size:13px;font-weight:800;cursor:pointer}
+
+.lessonOpsShell .addMakeupButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1px solid #bdd5ef;
+  border-radius: 12px;
+  background: #edf5ff;
+  color: #1459a3;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.addMakeupButton span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: #d9eaff;
+  font-size: 18px;
+}
+.addMakeupButton:focus-visible { outline: 2px solid #1268d6; outline-offset: 3px; }
+.addMakeupButton:disabled { opacity: .55; cursor: default; }

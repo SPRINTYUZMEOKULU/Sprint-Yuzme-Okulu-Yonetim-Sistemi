@@ -1,10 +1,11 @@
 "use client";
 
 import { openCurrentWhatsapp } from "@/lib/messaging/current-recipient";
+import { compatibleMakeupGroups } from "@/lib/lesson-operations/course";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import type { CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyLessonCancellation, recordCancellationMessageOpened, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
+import { applyLessonCancellation, verifyCancellationMessage, recordCancellationMessageOpened, confirmCancellationMessageSent, startingCancellationMessages, type StartingCancellationMessage, type PreparedCancellationMessage } from "./actions";
 
 type Branch = { id: string; name: string };
 type Group = { id: string; name: string; branch_id: string | null; course_type?: string | null };
@@ -61,7 +62,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [customTargets, setCustomTargets] = useState<Record<string, {date: string; scheduleId: string}>>({});
   const [extraLessons,setExtraLessons]=useState<{key:string;groupId:string;cancelledDate:string;scheduleId:string;customDate:string;customScheduleId:string}[]>([]);
   const operationLock=useRef(false);
-  const completedOperations=useRef(new Set<string>());
+  const completedOperations = useRef(new Map<string, Awaited<ReturnType<typeof applyLessonCancellation>>>());
+  const nextExtraLesson = useRef(0);
   const [prepareMessages, setPrepareMessages] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
@@ -160,8 +162,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   function compatibleTarget(sourceId: string, targetId: string | null) {
     const source = groups.find(g => g.id === sourceId);
     const target = groups.find(g => g.id === targetId);
-    const adult = (value?: string | null) => /yetişkin|yetiskin|adult|master/i.test(value || "");
-    return Boolean(source && target && source.branch_id === target.branch_id && adult(source.course_type) === adult(target.course_type));
+    return compatibleMakeupGroups(source, target);
   }
 
   async function submitOperation() {
@@ -220,21 +221,23 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     operationLock.current=true;
     setSubmitting(true);
     setResult("Ders iptali ve telafi işlemleri uygulanıyor…");
-    // Retain completed messages and outcomes if a later row needs a retry.
+    setOutcomes([]);
+    setPreparedMessages([]);
+
     setMessageFeedback("");
     setMessageFilter("all");
     setQueueIndex(0);
 
 
     try {
-      const messages: PreparedCancellationMessage[] = [...preparedMessages];
+      const messages: PreparedCancellationMessage[] = [];
       const results: string[] = [];
-      const operationOutcomes: CancellationOutcome[] = [...outcomes];
+      const operationOutcomes: CancellationOutcome[] = [];
       for (const job of jobs) {
         const id=job.groupId;
-        const operationKey=JSON.stringify({...job,mode});
-        if(completedOperations.current.has(operationKey))continue;
-        const response = await applyLessonCancellation({
+        setResult([...results, `${results.length + 1}/${jobs.length} · ${groups.find(group => group.id === id)?.name || ""} işleniyor…`].join("\n"));
+        const operationKey = JSON.stringify({...job, mode});
+        const response = completedOperations.current.get(operationKey) ?? await applyLessonCancellation({
           groupId: id,
           scheduleId: job.scheduleId,
           cancelledDate:job.cancelledDate, reason, description,
@@ -242,26 +245,29 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           customDate: mode === "custom" ? job.customDate : null,
           customScheduleId: mode === "custom" ? job.customScheduleId : null,
           prepareMessages,
-        });
-        if(response.ok)completedOperations.current.add(operationKey);
+        }).catch(() => ({
+          ok: false as const, message: "Sunucu yanıtı alınamadı. İşlem geçmişinden bu seansı kontrol edin.",
+          preparedMessages: [], outcomes: [],
+        }));
+        if (response.ok) completedOperations.current.set(operationKey, response);
         results.push(`${formatDate(job.cancelledDate)} · ${groups.find((g) => g.id === id)?.name}: ${response.message}`);
         for(const item of response.preparedMessages||[])if(!messages.some(m=>m.studentId===item.studentId&&m.message===item.message))messages.push(item);
         operationOutcomes.push(...("outcomes" in response ? response.outcomes || [] : []));
         setOutcomes([...operationOutcomes]);
         setResult(results.join("\n"));
         setPreparedMessages([...messages]);
-        if (!response.ok) break;
+
       }
     } catch (error) {
       console.error(error);
-      setResult("Ders operasyonu sırasında bağlantı hatası oluştu.");
+      setResult(previous => previous + "\nDers operasyonu sırasında bağlantı hatası oluştu.");
     } finally {
       operationLock.current=false;
       setSubmitting(false);
     }
   }
 
-  function openNextWhatsapp() {
+  async function openNextWhatsapp() {
     const sendable = preparedMessages.filter((item) => Boolean(item.recipient) && !sentMessageKeys.includes(item.studentId+item.message));
     if (!sendable.length) {
       setMessageFeedback("Gönderim bekleyen, telefon numarası kayıtlı mesaj kalmadı.");
@@ -272,13 +278,17 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     const current = sendable[safeIndex];
     if (!current.recipient) return;
 
-    void openWhatsapp(current);
-    setQueueIndex(safeIndex + 1 >= sendable.length ? 0 : safeIndex + 1);
+    if (await openWhatsapp(current)) setQueueIndex(safeIndex + 1 >= sendable.length ? 0 : safeIndex + 1);
   }
 
   async function openWhatsapp(item: PreparedCancellationMessage) {
+    if (operationLock.current || sentMessageKeys.includes(item.studentId + item.message)) return;
+    if (!window.confirm(`${item.studentName} · ${item.recipient}\n\n${item.message}\n\nBu mesaj WhatsApp’ta açılsın mı?`)) return;
     try {
-    const recipient = await openCurrentWhatsapp(item.studentId,item.recipient,item.message);
+    const recipient = await openCurrentWhatsapp(item.studentId,item.recipient,item.message, { rejectChangedRecipient: true, verify: async () => {
+      const check = await verifyCancellationMessage({ studentId: item.studentId, message: item.message });
+      if (!check.ok) throw new Error(check.message);
+    } });
     setPreparedMessages(items=>items.map(row=>row.studentId===item.studentId&&row.message===item.message?{...row,recipient}:row));
     const key = item.studentId + item.message;
     setOpenedStudentIds(ids => ids.includes(key) ? ids : [...ids, key]);
@@ -286,12 +296,16 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
     void recordCancellationMessageOpened({studentId:item.studentId,message:item.message}).then(response => {
       if (!response.ok) setMessageFeedback(`${item.studentName}: WhatsApp açma durumu kaydedilemedi. Gönderim yaptıysanız ayrıca onaylayabilirsiniz.`);
     }).catch(() => setMessageFeedback(`${item.studentName}: Bağlantı nedeniyle açılma durumu kaydedilemedi.`));
-    } catch(error) {setMessageFeedback(error instanceof Error?error.message:"Güncel telefon doğrulanamadı.");}
+    return true;
+    } catch(error) {setMessageFeedback(error instanceof Error?error.message:"Güncel telefon doğrulanamadı.");
+      return false;
+    }
   }
 
   const skippedOutcomes = outcomes.filter(item => item.status === "skipped");
   const processedOutcomes = outcomes.filter(item => item.status === "processed");
   const warningCount = outcomes.filter(item => item.warning).length;
+  const sentCount = preparedMessages.filter(item => sentMessageKeys.includes(item.studentId + item.message)).length;
   const pendingCount = preparedMessages.filter(item => item.recipient && !sentMessageKeys.includes(item.studentId+item.message)).length;
   const missingPhoneCount = preparedMessages.filter(item => !item.recipient).length;
   const visibleMessages = preparedMessages.filter(item => messageFilter === "all" || (messageFilter === "sent" ? sentMessageKeys.includes(item.studentId+item.message) : messageFilter === "missing" ? !item.recipient : Boolean(item.recipient) && !sentMessageKeys.includes(item.studentId+item.message)));
@@ -321,6 +335,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
               <span>Şube / Havuz</span>
               <select
                 value={branchId}
+                disabled={submitting}
                 onChange={(event) => {
                   setBranchId(event.target.value);
                   setExtraLessons([]);
@@ -370,8 +385,12 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   <label className="groupChoice">
                     <input aria-label={group.name} type="checkbox" disabled={submitting} checked={selectedIds.includes(group.id)} onChange={(event) => {
                       const ids = event.target.checked ? [...selectedIds, group.id] : selectedIds.filter((id) => id !== group.id);
-                      setGroupIds(ids); setGroupId(ids[0] || ""); setScheduleId(""); setCustomTargets({});
-
+                      setGroupIds(ids); setGroupId(ids[0] || ""); setScheduleId("");
+                      if (!event.target.checked) setCustomTargets(previous => {
+                        const remaining = {...previous};
+                        delete remaining[group.id];
+                        return remaining;
+                      });
                     }} />
                     <span>{group.name}</span>
                   </label>
@@ -386,7 +405,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
 
             {!multiple && <label>
               <span>İptal Edilen Seans</span>
-              <select value={scheduleId} disabled={!groupId} onChange={(event) => setScheduleId(event.target.value)}>
+              <select value={scheduleId} disabled={!groupId || submitting} onChange={(event) => setScheduleId(event.target.value)}>
                 <option value="">Seans seçin</option>
                 {groupSchedules.filter(s => !cancelledDate || participationWeekday(s.weekday) === dateWeekday).map((schedule) => (
                   <option key={schedule.id} value={schedule.id}>{scheduleText(schedule)}</option>
@@ -457,15 +476,15 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           </aside>}
           <h2>2 · Telafi yöntemi</h2>
           <div className="modeCards">
-            <button type="button" className={mode === "append_end" ? "active" : ""} onClick={() => setMode("append_end")}>
-              <strong>✓ Kayıt sonuna otomatik ekle</strong>
+            <button type="button" className={mode === "append_end" ? "active" : ""} disabled={submitting} aria-pressed={mode === "append_end"} onClick={() => setMode("append_end")}>
+              <strong>Kayıt sonuna otomatik ekle</strong>
               <span>Varsayılan. Öğrencinin mevcut telafili bitişinden sonraki ilk gerçek ders günü bulunur; aynı programda telafi oluşturulur.</span>
             </button>
-            <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+            <button type="button" className={mode === "custom" ? "active" : ""} disabled={submitting} aria-pressed={mode === "custom"} onClick={() => setMode("custom")}>
               <strong>Farklı tarih / seans planla</strong>
-              <span>Her grup için tarih seçin; aynı havuzdaki uygun çocuk veya yetişkin grubunun seansına telafi planlayın.</span>
+              <span>Her grup için tarih seçin; aynı havuzdaki uygun Çocuk, Yetişkin veya Takım / Altyapı seansına telafi planlayın.</span>
             </button>
-            <button type="button" className={mode === "reserve" ? "active" : ""} onClick={() => setMode("reserve")}>
+            <button type="button" className={mode === "reserve" ? "active" : ""} disabled={submitting} aria-pressed={mode === "reserve"} onClick={() => setMode("reserve")}>
               <strong>Hakkı saklı tut, sonra planla</strong>
               <span>Henüz tarih belli değilse iptal kaydedilir; veliye telafi hakkının saklı olduğu bildirilir.</span>
             </button>
@@ -476,7 +495,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             {selectedIds.map(id => {
               const target = customTargets[id] || {date:"", scheduleId:""};
               const day = target.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-              const options = schedules.filter(s => compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
+              const options = schedules.filter(s => s.is_active !== false && compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
               return <fieldset key={id} className="customTarget">
                 <legend>{groups.find(g => g.id === id)?.name}</legend>
                 <div className="fieldGrid customFields">
@@ -510,7 +529,10 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                 <button type="button" onClick={()=>setExtraLessons(rows=>rows.filter(item=>item.key!==row.key))}>Bu satırı kaldır</button>
               </fieldset>;
             })}
-            <button type="button" disabled={submitting||extraLessons.length>=11} onClick={()=>setExtraLessons(rows=>[...rows,{key:crypto.randomUUID(),groupId:groupId||"",cancelledDate:"",scheduleId:"",customDate:"",customScheduleId:""}])}>+ Telafi Dersi Ekle</button>
+            <button type="button" className="addMakeupButton" disabled={submitting || extraLessons.length >= 11} onClick={() => {
+              const key = String(++nextExtraLesson.current);
+              setExtraLessons(rows => [...rows, {key, groupId: selectedIds.length === 1 ? selectedIds[0] : "", cancelledDate: "", scheduleId: "", customDate: "", customScheduleId: ""}]);
+            }}><span aria-hidden="true">+</span> Telafi Dersi Ekle</button>
           </section>
 
           <label className="checkRow">
@@ -530,7 +552,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
             </p>
           </div>
 
-          <button type="button" className="applyButton" disabled={submitting} onClick={() => void submitOperation()}>
+          <button type="button" className="applyButton" aria-busy={submitting} disabled={submitting} onClick={() => void submitOperation()}>
             {submitting ? "İşlem uygulanıyor…" : "Ders İptalini Uygula + Telafiyi İşle"}
           </button>
 
@@ -552,7 +574,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           <div className="messageHead">
             <div>
               <span>3 · VELİ BİLGİLENDİRME</span>
-              <h2>{preparedMessages.length} mesaj · {sentMessageKeys.length} gönderildi</h2>
+              <h2>{preparedMessages.length} mesaj · {sentCount} gönderildi</h2>
               <p>WhatsApp’ta mesajı gönderdikten sonra “Gönderildi olarak kaydet” ile onaylayın. WhatsApp’ın açılması gönderim onayı değildir.</p>
               <p>Her mesaj gerçek öğrenci tarihlerini kullanır. Önce iptal bilgisi, sonra telafi ve iki bitiş tarihi gösterilir.</p>
             </div>
@@ -564,7 +586,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           </div>
 
           <div className="messageToolbar" aria-label="Mesaj durum filtresi">
-            {([['all',`Tümü (${preparedMessages.length})`],['pending',`Gönderim onayı bekleyen (${pendingCount})`],['sent',`Gönderildi (${sentMessageKeys.length})`],['missing',`Telefon eksik (${missingPhoneCount})`]] as const).map(([value,label]) => <button type="button" key={value} aria-pressed={messageFilter===value} onClick={() => setMessageFilter(value)}>{label}</button>)}
+            {([['all',`Tümü (${preparedMessages.length})`],['pending',`Gönderim onayı bekleyen (${pendingCount})`],['sent',`Gönderildi (${sentCount})`],['missing',`Telefon eksik (${missingPhoneCount})`]] as const).map(([value,label]) => <button type="button" key={value} aria-pressed={messageFilter===value} onClick={() => setMessageFilter(value)}>{label}</button>)}
           </div>
           {messageFeedback && <p className="messageFeedback" role="status">{messageFeedback}</p>}
           <div className="messageList">
@@ -585,8 +607,8 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   <span className={sentMessageKeys.includes(item.studentId+item.message) ? "sentFlag opened" : "sentFlag"}>
                     {sentMessageKeys.includes(item.studentId+item.message) ? "Gönderildi · Kullanıcı onaylı" : openedStudentIds.includes(item.studentId+item.message) ? "WhatsApp açma isteği · Onay bekliyor" : item.recipient ? "Mesaj hazır" : "Telefon eksik"}
                   </span>
-                  {item.recipient && <button type="button" className="openMessage" onClick={() => openWhatsapp(item)}>WhatsApp’ta aç</button>}
-                  {item.recipient && !sentMessageKeys.includes(item.studentId+item.message) && <button type="button" disabled={Boolean(confirmingMessage)} onClick={()=>void confirmSent(item)}>
+                  {item.recipient && !sentMessageKeys.includes(item.studentId+item.message) && <button type="button" disabled={submitting} className="openMessage" onClick={() => openWhatsapp(item)}>WhatsApp’ta aç</button>}
+                  {item.recipient && !sentMessageKeys.includes(item.studentId+item.message) && <button type="button" disabled={submitting || Boolean(confirmingMessage)} onClick={()=>void confirmSent(item)}>
                     {confirmingMessage===item.studentId+item.message ? "Kaydediliyor…" : "Gönderildi olarak kaydet"}
                   </button>}
                 </div>

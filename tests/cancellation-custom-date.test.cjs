@@ -5,12 +5,19 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
  const source={id:'source',group_id:'g',branch_id:'b',weekday:6,is_active:true,start_time:'19:00',end_time:'20:00'};
  const target={id:'target',group_id:'sunday',branch_id:targetBranch,weekday:sundayDay,is_active:true,start_time:'19:00',end_time:'20:00'};
  const rows={training_groups:[{id:'g',name:'Saturday',branch_id:'b',course_type:'adult',is_active:true},{id:'sunday',name:'Sunday',branch_id:targetBranch,course_type:targetCourse,is_active:true}],lesson_schedules:[source,target],student_group_memberships:[{student_id:'student',group_id:'g',is_active:true}],students:[{id:'student',first_name:'Test',status:'active',is_active:true}],student_enrollments:[{id:'e',student_id:'student',group_id:'g',start_date:'2026-10-01',lesson_weekdays:[6],planned_end_date:'2026-10-31',status:'active',created_at:'2026-10-01'}],student_attendance_plans:[{id:'p',student_id:'student',enrollment_id:'e',group_id:'g',selected_weekdays:[6],is_active:true}]};
- const client={from(table){let single=false,inserted=false;const filters=[];const q={select(){return q},eq(k,v){if(k!=='organization_id')filters.push([k,v]);return q},in(){return q},order(){return q},maybeSingle(){single=true;return q},insert(v){inserted=true;writes.push({table,value:v});return q},update(v){writes.push({table,value:v});return q},then(resolve){const data=(rows[table]||[]).filter(row=>filters.every(([k,v])=>row[k]===v));return Promise.resolve({data:single?data[0]||null:data,error:inserted&&table===failureTable?{message:'write failed'}:null}).then(resolve)}};return q;}};
+ const client={async rpc(name,{p_log,p_makeup,p_enrollment_id}){
+  assert.equal(name,'save_lesson_cancellation');
+  if(p_makeup&&failureTable==='student_compensation_lessons')return {error:{code:'error'}};
+  if(p_makeup)writes.push({table:'student_compensation_lessons',value:{...p_makeup,enrollment_id:p_enrollment_id,status:'planned'}});
+  writes.push({table:'student_activity_logs',value:p_log});
+  return {data:p_makeup?'makeup-id':null,error:null};
+ },from(table){let single=false,inserted=false;const filters=[];const q={select(){return q},eq(k,v){if(k!=='organization_id')filters.push([k,v]);return q},in(){return q},order(){return q},maybeSingle(){single=true;return q},insert(v){inserted=true;writes.push({table,value:v});return q},update(v){writes.push({table,value:v});return q},then(resolve){const data=(rows[table]||[]).filter(row=>filters.every(([k,v])=>row[k]===v));return Promise.resolve({data:single?data[0]||null:data,error:inserted&&table===failureTable?{message:'write failed'}:null}).then(resolve)}};return q;}};
  const actions=load('app/ders-operasyonlari/actions.ts',name=>{
   if(name==='next/cache')return {revalidatePath(){}};
   if(name==='next/headers')return {cookies:async()=>({get(){}})};
   if(name==='@/lib/auth/profile')return {requireProfile:async()=>({id:'admin',organization_id:'org'})};
   if(name==='@/lib/supabase/server')return {createClient:async()=>client};
+  if(name==='@/lib/lesson-operations/course')return load('lib/lesson-operations/course.ts');
   if(name==='@/lib/lesson-operations/participation')return load('lib/lesson-operations/participation.ts');
   if(name==='@/lib/lesson-operations/outcomes')return load('lib/lesson-operations/outcomes.ts');
   throw Error(name);
@@ -63,4 +70,14 @@ test('two cancellations can be planned in consecutive sessions on the same day',
 test('two different cancelled lessons cannot occupy the same makeup session',async()=>{
  const s=setup();s.rows.student_compensation_lessons=[{id:'first',student_id:'student',lesson_date:'2026-10-25',target_schedule_id:'target',status:'planned'}];
  const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.match(r.outcomes[0].reason,/zaten telafi var/);
+});
+
+test('team makeup selects a team session and rejects a child session',async()=>{
+ const s=setup('b','Takım / Altyapı');
+ s.rows.training_groups[0].course_type='Takım / Performans';
+ const ok=await s.call('2026-10-18');
+ assert.equal(ok.ok,true);
+ assert.match(ok.preparedMessages[0].message,/18.10.2026 · 19:00-20:00 · Sunday/);
+ s.rows.training_groups[1].course_type='Çocuk Yüzme Kursu';
+ assert.equal((await s.call('2026-10-18')).ok,false);
 });

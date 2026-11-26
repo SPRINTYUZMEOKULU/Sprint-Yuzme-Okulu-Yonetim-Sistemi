@@ -1,5 +1,6 @@
 "use server";
 
+import { compatibleMakeupGroups, isAdultCourse } from "@/lib/lesson-operations/course";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { missingEnrollmentReason, type CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { revalidatePath } from "next/cache";
@@ -70,15 +71,6 @@ function formatDateTR(value?: string | null) {
 
 function cleanPhone(value?: string | null) {
   return (value || "").replace(/\D/g, "");
-}
-
-function normalizeCourseType(value?: string | null) {
-  return (value || "").toLocaleLowerCase("tr-TR");
-}
-
-function isAdultCourse(value?: string | null) {
-  const normalized = normalizeCourseType(value);
-  return normalized.includes("yetişkin") || normalized.includes("yetiskin") || normalized.includes("adult") || normalized.includes("master");
 }
 
 function nextScheduledDate(afterDate: string, isoWeekdays: number[]) {
@@ -207,7 +199,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         .in("id", membershipStudentIds),
       supabase
         .from("student_enrollments")
-        .select("id,student_id,group_id,planned_end_date,lesson_weekdays,status,created_at,start_date,start_confirmation_required,actual_started_at")
+        .select("id,student_id,group_id,planned_end_date,compensation_end_date,lesson_weekdays,status,created_at,start_date,start_confirmation_required,actual_started_at")
         .eq("organization_id", organizationId)
         .eq("group_id", input.groupId)
         .eq("status", "active")
@@ -235,12 +227,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       if (!enrollmentMap.has(row.student_id)) enrollmentMap.set(row.student_id, row);
     }
 
-    const planMap = new Map<string, any>();
-    for (const row of plansResult.data || []) {
-      if (!planMap.has(row.student_id)) planMap.set(row.student_id, row);
-    }
-
     let customSchedule: any = null;
+    let customGroupName: string | null = null;
     if (input.compensationMode === "custom") {
       const targetResult = await supabase.from("lesson_schedules")
         .select("id,group_id,branch_id,weekday,start_time,end_time,is_active")
@@ -250,13 +238,13 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       }
       customSchedule = targetResult.data;
       const targetGroupResult = await supabase.from("training_groups")
-        .select("id,branch_id,course_type,is_active").eq("organization_id", organizationId)
+        .select("id,name,branch_id,course_type,is_active").eq("organization_id", organizationId)
         .eq("id", customSchedule.group_id).eq("is_active", true).maybeSingle();
       const targetGroup = targetGroupResult.data;
-      if (targetGroupResult.error || !targetGroup || targetGroup.branch_id !== group.branch_id
-        || isAdultCourse(targetGroup.course_type) !== isAdultCourse(group.course_type)) {
-        return { ok: false as const, message: "Telafi için aynı havuzdaki uygun çocuk veya yetişkin grubunu seçin.", preparedMessages };
+      if (targetGroupResult.error || !compatibleMakeupGroups(group, targetGroup)) {
+        return { ok: false as const, message: "Telafi için aynı havuzdaki uygun Çocuk, Yetişkin veya Takım / Altyapı grubunu seçin.", preparedMessages };
       }
+      customGroupName = targetGroup?.name || null;
       const targetDay = new Date(`${input.customDate}T12:00:00Z`).getUTCDay() || 7;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(input.customDate || "") || input.customDate! <= input.cancelledDate || targetDay !== participationWeekday(customSchedule.weekday)) {
         return { ok: false as const, message: "Telafi tarihi iptal tarihinden sonra ve seçilen seansın gününe uygun olmalıdır.", preparedMessages };
@@ -299,14 +287,14 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       }
 
       const oldNormalEndDate = plan?.normal_planned_end_date || enrollment.planned_end_date || null;
-      const currentCompensationEndDate = plan?.compensation_planned_end_date || oldNormalEndDate;
+      const currentCompensationEndDate = laterDate(laterDate(plan?.compensation_planned_end_date, enrollment.compensation_end_date), oldNormalEndDate);
 
       let compensationDate: string | null = null;
       let targetScheduleId: string | null = null;
       let newCompensationEndDate = currentCompensationEndDate;
 
       if (input.compensationMode === "append_end") {
-        const baseDate = currentCompensationEndDate || oldNormalEndDate || input.cancelledDate;
+        const baseDate = laterDate(currentCompensationEndDate, input.cancelledDate)!;
         const next = nextScheduledDate(baseDate, selectedWeekdays);
 
         if (!next) {
@@ -316,7 +304,9 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         }
 
         compensationDate = next.date;
-        targetScheduleId = groupSchedules.find((row: any) => participationWeekday(row.weekday) === next.weekday)?.id || null;
+        const candidates = groupSchedules.filter(row => participationWeekday(row.weekday) === next.weekday);
+        targetScheduleId = candidates.find(row => row.id === sourceSchedule.id)?.id
+          || (candidates.length === 1 ? candidates[0].id : null);
         newCompensationEndDate = compensationDate;
       }
 
@@ -337,47 +327,12 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
           .eq("target_schedule_id",targetScheduleId).in("status",["planned","completed"]).maybeSingle();
         if(occupiedError||occupied){skipped++;outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:occupiedError?"Telafi çakışması kontrol edilemedi.":"Bu tarih ve seansta zaten telafi var. Ayrı bir seans seçin."});continue;}
       }
-      if (compensationDate) {
-        const compensationInsert = await supabase
-          .from("student_compensation_lessons")
-          .insert({
-            organization_id: organizationId,
-            student_id: student.id,
-            enrollment_id: enrollment.id,
-            source_request_id: null,
-            target_group_id: customSchedule?.group_id || input.groupId,
-            target_schedule_id: targetScheduleId,
-            lesson_date: compensationDate,
-            status: "planned",
-            note:
-              `Tesis/grup kaynaklı ders iptali. Kaynak ders: ${formatDateTR(input.cancelledDate)} ` +
-              `${String(sourceSchedule.start_time || "").slice(0, 5)}-${String(sourceSchedule.end_time || "").slice(0, 5)}. ` +
-              `Gerekçe: ${input.reason.trim()}${input.description?.trim() ? ` · ${input.description.trim()}` : ""}`,
-            created_by: profile.id,
-            created_at: now,
-            updated_at: now,
-          });
-
-        if (compensationInsert.error) {
-          skipped += 1;
-          outcomes.push({ studentId: student.id, studentName: `${student.first_name || ""} ${student.last_name || ""}`.trim(), groupName: group.name, status: "skipped", reason: "Telafi kaydı oluşturulamadı. Kursiyer dosyasından kontrol edin." });
-          continue;
-        }
-
-        compensationCreated += 1;
-
-        if (plan?.id && newCompensationEndDate) {
-          await supabase
-            .from("student_attendance_plans")
-            .update({
-              compensation_planned_end_date: newCompensationEndDate,
-              updated_by: profile.id,
-              updated_at: now,
-            })
-            .eq("id", plan.id)
-            .eq("organization_id", organizationId);
-        }
-      }
+      const makeup = compensationDate ? {
+        target_group_id: customSchedule?.group_id || input.groupId,
+        target_schedule_id: targetScheduleId,
+        lesson_date: compensationDate,
+        note: `Tesis/grup kaynaklı ders iptali. Kaynak ders: ${formatDateTR(input.cancelledDate)}. Gerekçe: ${input.reason.trim()}${input.description?.trim() ? ` · ${input.description.trim()}` : ""}`,
+      } : null;
 
       const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
       const adult = isAdultCourse(group.course_type);
@@ -386,11 +341,14 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         : cleanPhone(student.guardian_phone) || cleanPhone(student.phone) || null;
 
       const sourceTime = `${String(sourceSchedule.start_time || "").slice(0, 5)}-${String(sourceSchedule.end_time || "").slice(0, 5)}`;
+      const targetSchedule = customSchedule || groupSchedules.find(row => row.id === targetScheduleId);
+      const targetTime = targetSchedule ? `${String(targetSchedule.start_time || "").slice(0, 5)}-${String(targetSchedule.end_time || "").slice(0, 5)}` : "";
+      const targetDetails = [formatDateTR(compensationDate), targetTime, customGroupName || group.name].filter(Boolean).join(" · ");
       const compensationText = input.compensationMode === "reserve"
         ? `İptal edilen dersinize ait telafi hakkınız saklıdır. Telafi tarihi ve saati planlandığında ayrıca tarafınıza bildirilecektir.`
         : input.compensationMode === "append_end"
-          ? `İptal edilen dersiniz telafi olarak sisteminize eklenmiş ve mevcut programınızın sonuna, aynı ders gün/saat düzeniniz korunarak planlanmıştır.\n\n📌 *Normal planlanan bitiş tarihi:* ${formatDateTR(oldNormalEndDate)}\n✅ *Telafi sonrası güncellenen bitiş tarihi:* ${formatDateTR(newCompensationEndDate)}\n🟣 *Telafi dersi:* ${formatDateTR(compensationDate)}`
-          : `İptal edilen dersiniz telafi olarak sisteminize eklenmiştir.\n\n📌 *Normal planlanan bitiş tarihi:* ${formatDateTR(oldNormalEndDate)}\n✅ *Telafi sonrası güncellenen bitiş tarihi:* ${formatDateTR(newCompensationEndDate)}\n🟣 *Telafi dersi:* ${formatDateTR(compensationDate)} · ${String(customSchedule?.start_time || "").slice(0, 5)}-${String(customSchedule?.end_time || "").slice(0, 5)}`;
+          ? `İptal edilen dersiniz telafi olarak sisteminize eklenmiş ve mevcut programınızın sonuna, aynı ders gün/saat düzeniniz korunarak planlanmıştır.\n\n📌 *Normal planlanan bitiş tarihi:* ${formatDateTR(oldNormalEndDate)}\n✅ *Telafi sonrası güncellenen bitiş tarihi:* ${formatDateTR(newCompensationEndDate)}\n🟣 *Telafi dersi:* ${targetDetails}`
+          : `İptal edilen dersiniz telafi olarak sisteminize eklenmiştir.\n\n📌 *Normal planlanan bitiş tarihi:* ${formatDateTR(oldNormalEndDate)}\n✅ *Telafi sonrası güncellenen bitiş tarihi:* ${formatDateTR(newCompensationEndDate)}\n🟣 *Telafi dersi:* ${targetDetails}`;
 
       const message =
         `*SPRİNT YÜZME OKULU | DERS BİLGİLENDİRMESİ*\n\n` +
@@ -400,7 +358,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         `Sonraki normal dersiniz mevcut programınız doğrultusunda devam edecektir.\n\n` +
         `*Sprint Yüzme Okulu Yönetimi*`;
 
-      await supabase.from("student_activity_logs").insert({
+      const activity = {
         organization_id: organizationId,
         student_id: student.id,
         activity_type: "lesson_cancellation_compensation",
@@ -432,7 +390,19 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         approved_by: profile.id,
         performed_at: now,
         approved_at: now,
+      };
+      const saved = await supabase.rpc("save_lesson_cancellation", {
+        p_log: activity, p_makeup: makeup, p_plan_id: plan?.id || null, p_enrollment_id: enrollment.id,
+        p_expected_end: enrollment.compensation_end_date || null, p_new_end: newCompensationEndDate,
       });
+      if (saved.error || (makeup && !saved.data)) {
+        skipped += 1;
+        console.error("Ders iptali kaydedilemedi", saved.error?.code);
+        const reason = saved.error?.code === "P0001" ? saved.error.message : "Telafi kaydı oluşturulamadı. Kursiyer dosyasından kontrol edin.";
+        outcomes.push({ studentId: student.id, studentName, groupName: group.name, status: "skipped", reason });
+        continue;
+      }
+      if (makeup) compensationCreated += 1;
 
       let messageWarning = "";
       if (input.prepareMessages) {
@@ -454,6 +424,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
             target_group_id: customSchedule?.group_id || input.groupId,
             compensation_mode: input.compensationMode,
             compensation_date: compensationDate,
+            compensation_id: saved.data,
+            target_schedule_id: targetScheduleId,
             old_normal_end_date: oldNormalEndDate,
             new_compensation_end_date: newCompensationEndDate,
             selected_operation: selectedStudentIds.length > 0,
@@ -473,7 +445,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       }
 
       processed += 1;
-      outcomes.push({ studentId: student.id, studentName, groupName: group.name, status: "processed", reason: (compensationDate ? `Telafi planlandı: ${formatDateTR(compensationDate)}` : "Telafi hakkı saklı; planlama bekliyor.") + messageWarning, warning: Boolean(messageWarning) });
+      outcomes.push({ studentId: student.id, studentName, groupName: group.name, status: "processed", reason: (compensationDate ? `Telafi planlandı: ${targetDetails}` : "Telafi hakkı saklı; planlama bekliyor.") + messageWarning, warning: Boolean(messageWarning) });
       revalidatePath(`/ogrenciler/${student.id}`);
     }
 
@@ -605,6 +577,28 @@ export async function startingCancellationMessages(input: {
     messages.push({studentId:student.id,studentName,groupName:group.name,recipient,message});
   }
   return {ok:true,message:input.prepare ? `${messages.length} başlangıç bilgilendirme mesajı hazırlandı.` : "",messages};
+}
+
+export async function verifyCancellationMessage(input: {studentId: string; message: string}) {
+  const profile = await requireProfile([...ALLOWED_ROLES]);
+  const db = await createClient();
+  const stale = {ok: false, message: "Mesajın telafi bilgisi güncel değil. Öğrenci dosyasını ve işlem geçmişini kontrol edin."};
+  if (!profile.organization_id || !input.studentId || !input.message) return stale;
+  const entry = await db.from("message_logs").select("status,metadata")
+    .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
+    .eq("template_key","lesson_cancellation_compensation").eq("channel","whatsapp").eq("message_body",input.message)
+    .order("prepared_at",{ascending:false}).limit(1).maybeSingle();
+  if (entry.error || entry.data?.status !== "prepared") return stale;
+  const details = entry.data.metadata;
+  if (details?.compensation_date) {
+    if (!details.compensation_id || !details.target_schedule_id) return stale;
+    const lesson = await db.from("student_compensation_lessons").select("id")
+      .eq("organization_id",profile.organization_id).eq("student_id",input.studentId).eq("id",details.compensation_id)
+      .eq("lesson_date",details.compensation_date).eq("target_schedule_id",details.target_schedule_id)
+      .eq("target_group_id",details.target_group_id).in("status",["planned","completed"]).maybeSingle();
+    if (lesson.error || !lesson.data) return stale;
+  }
+  return {ok: true, message: ""};
 }
 
 export async function confirmCancellationMessageSent(input: {studentId:string;message:string}) {
