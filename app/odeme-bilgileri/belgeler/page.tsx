@@ -4,6 +4,7 @@ import { documentAdmin } from "@/lib/payments/document-admin";
 import { hasDocumentDetails, isReceivedBankPayment } from "@/lib/payments/document-state";
 import MatchPayment from "./match-payment";
 import EsmmApproval from "./esmm-approval";
+import ManualEsmmForm from "./manual-esmm-form";
 import "./style.css";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,13 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
         .eq("organization_id",profile.organization_id).in("request_id",requestIds)
     : {data:[],error:null};
   const approvals = new Map((approvalsResult.data || []).map(x=>[x.request_id,x]));
+  const manualResult = requestIds.length
+    ? await db.from("manual_esmm_reconciliation")
+        .select("request_id,document_number,issue_date,verification_state")
+        .eq("organization_id",profile.organization_id).in("request_id",requestIds)
+    : {data:[],error:null};
+  const manualReferences = new Map((manualResult.data || []).map(x=>[x.request_id,x]));
+
 
 
   const ids = [...new Set([...rows, ...bankRows].map(r => r.student_id))];
@@ -57,7 +65,7 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
   const shareLogs = shareLogsResult.data || [];
 
   const names = new Map((studentsResult.data || []).map(s => [s.id, `${s.first_name || ""} ${s.last_name || ""}`.trim()]));
-  const error = requestsResult.error || bankResult.error || studentsResult.error || paymentsResult.error || bankEntryResult.error || shareLogsResult.error || approvalsResult.error;
+  const error = requestsResult.error || bankResult.error || studentsResult.error || paymentsResult.error || bankEntryResult.error || shareLogsResult.error || approvalsResult.error || manualResult.error;
   const canMatch = ["owner", "admin"].includes(profile.role);
   return <main className="document-review"><header><Link href={studentId ? `/odeme-bilgileri?studentId=${encodeURIComponent(studentId)}` : "/odeme-bilgileri"}>← Ödeme Bilgilerine Dön</Link><p>SPRİNT · YÖNETİCİ KONTROLÜ</p><h1>Havale / EFT ve Fatura Takibi</h1><span>Mevcut ödeme kaydı, müşteri bilgileri ve belge durumu birlikte kontrol edilir.</span></header>
     <nav style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:18}}><Link href="/fatura-merkezi">Fatura Merkezi</Link><Link href="/fatura-merkezi?tab=issued">Kesilen Faturalar</Link><Link href="/fatura-merkezi/banka">VakıfBank Excel Yükle</Link></nav><section className="integration-notice"><h2>NetteFatura bağlantısı hazırlanıyor</h2><p>Fatura, e-Arşiv ve adres defteri test servisleri belirlendi. Test firma bilgileri, başarılı test faturası ve canlı IP/VKN yetkilendirmesi tamamlanmadan sistem fatura göndermez.</p><p><b>Banka bağlantısı kurulmadı.</b> Aşağıdaki liste SprintOS'a kaydedilen ödemelerdir. VakıfBank IBAN hareketleri otomatik okunmuyor.</p></section>
@@ -74,6 +82,7 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
       const missing = !hasDocumentDetails(row);
       const hasDocument = Boolean(row.document_number) || ["document_created", "document_sent"].includes(row.status);
       const approval = approvals.get(row.id);
+      const portalReference = manualReferences.get(row.id);
       const canPreapprove = canMatch && row.status === "payment_received" &&
         row.document_type === "e_smm" && !!row.payment_id &&
         !missing && !hasDocument && row.document_status === "not_created";
@@ -82,7 +91,9 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
         {row.payment_id && ["payment_received", "document_pending", "document_created", "document_sent"].includes(row.status) ?
           <Link href={`/odeme-bilgileri/belgeler/paylas/${row.id}`}>Veliye PDF paylaşımı</Link> : null}
         {!hasDocument && !["cancelled", "error"].includes(row.status) && Date.parse(row.expires_at) <= Date.now() ? <p className="warning">Müşteri bağlantısının süresi dolmuş. Gerekirse kursiyer dosyasından yeni bağlantı oluşturunuz.</p> : null}
-        {approval ? <p className="status"><strong>e-SMM yönetici ön onayı kayıtlı · {date(approval.approved_at)}</strong> · Durum: {approval.issue_state === "not_sent" ? "İşNet'e gönderilmedi" : "Sağlayıcı durumunu ayrıca kontrol edin"}</p>
+        {portalReference ? <p className="status"><strong>Portaldan kesilmiş e-SMM referansı: {portalReference.document_number}</strong> · {portalReference.issue_date} · PDF/XML ve sağlayıcı doğrulaması bekleniyor. Yeni e-SMM kesilmemeli.</p> : null}
+        {!portalReference && !approval && canPreapprove ? <ManualEsmmForm requestId={row.id} /> : null}
+                {approval ? <p className="status"><strong>e-SMM yönetici ön onayı kayıtlı · {date(approval.approved_at)}</strong> · Durum: {approval.issue_state === "not_sent" ? "İşNet'e gönderilmedi" : "Sağlayıcı durumunu ayrıca kontrol edin"}</p>
           : canPreapprove ? <EsmmApproval requestId={row.id} /> : null}
         {canMatch && row.status === "waiting_payment" && !row.payment_id && !missing ? (options.length ? <MatchPayment requestId={row.id} payments={options.map(p => ({ id: p.id, label: `${money(p.amount)} · ${date(p.received_at)}` }))} /> : <p className="warning">Bu kursiyer / dönem ve tutarla eşleşen alınmış havale/EFT kaydı yok. Ödeme Merkezini kontrol ediniz.</p>) : null}
       </article>;
