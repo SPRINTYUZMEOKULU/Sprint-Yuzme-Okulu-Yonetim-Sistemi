@@ -102,7 +102,7 @@ export default function UcretAyarlari() {
         {rows.map((row) => {
           const draft = drafts[row.staffId] || row;
           return (
-            <article className="payCard" key={row.staffId}>
+            <article className="payCard" key={row.staffId} id={`personel-${row.staffId}`}>
               <header>
                 <div className="payAvatar">{row.staffName.trim().slice(0, 1).toLocaleUpperCase("tr-TR")}</div>
                 <div><strong>{row.staffName}</strong><span>{row.title || "Personel"}</span></div>

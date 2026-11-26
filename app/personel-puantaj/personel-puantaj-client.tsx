@@ -124,7 +124,7 @@ function statusMeta(checkin: Checkin | null) {
   return { label: "Geldi", tone: "success" };
 }
 
-export default function PersonelPuantajClient({ currentRole, coachHome = false }: { currentRole: UserRole; coachHome?: boolean }) {
+export default function PersonelPuantajClient({ currentRole, coachHome = false, previewStaffId }: { currentRole: UserRole; coachHome?: boolean; previewStaffId?: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,7 +138,10 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
     setLoading(true);
     setError(null);
     try {
-      const query = date ? `?${new URLSearchParams({ date })}` : "";
+      const params = new URLSearchParams();
+      if (date) params.set("date", date);
+      if (previewStaffId) params.set("personel", previewStaffId);
+      const query = params.size ? `?${params}` : "";
       const response = await fetch(`/api/personel-puantaj${query}`, { cache: "no-store", signal });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Veriler alınamadı.");
@@ -148,7 +151,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [date]);
+  }, [date, previewStaffId]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -243,7 +246,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
     );
   }, [load]);
 
-  const approve = useCallback(async (checkinId: string) => {
+  const approve = useCallback(async (checkinId: string, note?: string) => {
     setBusyKey(checkinId);
     setMessage(null);
     setError(null);
@@ -251,11 +254,11 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
       const response = await fetch("/api/personel-puantaj", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", checkinId }),
+        body: JSON.stringify({ action: "approve", checkinId, note }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Onay verilemedi.");
-      setMessage("Personel girişi onaylandı ve puantaja dahil edildi.");
+      setMessage("Personelin konum girişi onaylandı.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Onay verilemedi.");
@@ -418,11 +421,18 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
                         </button>
                       ) : null}
                       {canApprove && row.checkin ? (
-                        <button className="ppApprove" onClick={() => void approve(row.checkin!.id)} disabled={busyKey === row.checkin.id}>
-                          {busyKey === row.checkin.id ? "Onaylanıyor…" : "Konum Girişini Onayla"}
-                        </button>
+                        <form className="ppApprovalForm" onSubmit={(event) => {
+                          event.preventDefault();
+                          const note = new FormData(event.currentTarget).get("note");
+                          void approve(row.checkin!.id, typeof note === "string" ? note : undefined);
+                        }}>
+                          {previewStaffId ? <input name="note" aria-label="Yönetici onay notu" placeholder="Onay notu (isteğe bağlı)" maxLength={500} /> : null}
+                          <button type="submit" className="ppApprove" disabled={busyKey === row.checkin.id}>
+                            {busyKey === row.checkin.id ? "Onaylanıyor…" : "Konum Girişini Onayla"}
+                          </button>
+                        </form>
                       ) : null}
-                      {row.isMine ? <Link className="ppApprove" href={attendanceUrl}>Öğrenciler ve Yoklama</Link> : null}
+                      {(row.isMine || previewStaffId) ? <Link className="ppApprove" href={attendanceUrl}>Öğrenciler ve Yoklama</Link> : null}
                       {canComplete ? (
                         <button className="ppPrimary" disabled={busyKey === row.scheduleId} onClick={() => void complete(row)}>
                           {busyKey === row.scheduleId ? "Kaydediliyor…" : "Dersi Tamamla"}
@@ -430,6 +440,9 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false }
                       ) : null}
                       {row.isMine && !row.checkin && data.date === data.currentDate && currentMinute < minutes(row.startTime) - 30
                         ? <span className="ppDone">Konumlu giriş 30 dakika kala açılır.</span> : null}
+                      {data.isManager && !previewStaffId && ["owner", "admin"].includes(currentRole) ? (
+                        <Link className="ppApprove" href={`/personel-puantaj?personel=${row.staffId}`}>Paneli Aç</Link>
+                      ) : null}
                       {data.isManager ? (
                         <Link
                           className="ppApprove"
