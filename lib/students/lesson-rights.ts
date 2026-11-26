@@ -5,7 +5,7 @@ export function studentLessonRights(p:{total:number;scheduledUsed:number;legacyC
  for(const row of p.cancellations){
   const date=row.old_value?.cancelled_lesson_date;
   const schedule=p.schedules.find(s=>s.id===row.source_id);
-  if(!date||!e||date<e.start_date||date>e.planned_end_date||schedule?.group_id!==e.group_id)continue;
+  if(row.new_value?.source_compensation_id||row.new_value?.rescheduled_existing_makeup||!date||!e||date<e.start_date||date>e.planned_end_date||schedule?.group_id!==e.group_id)continue;
   operations.set(`${row.source_id}:${date}`,{...row,date,schedule});
  }
  const rows=[...operations.values()];
