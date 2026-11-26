@@ -26,9 +26,7 @@ const { data: coachStaff } = profile.base_role === "coach"
 const requestedStaffId = params.personel;
 let selectedStaff: { id: string; auth_user_id: string | null; first_name: string; last_name: string } | null = null;
 if (requestedStaffId && profile.is_active && ["owner", "admin"].includes(profile.base_role)) {
-  const db = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const db = attendanceOperationsDb();
   const result = await db.from("staff").select("id,auth_user_id,first_name,last_name")
     .eq("organization_id", organizationId).eq("id", requestedStaffId).eq("is_active", true).maybeSingle();
   selectedStaff = result.data;
