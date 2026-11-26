@@ -27,6 +27,9 @@ type Props = {
   participation: { students: {id: string; name: string}[]; memberships: {student_id: string; group_id: string}[]; enrollments: any[]; plans: any[] };
 };
 
+type CustomTarget = {date: string; scheduleId: string; start?: string; end?: string};
+const newSession = "one_off";
+
 type Mode = "append_end" | "custom" | "reserve";
 
 const DAY_NAMES: Record<number, string> = {
@@ -59,7 +62,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
   const [reason, setReason] = useState("Havuz / tesis kaynaklı kapanış");
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<Mode>("append_end");
-  const [customTargets, setCustomTargets] = useState<Record<string, {date: string; scheduleId: string}>>({});
+  const [customTargets, setCustomTargets] = useState<Record<string, CustomTarget>>({});
   const [extraLessons,setExtraLessons]=useState<{key:string;groupId:string;cancelledDate:string;scheduleId:string;customDate:string;customScheduleId:string}[]>([]);
   const operationLock=useRef(false);
   const completedOperations = useRef(new Map<string, Awaited<ReturnType<typeof applyLessonCancellation>>>());
@@ -172,18 +175,9 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       return;
     }
 
-    if (mode === "custom" && selectedIds.some(id => {
-      const target = customTargets[id];
-      const day = target?.date ? new Date(`${target.date}T12:00:00Z`).getUTCDay() || 7 : 0;
-      return !target?.date || target.date <= cancelledDate || !schedules.some(s => s.id === target.scheduleId && compatibleTarget(id, s.group_id) && participationWeekday(s.weekday) === day);
-    })) {
-      setResult("Her grup için iptal tarihinden sonraki telafi tarihini ve o güne uygun seansı seçin.");
-      return;
-    }
-
     const jobs = [
-      ...selectedIds.map(id=>({groupId:id,scheduleId:sourceFor(id)!.id,cancelledDate,customDate:customTargets[id]?.date||null,customScheduleId:customTargets[id]?.scheduleId||null})),
-      ...extraLessons,
+      ...selectedIds.map(id=>({groupId:id,scheduleId:sourceFor(id)!.id,cancelledDate,customDate:customTargets[id]?.date||null,customScheduleId:customTargets[id]?.scheduleId||null,oneOff:customTargets[id]?.scheduleId===newSession?{start:customTargets[id]?.start||"",end:customTargets[id]?.end||""}:undefined})),
+      ...extraLessons.map(row=>({...row,oneOff:undefined})),
     ];
     const keys=new Set<string>(),targets=new Set<string>();
     for(const job of jobs){
@@ -195,6 +189,12 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
       keys.add(key);
       if(mode==="custom"){
         const target=schedules.find(s=>s.id===job.customScheduleId&&s.is_active!==false&&compatibleTarget(job.groupId,s.group_id));
+        if(job.oneOff){
+          if(!job.customDate || job.customDate<=job.cancelledDate || !job.oneOff.start || !job.oneOff.end || job.oneOff.start>=job.oneOff.end){
+            setResult("Tek seferlik telafi için iptalden sonraki tarihi ve geçerli başlangıç / bitiş saatini girin.");return;
+          }
+          continue;
+        }
         const targetKey=`${job.groupId}:${job.customDate}:${job.customScheduleId}`;
         if(!target||!job.customDate||job.customDate<=job.cancelledDate||participationWeekday(target.weekday)!==(new Date(`${job.customDate}T12:00:00Z`).getUTCDay()||7)||targets.has(targetKey)){
           setResult("Her iptal dersi için ayrı, uygun bir telafi tarihi ve seansı seçin. Aynı telafi seansı iki kez eklenemez.");return;
@@ -214,7 +214,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           ? "telafileri seçilen özel tarih/seansa planlamak"
           : "telafi haklarını saklı tutup daha sonra planlamak";
 
-    if (!window.confirm(`${jobs.map(job=>`${groups.find(g=>g.id===job.groupId)?.name} · ${formatDate(job.cancelledDate)} · ${scheduleText(schedules.find(s=>s.id===job.scheduleId))}${mode==="custom"?` → ${formatDate(job.customDate)} · ${scheduleText(schedules.find(s=>s.id===job.customScheduleId))}`:""}`).join("\n")}\n\n${jobs.length} iptal dersi için ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
+    if (!window.confirm(`${jobs.map(job=>`${groups.find(g=>g.id===job.groupId)?.name} · ${formatDate(job.cancelledDate)} · ${scheduleText(schedules.find(s=>s.id===job.scheduleId))}${mode==="custom"?` → ${formatDate(job.customDate)} · ${(job.oneOff ? `${job.oneOff.start}–${job.oneOff.end} · Tek seferlik telafi` : scheduleText(schedules.find(s=>s.id===job.customScheduleId)))}`:""}`).join("\n")}\n\n${jobs.length} iptal dersi için ${modeText} istiyorsunuz. Devam edilsin mi?`)) {
       return;
     }
 
@@ -244,6 +244,7 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
           compensationMode: mode,
           customDate: mode === "custom" ? job.customDate : null,
           customScheduleId: mode === "custom" ? job.customScheduleId : null,
+          oneOff: mode === "custom" ? job.oneOff : undefined,
           prepareMessages,
         }).catch(() => ({
           ok: false as const, message: "Sunucu yanıtı alınamadı. İşlem geçmişinden bu seansı kontrol edin.",
@@ -502,10 +503,21 @@ export default function LessonOperationsClient({ branches, groups, schedules, me
                   <label><span>Telafi Tarihi</span><input type="date" value={target.date} disabled={submitting} onChange={event => setCustomTargets(prev => ({...prev,[id]:{date:event.target.value,scheduleId:""}}))} /></label>
                   <label><span>Telafi Grubu / Seansı</span><select value={target.scheduleId} disabled={submitting || !target.date} onChange={event => setCustomTargets(prev => ({...prev,[id]:{...target,scheduleId:event.target.value}}))}>
                     <option value="">Seans seçin</option>
+                    <option value={newSession}>Tek seferlik telafi seansı oluştur</option>
                     {options.map(schedule => <option key={schedule.id} value={schedule.id}>{groups.find(g => g.id === schedule.group_id)?.name} · {scheduleText(schedule)}</option>)}
                   </select></label>
                 </div>
-                {target.date && !options.length && <p role="status">Seçilen tarihte aynı havuzda uygun aktif seans bulunamadı. Havuzun grup programını kontrol edin.</p>}
+                {target.scheduleId === newSession && <div className="fieldGrid customFields">
+                  <label><span>Başlangıç saati</span><input type="time" value={target.start || ""} disabled={submitting} onChange={event => {
+                    const start = event.target.value;
+                    setCustomTargets(prev=>({...prev,[id]:{...target,start}}));
+                  }}/></label>
+                  <label><span>Bitiş saati</span><input type="time" value={target.end || ""} disabled={submitting} onChange={event => {
+                    const end = event.target.value;
+                    setCustomTargets(prev=>({...prev,[id]:{...target,end}}));
+                  }}/></label>
+                </div>}
+                {target.date && !options.length && target.scheduleId !== newSession && <p role="status">Bu tarihte uygun seans yok. Tek seferlik telafi seansı oluşturabilirsiniz.</p>}
               </fieldset>;
             })}
           </div>}

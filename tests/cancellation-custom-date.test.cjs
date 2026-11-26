@@ -5,7 +5,9 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
  const source={id:'source',group_id:'g',branch_id:'b',weekday:6,is_active:true,start_time:'19:00',end_time:'20:00'};
  const target={id:'target',group_id:'sunday',branch_id:targetBranch,weekday:sundayDay,is_active:true,start_time:'19:00',end_time:'20:00'};
  const rows={training_groups:[{id:'g',name:'Saturday',branch_id:'b',course_type:'adult',is_active:true},{id:'sunday',name:'Sunday',branch_id:targetBranch,course_type:targetCourse,is_active:true}],lesson_schedules:[source,target],student_group_memberships:[{student_id:'student',group_id:'g',is_active:true}],students:[{id:'student',first_name:'Test',status:'active',is_active:true}],student_enrollments:[{id:'e',student_id:'student',group_id:'g',start_date:'2026-10-01',lesson_weekdays:[6],planned_end_date:'2026-10-31',status:'active',created_at:'2026-10-01'}],student_attendance_plans:[{id:'p',student_id:'student',enrollment_id:'e',group_id:'g',selected_weekdays:[6],is_active:true}]};
- const client={async rpc(name,{p_log,p_makeup,p_enrollment_id}){
+ const client={async rpc(name,args){
+  if(name==='ensure_one_off_makeup_session')return {data:{id:'one-off',group_id:args.p_group,weekday:0,start_time:args.p_start,end_time:args.p_end},error:null};
+  const {p_log,p_makeup,p_enrollment_id}=args;
   assert.equal(name,'save_lesson_cancellation');
   if(p_makeup&&failureTable==='student_compensation_lessons')return {error:{code:'error'}};
   if(p_makeup)writes.push({table:'student_compensation_lessons',value:{...p_makeup,enrollment_id:p_enrollment_id,status:'planned'}});
@@ -22,7 +24,7 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
   if(name==='@/lib/lesson-operations/outcomes')return load('lib/lesson-operations/outcomes.ts');
   throw Error(name);
  });
- return {writes,rows,call:(date,schedule='target',mode='custom',cancelledDate='2026-10-17')=>actions.applyLessonCancellation({groupId:'g',scheduleId:'source',cancelledDate,reason:'Pool closure',compensationMode:mode,customDate:date,customScheduleId:schedule,prepareMessages:true})};
+ return {writes,rows,call:(date,schedule='target',mode='custom',cancelledDate='2026-10-17',oneOff)=>actions.applyLessonCancellation({groupId:'g',scheduleId:'source',cancelledDate,reason:'Pool closure',compensationMode:mode,customDate:date,customScheduleId:schedule,oneOff,prepareMessages:true})};
 }
 test('custom compensation rejects wrong weekday before any writes',async()=>{const s=setup();const r=await s.call('2026-10-19');assert.equal(r.ok,false);assert.match(r.message,/seansın gününe/);assert.equal(s.writes.length,0);});
 test('custom compensation rejects dates before cancellation before any writes',async()=>{const s=setup();const r=await s.call('2026-10-11');assert.equal(r.ok,false);assert.match(r.message,/iptal tarihinden sonra/);assert.equal(s.writes.length,0);});
@@ -80,4 +82,12 @@ test('team makeup selects a team session and rejects a child session',async()=>{
  assert.match(ok.preparedMessages[0].message,/18.10.2026 · 19:00-20:00 · Sunday/);
  s.rows.training_groups[1].course_type='Çocuk Yüzme Kursu';
  assert.equal((await s.call('2026-10-18')).ok,false);
+});
+
+test('a one-off telafi is written against the actual session returned by the server',async()=>{
+ const fixture=setup();
+ const result=await fixture.call('2026-10-18',null,'custom','2026-10-17',{start:'19:00',end:'20:00'});
+ assert.equal(result.compensationCreated,1);
+ assert.equal(fixture.writes.find(w=>w.table==='student_compensation_lessons').value.target_schedule_id,'one-off');
+ assert.match(result.preparedMessages[0].message,/18.10.2026 · 19:00-20:00/);
 });

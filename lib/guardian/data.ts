@@ -25,7 +25,7 @@ export type GuardianContext = {
   coursePackage: any | null;
   coach: any | null;
   schedules: any[];
-  upcomingMakeups: {id: string; lesson_date: string; schedule: {start_time: string; end_time: string; is_active: boolean; organization_id: string} | null}[];
+  upcomingMakeups: {id: string; lesson_date: string; schedule: {start_time: string; end_time: string; is_active: boolean; makeup_date?: string | null; organization_id: string} | null}[];
   attendance: any[];
   progress: any[];
   announcements: any[];
@@ -238,7 +238,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     plan.schedule&&enrollment?.group_id?admin.from("lesson_schedules").select("id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("group_id",enrollment.group_id).eq("is_active",true):empty(),
     installmentsPromise,branchPromise,coachesPromise,announcementsPromise,
     plan.attendanceHistory || plan.full
-      ? allRows("student_compensation_lessons","id,lesson_date,schedule:lesson_schedules!student_compensation_lessons_target_schedule_id_fkey(start_time,end_time,is_active,organization_id)",
+      ? allRows("student_compensation_lessons","id,lesson_date,schedule:lesson_schedules!student_compensation_lessons_target_schedule_id_fkey(start_time,end_time,is_active,makeup_date,organization_id)",
           q=>q.eq("status","planned").gte("lesson_date",istanbulDate()).order("lesson_date").order("id"))
       : empty(),
   ]);
@@ -254,7 +254,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     students:studentList,issues,selected,enrollment,group,branch:branchRes.data||null,coursePackage:packageRes.data||null,
     coach:coachesRes.data?.length?{full_name:coachesRes.data.map((row:any)=>row.full_name).join(", ")}:null,
     schedules:visibleSchedules(group ? schedulesRes.data||[] : [],enrollment,currentAssignments),
-    upcomingMakeups:(makeupsRes.data||[]).map(row=>({...row,schedule:row.schedule?.is_active && row.schedule.organization_id===profile.organization_id ? row.schedule : null})),
+    upcomingMakeups:(makeupsRes.data||[]).map(row=>({...row,schedule:(row.schedule?.is_active || row.schedule?.makeup_date===row.lesson_date) && row.schedule.organization_id===profile.organization_id ? row.schedule : null})),
     attendance:plan.attendanceHistory?(attendanceRes.data||[]).slice(0,HISTORY_PAGE_SIZE):attendanceRes.data||[],
     progress:progress.filter((note:any)=>note.note_type==='coach'),
     announcements:(announcementsRes.data||[]).filter((a:any)=>a.group_id?a.group_id===group?.id:a.branch_id?a.branch_id===branchId:true),
