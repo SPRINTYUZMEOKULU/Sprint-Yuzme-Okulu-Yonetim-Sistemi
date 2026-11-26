@@ -21,3 +21,11 @@ test('rescheduling follows the exact makeup chain and hides stale messages',()=>
 });
 
 test('a repeat skip cannot hide a previously saved makeup or its message',()=>{const [s]=run([log('a'),log('a','lesson_cancellation_skipped','2026-10-22T13:00:00Z')]);assert.equal(s.students.length,1);assert.equal(s.students[0].status,'processed');});
+
+test('a collision notice stays visible for skipped rows and is superseded by a real plan',()=>{
+ const skipped=log('a','lesson_cancellation_skipped');
+ skipped.new_value={};
+ const msg={student_id:'a',metadata:{source_schedule_id:'s',cancelled_date:'2026-10-22',notice_type:'makeup_conflict_cancellation'},message_body:'İptal bildirimi',status:'prepared'};
+ assert.equal(run([skipped],[msg])[0].students[0].message,'İptal bildirimi');
+ assert.equal(run([skipped,log('a')],[msg])[0].students[0].message,null);
+});

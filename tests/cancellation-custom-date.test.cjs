@@ -6,6 +6,7 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
  const target={id:'target',group_id:'sunday',branch_id:targetBranch,weekday:sundayDay,is_active:true,start_time:'19:00',end_time:'20:00'};
  const rows={training_groups:[{id:'g',name:'Saturday',branch_id:'b',course_type:'adult',is_active:true},{id:'sunday',name:'Sunday',branch_id:targetBranch,course_type:targetCourse,is_active:true}],lesson_schedules:[source,target],student_group_memberships:[{student_id:'student',group_id:'g',is_active:true}],students:[{id:'student',first_name:'Test',status:'active',is_active:true}],student_enrollments:[{id:'e',student_id:'student',group_id:'g',start_date:'2026-10-01',lesson_weekdays:[6],planned_end_date:'2026-10-31',status:'active',created_at:'2026-10-01'}],student_attendance_plans:[{id:'p',student_id:'student',enrollment_id:'e',group_id:'g',selected_weekdays:[6],is_active:true}]};
  const client={async rpc(name,args){
+  if(name==='prepare_conflicted_cancellation_notices'){writes.push({table:'conflict-notices',value:args});return {data:1,error:null};}
   if(name==='ensure_one_off_makeup_session')return {data:{id:'one-off',group_id:args.p_group,weekday:0,start_time:args.p_start,end_time:args.p_end},error:null};
   const {p_log,p_makeup,p_enrollment_id}=args;
   assert.equal(name,'save_lesson_cancellation');
@@ -71,7 +72,7 @@ test('two cancellations can be planned in consecutive sessions on the same day',
 });
 test('two different cancelled lessons cannot occupy the same makeup session',async()=>{
  const s=setup();s.rows.student_compensation_lessons=[{id:'first',student_id:'student',lesson_date:'2026-10-25',target_schedule_id:'target',status:'planned'}];
- const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.match(r.outcomes[0].reason,/zaten telafi var/);
+ const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.match(r.outcomes[0].reason,/zaten telafi var/);assert.match(r.message,/1 iptal mesajı hazırlandı/);assert.deepEqual(s.writes.find(w=>w.table==="conflict-notices").value,{p_source:"source",p_date:"2026-10-24",p_students:["student"]});
 });
 
 test('team makeup selects a team session and rejects a child session',async()=>{

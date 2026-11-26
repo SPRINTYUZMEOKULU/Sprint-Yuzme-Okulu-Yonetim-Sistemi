@@ -1,3 +1,5 @@
+export const makeupCollisionReason = "Bu tarih ve seansta zaten telafi var. Ayrı bir seans seçin.";
+
 export type CancellationOutcome = {
   studentId: string;
   studentName: string;
