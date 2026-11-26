@@ -26,6 +26,7 @@ export type LessonCancellationInput = {
   compensationMode: CompensationMode;
   customScheduleId?: string | null;
   customDate?: string | null;
+  oneOff?: {start: string; end: string};
   prepareMessages: boolean;
 };
 
@@ -117,7 +118,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       return { ok: false as const, message: "Grup, seans, iptal tarihi ve gerekçe zorunludur.", preparedMessages };
     }
 
-    if (input.compensationMode === "custom" && (!input.customScheduleId || !input.customDate)) {
+    if (input.compensationMode === "custom" && ((!input.customScheduleId && !input.oneOff) || !input.customDate)) {
       return { ok: false as const, message: "Özel telafi için tarih ve seans seçilmelidir.", preparedMessages };
     }
 
@@ -230,9 +231,17 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
     let customSchedule: any = null;
     let customGroupName: string | null = null;
     if (input.compensationMode === "custom") {
-      const targetResult = await supabase.from("lesson_schedules")
-        .select("id,group_id,branch_id,weekday,start_time,end_time,is_active")
-        .eq("organization_id", organizationId).eq("id", input.customScheduleId!).eq("is_active", true).maybeSingle();
+      if (input.oneOff && (!/^\d{2}:\d{2}$/.test(input.oneOff.start) || !/^\d{2}:\d{2}$/.test(input.oneOff.end)
+        || input.oneOff.start >= input.oneOff.end || !input.customDate || input.customDate <= input.cancelledDate)) {
+        return {ok:false as const,message:"Telafi tarihini ve başlangıç / bitiş saatlerini kontrol edin.",preparedMessages};
+      }
+      const targetResult = input.oneOff
+        ? await supabase.rpc("ensure_one_off_makeup_session", {
+          p_group: input.groupId, p_date: input.customDate, p_start: input.oneOff.start, p_end: input.oneOff.end,
+        })
+        : await supabase.from("lesson_schedules")
+          .select("id,group_id,branch_id,weekday,start_time,end_time,is_active")
+          .eq("organization_id", organizationId).eq("id", input.customScheduleId!).eq("is_active", true).maybeSingle();
       if (targetResult.error || !targetResult.data) {
         return { ok: false as const, message: "Seçilen telafi seansı bulunamadı veya aktif değil.", preparedMessages };
       }
@@ -312,7 +321,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
 
       if (input.compensationMode === "custom") {
         compensationDate = input.customDate || null;
-        targetScheduleId = input.customScheduleId || null;
+        targetScheduleId = customSchedule.id;
         newCompensationEndDate = laterDate(currentCompensationEndDate, compensationDate);
       }
 

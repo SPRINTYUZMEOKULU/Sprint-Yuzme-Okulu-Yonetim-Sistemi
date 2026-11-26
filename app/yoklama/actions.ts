@@ -243,7 +243,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       error: scheduleError,
     } = await supabase
       .from("lesson_schedules")
-      .select("id, branch_id, group_id, coach_id, weekday, is_active")
+      .select("id, branch_id, group_id, coach_id, weekday, is_active, makeup_date")
       .eq("id", input.scheduleId)
       .eq("group_id", input.groupId)
       .eq("organization_id", organizationId)
@@ -258,7 +258,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
     }
 
     const requestedDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
-    if (schedule.is_active === false || (Number(schedule.weekday) === 7 ? 0 : Number(schedule.weekday)) !== requestedDay) {
+    if (schedule.makeup_date ? schedule.makeup_date !== input.lessonDate : schedule.is_active === false || (Number(schedule.weekday) === 7 ? 0 : Number(schedule.weekday)) !== requestedDay) {
       return {ok:false,count:0,message:"Seçilen tarih bu seansın ders günüyle eşleşmiyor."};
     }
 
@@ -436,7 +436,7 @@ export async function saveAttendance(input: SaveAttendanceInput) {
       return {ok:false,count:0,message:"Öğrencilerin kayıt günleri doğrulanamadı. Yoklama kaydedilmedi."};
     }
     const lessonDay = new Date(`${input.lessonDate}T12:00:00Z`).getUTCDay();
-    const roster = attendanceRoster({students:rosterStudents.data||[],enrollments:rosterEnrollments.data||[],memberships:rosterMemberships.data||[],compensationLessons:rosterCompensations.data||[]}, input.groupId, input.scheduleId, input.lessonDate, lessonDay===0?7:lessonDay);
+    const roster = attendanceRoster({students:rosterStudents.data||[],enrollments:rosterEnrollments.data||[],memberships:schedule.makeup_date ? [] : rosterMemberships.data||[],compensationLessons:rosterCompensations.data||[]}, input.groupId, input.scheduleId, input.lessonDate, lessonDay===0?7:lessonDay);
     const eligibleIds = new Set(roster.students.map(student=>student.id));
     if(input.records.some(record=>!eligibleIds.has(record.studentId))) {
       return {ok:false,count:0,message:"Listede bu gün için kaydı veya telafisi olmayan öğrenci var. Yoklamayı yenileyip tekrar deneyin."};

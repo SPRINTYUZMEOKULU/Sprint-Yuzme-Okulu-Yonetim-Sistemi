@@ -14,7 +14,7 @@ import { clearAttendance, getAttendanceForDate, saveAttendance } from "./actions
 type Status="present"|"absent"|"excused"|"compensation";
 type Branch={id:string;name?:string|null;short_name?:string|null};
 type Group={id:string;branch_id?:string|null;name?:string|null;course_type?:string|null;primary_coach_id?:string|null};
-type Schedule={id:string;branch_id?:string|null;group_id?:string|null;coach_id?:string|null;weekday?:number|null;start_time?:string|null;end_time?:string|null;is_active?:boolean|null};
+type Schedule={makeup_date?:string|null;id:string;branch_id?:string|null;group_id?:string|null;coach_id?:string|null;weekday?:number|null;start_time?:string|null;end_time?:string|null;is_active?:boolean|null};
 type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolean|null};
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
@@ -23,6 +23,7 @@ type Props={viewerId:string;allowedStudentIdsBySchedule?:Record<string,string[]>
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
+function onDate(schedule:Schedule,date:string){return schedule.makeup_date ? schedule.makeup_date===date : schedule.is_active!==false&&scheduleWeekday(schedule.weekday)===weekday(date)}
 function weekday(v:string){const d=new Date(`${v}T12:00:00`).getDay();return d===0?7:d}
 function scheduleWeekday(v?:number|null){const d=Number(v);return d===0?7:d}
 function tm(v?:string|null){return v?.slice(0,5)||"—"}
@@ -37,10 +38,10 @@ export default function QuickAttendanceClient(p:Props){
  const mutationVersion=useRef(0);
  const [syncMessage,setSyncMessage]=useState("");
  const initialDate = p.initialDate && /^\d{4}-\d{2}-\d{2}$/.test(p.initialDate) && !Number.isNaN(Date.parse(`${p.initialDate}T12:00:00`)) ? p.initialDate : today();
- const targetSchedule = p.schedules.find(s=>s.id===p.initialScheduleId && scheduleWeekday(s.weekday)===weekday(initialDate));
+ const targetSchedule = p.schedules.find(s=>s.id===p.initialScheduleId && onDate(s,initialDate));
  const [date,setDate]=useState(initialDate);
  const day=weekday(date);
- const initialBranch=(p.branches.some(b=>b.id===p.initialBranchId)?p.initialBranchId:"")||targetSchedule?.branch_id||p.schedules.find(s=>scheduleWeekday(s.weekday)===weekday(initialDate))?.branch_id||p.branches[0]?.id||"";
+ const initialBranch=(p.branches.some(b=>b.id===p.initialBranchId)?p.initialBranchId:"")||targetSchedule?.branch_id||p.schedules.find(s=>onDate(s,initialDate))?.branch_id||p.branches[0]?.id||"";
  const [branchId,setBranchId]=useState(initialBranch);
  const [time,setTime]=useState(targetSchedule?tm(targetSchedule.start_time):p.initialTime||"");
  const [statuses,setStatuses]=useState<Record<string,Status>>({});
@@ -59,14 +60,13 @@ export default function QuickAttendanceClient(p:Props){
  function changeDate(nextDate:string){
    if(!nextDate)return;
    setDate(nextDate);
-   const nextDay=weekday(nextDate);
-   if(!p.schedules.some(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===nextDay&&s.branch_id===branchId)){
-     const nextBranch=p.schedules.find(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===nextDay)?.branch_id;
+   if(!p.schedules.some(s=>onDate(s,nextDate)&&s.branch_id===branchId)){
+     const nextBranch=p.schedules.find(s=>onDate(s,nextDate))?.branch_id;
      if(nextBranch)setBranchId(nextBranch);
    }
  }
 
- const schedulesForDay=useMemo(()=>p.schedules.filter(s=>s.is_active!==false&&scheduleWeekday(s.weekday)===day&&(!branchId||s.branch_id===branchId)),[p.schedules,day,branchId]);
+ const schedulesForDay=useMemo(()=>p.schedules.filter(s=>onDate(s,date)&&(!branchId||s.branch_id===branchId)),[p.schedules,date,branchId]);
  const times=useMemo(()=>Array.from(new Set(schedulesForDay.map(s=>tm(s.start_time)))).sort(),[schedulesForDay]);
  useEffect(()=>{if(!times.length)setTime("");else if(!times.includes(time))setTime(times[0])},[times,time]);
  const timeSummaries=useMemo(()=>Object.fromEntries(times.map(t=>{
@@ -75,7 +75,7 @@ export default function QuickAttendanceClient(p:Props){
      const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)continue;
      const kind=attendanceCourseLabel(group);
      const ids=counts.get(kind)||new Set<string>();
-     const roster=attendanceRoster(p,group.id,schedule.id,date,day);
+     const roster=attendanceRoster(schedule.makeup_date?{...p,memberships:[]}:p,group.id,schedule.id,date,day);
      const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
      for(const student of roster.students)if(!allowed||allowed.includes(student.id))ids.add(student.id);
      counts.set(kind,ids);
@@ -86,7 +86,7 @@ export default function QuickAttendanceClient(p:Props){
 
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
    const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)return null;
-   const {students,enrollmentByStudent,compensationIds}=attendanceRoster(p,group.id,schedule.id,date,day);
+   const {students,enrollmentByStudent,compensationIds}=attendanceRoster(schedule.makeup_date?{...p,memberships:[]}:p,group.id,schedule.id,date,day);
    const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
    return {group,schedule,students:allowed?students.filter(s=>allowed.includes(s.id)):students,enrollmentByStudent,compensationIds};
  }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,p.allowedStudentIdsBySchedule,date,day]);

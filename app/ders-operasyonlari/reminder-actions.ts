@@ -16,7 +16,7 @@ async function eligible(db:any, org:string) {
   const results=await Promise.all([
     db.from("student_compensation_lessons").select("id,student_id,enrollment_id,target_group_id,target_schedule_id,lesson_date,status").eq("organization_id",org).eq("lesson_date",now.date).eq("status","planned"),
     db.from("students").select("id,first_name,last_name,phone,guardian_phone").eq("organization_id",org).eq("status","active").eq("is_active",true).eq("is_deleted",false),
-    db.from("lesson_schedules").select("id,group_id,start_time,end_time").eq("organization_id",org).eq("is_active",true),
+    db.from("lesson_schedules").select("id,group_id,start_time,end_time").eq("organization_id",org).or(`is_active.eq.true,makeup_date.eq.${now.date}`),
     db.from("training_groups").select("id,name,branch_id,course_type").eq("organization_id",org).eq("is_active",true),
     db.from("branches").select("id,name").eq("organization_id",org).eq("is_active",true),
     db.from("student_activity_logs").select("student_id,source_id").eq("organization_id",org).eq("activity_type","lesson_cancellation_compensation").eq("old_value->>cancelled_lesson_date",now.date),
