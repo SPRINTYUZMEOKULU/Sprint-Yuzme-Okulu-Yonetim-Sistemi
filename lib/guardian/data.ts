@@ -1,3 +1,4 @@
+import { istanbulDate } from "@/lib/enrollment/dates";
 import { visibleSchedules } from "./presentation";
 import { formatDisplayDate } from "@/lib/dates/display";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
@@ -24,6 +25,7 @@ export type GuardianContext = {
   coursePackage: any | null;
   coach: any | null;
   schedules: any[];
+  upcomingMakeups: {id: string; lesson_date: string; schedule: {start_time: string; end_time: string; is_active: boolean; organization_id: string} | null}[];
   attendance: any[];
   progress: any[];
   announcements: any[];
@@ -53,6 +55,7 @@ function emptyContext(students: GuardianStudent[] = [], issue?:string): Guardian
     coursePackage: null,
     coach: null,
     schedules: [],
+    upcomingMakeups: [],
     attendance: [],
     progress: [],
     announcements: [],
@@ -216,7 +219,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     return admin.from("announcements").select("id,title,body,branch_id,group_id,published_at,created_at").eq("organization_id",profile.organization_id).eq("is_published",true).or(scopes.join(",")).order("published_at",{ascending:false}).limit(200);
   });
 
-  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,currentAssignments,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes,schedulesRes,installmentsRes,branchRes,coachesRes,announcementsRes]=await Promise.all([
+  const [attendanceRes,notesRes,paymentsRes,messagesRes,documentsRes,consentsRes,requestsRes,planRes,groupRes,packageRes,assignmentsRes,currentAssignments,paymentHistoryRes,rights,obligationsRes,obligationPaymentsRes,schedulesRes,installmentsRes,branchRes,coachesRes,announcementsRes,makeupsRes]=await Promise.all([
     attendance(),noteQuery(),
     plan.finance&&enrollment?allRows("student_payments",plan.full?"id,enrollment_id,amount,payment_status,payment_method,received_at,cancelled_at":"id,enrollment_id,amount,payment_status,cancelled_at",q=>(plan.full?q:q.eq("enrollment_id",enrollment.id)).order("id")):empty(),
     messageQuery(),
@@ -234,12 +237,16 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     plan.finance?allRows("student_activity_logs","new_value",q=>q.eq("activity_type","financial_obligation_payment").order("id")):empty(),
     plan.schedule&&enrollment?.group_id?admin.from("lesson_schedules").select("id,weekday,start_time,end_time").eq("organization_id",profile.organization_id).eq("group_id",enrollment.group_id).eq("is_active",true):empty(),
     installmentsPromise,branchPromise,coachesPromise,announcementsPromise,
+    plan.attendanceHistory || plan.full
+      ? allRows("student_compensation_lessons","id,lesson_date,schedule:lesson_schedules!student_compensation_lessons_target_schedule_id_fkey(start_time,end_time,is_active,organization_id)",
+          q=>q.eq("status","planned").gte("lesson_date",istanbulDate()).order("lesson_date").order("id"))
+      : empty(),
   ]);
   for(const [label,result] of [["Yoklama",attendanceRes],["Gelişim",notesRes],["Ödeme",paymentsRes],["Mesaj",messagesRes],["Belge",documentsRes],["Onay",consentsRes],["Talep",requestsRes],["Ödeme planı",planRes],["Grup",groupRes],["Ödeme paketi",packageRes],["Eğitmen atamaları",assignmentsRes],["Ödeme geçmişi",paymentHistoryRes],["Ödeme ek borçları",obligationsRes],["Ödeme eşleştirmeleri",obligationPaymentsRes]] as const)report(label,result);
   if(enrollment&&rights)enrollment.lesson_rights=rights;
   const group = groupRes.data || null;
   const branchId = group?.branch_id || selected.branch_id;
-  for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Duyuru",announcementsRes]] as const)report(label,result);
+  for(const [label,result] of [["Ödeme planı",installmentsRes],["Şube",branchRes],["Eğitmen",coachesRes],["Ders programı",schedulesRes],["Telafi programı",makeupsRes],["Duyuru",announcementsRes]] as const)report(label,result);
   const progress=(notesRes.data||[]).map((item:any)=>({...item,note:item.body,visible_to_guardian:item.is_guardian_visible,coach_id:item.author_id}));
   const obligationPaymentIds=new Set((obligationPaymentsRes.data||[]).map((row:any)=>row.new_value?.payment_id).filter(Boolean));
   const history=plan.attendanceHistory?attendanceRes.data:paymentHistoryRes.data;
@@ -247,6 +254,7 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
     students:studentList,issues,selected,enrollment,group,branch:branchRes.data||null,coursePackage:packageRes.data||null,
     coach:coachesRes.data?.length?{full_name:coachesRes.data.map((row:any)=>row.full_name).join(", ")}:null,
     schedules:visibleSchedules(group ? schedulesRes.data||[] : [],enrollment,currentAssignments),
+    upcomingMakeups:(makeupsRes.data||[]).map(row=>({...row,schedule:row.schedule?.is_active && row.schedule.organization_id===profile.organization_id ? row.schedule : null})),
     attendance:plan.attendanceHistory?(attendanceRes.data||[]).slice(0,HISTORY_PAGE_SIZE):attendanceRes.data||[],
     progress:progress.filter((note:any)=>note.note_type==='coach'),
     announcements:(announcementsRes.data||[]).filter((a:any)=>a.group_id?a.group_id===group?.id:a.branch_id?a.branch_id===branchId:true),

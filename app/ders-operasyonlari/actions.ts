@@ -590,13 +590,25 @@ export async function verifyCancellationMessage(input: {studentId: string; messa
     .order("prepared_at",{ascending:false}).limit(1).maybeSingle();
   if (entry.error || entry.data?.status !== "prepared") return stale;
   const details = entry.data.metadata;
-  if (details?.compensation_date) {
-    if (!details.compensation_id || !details.target_schedule_id) return stale;
-    const lesson = await db.from("student_compensation_lessons").select("id")
-      .eq("organization_id",profile.organization_id).eq("student_id",input.studentId).eq("id",details.compensation_id)
-      .eq("lesson_date",details.compensation_date).eq("target_schedule_id",details.target_schedule_id)
-      .eq("target_group_id",details.target_group_id).in("status",["planned","completed"]).maybeSingle();
+  if (!details?.source_schedule_id || !details.cancelled_date) return stale;
+  const activity = await db.from("student_activity_logs").select("new_value")
+    .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
+    .eq("activity_type","lesson_cancellation_compensation").eq("source_id",details.source_schedule_id)
+    .eq("old_value->>cancelled_lesson_date",details.cancelled_date).maybeSingle();
+  if (activity.error || !activity.data) return stale;
+  if (details.compensation_date) {
+    const scheduleId = details.target_schedule_id || activity.data.new_value?.target_schedule_id;
+    const makeupId = details.compensation_id || activity.data.new_value?.compensation_id;
+    if (!scheduleId || !details.target_group_id) return stale;
+    let query = db.from("student_compensation_lessons").select("id")
+      .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
+      .eq("lesson_date",details.compensation_date).eq("target_schedule_id",scheduleId)
+      .eq("target_group_id",details.target_group_id).in("status",["planned","completed"]);
+    if (makeupId) query = query.eq("id",makeupId);
+    const lesson = await query.maybeSingle();
     if (lesson.error || !lesson.data) return stale;
+  } else if (activity.data.new_value?.compensation_mode !== "reserve" || activity.data.new_value?.compensation_date) {
+    return stale;
   }
   return {ok: true, message: ""};
 }
