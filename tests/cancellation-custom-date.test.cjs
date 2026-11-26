@@ -60,7 +60,7 @@ test('failed message preparation keeps the successful compensation and warns wit
 
 test('reopening a previously processed cancellation cannot add a second lesson',async()=>{
  const s=setup();s.rows.student_activity_logs=[{id:'previous',student_id:'student',activity_type:'lesson_cancellation_compensation',source_id:'source','old_value->>cancelled_lesson_date':'2026-10-17'}];
- const r=await s.call('2026-10-18');assert.equal(r.compensationCreated,0);assert.equal(r.skippedCount,1);assert.match(r.outcomes[0].reason,/zaten kayıtlı/);
+ const r=await s.call('2026-10-18');assert.equal(r.compensationCreated,0);assert.equal(r.skippedCount,0);assert.equal(r.alreadyCount,1);assert.match(r.outcomes[0].reason,/zaten kayıtlı/);
 });
 test('two cancellations can be planned in consecutive sessions on the same day',async()=>{
  const s=setup();assert.equal((await s.call('2026-10-25')).compensationCreated,1);
