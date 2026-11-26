@@ -91,6 +91,7 @@ export default async function PaymentDocumentReviewPage({ searchParams }: { sear
         {row.payment_id && ["payment_received", "document_pending", "document_created", "document_sent"].includes(row.status) ?
           <Link href={`/odeme-bilgileri/belgeler/paylas/${row.id}`}>Veliye PDF paylaşımı</Link> : null}
         {!hasDocument && !["cancelled", "error"].includes(row.status) && Date.parse(row.expires_at) <= Date.now() ? <p className="warning">Müşteri bağlantısının süresi dolmuş. Gerekirse kursiyer dosyasından yeni bağlantı oluşturunuz.</p> : null}
+        {canMatch && !hasDocument && !portalReference ? <p><Link href={`/odeme-bilgileri/belgeler/hazirla/${row.id}`}>NetteFatura için hazırla · eksikleri gör / bilgileri kopyala</Link></p> : null}
         {portalReference ? <p className="status"><strong>Portaldan kesilmiş e-SMM referansı: {portalReference.document_number}</strong> · {portalReference.issue_date} · PDF/XML ve sağlayıcı doğrulaması bekleniyor. Yeni e-SMM kesilmemeli.</p> : null}
         {!portalReference && !approval && canPreapprove ? <ManualEsmmForm requestId={row.id} /> : null}
                 {approval ? <p className="status"><strong>e-SMM yönetici ön onayı kayıtlı · {date(approval.approved_at)}</strong> · Durum: {approval.issue_state === "not_sent" ? "İşNet'e gönderilmedi" : "Sağlayıcı durumunu ayrıca kontrol edin"}</p>
