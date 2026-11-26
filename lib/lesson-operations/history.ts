@@ -26,7 +26,7 @@ export function buildCancellationHistory(logs:any[],messages:any[],names:Map<str
   }
   // The saved message metadata also covers older bulk date corrections.
   if(!compensationId && matches[0]?.metadata?.compensation_date)compensationDate=matches[0].metadata.compensation_date;
-  const message=matches.find(m=>m.status!=="cancelled" && (m.metadata?.compensation_date===compensationDate || (!compensationId && !m.metadata?.compensation_date)));
+  const message=matches.find(m=>m.status!=="cancelled" && (m.metadata?.notice_type!=="makeup_conflict_cancellation" || log.activity_type==="lesson_cancellation_skipped") && (m.metadata?.compensation_date===compensationDate || (!compensationId && !m.metadata?.compensation_date)));
 
   session.students.push({studentId:log.student_id,name:names.get(log.student_id)||"Kursiyer",status:log.activity_type==="lesson_cancellation_skipped"?"skipped":"processed",reason:log.description||log.new_value?.reason||"",compensationDate,message:message?.message_body||null,recipient:message?.recipient||null,messageStatus:message?.status||"none",sentAt:message?.sent_at||null});
  }

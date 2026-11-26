@@ -2,7 +2,7 @@
 
 import { compatibleMakeupGroups, isAdultCourse } from "@/lib/lesson-operations/course";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
-import { missingEnrollmentReason, type CancellationOutcome } from "@/lib/lesson-operations/outcomes";
+import { makeupCollisionReason, missingEnrollmentReason, type CancellationOutcome } from "@/lib/lesson-operations/outcomes";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireProfile } from "@/lib/auth/profile";
@@ -340,7 +340,7 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
         const {data:occupied,error:occupiedError}=await supabase.from("student_compensation_lessons").select("id")
           .eq("organization_id",organizationId).eq("student_id",student.id).eq("lesson_date",compensationDate)
           .eq("target_schedule_id",targetScheduleId).in("status",["planned","completed"]).maybeSingle();
-        if(occupiedError||occupied){skipped++;outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:occupiedError?"Telafi çakışması kontrol edilemedi.":"Bu tarih ve seansta zaten telafi var. Ayrı bir seans seçin."});continue;}
+        if(occupiedError||occupied){skipped++;outcomes.push({studentId:student.id,studentName:`${student.first_name||""} ${student.last_name||""}`.trim(),groupName:group.name,status:"skipped",reason:occupiedError?"Telafi çakışması kontrol edilemedi.":makeupCollisionReason});continue;}
       }
       const makeup = compensationDate ? {
         target_group_id: customSchedule?.group_id || input.groupId,
@@ -474,6 +474,10 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
       source_type: "lesson_cancellation_operation", source_id: input.scheduleId,
       performed_by: profile.id, performed_at: now,
     }))) : {error:null};
+    const conflictedIds = skippedRows.filter(item=>item.reason===makeupCollisionReason).map(item=>item.studentId);
+    const conflictNotices = input.prepareMessages && !skippedHistory.error && conflictedIds.length
+      ? await supabase.rpc("prepare_conflicted_cancellation_notices",{p_source:input.scheduleId,p_date:input.cancelledDate,p_students:conflictedIds})
+      : null;
     revalidatePath("/ders-operasyonlari/gecmis");
     revalidatePath("/yoklama");
     revalidatePath("/ders-operasyonlari");
@@ -489,6 +493,8 @@ export async function applyLessonCancellation(input: LessonCancellationInput) {
           : `${compensationCreated} telafi dersi oluşturuldu.`) +
         (already ? ` ${already} kursiyerin telafisi zaten kayıtlı.` : "") +
         (skipped ? ` ${skipped} kursiyere işlem uygulanmadı; isim ve gerekçeler aşağıda.` : "") +
+        (conflictNotices?.error ? " Çakışan derslerin iptal mesajı hazırlanamadı. İşlem Geçmişi’nden tekrar deneyin." : "") +
+        (conflictNotices?.data ? ` ${conflictNotices.data} iptal mesajı hazırlandı; İşlem Geçmişi’nden açabilirsiniz.` : "") +
         (skippedHistory.error ? " Atlanan kursiyerler işlem geçmişine kaydedilemedi; bu ekrandaki listeyi kontrol edin." : ""),
       processedCount: processed,
       compensationCreated,
@@ -602,10 +608,16 @@ export async function prepareSavedMakeupMessages(input: {scheduleId: string; dat
     return {ok:false,message:"Ders tarihi veya seansı geçersiz."};
   }
   const db = await createClient();
-  const result = await db.rpc("prepare_saved_makeup_messages",{p_source:input.scheduleId,p_date:input.date});
-  if(result.error) return {ok:false,message:"Kayıtlı telafi mesajları hazırlanamadı. İşlem geçmişini yenileyip tekrar deneyin."};
+  const inputScope={p_source:input.scheduleId,p_date:input.date};
+  const [planned,conflicted] = await Promise.all([
+    db.rpc("prepare_saved_makeup_messages",inputScope),
+    db.rpc("prepare_conflicted_cancellation_notices",{...inputScope,p_students:null}),
+  ]);
   revalidatePath("/ders-operasyonlari/gecmis");
-  return {ok:true,message:result.data ? `${result.data} WhatsApp mesajı hazırlandı.` : "Hazırlanmayı bekleyen doğrulanmış telafi mesajı bulunamadı."};
+  const total=Number(planned.data||0)+Number(conflicted.data||0);
+  if(planned.error||conflicted.error) return {ok:false,message:`${total} mesaj hazırlandı. Kalan mesajlar doğrulanamadı; sayfayı yenileyip tekrar deneyin.`};
+  return {ok:true,message:total ? `${total} WhatsApp mesajı hazırlandı.` : "Hazırlanmayı bekleyen doğrulanmış mesaj bulunamadı."};
+
 }
 
 export async function verifyCancellationMessage(input: {studentId: string; message: string}) {
@@ -624,6 +636,19 @@ export async function verifyCancellationMessage(input: {studentId: string; messa
     .eq("organization_id",profile.organization_id).eq("student_id",input.studentId)
     .eq("activity_type","lesson_cancellation_compensation").eq("source_id",details.source_schedule_id)
     .eq("old_value->>cancelled_lesson_date",details.cancelled_date).maybeSingle();
+  if(details.notice_type==="makeup_conflict_cancellation"){
+    if(activity.error||activity.data) return stale;
+    const [skipped,source]=await Promise.all([
+      db.from("student_activity_logs").select("id").eq("organization_id",profile.organization_id)
+        .eq("student_id",input.studentId).eq("source_id",details.source_schedule_id)
+        .eq("activity_type","lesson_cancellation_skipped").eq("description",makeupCollisionReason)
+        .eq("old_value->>cancelled_lesson_date",details.cancelled_date).limit(1).maybeSingle(),
+      db.from("lesson_schedules").select("start_time").eq("organization_id",profile.organization_id)
+        .eq("id",details.source_schedule_id).maybeSingle(),
+    ]);
+    return !skipped.error&&skipped.data&&!source.error&&source.data?.start_time===details.source_start_time
+      ? {ok:true,message:""} : stale;
+  }
   if (activity.error || !activity.data) return stale;
   if (details.compensation_date) {
     const scheduleId = details.target_schedule_id || activity.data.new_value?.target_schedule_id;
