@@ -58,8 +58,8 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
   return earth * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContext>>>, selectedDate: string | null) {
-  const { admin, organizationId, role, staff: currentStaff } = ctx;
+async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContext>>>, selectedDate: string | null, previewStaffId?: string) {
+  const { admin, organizationId, role, staff: viewerStaff } = ctx;
   const manager = managementRoles.includes(role);
   const { date: today, minute: now } = sessionClock();
   const dateKey = selectedDate && isLessonDate(selectedDate) ? selectedDate : today;
@@ -77,7 +77,9 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
   ]);
   const error = staffResult.error || todayResult.error || monthResult.error || periodResult.error;
   if (error) throw error;
-  const staffRows = staffResult.data || [];
+  const allStaff = staffResult.data || [];
+  const currentStaff = previewStaffId ? allStaff.find((person) => person.id === previewStaffId) : viewerStaff;
+  const staffRows = previewStaffId ? allStaff.filter((person) => person.id === previewStaffId) : allStaff;
   const staffIdentityMap = new Map<string, (typeof staffRows)[number]>();
   for (const person of staffRows) {
     staffIdentityMap.set(person.id, person);
@@ -113,7 +115,7 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
         startTime: String(schedule.start_time || "").slice(0, 5),
         endTime: String(schedule.end_time || "").slice(0, 5),
         checkin: checkin || null,
-        isMine: String(currentStaff?.id || "") === staffId,
+        isMine: !previewStaffId && String(currentStaff?.id || "") === staffId,
       });
     }
   }
@@ -179,7 +181,11 @@ export async function GET(request: NextRequest) {
   try {
     const ctx = await getContext();
     if (!ctx || ctx.role === "guardian" || ctx.role === "pending") return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
-    return NextResponse.json(await getDashboard(ctx, request.nextUrl.searchParams.get("date")));
+    const previewStaffId = request.nextUrl.searchParams.get("personel");
+    if (previewStaffId && !["owner", "admin"].includes(ctx.role)) {
+      return NextResponse.json({ error: "Personel görünümü için yönetici yetkisi gerekiyor." }, { status: 403 });
+    }
+    return NextResponse.json(await getDashboard(ctx, request.nextUrl.searchParams.get("date"), previewStaffId || undefined));
   } catch (error) {
     console.error("Personel puantaj GET hatası:", error);
     return NextResponse.json({ error: "Personel puantaj verileri alınamadı." }, { status: 500 });
@@ -201,7 +207,7 @@ export async function POST(request: NextRequest) {
         approval_status: "approved",
         approved_by: ctx.user.id,
         approved_at: new Date().toISOString(),
-        manager_note: body?.note ? String(body.note) : null,
+        manager_note: typeof body?.note === "string" ? body.note.trim().slice(0, 500) || null : null,
         updated_at: new Date().toISOString(),
       }).eq("id", checkinId).eq("organization_id", ctx.organizationId).eq("approval_status", "pending");
       if (error) throw error;

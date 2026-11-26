@@ -5,8 +5,11 @@ import type { CurrentProfile } from "@/lib/auth/profile";
 import PersonelPuantajClient from "./personel-puantaj-client";
 import "./personel-puantaj.css";
 
-export default function CoachHome({ profile }: { profile: CurrentProfile }) {
-  const firstName = profile.full_name?.trim().split(/\s+/)[0];
+export default function CoachHome({ profile, preview }: {
+  profile: CurrentProfile;
+  preview?: { id: string; name: string; profileId: string | null };
+}) {
+  const firstName = (preview?.name || profile.full_name)?.trim().split(/\s+/)[0];
   return (
     <>
       <UstGezinme />
@@ -14,16 +17,22 @@ export default function CoachHome({ profile }: { profile: CurrentProfile }) {
         <div className="ppShell">
           <header className="ppHeader">
             <div>
-              <p className="ppEyebrow">EĞİTMEN PANELİ</p>
+              <p className="ppEyebrow">{preview ? "YÖNETİCİ · PERSONEL GÖRÜNÜMÜ" : "EĞİTMEN PANELİ"}</p>
               <h1>{firstName ? `Hoş geldiniz, ${firstName}` : "Derslerim"}</h1>
             </div>
-            {profile.is_super_user ? <Link href="/?yonetim=1" className="ppBack">Yönetim Ekranı</Link> : null}
+            {preview ? <Link className="ppBack" href="/personel-puantaj">Personel Listesi</Link> : profile.is_super_user ? <Link href="/?yonetim=1" className="ppBack">Yönetim Ekranı</Link> : null}
           </header>
-          <PersonelPuantajClient currentRole="coach" coachHome />
-          <details className="ppCoachNotifications">
+          {preview ? (
+            <nav className="ppPreviewTools" aria-label="Personel düzenleme">
+              {preview.profileId ? <Link className="ppBack" href={`/kullanicilar-ve-yetkiler?profile=${preview.profileId}`}>Personel Bilgilerini Düzenle</Link> : null}
+              <Link className="ppBack" href={`/personel-puantaj/ucret-ayarlari#personel-${preview.id}`}>Ücret Bilgilerini Düzenle</Link>
+            </nav>
+          ) : null}
+          <PersonelPuantajClient key={preview?.id} currentRole="coach" coachHome previewStaffId={preview?.id} />
+          {!preview ? <details className="ppCoachNotifications">
             <summary>Telefon bildirimlerini aç veya test et</summary>
             <NotificationSettingsClient />
-          </details>
+          </details> : null}
         </div>
       </main>
     </>

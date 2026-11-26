@@ -27,3 +27,7 @@
 .ppCoachNotifications { margin-top: 16px; border: 1px solid #dce5ef; border-radius: 14px; background: #fff; }
 .ppCoachNotifications summary { padding: 14px 16px; color: #29496f; font-size: 13px; font-weight: 700; cursor: pointer; }
 .ppCoachNotifications > section { margin: 4px 12px 12px; }
+.ppPreviewTools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.ppPreviewTools select, .ppApprovalForm input { min-height: 42px; max-width: 100%; border: 1px solid #dce5ef; border-radius: 10px; background: #fff; color: #29496f; padding: 0 10px; font: inherit; }
+.ppPreviewTools label { flex-wrap: wrap; }
+.ppApprovalForm { display: flex; flex-wrap: wrap; gap: 8px; }
