@@ -57,11 +57,12 @@ async function buildRows(ctx: NonNullable<Awaited<ReturnType<typeof getContext>>
   const [year, monthNo] = month.split("-").map(Number);
   const lastDay = new Date(Date.UTC(year, monthNo, 0)).getUTCDate();
   const end = `${month}-${String(lastDay).padStart(2, "0")}`;
-  const [{ data: staffRows }, { data: checkins }, { data: periods }] = await Promise.all([
+  const [{ data: staffRows, error: staffError }, { data: checkins, error: checkinError }, { data: periods, error: periodError }] = await Promise.all([
     ctx.admin.from("staff").select("id, first_name, last_name, title, pay_type, per_lesson_rate, hourly_rate, monthly_salary, payroll_active").eq("organization_id", ctx.organizationId).eq("is_active", true).eq("payroll_active", true),
-    ctx.admin.from("staff_checkins").select("staff_id, planned_start, planned_end, approval_status").eq("organization_id", ctx.organizationId).gte("lesson_date", start).lte("lesson_date", end).in("approval_status", ["auto_approved", "approved"]),
+    ctx.admin.from("staff_checkins").select("staff_id, planned_start, planned_end, approval_status").eq("organization_id", ctx.organizationId).gte("lesson_date", start).lte("lesson_date", end).not("completed_at", "is", null).in("approval_status", ["auto_approved", "approved"]),
     ctx.admin.from("staff_payroll_periods").select("id, staff_id, period_month, pay_type, approved_lesson_count, approved_minutes, base_amount, adjustment_amount, total_amount, status, paid_amount, payment_method, paid_at, archived_at, payment_note, closed_at").eq("organization_id", ctx.organizationId).eq("period_month", start),
   ]);
+  if (staffError || checkinError || periodError) throw staffError || checkinError || periodError;
   const periodMap = new Map((periods || []).map((p: any) => [String(p.staff_id), p]));
   return (staffRows || []).map((person: any) => {
     const mine = (checkins || []).filter((c: any) => String(c.staff_id) === String(person.id));

@@ -427,7 +427,7 @@ async function startedStudentCount(organizationId: string | null) {
   }
 }
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ yonetim?: string }> }) {
   const profile = await requireProfile();
 
   /*
@@ -435,6 +435,11 @@ export default async function HomePage() {
    */
   if (profile.role === "guardian") {
     redirect("/veli-paneli");
+  }
+
+  if (profile.base_role === "coach" && (!profile.is_super_user || (await searchParams).yonetim !== "1")) {
+    const { default: CoachHome } = await import("@/app/personel-puantaj/coach-home");
+    return <CoachHome profile={profile} />;
   }
 
   const access = await getAllowedModules(profile.id, profile.role);

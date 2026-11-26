@@ -1,6 +1,7 @@
 import Link from "next/link";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
+import CoachHome from "./coach-home";
 import PersonelPuantajClient from "./personel-puantaj-client";
 import PersonelOdemeleri from "./personel-odemeleri";
 import "./personel-puantaj.css";
@@ -16,6 +17,8 @@ export default async function PersonelPuantajPage() {
     "accounting",
     "coach",
   ]);
+
+  if (profile.base_role === "coach") return <CoachHome profile={profile} />;
 
   const canManagePay = ["owner", "admin", "branch_manager", "accounting"].includes(profile.role);
 
