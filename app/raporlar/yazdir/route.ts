@@ -37,7 +37,12 @@ export async function POST(request: Request) {
       return new Response("PDF oluşturulamadı. Geri dönüp yeniden deneyin.", { status: 500 });
     }
   }
-  return new Response(printReportHtml(report.sheet, report.filename), {
+  const returnTo = form.get("returnTo");
+  const reportUrl = new URL("/raporlar", request.url);
+  if (typeof returnTo === "string" && returnTo.startsWith("/raporlar?")) {
+    reportUrl.search = new URL(returnTo, request.url).search;
+  }
+  return new Response(printReportHtml(report.sheet, report.filename, reportUrl.pathname + reportUrl.search), {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
   });
 }

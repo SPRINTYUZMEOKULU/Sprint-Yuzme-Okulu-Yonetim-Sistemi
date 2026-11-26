@@ -175,8 +175,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const attendanceRate = attendanceBase ? (presentCount / attendanceBase) * 100 : 0;
   const validPayments = filteredPayments.filter(received);
   const collectionTotal = validPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const rightsContext=await loadLessonRightsContext(supabase,organizationId,students.map(s=>s.id));
-  const remainingLessons=activeEnrollments.reduce((sum,e)=>sum+rightsForEnrollment(rightsContext,e).total,0);
+  const rightsContext=await loadLessonRightsContext(supabase, organizationId);
+  const rightsByEnrollment = new Map(enrollments.map(enrollment => [enrollment.id, rightsForEnrollment(rightsContext, enrollment)]));
+  const remainingLessons = activeEnrollments.reduce((sum,e) => sum + rightsByEnrollment.get(e.id)!.total, 0);
 
   const reportBranches = [...branches, ...(activeEnrollments.some(e => !branchMap.has(enrollmentBranch(e) || "")) ? [{id:"unassigned",name:"Şubesi belirlenemeyen",is_active:false}] : [])];
   const branchRows = reportBranches
@@ -232,10 +233,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       name: `${student.first_name || ""} ${student.last_name || ""}`.trim(),
       branch: branchMap.get(enrollmentBranch(enrollment) || "") || "—",
       group: groupMap.get(enrollment?.group_id || "")?.name || "—",
-      used: rightsForEnrollment(rightsContext,enrollment).used,
-      normalRemaining: rightsForEnrollment(rightsContext,enrollment).normal,
-      compensation: rightsForEnrollment(rightsContext,enrollment).compensation,
-      remaining: rightsForEnrollment(rightsContext,enrollment).total,
+      used: rightsByEnrollment.get(enrollment.id)!.used,
+      normalRemaining: rightsByEnrollment.get(enrollment.id)!.normal,
+      compensation: rightsByEnrollment.get(enrollment.id)!.compensation,
+      remaining: rightsByEnrollment.get(enrollment.id)!.total,
       total: Number(enrollment?.total_lessons || 0),
       attendance: p + a ? (p / (p + a)) * 100 : 0,
     };
@@ -261,7 +262,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const financeRows = reportEnrollments.map(e => {
     const student = studentMap.get(e.student_id)!;
     const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
-    const rights = rightsForEnrollment(rightsContext, e);
+    const rights = rightsByEnrollment.get(e.id)!;
     const hasRenewal = enrollments.some(next => next.student_id === e.student_id && next.id !== e.id && ["active", "scheduled"].includes(next.status || "") && String(next.start_date || "") > String(e.start_date || ""));
     const paid = payments.filter(p => p.enrollment_id === e.id && received(p)).reduce((sum,p) => sum + Number(p.amount || 0), 0);
     const activePlans = plans.filter(p => p.enrollment_id === e.id && !["cancelled","canceled"].includes(p.status));
@@ -281,7 +282,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     if (balance === null) addNote(name,"Kayıt ücreti belirlenemedi veya birden fazla ödeme planı var.",`/ogrenciler/${student.id}`);
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
     if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Takvime göre işlenen ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
-    if (!hasRenewal && !isWaiting(e) && e.status === "active" && student.status === "active" && ((rightsForEnrollment(rightsContext,e).compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rightsForEnrollment(rightsContext,e).total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
+    if (!hasRenewal && !isWaiting(e) && e.status === "active" && student.status === "active" && ((rights.compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rights.total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
     if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
     const expiredActive = e.status === "active" && hasActiveStudent(e) && !isWaiting(e) && Boolean(e.planned_end_date && e.planned_end_date < today);
     const actions: string[] = [];
@@ -298,11 +299,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (balance > 0) actions.push(`${status === "Gecikmiş" ? "Gecikmiş ödemeyi takip edin" : "Kalan ödemeyi takip edin"}: ${money(balance)}.`);
     if (isWaiting(e)) actions.push("Başlangıç tarihini ve kursa başlatma onayını kontrol edin.");
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) actions.push("Başlangıç ve bitiş tarihlerini düzeltin.");
-    const unplannedCompensation = Math.max(0, rights.compensation - rightsContext.compensations.filter(c => c.student_id === e.student_id && c.status === "planned").length);
+    const unplannedCompensation = rights.compensation - rights.plannedCompensation;
     if (unplannedCompensation > 0) actions.push(`${unplannedCompensation} telafi hakkı için gün ve seans planlayın.`);
     const nextActions = actions.join(" • ") || "İşlem gerekmiyor";
     for (const action of actions) addNote(name,action,`/ogrenciler/${student.id}`);
-    return {id:e.id, studentId:student.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
+    return {id:e.id, studentId:student.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var (${rights.plannedCompensation} planlı, ${unplannedCompensation} tarih bekliyor)` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
   });
   financeRows.sort((a,b) => a.endIso.localeCompare(b.endIso) || a.name.localeCompare(b.name,"tr") || a.id.localeCompare(b.id));
   const financeSheet = (name: string, rows: typeof financeRows) => ({name,rows:[["Sıra","Öğrenci","Kayıt uyarısı","Kayıt tarihi","Başlangıç","Kayıt bitiş tarihi","Telafi bitiş tarihi","Ücret","Ödenen","Kalan","Gecikmiş taksit","Ödeme durumu","Ek dönem bilgisi","Kayıt dönemi","Kayıt durumu","Yapılacak işlemler"],...rows.map((r,i)=>[i+1,r.name,r.recordStatus,r.registered,r.start,r.end,r.compensationEnd,r.price,r.paid,r.balance,r.overdue,r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status,r.periodInfo,`${r.periodNumber}. kayıt dönemi`,r.scope,r.nextActions])]});
@@ -415,15 +416,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="reportsHeaderActions"><Link href="/" className="reportSecondary">← Yönetim paneli</Link><Link href="/odemeler" className="reportPrimary">Ödeme merkezini aç</Link></div>
         </header>
 
-        <ReportExports sheets={exportSheets} filename={`Sprint-Yonetim-Raporu-${from}-${to}`} />
         <p className="reportScope">Tahsilat ve yoklama: seçilen tarih aralığındaki tüm hareketler; pasife alınanların geçmişi korunur. Kayıt kapsamı filtresi kayıt ve borç listelerini belirler. Aktif öğrenci ve atamalar: başlamış güncel kayıtlar. Tarihler Türkiye saatine göredir.</p>
-        <form className="reportFilters" method="get">
+        <form id="report-filters" className="reportFilters" method="get">
           <label><span>Başlangıç</span><input type="date" name="from" defaultValue={from} /></label>
           <label><span>Bitiş</span><input type="date" name="to" defaultValue={to} /></label>
           <label><span>Kayıt kapsamı</span><select name="status" defaultValue={reportStatus}><option value="active">Aktif kayıtlar</option><option value="all">Tüm kayıt geçmişi</option><option value="pending">Henüz başlamamış kayıtlar</option><option value="passive">Pasif / kapanmış kayıtlar</option></select></label>
           <label><span>Şube</span><select name="branch" defaultValue={branchId}><option value="all">Tüm şubeler</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
           <button type="submit">Raporu getir</button>
         </form>
+        <ReportExports key={JSON.stringify([from, to, branchId, reportStatus])} sheets={exportSheets} filename={`Sprint-Yonetim-Raporu-${from}-${to}`} initialSelection={params.reportType} />
 
         {inconsistentActiveEnrollmentCount > 0 ? (
           <div className="dataNotice">
