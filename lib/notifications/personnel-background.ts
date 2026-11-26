@@ -47,7 +47,7 @@ export async function runPersonnelBackground(
         body: isReminder
           ? `${lesson} · ${diff} dakika kaldı. Tesise ulaştığınızda “Derse Geldim” seçeneğini kullanın.`
           : `${staff.first_name} ${staff.last_name} · ${lesson} seansı başladı. Eğitmen girişi bekleniyor.`,
-        category: "staff",
+        category: isReminder ? "schedule" : "staff",
         eventKey,
         dedupeKey: eventKey,
         notificationType: type,
@@ -59,10 +59,11 @@ export async function runPersonnelBackground(
         entityId: staff.id,
         targetPath: "/personel-puantaj",
         recipientProfileIds: recipients,
-        metadata: { lessonDate: date, scheduleId: session.id, branchId: session.branch_id, staffId: staff.id },
+        metadata: { lessonDate: date, assignedProfileId: staff.auth_user_id, scheduleId: session.id, branchId: session.branch_id, staffId: staff.id },
         push: true,
       });
-      if (!result.ok) throw new Error(result.message);
+      // No eligible recipients is expected when notification preferences disable this category.
+      if (!result.ok && result.recipientCount > 0) throw new Error(result.message);
       totals.created += result.notificationIds.length;
       totals.pushSent += result.push.sent;
       totals.pushFailed += result.push.failed;

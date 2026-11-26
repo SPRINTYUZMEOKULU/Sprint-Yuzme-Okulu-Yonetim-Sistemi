@@ -20,7 +20,7 @@ type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolea
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
-type Props={viewerId:string;reportScope?:Record<string,string[]|null>;allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
+type Props={viewerId:string;cancellations?:Record<string,string[]>;reportScope?:Record<string,string[]|null>;allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
@@ -78,19 +78,21 @@ export default function QuickAttendanceClient(p:Props){
      const ids=counts.get(kind)||new Set<string>();
      const roster=attendanceRoster(schedule.makeup_date?{...p,memberships:[]}:p,group.id,schedule.id,date,day);
      const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
-     for(const student of roster.students)if(!allowed||allowed.includes(student.id))ids.add(student.id);
+     const cancelled = new Set(p.cancellations?.[`${date}:${schedule.id}`]);
+     for(const student of roster.students)if(!cancelled.has(student.id)&&(!allowed||allowed.includes(student.id)))ids.add(student.id);
      counts.set(kind,ids);
    }
    return [t,Array.from(counts).map(([kind,ids])=>`${kind} (${ids.size})`).join(" · ")];
- })),[times,schedulesForDay,p.groups,p.students,p.memberships,p.enrollments,p.compensationLessons,p.allowedStudentIdsBySchedule,date,day]);
+ })),[times,schedulesForDay,p.groups,p.students,p.memberships,p.enrollments,p.compensationLessons,p.allowedStudentIdsBySchedule,p.cancellations,date,day]);
  const schedulesAtTime=useMemo(()=>schedulesForDay.filter(s=>tm(s.start_time)===time),[schedulesForDay,time]);
 
  const groups=useMemo(()=>schedulesAtTime.map(schedule=>{
    const group=p.groups.find(g=>g.id===schedule.group_id);if(!group)return null;
    const {students,enrollmentByStudent,compensationIds}=attendanceRoster(schedule.makeup_date?{...p,memberships:[]}:p,group.id,schedule.id,date,day);
    const allowed=p.allowedStudentIdsBySchedule?.[schedule.id];
-   return {group,schedule,students:allowed?students.filter(s=>allowed.includes(s.id)):students,enrollmentByStudent,compensationIds};
- }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,p.allowedStudentIdsBySchedule,date,day]);
+   const cancelled = new Set(p.cancellations?.[`${date}:${schedule.id}`]);
+   return {group,schedule,students:students.filter(s=>!cancelled.has(s.id)&&(!allowed||allowed.includes(s.id))),enrollmentByStudent,compensationIds};
+ }).filter(Boolean) as Array<{group:Group;schedule:Schedule;students:Student[];enrollmentByStudent:Map<string,Enrollment>;compensationIds:Set<string>}> ,[schedulesAtTime,p.groups,p.enrollments,p.memberships,p.compensationLessons,p.students,p.allowedStudentIdsBySchedule,p.cancellations,date,day]);
 
  const draftKey=`sprintos:quick-attendance:v2:${p.viewerId}:${date}:${branchId}:${time}`;
  const ready=loaded&&loadedKey===draftKey;

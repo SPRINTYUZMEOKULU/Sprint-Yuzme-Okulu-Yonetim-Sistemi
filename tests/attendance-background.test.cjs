@@ -77,5 +77,7 @@ test('personnel reminders resolve profile-based assignments and skip checked-in 
   assert.equal((await runPersonnelBackground(client, 'org', date, 20 * 60 + 30, notify)).pushSent, 1);
   assert.equal((await runPersonnelBackground(client, 'org', date, 20 * 60 + 35, notify)).created, 0);
   assert.deepEqual(delivered.map((n) => n.recipientProfileIds), [['coach-profile']]);
+  assert.equal(delivered[0].category, 'schedule');
+  assert.equal(delivered[0].metadata.assignedProfileId, 'coach-profile');
   assert.equal(delivered[0].dedupeKey, 'staff_session_30m:2026-10-14:s:staff-record');
 });
