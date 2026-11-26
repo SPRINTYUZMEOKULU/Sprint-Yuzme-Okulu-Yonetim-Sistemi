@@ -36,16 +36,19 @@ test('pending and approved-but-unconsumed requests stay pending and cannot infla
  assert.match(html,/0% tamamlandı/);
 });
 async function decideRenewal(action, renewal=true){
- const writes=[],notifications=[];
+ const writes=[],notifications=[],freezeNotices=[];
  const approval={id:a,organization_id:'org',student_id:b,status:'pending',request_type:'registration_custom_lesson_count',metadata:{source:renewal?'student_renewal_center':'registration_completion'},new_values:{total_lessons:9},requested_by:'staff'};
  const db={rpc:async()=>({data:0,error:null}),auth:{getUser:async()=>({data:{user:{id:'owner'}},error:null})},from(table){let mode='read';const q={select(){return q},eq(){return q},maybeSingle(){return q},update(value){mode='update';writes.push({table,value});return q},insert(value){mode='insert';writes.push({table,value});return q},then(resolve,reject){const data=mode!=='read'?null:table==='profiles'?{id:'owner',organization_id:'org',role:'owner',full_name:'Owner'}:table==='approval_requests'?approval:table==='students'?{id:b}:null;return Promise.resolve({data,error:null}).then(resolve,reject)}};return q}};
  const route=load('app/api/approval-center/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/supabase/server':{createClient:async()=>db},
   '@/lib/registrations/close-pre-registration':{applyPreRegistrationClosure:async()=>{throw Error('Unexpected closure in a renewal test')}},
+  '@/lib/messaging/publish-enrollment-freeze':{publishEnrollmentFreeze:async (...args)=>{freezeNotices.push(args);return ''; }},
+  '@/lib/messaging/enrollment-freeze-message':load('lib/messaging/enrollment-freeze-message.ts'),
   '@/lib/notifications/publish-event':{publishEventNotification:async n=>{notifications.push(n);return {error:null}}}
  });
  const response=await route.POST({json:async()=>({id:a,source:'approval_request',action})});
+ assert.deepEqual(freezeNotices,[]);
  return {response,writes,notifications};
 }
 test('renewal approval preserves passive status and existing registration checklist, and opens renewal instead of first registration',async()=>{
