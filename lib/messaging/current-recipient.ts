@@ -12,11 +12,17 @@ export async function currentRecipient(studentId: string, previousRecipient?: st
 }
 
 // Reserve the window within the click gesture (including on iPhone), then resolve the current phone.
-export async function openCurrentWhatsapp(studentId: string, previousRecipient: string | null, message: string) {
+export async function openCurrentWhatsapp(studentId: string, previousRecipient: string | null, message: string, options?: { rejectChangedRecipient?: boolean; verify?: () => Promise<void> }) {
   const popup = window.open("about:blank", "_blank");
   if (popup) popup.opener = null;
   try {
+    if (options?.verify) await options.verify();
     const recipient = await currentRecipient(studentId, previousRecipient);
+    const recordedNumber = (previousRecipient || "").replace(/\D/g, "").replace(/^0/, "90");
+    const normalizedNumber = recordedNumber.length === 10 ? `90${recordedNumber}` : recordedNumber;
+    if (options?.rejectChangedRecipient && recipient !== normalizedNumber) {
+      throw new Error("Kayıtlı telefon değişti. Mesajı açmadan önce kursiyerin iletişim bilgisini ve mesajı kontrol edin.");
+    }
     navigateWhatsapp(popup, `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`);
     return recipient;
   } catch (error) { popup?.close(); throw error; }

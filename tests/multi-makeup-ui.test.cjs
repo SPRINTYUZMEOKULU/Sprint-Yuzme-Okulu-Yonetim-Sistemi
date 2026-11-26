@@ -8,6 +8,7 @@ test('mounted UI plans two independent cancellations in consecutive makeup slots
  window.confirm=()=>true;const calls=[];
  const Component=load('app/ders-operasyonlari/lesson-operations-client.tsx',{
   '@/lib/messaging/current-recipient':{},
+  '@/lib/lesson-operations/course':load('lib/lesson-operations/course.ts'),
   '@/lib/lesson-operations/participation':load('lib/lesson-operations/participation.ts'),
   './actions':{startingCancellationMessages:async()=>({ok:true,messages:[]}),applyLessonCancellation:async input=>{calls.push(input);return {ok:true,message:'Saved',preparedMessages:[],outcomes:[]};}},
  }).default;
