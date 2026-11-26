@@ -1,3 +1,4 @@
+import { developmentReportTitle, developmentSections } from "@/lib/attendance/development-report";
 import { loadGuardianPage, type GuardianPageQuery } from "@/lib/guardian/page-context";
 import { formatDate } from "@/lib/guardian/data";
 import { EmptyGuardian, GuardianHeader, GuardianIcon } from "@/app/veli-paneli/guardian-ui";
@@ -20,15 +21,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<Gua
       </header>
       {!student ? <EmptyGuardian title="Bağlı öğrenci bulunamadı" text="Öğrenci bağlantısı tamamlandığında gelişim notları burada görünecek." /> :
         <section className="guardianCard courseProgress" aria-labelledby="progress-notes">
-          <h2 id="progress-notes">Eğitmen notları</h2>
+          <h2 id="progress-notes">Gelişim raporları ve eğitmen notları</h2>
           {progressUnavailable ? <p>Sayfayı yenileyerek tekrar deneyebilirsiniz.</p> :
             data.progress.length ? <ul className="courseProgressNotes">
-              {data.progress.map(note => <li key={note.id}>
-                <span className="courseProgressDate">{formatDate(note.created_at)}</span>
+              {data.progress.map(note => <li key={note.id} id={`not-${note.id}`}>
+                <span className="courseProgressDate">{formatDate(note.created_at)}{note.author?.full_name ? ` · ${note.author.full_name}` : ""}</span>
                 <h3>{note.target || "Gelişim notu"}</h3>
-                <p>{note.note}</p>
+                <p>{note.target === developmentReportTitle && typeof note.note === "string"
+                  ? note.note.split("\n").map((line: string, index: number) => (
+                    <span key={index}>
+                      {developmentSections.some((section) => section.label === line) ? <strong>{line}</strong> : line}
+                      {"\n"}
+                    </span>
+                  ))
+                  : note.note}</p>
               </li>)}
-            </ul> : <p>Eğitmeniniz bir gelişim notu paylaştığında burada görebilirsiniz.</p>}
+            </ul> : <p>Eğitmeniniz bir gelişim raporu veya notu paylaştığında burada görebilirsiniz.</p>}
         </section>}
     </div>
   </main>;

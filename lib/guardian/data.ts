@@ -168,7 +168,8 @@ export async function getGuardianContext(userId: string, selectedId?: string, vi
   };
   const noteQuery=()=>{
     if(!plan.notes)return empty();
-    let q=base("student_notes","id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at").eq("is_guardian_visible",true);
+    const columns = "id,student_id,author_id,note_type,body,target,is_guardian_visible,created_at";
+    let q=base("student_notes", plan.progressOnly ? `${columns},author:profiles!student_notes_author_id_fkey(full_name)` : columns).eq("is_guardian_visible",true);
     if(plan.progressOnly)q=q.eq("note_type","coach");
     return q.order("created_at",{ascending:false}).order("id").limit(30);
   };

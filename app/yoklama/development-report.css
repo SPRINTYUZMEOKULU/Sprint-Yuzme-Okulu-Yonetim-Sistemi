@@ -1,0 +1,29 @@
+.developmentDialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(540px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #dce5ef;
+  border-radius: 18px;
+  background: #fff;
+  color: #17304f;
+}
+.developmentDialog::backdrop { background: rgb(16 30 53 / 58%); }
+.developmentHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px; border-bottom: 1px solid #e4edf5; }
+.developmentHeader h2 { margin: 0; font-size: 20px; }
+.developmentHeader p { margin: 5px 0 0; font-size: 13px; color: #526b88; }
+.developmentForm { padding: 16px 18px 18px; display: grid; gap: 14px; }
+.developmentForm label { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
+.developmentForm textarea { min-height: 76px; resize: vertical; width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #c6d5e5; border-radius: 10px; color: inherit; font: inherit; font-size: 16px; font-weight: 400; }
+.developmentActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.developmentDialog button { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #c6d5e5; background: #fff; color: #21476e; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; }
+.developmentDialog .developmentPrimary { background: #195aba; border-color: #195aba; color: #fff; }
+.developmentDialog button:disabled { opacity: .65; cursor: wait; }
+.developmentPreview { padding: 12px; background: #f4f8fc; border-radius: 10px; }
+.developmentPreview h3 { margin: 0 0 6px; font-size: 14px; }
+.developmentPreview p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.developmentFeedback, .developmentError { margin: 0; padding: 10px; background: #eef7ff; border-radius: 8px; font-size: 14px; }
+.developmentError { background: #fff1f2; color: #9b2331; }
