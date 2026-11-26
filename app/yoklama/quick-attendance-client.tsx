@@ -9,6 +9,7 @@ import { registrationDaysLabel, attendanceCourseLabel } from "@/lib/attendance/p
 import { attendanceRoster } from "@/lib/attendance/roster";
 import StudentAttendanceFollowup from "./student-attendance-followup";
 import AttendanceReminderPanel from "./attendance-reminder-panel";
+import DevelopmentReportButton from "./development-report-button";
 import { clearAttendance, getAttendanceForDate, saveAttendance } from "./actions";
 
 type Status="present"|"absent"|"excused"|"compensation";
@@ -19,7 +20,7 @@ type Membership={student_id?:string|null;group_id?:string|null;is_active?:boolea
 type Student={id:string;first_name?:string|null;last_name?:string|null;birth_date?:string|null;status?:string|null};
 type Enrollment={id:string;start_confirmation_required?:boolean;actual_started_at?:string|null;student_id?:string|null;group_id?:string|null;total_lessons?:number|null;used_lessons?:number|null;lesson_weekdays?:number[]|null;status?:string|null;start_date?:string|null;planned_end_date?:string|null;created_at?:string|null;updated_at?:string|null};
 type Compensation={student_id:string;target_group_id:string;target_schedule_id?:string|null;lesson_date:string;status:string};
-type Props={viewerId:string;allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
+type Props={viewerId:string;reportScope?:Record<string,string[]|null>;allowedStudentIdsBySchedule?:Record<string,string[]>;branches:Branch[];groups:Group[];schedules:Schedule[];memberships:Membership[];students:Student[];enrollments:Enrollment[];compensationLessons:Compensation[];initialBranchId?:string;initialDate?:string;initialTime?:string;initialScheduleId?:string};
 
 const DAYS:Record<number,string>={1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi",7:"Pazar"};
 function today(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
@@ -277,6 +278,11 @@ export default function QuickAttendanceClient(p:Props){
          <button disabled={expired||pending} className={cur==="present"||cur==="compensation"?"on present":""} onClick={()=>setStatus(g,s,"present")}>✓ Geldi</button>
          <button disabled={expired||pending} className={cur==="absent"?"on absent":""} onClick={()=>setStatus(g,s,"absent")}>✕ Gelmedi</button>
          <StudentAttendanceFollowup key={`${date}:${g.schedule.id}:${s.id}`} studentId={s.id} studentName={fullName(s)} scheduleId={g.schedule.id} date={date} disabled={pending}/>
+         {s.status==="active"&&date<=today()&&
+           (p.reportScope?.[g.schedule.id]===null||p.reportScope?.[g.schedule.id]?.includes(s.id))&&
+           <DevelopmentReportButton key={`report:${date}:${g.schedule.id}:${s.id}`} studentId={s.id}
+             studentName={fullName(s)} scheduleId={g.schedule.id} date={date} disabled={pending}/>}
+
        </div>
      </article>})}</div>
      <div className="qaGroupSave"><div>{savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?<><b>✓ Seans kaydedildi</b><span>Değişiklik yaparsanız tekrar kaydedebilirsiniz.</span></>:<><b>Bu seansın kaydı tamamlanmadı</b><span>{g.students.filter(s=>storedStatuses[attendanceKey(g.schedule.id,s.id)]).length}/{g.students.length} sunucuda kayıtlı · Seçimler kaydedilene kadar bu cihazda taslaktır.</span></>}</div><button disabled={pending||!ready||!eligibleStudents(g).length} onClick={()=>saveGroup(g)}>{pending?"Kaydediliyor…":savedGroups[groupSaveKey(g.group.id,g.schedule.id)]?"Tekrar Kaydet":"Bu Seansı Kaydet"}</button></div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { reportStudentScope } from "@/lib/attendance/development-report";
 import { coachStudentScope } from "@/lib/attendance/coach-roster";
 import AttendanceBackButton from "./attendance-back-button";
 import { requireProfile } from "@/lib/auth/profile";
@@ -17,12 +18,22 @@ let allowedStudentIdsBySchedule:Record<string,string[]>|undefined;
 let coachVisibleSchedules=effectiveSchedules;
 let coachVisibleGroups=groups.data||[];
 let coachVisibleMemberships=memberships.data||[];
+const { data: coachStaff } = profile.base_role === "coach"
+  ? await supabase.from("staff").select("id").eq("organization_id", organizationId).eq("auth_user_id", profile.id)
+    .eq("is_active", true).eq("login_enabled", true).maybeSingle()
+  : { data: null };
+const coachIds = new Set([profile.id, coachStaff?.id].filter(Boolean) as string[]);
+let reportScope: Record<string, string[] | null> | undefined;
+if (coachStaff && profile.is_active) {
+  const studentIds = (students.data || []).map((student) => student.id);
+  const primaryCoaches = new Map((groups.data || []).map((group) => [group.id, group.primary_coach_id]));
+  reportScope = Object.fromEntries(effectiveSchedules.map((schedule) => [
+    schedule.id,
+    reportStudentScope(schedule, primaryCoaches.get(schedule.group_id), staffAssignments.data || [],
+      studentAssignments.data || [], coachIds, studentIds) ?? null,
+  ]));
+}
 if(profile.role==="coach"&&!profile.is_super_user){
-  const {data:coachStaff}=await supabase.from("staff").select("id").eq("organization_id",organizationId).eq("auth_user_id",profile.id).eq("is_active",true).maybeSingle();
-  // Operasyon planındaki coach_id alanları profile.id kullanıyor. Personel/puantaj
-  // tarafındaki eski veya ek kayıtlar staff.id kullanabildiği için iki kimliği de
-  // kabul ediyoruz. Böylece yetkisi açık eğitmenin atanmış seansları boş görünmez.
-  const coachIds=new Set([profile.id,coachStaff?.id].filter(Boolean) as string[]);
   if(coachIds.size){
     const assignedRows=(staffAssignments.data||[]).filter((item:any)=>item.coach_id&&coachIds.has(item.coach_id));
     const studentAssignedRows=(studentAssignments.data||[]).filter((item:any)=>item.coach_id&&coachIds.has(item.coach_id));
@@ -47,4 +58,4 @@ if(profile.role==="coach"&&!profile.is_super_user){
     coachVisibleMemberships=[];
   }
 }
-return <><nav className="saTopNav" aria-label="Yoklama hızlı erişim"><AttendanceBackButton><span className="saTopNavIcon"><Icon name="back"/></span><span><b>Geri</b><small>Önceki ekran</small></span></AttendanceBackButton><Link href={`/yoklama?date=${todayDate}`} className="saTopNavItem active"><span className="saTopNavIcon"><Icon name="today"/></span><span><b>Bugün</b><small>Günlük yoklama</small></span></Link><Link href="/yoklama/aylik" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="month"/></span><span><b>Tüm Ay</b><small>Aylık görünüm</small></span></Link><Link href="/yoklama/gecmis" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="history"/></span><span><b>Geçmiş</b><small>Ders kayıtları</small></span></Link></nav><QuickAttendanceClient key={`${attendanceDate}:${params.branchId||""}:${params.time||""}:${params.scheduleId||""}`} viewerId={profile.id} branches={profile.role==="coach"&&!profile.is_super_user?(branches.data||[]).filter(branch=>coachVisibleSchedules.some(schedule=>schedule.branch_id===branch.id)):branches.data||[]} groups={coachVisibleGroups} schedules={coachVisibleSchedules} allowedStudentIdsBySchedule={allowedStudentIdsBySchedule} memberships={coachVisibleMemberships} students={students.data||[]} enrollments={enrollments.data||[]} compensationLessons={compensation.data||[]} initialBranchId={params.branchId||""} initialDate={attendanceDate} initialTime={params.time} initialScheduleId={params.scheduleId}/></>}
+return <><nav className="saTopNav" aria-label="Yoklama hızlı erişim"><AttendanceBackButton><span className="saTopNavIcon"><Icon name="back"/></span><span><b>Geri</b><small>Önceki ekran</small></span></AttendanceBackButton><Link href={`/yoklama?date=${todayDate}`} className="saTopNavItem active"><span className="saTopNavIcon"><Icon name="today"/></span><span><b>Bugün</b><small>Günlük yoklama</small></span></Link><Link href="/yoklama/aylik" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="month"/></span><span><b>Tüm Ay</b><small>Aylık görünüm</small></span></Link><Link href="/yoklama/gecmis" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="history"/></span><span><b>Geçmiş</b><small>Ders kayıtları</small></span></Link></nav><QuickAttendanceClient key={`${attendanceDate}:${params.branchId||""}:${params.time||""}:${params.scheduleId||""}`} viewerId={profile.id} branches={profile.role==="coach"&&!profile.is_super_user?(branches.data||[]).filter(branch=>coachVisibleSchedules.some(schedule=>schedule.branch_id===branch.id)):branches.data||[]} groups={coachVisibleGroups} schedules={coachVisibleSchedules} allowedStudentIdsBySchedule={allowedStudentIdsBySchedule} reportScope={reportScope} memberships={coachVisibleMemberships} students={students.data||[]} enrollments={enrollments.data||[]} compensationLessons={compensation.data||[]} initialBranchId={params.branchId||""} initialDate={attendanceDate} initialTime={params.time} initialScheduleId={params.scheduleId}/></>}
