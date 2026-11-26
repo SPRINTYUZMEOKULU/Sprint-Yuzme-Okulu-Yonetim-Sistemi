@@ -20,6 +20,7 @@ function setup(targetBranch='b',targetCourse='adult',sundayDay=0,failureTable=nu
   if(name==='next/headers')return {cookies:async()=>({get(){}})};
   if(name==='@/lib/auth/profile')return {requireProfile:async()=>({id:'admin',organization_id:'org'})};
   if(name==='@/lib/supabase/server')return {createClient:async()=>client};
+  if(name==='@/lib/enrollment/dates')return {istanbulDate:()=> '2026-10-10'};
   if(name==='@/lib/lesson-operations/course')return load('lib/lesson-operations/course.ts');
   if(name==='@/lib/lesson-operations/participation')return load('lib/lesson-operations/participation.ts');
   if(name==='@/lib/lesson-operations/outcomes')return load('lib/lesson-operations/outcomes.ts');
@@ -72,7 +73,8 @@ test('two cancellations can be planned in consecutive sessions on the same day',
 });
 test('two different cancelled lessons cannot occupy the same makeup session',async()=>{
  const s=setup();s.rows.student_compensation_lessons=[{id:'first',student_id:'student',lesson_date:'2026-10-25',target_schedule_id:'target',status:'planned'}];
- const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.match(r.outcomes[0].reason,/zaten telafi var/);assert.match(r.message,/1 iptal mesajı hazırlandı/);assert.deepEqual(s.writes.find(w=>w.table==="conflict-notices").value,{p_source:"source",p_date:"2026-10-24",p_students:["student"]});
+ const r=await s.call('2026-10-25','target','custom','2026-10-24');assert.equal(r.compensationCreated,0);assert.equal(r.processedCount,1);assert.match(r.outcomes[0].reason,/hakkı saklandı/);assert.match(r.preparedMessages[0].message,/hakkınız saklıdır/);
+ assert.equal(s.writes.find(w=>w.table==="student_activity_logs").value.new_value.compensation_mode,"reserve");
 });
 
 test('team makeup selects a team session and rejects a child session',async()=>{
@@ -91,4 +93,19 @@ test('a one-off telafi is written against the actual session returned by the ser
  assert.equal(result.compensationCreated,1);
  assert.equal(fixture.writes.find(w=>w.table==='student_compensation_lessons').value.target_schedule_id,'one-off');
  assert.match(result.preparedMessages[0].message,/18.10.2026 · 19:00-20:00/);
+});
+
+test('append uses the next scheduled day after existing makeup records',async()=>{
+ const s=setup();s.rows.student_compensation_lessons=[{id:'prior',student_id:'student',enrollment_id:'e',lesson_date:'2026-11-07',target_schedule_id:'source',status:'planned'}];
+ const result=await s.call(null,null,'append_end');
+ assert.equal(result.ok,true);
+ assert.equal(s.writes.find(w=>w.table==='student_compensation_lessons').value.lesson_date,'2026-11-14');
+});
+test('an expired normal period can move its existing source makeup without creating a new right',async()=>{
+ const s=setup();s.rows.student_enrollments[0].planned_end_date='2026-10-10';
+ s.rows.student_compensation_lessons=[{id:'prior',student_id:'student',enrollment_id:'e',lesson_date:'2026-10-17',target_schedule_id:'source',status:'planned'}];
+ const result=await s.call(null,null,'append_end');
+ assert.equal(result.ok,true);
+ assert.equal(s.writes.find(w=>w.table==='student_activity_logs').value.new_value.source_compensation_id,'prior');
+ assert.match(result.preparedMessages[0].message,/taşındı/);
 });
