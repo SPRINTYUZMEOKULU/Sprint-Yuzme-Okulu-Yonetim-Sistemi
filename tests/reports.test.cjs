@@ -51,7 +51,7 @@ test('expired enrollment keeps expiry warning alongside makeup rights',async()=>
  const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
  d.student_compensation_lessons=[{id:'makeup',student_id:'s',enrollment_id:'e',lesson_date:'2099-01-01',status:'planned'}];
  const {sheets}=await render(d);
- assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Normal paket bitti · telafi devam ediyor');
  assert.match(financeRows(sheets)[0]['Ek dönem bilgisi'],/telafi hakkı var/);
  assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
 });
