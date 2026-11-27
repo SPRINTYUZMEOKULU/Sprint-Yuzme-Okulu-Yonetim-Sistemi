@@ -1383,3 +1383,50 @@ input[type="checkbox"] {
 
 .preRegPage .selectedGroupCard { animation: none; border: 1px solid #bed5f4 !important; box-shadow: 0 8px 24px rgba(23, 67, 120, .07); }
 .selectedSchedule .scheduleChoiceCopy { box-shadow: none !important; }
+
+.preRegPageCompact .preRegShell {
+  display: block;
+  max-width: 840px;
+  margin-inline: auto;
+}
+
+.preRegPageCompact .preRegContent {
+  border-radius: 24px;
+}
+
+.preRegTopCompact {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.preRegTopCompact .preRegLogo {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.preRegTopCompact h1 {
+  margin: 0 0 4px;
+  color: #132344;
+  font-size: clamp(1.45rem, 3.2vw, 2.15rem);
+  line-height: 1.15;
+}
+
+.preRegPageCompact :is(input, select, textarea, button, a):focus-visible {
+  outline: 2px solid #1158b7;
+  outline-offset: 3px;
+}
+
+@media (max-width: 620px) {
+  .preRegPageCompact .preRegContent {
+    border-radius: 16px;
+  }
+
+  .preRegPageCompact .formGrid :is(input, select, textarea) {
+    min-height: 48px;
+    font-size: 16px;
+  }
+}
