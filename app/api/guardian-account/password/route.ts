@@ -32,8 +32,23 @@ export async function POST(request:NextRequest){
    if(!identity)return reply(false,'Giriş hesabınız doğrulanamadı. Yönetimle iletişime geçin.',409);
    const {data:verified,error:verifyError}=await verifier.auth.signInWithPassword({...identity,password:current});
    if(verifyError||verified.user?.id!==user.id||!verified.session)return reply(false,'Mevcut şifreniz doğrulanamadı. Kontrol ederek tekrar deneyin.',400);
-   const {data:updated,error:updateError}=await db.auth.updateUser({password});
-   if(updateError||updated.user?.id!==user.id)return reply(false,'Şifre güncellenemedi. Yeniden giriş yapıp tekrar deneyin; sorun sürerse yönetime bildirin.',409);
+   // Update through the freshly verified session for this same account.
+   const {data:updated,error:updateError}=await verifier.auth.updateUser({password});
+   if(updateError){
+    switch(updateError.code){
+     case 'weak_password':
+      return reply(false,'Yeni şifreniz güvenlik kurallarını karşılamıyor. Harf, rakam ve sembol içeren benzersiz bir şifre deneyin.',422);
+     case 'same_password':
+      return reply(false,'Yeni şifreniz mevcut şifrenizden farklı olmalıdır.',400);
+     case 'reauthentication_needed':
+     case 'reauthentication_not_valid':
+      return reply(false,'Şifre değişikliği için ek doğrulama gerekiyor. Yeni bir şifre bağlantısı istemek için Sprint yönetimine ulaşın.',409);
+    }
+    if(updateError.status===429)return reply(false,'Çok fazla deneme yapıldı. Biraz bekleyip tekrar deneyin.',429);
+    console.warn('[guardian-account/password] Update rejected',{code:updateError.code,status:updateError.status});
+    return reply(false,'Şifre sunucuda güncellenemedi. Tekrar deneyin veya Sprint yönetimine bildirin.',502);
+   }
+   if(updated.user?.id!==user.id)return reply(false,'Şifre güncellemesi doğrulanamadı. Sprint yönetimine bildirin.',502);
    revalidatePath('/veli-hesabim');
    return reply(true,'Şifreniz güncellendi. Bundan sonraki girişlerinizde yeni şifrenizi kullanın. Aynı hesaba bağlı tüm kursiyerler için geçerlidir.');
   }finally{try{await verifier.auth.signOut({scope:'local'});}catch{/* Only the isolated verification session is closed. */}}
