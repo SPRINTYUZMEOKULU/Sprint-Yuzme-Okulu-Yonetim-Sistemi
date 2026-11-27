@@ -1,7 +1,6 @@
 import { loadStudentObligations, loadStudentPaymentCenter } from "@/lib/payments/student-finance";
 import { summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
-import { visibleRenewalNotes } from "@/lib/enrollment/renewal-lifecycle";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
 import AttendanceSummary from "@/app/components/attendance-summary";
 import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
@@ -119,6 +118,44 @@ function ageFromBirthDate(value?: string | null) {
   return age >= 0 && age <= 120 ? age : null;
 }
 
+const noteLabels: Record<string, string> = {
+  general: "Genel Not",
+  management: "Yönetici Notu",
+  coach: "Antrenör Notu",
+  health: "Sağlık Notu",
+  finance: "Ödeme Notu",
+  payment: "Ödeme Notu",
+  crm: "Kayıt Notu",
+  registration: "Kayıt Notu",
+};
+
+async function loadStudentFileNotes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  studentId: string,
+) {
+  const pageSize = 200;
+  const notes = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("student_notes")
+      .select("id,note_type,body,is_guardian_visible,created_at")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      console.error("Student file notes failed to load", error);
+      return { notes, error };
+    }
+
+    notes.push(...data);
+    if (data.length < pageSize) return { notes, error: null };
+  }
+}
+
 export default async function StudentFile({
   params,
   searchParams,
@@ -139,6 +176,7 @@ export default async function StudentFile({
   const query = await searchParams;
 
   const supabase = await createClient();
+  if (!profile.organization_id) notFound();
 
   const canManageDestructiveActions = ["owner", "admin"].includes(
     String((profile as any).role || ""),
@@ -204,12 +242,7 @@ export default async function StudentFile({
       .eq("student_id", id)
       .maybeSingle(),
 
-    supabase
-      .from("student_notes")
-      .select("id,note_type,body,target,is_guardian_visible,created_at,author_id")
-      .eq("student_id", id)
-      .order("created_at", { ascending: false })
-      .limit(20),
+    loadStudentFileNotes(supabase, profile.organization_id, id),
 
     supabase
       .from("student_timeline_events")
@@ -312,7 +345,7 @@ export default async function StudentFile({
   const renewal = renewalPresentation(nextEnrollment);
   const lessonBalance = lessonBalanceResult.data;
 
-  const notes = visibleRenewalNotes(notesResult.data ?? [], new Set<string>((enrollmentHistoryResult.data || []).filter((row:any) => row.status === "scheduled").map((row:any) => row.id)));
+  const { notes, error: notesError } = notesResult;
   const oldTimeline = oldTimelineResult.data ?? [];
   const activityLogs = activityResult.data ?? [];
   const registrationNotes = activityLogs.filter(
@@ -327,6 +360,9 @@ export default async function StudentFile({
   const paymentSummary = paymentSummaryResult.data;
   const heldDebt = student.registration_payment_hold ? await registrationPaymentDue(supabase, id) : 0;
   const payments = paymentsResult.data ?? [];
+  const paymentNotes = canReadFinance
+    ? payments.filter((payment) => payment.description?.trim())
+    : [];
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
@@ -820,6 +856,7 @@ export default async function StudentFile({
         }}
         canRequestFreeze={["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)}
         enrollmentId={enrollment?.id ?? null}
+        noteCount={notesError ? undefined : notes.length + paymentNotes.length + registrationNotes.length}
         activeWeekdays={planDays}
         totalReceived={activeEnrollmentTotalReceived}
         remainingPayment={activeEnrollmentRemainingPayment}
@@ -1522,7 +1559,7 @@ export default async function StudentFile({
           <div className="panelHead">
             <div>
               <p>NOTLAR</p>
-              <h2>Antrenör ve yönetim notları</h2>
+              <h2>Öğrenci notları</h2>
             </div>
           </div>
 
@@ -1537,9 +1574,9 @@ export default async function StudentFile({
 
               <option value="health">Sağlık</option>
 
-              <option value="finance">Finans</option>
+              <option value="finance">Ödeme</option>
 
-              <option value="crm">CRM</option>
+              <option value="crm">Kayıt</option>
             </select>
 
             <textarea
@@ -1572,7 +1609,7 @@ export default async function StudentFile({
             {notes.map((note: any) => (
               <article key={note.id} className="managedNote">
                 <div>
-                  <strong>{String(note.note_type).toUpperCase()}</strong><small style={{display:"block",marginTop:6,color:note.is_guardian_visible?"#087443":"#66758a"}}>{note.is_guardian_visible?"Alıcı: bağlı portal velileri · Mesajlar ekranında görünür":"Kurum içi · Yalnızca yetkili personel görür"}</small>
+                  <strong>{noteLabels[note.note_type] || "Öğrenci Notu"}</strong><small style={{display:"block",marginTop:6,color:note.is_guardian_visible?"#087443":"#66758a"}}>{note.is_guardian_visible?"Alıcı: bağlı portal velileri · Mesajlar ekranında görünür":"Kurum içi · Yalnızca yetkili personel görür"}</small>
 
                   <p>{note.body}</p>
                   <StudentNoteFollowUp noteId={note.id}/>
@@ -1620,8 +1657,28 @@ export default async function StudentFile({
               </article>
             ))}
 
-            {!notes.length && <p className="empty">Henüz not yok.</p>}
+            {notesError && <p role="alert">Öğrenci notlarının tamamı yüklenemedi. Sayfayı yenileyerek tekrar deneyin.</p>}
+            {!notesError && !notes.length && !paymentNotes.length && !registrationNotes.length && (
+              <p className="empty">Henüz not yok.</p>
+            )}
           </div></StudentNoteFollowUps>
+
+          {paymentNotes.length > 0 && (
+            <div className="registrationNotesBlock">
+              <div className="panelHead compact"><h3>Ödeme açıklamaları</h3></div>
+              <div className="list">
+                {paymentNotes.map((payment) => (
+                  <article key={payment.id} className="managedNote">
+                    <div>
+                      <strong>Ödeme Notu</strong>
+                      <p>{payment.description}</p>
+                    </div>
+                    <span>{fmt(payment.received_at || payment.created_at)}</span>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="registrationNotesBlock">
             <div className="panelHead compact">
