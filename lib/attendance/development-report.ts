@@ -1,5 +1,6 @@
 import { coachStudentScope } from "./coach-roster";
 
+export const pendingDevelopmentReportTitle = "Gelişim raporu · Onay bekliyor";
 export const developmentReportTitle = "Gelişim raporu";
 
 export const developmentSections = [

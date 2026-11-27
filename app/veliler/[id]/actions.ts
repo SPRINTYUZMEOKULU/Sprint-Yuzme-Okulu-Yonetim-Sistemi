@@ -1,5 +1,7 @@
 "use server";
 
+import { pendingDevelopmentReportTitle } from "@/lib/attendance/development-report";
+
 import {notifySharedNote,hideSharedNoteNotifications} from "@/lib/guardian/note-sharing";
 import {guardianStudentAccess} from "@/lib/guardian/access";
 import {createNotification} from "@/lib/notifications/create-notification";
@@ -218,8 +220,9 @@ export async function toggleGuardianProgressVisibility(formData: FormData) {
   if (!verified.ok) back(authProfileId, "error", verified.message);
 
   const admin = adminClient();
-  const { data: current } = await admin.from("student_notes").select("id,is_guardian_visible,body").eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId).eq("note_type", "coach").maybeSingle();
+  const { data: current } = await admin.from("student_notes").select("id,is_guardian_visible,body,target").eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId).eq("note_type", "coach").maybeSingle();
   if (!current) back(authProfileId, "error", "Gelişim notu bulunamadı.");
+  if (current.target === pendingDevelopmentReportTitle) back(authProfileId, "error", "Raporu öğrenci dosyasındaki onay düğmesinden yayımlayın.");
   const next = !current.is_guardian_visible;
   const { error } = await admin.from("student_notes").update({ is_guardian_visible: next }).eq("organization_id", profile.organization_id).eq("id", noteId).eq("student_id", studentId);
   if (error) back(authProfileId, "error", error.message);

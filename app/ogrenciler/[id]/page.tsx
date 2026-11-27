@@ -1,3 +1,5 @@
+import { pendingDevelopmentReportTitle } from "@/lib/attendance/development-report";
+import ApproveDevelopmentReport from "./approve-development-report";
 import { loadStudentObligations, loadStudentPaymentCenter } from "@/lib/payments/student-finance";
 import { summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
@@ -1570,12 +1572,16 @@ export default async function StudentFile({
 
           <StudentNoteFollowUps studentId={student.id}><div className="list">
             {notes.map((note: any) => (
-              <article key={note.id} className="managedNote">
+              <article id={`not-${note.id}`} key={note.id} className="managedNote">
                 <div>
                   <strong>{String(note.note_type).toUpperCase()}</strong><small style={{display:"block",marginTop:6,color:note.is_guardian_visible?"#087443":"#66758a"}}>{note.is_guardian_visible?"Alıcı: bağlı portal velileri · Mesajlar ekranında görünür":"Kurum içi · Yalnızca yetkili personel görür"}</small>
 
                   <p>{note.body}</p>
                   <StudentNoteFollowUp noteId={note.id}/>
+                  {note.target === pendingDevelopmentReportTitle ? <div>
+                    <strong>Yönetici onayı bekliyor</strong>
+                    {canManageDestructiveActions ? <ApproveDevelopmentReport studentId={student.id} id={note.id} /> : null}
+                  </div> : null}
                 </div>
 
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
@@ -1633,7 +1639,7 @@ export default async function StudentFile({
 
             <div className="list">
               {registrationNotes.map((note: any) => (
-                <article key={note.id} className="managedNote">
+                <article id={`not-${note.id}`} key={note.id} className="managedNote">
                   <div>
                     <strong>{note.title || "Kayıt Notu"}</strong>
                     <p>{note.description || "—"}</p>

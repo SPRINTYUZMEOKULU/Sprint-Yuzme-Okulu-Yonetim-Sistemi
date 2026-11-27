@@ -54,10 +54,10 @@ export default function DevelopmentReportButton({
       setSent(true);
       setNeedsRetry(Boolean(data.notificationError));
       setFeedback(data.notificationError
-        ? "Rapor kaydedildi. Veli bildirimi için yeniden deneyebilirsiniz."
+        ? "Rapor onay bekliyor. Yönetim bildirimini yeniden deneyebilirsiniz."
         : data.recipientCount
-          ? "Rapor Gelişim Merkezi’nde yayımlandı ve veli bildirimi oluşturuldu."
-          : "Rapor kaydedildi. Bildirim alabilen bağlı veli hesabı bulunamadı.");
+          ? "Rapor yönetici onayına gönderildi."
+          : "Rapor kaydedildi ve yönetici onayı bekliyor.");
     } catch (error) {
       setFailed(true);
       setFeedback(error instanceof Error ? error.message : "Gelişim raporu paylaşılamadı.");
@@ -93,7 +93,7 @@ export default function DevelopmentReportButton({
             <div className="developmentActions">
               {!requestId.current ? <button type="button" disabled={saving} onClick={() => setPreview(false)}>Düzenle</button> : null}
               {(!sent || needsRetry) ? <button type="button" className="developmentPrimary" disabled={saving} onClick={() => void publish()}>
-                {saving ? "Paylaşılıyor…" : needsRetry ? "Bildirimi Yeniden Dene" : "Veliyle Paylaş"}
+                {saving ? "Paylaşılıyor…" : needsRetry ? "Bildirimi Yeniden Dene" : "Yönetici onayına gönder"}
               </button> : null}
             </div>
           </div>

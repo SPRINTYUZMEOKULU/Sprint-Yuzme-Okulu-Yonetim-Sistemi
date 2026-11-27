@@ -16,7 +16,10 @@ function money(value:number){ return new Intl.NumberFormat("tr-TR",{style:"curre
 function monthNow(){ const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit"}).formatToParts(new Date()); return `${p.find(x=>x.type==="year")?.value||"2026"}-${p.find(x=>x.type==="month")?.value||"01"}`; }
 
 export default function PersonelOdemeleri(){
-  const [month,setMonth]=useState(monthNow()); const [data,setData]=useState<Data|null>(null); const [loading,setLoading]=useState(true);
+  const [month,setMonth]=useState(monthNow());
+  const [year, monthNumber] = month.split("-").map(Number);
+  const plannedPaymentDate = month ? new Date(Date.UTC(year, monthNumber, 5)).toISOString().slice(0, 10) : "";
+  const [data,setData]=useState<Data|null>(null); const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState<string|null>(null); const [error,setError]=useState<string|null>(null); const [message,setMessage]=useState<string|null>(null); const [showArchive,setShowArchive]=useState(false);
   const load=useCallback(async()=>{ setLoading(true); setError(null); try{ const res=await fetch(`/api/personel-puantaj/odemeler?month=${month}`,{cache:"no-store"}); const payload=await res.json(); if(!res.ok) throw new Error(payload?.error||"Ödeme verileri alınamadı."); setData(payload); }catch(e){setError(e instanceof Error?e.message:"Ödeme verileri alınamadı.");}finally{setLoading(false);}},[month]);
   useEffect(()=>{void load();},[load]);
@@ -37,6 +40,10 @@ export default function PersonelOdemeleri(){
   const rows=useMemo(()=>(data?.rows||[]).filter(r=>showArchive?true:r.status!=="archived"),[data,showArchive]);
   return <section className="ppPanel ppPayments">
     <div className="ppPanelHead ppPaymentsHead"><div><p>PERSONEL GİDERLERİ</p><h2>Hakediş, ödeme ve arşiv</h2></div><div className="ppPaymentTools"><input type="month" value={month} onChange={e=>setMonth(e.target.value)}/><label><input type="checkbox" checked={showArchive} onChange={e=>setShowArchive(e.target.checked)}/> Arşivi göster</label></div></div>
+    {plannedPaymentDate ? <div className="ppInfo">
+      <strong>Planlanan ödeme günü</strong>
+      <p>{formatDisplayDate(plannedPaymentDate)} · Seçilen dönemi izleyen ayın 5’i</p>
+    </div> : null}
     {message?<div className="ppNotice success ppInnerNotice">{message}</div>:null}{error?<div className="ppNotice danger ppInnerNotice">{error}</div>:null}
     <div className="ppExpenseStats"><article><span>Toplam Personel Gideri</span><strong>{money(data?.summary.total||0)}</strong></article><article><span>Ödenen</span><strong>{money(data?.summary.paid||0)}</strong></article><article><span>Ödeme Bekleyen</span><strong>{money(data?.summary.pending||0)}</strong></article><article><span>Arşivlenen Ödeme</span><strong>{money(data?.summary.archived||0)}</strong></article></div>
     {loading&&!data?<div className="ppEmpty">Personel giderleri hazırlanıyor…</div>:<div className="ppPayrollTableWrap"><table className="ppPayrollTable ppPaymentTable"><thead><tr><th>Personel</th><th>Model</th><th>Ders / Süre</th><th>Hakediş</th><th>Ek/Kesinti</th><th>Net</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>{rows.map(row=><tr key={row.staffId}><td><strong>{row.staffName}</strong><small>{row.title}</small></td><td>{payLabel[row.payType]||row.payType}</td><td>{row.lessonCount} ders · {Math.floor(row.totalMinutes/60)} sa {row.totalMinutes%60} dk</td><td>{money(row.baseAmount)}</td><td>{money(row.adjustmentAmount)}</td><td><strong>{money(row.totalAmount)}</strong></td><td><span className={`ppPayStatus ${row.status}`}>{statusLabel[row.status]||row.status}</span>{row.paidAt?<small>{formatDisplayDate(new Date(row.paidAt))}</small>:null}</td><td><div className="ppPayActions">

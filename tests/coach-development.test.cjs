@@ -37,30 +37,38 @@ test("direct assignments and individual student allocations control the developm
 function fixture(otherCoach) {
   const saved = new Map();
   const notifications = new Set();
+  const managementNotifications = [];
   let calls = 0;
+  let actor = "coach";
   const db = { from(table) {
     const criteria = [];
     let payload;
+    let changes;
     const builder = {
       select() { return builder; }, eq(key, value) { criteria.push([key, value]); return builder; }, or() { return builder; },
+      update(row) { changes = row; return builder; },
       upsert(row) { payload = row; return builder; },
       maybeSingle() {
         if (table === "staff") return Promise.resolve({ data: { id: "staff" } });
         if (payload && !saved.has(payload.id)) { saved.set(payload.id, payload); return Promise.resolve({ data: { id: payload.id } }); }
         if (payload) return Promise.resolve({ data: null });
-        return Promise.resolve({ data: [...saved.values()].find(row => criteria.every(([key, value]) => row[key] === value)) || null });
+        const match = [...saved.values()].find(row => criteria.every(([key, value]) => row[key] === value));
+        if (match && changes) Object.assign(match, changes);
+        return Promise.resolve({ data: match || null });
       },
+      in() { return builder; },
       then(resolve) {
+        if (table === "profiles") return Promise.resolve({ data: [{ id: "manager" }] }).then(resolve);
         return Promise.resolve({ data: otherCoach ? [{ schedule_id: scheduleId, student_id: studentId, coach_id: "other" }] : [] }).then(resolve);
       },
     };
     return builder;
   } };
-  const { POST } = load("app/api/coach-development/route.ts", {
+  const { POST, PATCH } = load("app/api/coach-development/route.ts", {
     "@supabase/supabase-js": { createClient: () => db },
     "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status || 200 }) } },
     "next/cache": { revalidatePath() {} },
-    "@/lib/auth/profile": { requireProfile: async () => ({ id: "coach", organization_id: "org", base_role: "coach", is_active: true }) },
+    "@/lib/auth/profile": { requireProfile: async () => ({ id: actor, organization_id: "org", base_role: actor, is_active: true }) },
     "@/lib/attendance/roster": { attendanceRoster: () => ({ students: [{ id: studentId, status: "active" }] }) },
     "@/lib/attendance/coach-roster": scope,
     "@/lib/attendance/development-report": report,
@@ -70,6 +78,10 @@ function fixture(otherCoach) {
       isLessonDate: () => true, sessionClock: () => ({ date: "2026-11-26" }),
       loadPersonnelSessions: async () => [{ id: scheduleId, group_id: "group", weekday: 4, coaches: new Map([["staff", "coach"]]) }],
     },
+    "@/lib/notifications/create-notification": { createNotification: async (input) => {
+      managementNotifications.push(input);
+      return { ok: true, recipientCount: 1 };
+    } },
     "@/lib/guardian/note-sharing": { notifySharedNote: async (org, student, note, body, actor, options) => {
       assert.equal(options.developmentReport, true);
       calls += 1;
@@ -78,7 +90,7 @@ function fixture(otherCoach) {
       return { count: 1 };
     } },
   });
-  return { submit: () => POST({ json: async () => form }), saved, notifications };
+  return { submit: (payload = form) => POST({ json: async () => payload }), approve: async (role) => { actor = role; return PATCH({ json: async () => ({ id: noteId, studentId }) }); }, saved, notifications, managementNotifications };
 }
 
 test("the server refuses a student allocated to another coach before creating the report", async () => {
@@ -87,12 +99,37 @@ test("the server refuses a student allocated to another coach before creating th
   assert.equal(flow.saved.size, 0);
 });
 
-test("a notification retry reuses the guardian-visible report and preserves its author", async () => {
+test("reports stay private until a manager approves and notification retries preserve the author", async () => {
   const flow = fixture(false);
-  assert.deepEqual((await flow.submit()).body, { saved: true, notificationError: true });
   assert.deepEqual((await flow.submit()).body, { saved: true, recipientCount: 1 });
+  assert.equal(flow.saved.get(noteId).is_guardian_visible, false);
+  assert.equal(flow.saved.get(noteId).target, report.pendingDevelopmentReportTitle);
+  assert.equal(flow.notifications.size, 0);
+  assert.equal((await flow.approve("coach")).status, 403);
+  assert.deepEqual((await flow.approve("admin")).body, { saved: true, notificationError: true });
+  assert.deepEqual((await flow.approve("admin")).body, { saved: true, notificationError: false });
   assert.equal(flow.saved.size, 1);
   assert.equal(flow.saved.get(noteId).author_id, "coach");
+  assert.equal(flow.saved.get(noteId).target, report.developmentReportTitle);
   assert.equal(flow.saved.get(noteId).is_guardian_visible, true);
   assert.equal(flow.notifications.size, 1);
+  assert.deepEqual(flow.managementNotifications.at(-1).recipientProfileIds, ["coach"]);
+});
+
+
+test("a coach management note stays private and alerts only management without exposing its content", async () => {
+  const flow = fixture(false);
+  const payload = { ...form, kind: "management_note", subject: "guardian", body: "Özel görüşme notu" };
+  assert.deepEqual((await flow.submit(payload)).body, { saved: true, recipientCount: 1 });
+  await flow.submit(payload);
+  assert.equal(flow.saved.size, 1);
+  assert.equal(flow.saved.get(noteId).note_type, "management");
+  assert.equal(flow.saved.get(noteId).is_guardian_visible, false);
+  assert.equal(flow.notifications.size, 0);
+  assert.deepEqual(flow.managementNotifications[0].recipientProfileIds, ["manager"]);
+  assert.equal(flow.managementNotifications[0].dedupeKey, flow.managementNotifications[1].dedupeKey);
+  assert.doesNotMatch(flow.managementNotifications[0].body, /Özel görüşme/);
+  const otherCoach = fixture(true);
+  assert.equal((await otherCoach.submit(payload)).status, 403);
+  assert.equal(otherCoach.saved.size, 0);
 });

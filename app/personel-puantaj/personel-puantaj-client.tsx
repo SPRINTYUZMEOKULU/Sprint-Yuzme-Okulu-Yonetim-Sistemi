@@ -520,7 +520,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
 
           <div className="ppInfo">
             <strong>Hesaplama kuralı</strong>
-            <p>Hakedişe yalnızca konumu otomatik doğrulanan veya yönetici tarafından onaylanan ders girişleri dahil edilir. Personelin ücret modeli `staff` kaydındaki ders başı, saatlik veya aylık ücret ayarından hesaplanır.</p>
+            <p>Ders hesabına tamamlanmış, konumu doğrulanmış veya yönetici onayı verilmiş girişler alınır. Tutar belirlenen ücret modeline göre hesaplanır.</p>
           </div>
         </section>
       )}

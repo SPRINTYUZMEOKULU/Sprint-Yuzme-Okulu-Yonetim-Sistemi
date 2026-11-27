@@ -20,8 +20,8 @@ async function getContext() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const admin = adminClient();
-  const { data: profile } = await admin.from("profiles").select("id, role, organization_id").eq("id", user.id).maybeSingle();
-  if (!profile?.organization_id) return null;
+  const { data: profile } = await admin.from("profiles").select("id, role, organization_id, is_active").eq("id", user.id).maybeSingle();
+  if (!profile?.organization_id || !profile.is_active) return null;
   return { user, role: String(profile.role) as Role, organizationId: String(profile.organization_id), admin };
 }
 
