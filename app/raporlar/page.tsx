@@ -175,8 +175,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const attendanceRate = attendanceBase ? (presentCount / attendanceBase) * 100 : 0;
   const validPayments = filteredPayments.filter(received);
   const collectionTotal = validPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const rightsContext=await loadLessonRightsContext(supabase,organizationId,students.map(s=>s.id));
-  const remainingLessons=activeEnrollments.reduce((sum,e)=>sum+rightsForEnrollment(rightsContext,e).total,0);
+  const rightsContext=await loadLessonRightsContext(supabase, organizationId);
+  const rightsByEnrollment = new Map(enrollments.map(enrollment => [enrollment.id, rightsForEnrollment(rightsContext, enrollment)]));
+  const remainingLessons = activeEnrollments.reduce((sum,e) => sum + rightsByEnrollment.get(e.id)!.total, 0);
 
   const reportBranches = [...branches, ...(activeEnrollments.some(e => !branchMap.has(enrollmentBranch(e) || "")) ? [{id:"unassigned",name:"Şubesi belirlenemeyen",is_active:false}] : [])];
   const branchRows = reportBranches
@@ -232,10 +233,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       name: `${student.first_name || ""} ${student.last_name || ""}`.trim(),
       branch: branchMap.get(enrollmentBranch(enrollment) || "") || "—",
       group: groupMap.get(enrollment?.group_id || "")?.name || "—",
-      used: rightsForEnrollment(rightsContext,enrollment).used,
-      normalRemaining: rightsForEnrollment(rightsContext,enrollment).normal,
-      compensation: rightsForEnrollment(rightsContext,enrollment).compensation,
-      remaining: rightsForEnrollment(rightsContext,enrollment).total,
+      used: rightsByEnrollment.get(enrollment.id)!.used,
+      normalRemaining: rightsByEnrollment.get(enrollment.id)!.normal,
+      compensation: rightsByEnrollment.get(enrollment.id)!.compensation,
+      remaining: rightsByEnrollment.get(enrollment.id)!.total,
       total: Number(enrollment?.total_lessons || 0),
       attendance: p + a ? (p / (p + a)) * 100 : 0,
     };
@@ -261,7 +262,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const financeRows = reportEnrollments.map(e => {
     const student = studentMap.get(e.student_id)!;
     const name = `${student.first_name || ""} ${student.last_name || ""}`.trim();
-    const rights = rightsForEnrollment(rightsContext, e);
+    const rights = rightsByEnrollment.get(e.id)!;
     const hasRenewal = enrollments.some(next => next.student_id === e.student_id && next.id !== e.id && ["active", "scheduled"].includes(next.status || "") && String(next.start_date || "") > String(e.start_date || ""));
     const paid = payments.filter(p => p.enrollment_id === e.id && received(p)).reduce((sum,p) => sum + Number(p.amount || 0), 0);
     const activePlans = plans.filter(p => p.enrollment_id === e.id && !["cancelled","canceled"].includes(p.status));
@@ -281,15 +282,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     if (balance === null) addNote(name,"Kayıt ücreti belirlenemedi veya birden fazla ödeme planı var.",`/ogrenciler/${student.id}`);
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) addNote(name,"Başlangıç/bitiş tarihi eksik veya sırası hatalı.",`/ogrenciler/${student.id}`);
     if (Number(e.used_lessons) > Number(e.total_lessons)) addNote(name,"Takvime göre işlenen ders paket hakkını aşıyor.",`/ogrenciler/${student.id}`);
-    if (!hasRenewal && !isWaiting(e) && e.status === "active" && student.status === "active" && ((rightsForEnrollment(rightsContext,e).compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rightsForEnrollment(rightsContext,e).total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
+    if (!hasRenewal && !isWaiting(e) && e.status === "active" && student.status === "active" && ((rights.compensation<=0 && e.planned_end_date && e.planned_end_date < today) || rights.total <= 0)) addNote(name,"Aktif kayıt için yenileme veya pasife alma kontrolü gerekli.",`/ogrenciler/${student.id}`);
     if (!e.lesson_weekdays?.length) addNote(name,"Kayıtta seçili ders günleri eksik.",`/ogrenciler/${student.id}`);
     const expiredActive = e.status === "active" && hasActiveStudent(e) && !isWaiting(e) && Boolean(e.planned_end_date && e.planned_end_date < today);
+    const makeupContinues = rights.compensation > 0;
     const actions: string[] = [];
     if (expiredActive) {
       actions.push(hasRenewal
         ? "Eski kayıt dönemini kapatın; yeni kayıt mevcut."
         : rights.compensation > 0
-          ? "Kayıt süresi dolmuş, hâlâ aktif. Telafi haklarını koruyarak pasife alma / yenileme işlemini değerlendirin."
+          ? "Normal paket bitti. Planlı telafileri ve saklı hakları takip edin."
           : "Kayıt süresi dolmuş, hâlâ aktif. Kaydı yenileyin; devam etmeyecekse pasife alın.");
     } else if (e.status === "active" && hasActiveStudent(e) && !isWaiting(e) && rights.total <= 0 && !hasRenewal) {
       actions.push("Ders hakkı bitmiş. Kaydı yenileyin; devam etmeyecekse pasife alın.");
@@ -298,11 +300,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (balance > 0) actions.push(`${status === "Gecikmiş" ? "Gecikmiş ödemeyi takip edin" : "Kalan ödemeyi takip edin"}: ${money(balance)}.`);
     if (isWaiting(e)) actions.push("Başlangıç tarihini ve kursa başlatma onayını kontrol edin.");
     if (!e.start_date || !e.planned_end_date || (e.start_date && e.planned_end_date && e.start_date > e.planned_end_date)) actions.push("Başlangıç ve bitiş tarihlerini düzeltin.");
-    const unplannedCompensation = Math.max(0, rights.compensation - rightsContext.compensations.filter(c => c.student_id === e.student_id && c.status === "planned").length);
+    const unplannedCompensation = rights.compensation - rights.plannedCompensation;
     if (unplannedCompensation > 0) actions.push(`${unplannedCompensation} telafi hakkı için gün ve seans planlayın.`);
     const nextActions = actions.join(" • ") || "İşlem gerekmiyor";
     for (const action of actions) addNote(name,action,`/ogrenciler/${student.id}`);
-    return {id:e.id, studentId:student.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? "Süresi dolmuş · hâlâ aktif" : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? "Süresi doldu" : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
+    return {id:e.id, studentId:student.id,name,periodNumber,priceSource,nextActions,scope:expiredActive ? (makeupContinues ? "Telafi devam ediyor · aktif" : "Süresi dolmuş · hâlâ aktif") : scopeLabel(e), debtStatus:balance === null ? "Belirlenemedi" : balance > 0 ? "Borcu var" : "Borcu yok", periodInfo: [hasRenewal ? "Yeni kayıt mevcut" : "", rights.compensation > 0 ? `${rights.compensation} telafi hakkı var (${rights.plannedCompensation} planlı, ${unplannedCompensation} tarih bekliyor)` : ""].filter(Boolean).join(" · ") || "—", recordStatus: (() => { const days = e.planned_end_date && isIsoDate(e.planned_end_date) ? Math.round((Date.parse(e.planned_end_date) - Date.parse(today)) / 86400000) : null; return isWaiting(e) ? "Henüz başlamadı" : days === null ? "Bitiş tarihi eksik" : days < 0 ? (makeupContinues ? "Normal paket bitti · telafi devam ediyor" : "Süresi doldu") : days === 0 ? "Bugün bitiyor" : days <= 7 ? `Bitişi yaklaşıyor (${days} gün)` : `${days} gün kaldı`; })(), endIso:e.planned_end_date || "9999-12-31", registered:dateLabel(e.created_at),start:dateLabel(e.start_date),end:dateLabel(e.planned_end_date),compensationEnd:dateLabel(rights.endDate),price,paid,balance,overdue,status};
   });
   financeRows.sort((a,b) => a.endIso.localeCompare(b.endIso) || a.name.localeCompare(b.name,"tr") || a.id.localeCompare(b.id));
   const financeSheet = (name: string, rows: typeof financeRows) => ({name,rows:[["Sıra","Öğrenci","Kayıt uyarısı","Kayıt tarihi","Başlangıç","Kayıt bitiş tarihi","Telafi bitiş tarihi","Ücret","Ödenen","Kalan","Gecikmiş taksit","Ödeme durumu","Ek dönem bilgisi","Kayıt dönemi","Kayıt durumu","Yapılacak işlemler"],...rows.map((r,i)=>[i+1,r.name,r.recordStatus,r.registered,r.start,r.end,r.compensationEnd,r.price,r.paid,r.balance,r.overdue,r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status,r.periodInfo,`${r.periodNumber}. kayıt dönemi`,r.scope,r.nextActions])]});
@@ -390,7 +392,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     ]},
     financeSheet("Kayıt ve ödeme",financeRows),
     financeSheet("Bitişi yaklaşanlar",financeRows.filter(r=>r.recordStatus.startsWith("Bitişi yaklaşıyor") || r.recordStatus === "Bugün bitiyor")),
-    financeSheet("Süresi dolanlar",financeRows.filter(r=>r.recordStatus === "Süresi doldu")),
+    financeSheet("Süresi dolanlar",financeRows.filter(r=>r.recordStatus === "Süresi doldu" || r.recordStatus.startsWith("Normal paket bitti"))),
     financeSheet("Ödeme yapılmayanlar",financeRows.filter(r=>r.paid === 0 && (r.balance || 0)>0)),
     financeSheet("Kısmi ödeme yapanlar",financeRows.filter(r=>r.paid > 0 && (r.balance || 0)>0)),
     {name:"Öğrenciler",rows:[["Öğrenci","Şube","Grup","Günler","Takvime göre işlenen ders","Paket ders","Kalan ders","Telafi","Toplam kalan","Katılım %"],...studentRows.map(r=>[r.name,r.branch,r.group,r.days,r.used,r.total,r.normalRemaining,r.compensation,r.remaining,Math.round(r.attendance)])]},
@@ -415,15 +417,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="reportsHeaderActions"><Link href="/" className="reportSecondary">← Yönetim paneli</Link><Link href="/odemeler" className="reportPrimary">Ödeme merkezini aç</Link></div>
         </header>
 
-        <ReportExports sheets={exportSheets} filename={`Sprint-Yonetim-Raporu-${from}-${to}`} />
         <p className="reportScope">Tahsilat ve yoklama: seçilen tarih aralığındaki tüm hareketler; pasife alınanların geçmişi korunur. Kayıt kapsamı filtresi kayıt ve borç listelerini belirler. Aktif öğrenci ve atamalar: başlamış güncel kayıtlar. Tarihler Türkiye saatine göredir.</p>
-        <form className="reportFilters" method="get">
+        <form id="report-filters" className="reportFilters" method="get">
           <label><span>Başlangıç</span><input type="date" name="from" defaultValue={from} /></label>
           <label><span>Bitiş</span><input type="date" name="to" defaultValue={to} /></label>
           <label><span>Kayıt kapsamı</span><select name="status" defaultValue={reportStatus}><option value="active">Aktif kayıtlar</option><option value="all">Tüm kayıt geçmişi</option><option value="pending">Henüz başlamamış kayıtlar</option><option value="passive">Pasif / kapanmış kayıtlar</option></select></label>
           <label><span>Şube</span><select name="branch" defaultValue={branchId}><option value="all">Tüm şubeler</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
           <button type="submit">Raporu getir</button>
         </form>
+        <ReportExports key={JSON.stringify([from, to, branchId, reportStatus])} sheets={exportSheets} filename={`Sprint-Yonetim-Raporu-${from}-${to}`} initialSelection={params.reportType} />
 
         {inconsistentActiveEnrollmentCount > 0 ? (
           <div className="dataNotice">
@@ -449,7 +451,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">KAYIT VE FİNANS</span><h2>Kayıt tarihleri ve ödeme durumu</h2></div></div>
             <p className="reportScope">Kayıt bitiş tarihi normal paketin sonudur. Telafi bitiş tarihi, aynı kayıt dönemine bağlı planlı telafiler dahil son tarihtir; telafi uzatması yoksa kayıt bitişiyle aynıdır. Sıralama ve kayıt uyarıları normal kayıt bitiş tarihine göredir; bitişi en yakın olan önce, aynı tarihte ad-soyad A–Z. Bitişe 7 gün kalanlar ayrıca işaretlenir. Her kayıt dönemi ayrı satırdır; kayıt kapsamı filtresi geçmiş kayıtları da gösterir. Ödenen ve kalan tutarlar kayıt döneminin tüm geçmişini kapsar. Ödeme planı yoksa Ödeme Merkezi ile aynı paket ücreti kullanılır; güncel paket ücreti geçmiş anlaşmadan farklı olabilir.</p>
-            <div className="tableScroll"><table><thead><tr><th>Sıra</th><th>Öğrenci</th><th>Kayıt dönemi</th><th>Kayıt uyarısı</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Kayıt bitiş tarihi</th><th>Telafi bitiş tarihi</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Ödeme durumu</th><th>Yapılacak işlemler</th></tr></thead><tbody>{financeRows.map((r,i)=><tr key={r.id}><td>{i+1}</td><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td>{r.periodNumber}. kayıt dönemi<br/><small>{r.scope}</small></td><td><span className={r.recordStatus === "Süresi doldu" ? "reportTag reportDanger" : /yaklaşıyor|Bugün/.test(r.recordStatus) ? "reportTag reportWarning" : "reportTag"}>{r.recordStatus}</span>{r.periodInfo !== "—" && <><br/><small>{r.periodInfo}</small></>}</td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.compensationEnd}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td><span className={r.balance === 0 ? "reportTag reportGood" : "reportTag reportDanger"}>{r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status}</span></td><td><strong>{r.nextActions}</strong>{r.nextActions !== "İşlem gerekmiyor" && <><br/><Link href={`/ogrenciler/${r.studentId}`}>Öğrenci dosyasını aç →</Link></>}</td></tr>)}</tbody></table></div>
+            <div className="tableScroll"><table><thead><tr><th>Sıra</th><th>Öğrenci</th><th>Kayıt dönemi</th><th>Kayıt uyarısı</th><th>Kayıt tarihi</th><th>Başlangıç</th><th>Kayıt bitiş tarihi</th><th>Telafi bitiş tarihi</th><th>Ücret</th><th>Ödenen</th><th>Kalan</th><th>Gecikmiş taksit</th><th>Ödeme durumu</th><th>Yapılacak işlemler</th></tr></thead><tbody>{financeRows.map((r,i)=><tr key={r.id}><td>{i+1}</td><td><Link href={`/ogrenciler/${r.studentId}`}>{r.name}</Link></td><td>{r.periodNumber}. kayıt dönemi<br/><small>{r.scope}</small></td><td><span className={r.recordStatus === "Süresi doldu" ? "reportTag reportDanger" : /yaklaşıyor|Bugün|telafi devam ediyor/.test(r.recordStatus) ? "reportTag reportWarning" : "reportTag"}>{r.recordStatus}</span>{r.periodInfo !== "—" && <><br/><small>{r.periodInfo}</small></>}</td><td>{r.registered}</td><td>{r.start}</td><td>{r.end}</td><td>{r.compensationEnd}</td><td>{r.price === null || !Number.isFinite(r.price) ? "Kontrol gerekli" : money(r.price)}</td><td>{money(r.paid)}</td><td>{r.balance === null ? "Bilinmiyor" : money(r.balance)}</td><td>{money(r.overdue)}</td><td><span className={r.balance === 0 ? "reportTag reportGood" : "reportTag reportDanger"}>{r.paid === 0 && (r.balance || 0)>0 ? `Ödeme yapılmadı${r.status === "Gecikmiş" ? " · Gecikmiş" : ""}` : r.status}</span></td><td><strong>{r.nextActions}</strong>{r.nextActions !== "İşlem gerekmiyor" && <><br/><Link href={`/ogrenciler/${r.studentId}`}>Öğrenci dosyasını aç →</Link></>}</td></tr>)}</tbody></table></div>
           </article>
           <article className="reportPanel reportPanelWide">
             <div className="panelHead"><div><span className="panelKicker">GÜNCEL OPERASYON PLANI</span><h2>Öğrenci ve eğitmen atamaları</h2></div><Link href="/operasyon-plani">Atamaları düzenle →</Link></div>

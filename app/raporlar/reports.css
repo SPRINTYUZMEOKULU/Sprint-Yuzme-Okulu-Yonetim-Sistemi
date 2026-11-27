@@ -9,3 +9,83 @@ body{background:white!important}.reportsShell{padding:0!important;background:whi
 .reportTag{display:inline-block;padding:5px 8px;border-radius:6px;background:#edf3fb;color:#38516f;font-size:11px;font-weight:700}.reportDanger{background:#fff0f0;color:#a62020}.reportWarning{background:#fff5d6;color:#805400}.reportGood{background:#e9f8ef;color:#086b3c}
 
 .reportTasks{margin-bottom:16px;border-top:4px solid #dc941b}.reportTasks h2{font-size:22px}.reportTasks small{color:#64748b}
+
+.reportFilters label,
+.reportFilters input,
+.reportFilters select {
+  min-width: 0;
+}
+.reportFilters input,
+.reportFilters select {
+  box-sizing: border-box;
+  width: 100%;
+}
+@media (max-width: 900px) {
+  .reportFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 360px) {
+  .reportFilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.reportExportBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.reportPrintChoice {
+  width: min(100%, 420px);
+}
+.reportPrintChoice select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 16px;
+}
+.reportExportButtons button,
+.reportExportButtons a,
+.reportPdfControls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #8195b6;
+  border-radius: 10px;
+  background: white;
+  color: #17325c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: none;
+}
+.reportExportButtons button:last-child {
+  background: white;
+  color: #17325c;
+}
+.reportExportButtons .reportExcelButton:last-child {
+  background: #dff8ee;
+  color: #07593e;
+}
+.reportPdfControls {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.reportPdfControls > button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.reportPdfReady {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #536987;
+  border-radius: 12px;
+}
+.reportPdfReady p {
+  margin: 0 0 8px;
+}

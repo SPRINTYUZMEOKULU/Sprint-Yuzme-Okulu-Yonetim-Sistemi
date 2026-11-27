@@ -25,3 +25,8 @@ test('untrusted report values remain inert while the PDF preparation controls st
   assert.equal(payload.filename,filename);assert.equal(payload.sheet.rows[0][1],hostile);
  } finally {dom.window.close();}
 });
+
+test('print preview returns to the selected report and applied filters',()=>{
+ const html=exportsObject.printReportHtml({name:'Kayıt ve ödeme',rows:[['Öğrenci']]},'Sprint','/raporlar?branch=meltem&reportType=Kayit');
+ assert.match(html,/href="\/raporlar\?branch=meltem&amp;reportType=Kayit"/);
+});

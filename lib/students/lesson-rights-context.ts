@@ -31,5 +31,6 @@ export function rightsForEnrollment(context:Awaited<ReturnType<typeof loadLesson
   compensations:context.compensations.filter(c=>c.student_id===enrollment?.student_id),
   cancellations:context.cancellations.filter(c=>c.student_id===enrollment?.student_id),schedules:context.schedules,today:context.today,time:context.time});
  const endDate=compensationEndDate(enrollment?.planned_end_date,context.compensations.filter(c=>c.student_id===enrollment?.student_id && Boolean(enrollment?.id) && c.enrollment_id===enrollment.id));
- return {...rights,endDate:endDate||null};
+ const plannedCompensation = context.compensations.filter(c => c.student_id === enrollment?.student_id && Boolean(enrollment?.id) && c.enrollment_id === enrollment.id && c.status === "planned").length;
+ return {...rights,plannedCompensation,endDate:endDate||null};
 }

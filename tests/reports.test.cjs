@@ -51,7 +51,7 @@ test('expired enrollment keeps expiry warning alongside makeup rights',async()=>
  const d=fixture();d.student_enrollments[0].planned_end_date='2026-01-02';
  d.student_compensation_lessons=[{id:'makeup',student_id:'s',enrollment_id:'e',lesson_date:'2099-01-01',status:'planned'}];
  const {sheets}=await render(d);
- assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Süresi doldu');
+ assert.equal(sheets.find(s=>s.name==='Kayıt ve ödeme').rows[1][2],'Normal paket bitti · telafi devam ediyor');
  assert.match(financeRows(sheets)[0]['Ek dönem bilgisi'],/telafi hakkı var/);
  assert.equal(sheets.find(s=>s.name==='Süresi dolanlar').rows.length,2);
 });
@@ -97,4 +97,14 @@ test('unresolved branch remains visible rather than disappearing from branch tot
 test('group primary coach is part of the current planned session staff',async()=>{
  const d=fixture();d.lesson_schedules[0].coach_id=null;d.lesson_student_assignments=[{id:'as',schedule_id:'sc',student_id:'s',coach_id:'c1',is_active:true}];
  const {sheets}=await render(d);const a=sheets.find(s=>s.name==='Atamalar').rows[1];assert.equal(a[4],'Plan Hoca');assert.equal(a[5],'Plan Hoca');
+});
+
+test('a planned makeup from a previous period does not hide an active period reservation',async()=>{
+ const d=fixture();
+ d.lesson_schedules[0].end_time='20:00:00';
+ d.student_activity_logs=[{id:'reserved',student_id:'s',source_id:'sc',activity_type:'lesson_cancellation_compensation',old_value:{cancelled_lesson_date:'2026-10-11'},new_value:{compensation_mode:'reserve'}}];
+ d.student_compensation_lessons=[{id:'older-makeup',student_id:'s',enrollment_id:'older',lesson_date:'2099-01-01',status:'planned'}];
+ const row=financeRows((await render(d)).sheets)[0];
+ assert.match(row['Ek dönem bilgisi'],/1 telafi hakkı var \(0 planlı, 1 tarih bekliyor\)/);
+ assert.match(row['Yapılacak işlemler'],/1 telafi hakkı için gün ve seans planlayın/);
 });
