@@ -120,6 +120,37 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
     }
   }
 
+  // Use the same roster and saved records as the lesson completion check.
+  if ((previewStaffId || role === "coach") && dateKey <= today && rows.length) {
+    try {
+      const [eligibility, attendance] = await Promise.all([
+        loadAttendanceEligibility(admin, organizationId),
+        admin.from("attendance_records").select("student_id, schedule_id, group_id, lesson_date")
+          .eq("organization_id", organizationId).eq("lesson_date", dateKey)
+          .in("schedule_id", [...new Set(rows.map((row) => String(row.scheduleId)))]),
+      ]);
+      if (attendance.error) throw attendance.error;
+      const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+      const recordsBySession = new Map<string, typeof attendance.data>();
+      for (const record of attendance.data || []) {
+        const records = recordsBySession.get(record.schedule_id) || [];
+        records.push(record);
+        recordsBySession.set(record.schedule_id, records);
+      }
+      for (const row of rows) {
+        const session = sessionsById.get(row.scheduleId);
+        if (!session) continue;
+        const records = recordsBySession.get(session.id) || [];
+        const roster = session.makeup_date ? { ...eligibility, memberships: [] } : eligibility;
+        const missing = missingAttendanceStudents(roster, session, dateKey, records).length;
+        row.attendanceState = missing ? (records.length ? "partial" : "pending") : records.length ? "saved" : "empty";
+      }
+    } catch {
+      // A roster lookup failure should not prevent check-in or access to the schedule.
+      for (const row of rows) row.attendanceState = "unavailable";
+    }
+  }
+
   rows.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.staffName).localeCompare(String(b.staffName), "tr"));
 
   const unassigned = manager && !previewStaffId ? sessions.filter((session) =>

@@ -3,7 +3,7 @@ import { formatDisplayDate } from "@/lib/dates/display";
 
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UserRole } from "@/lib/auth/profile";
 
 type Checkin = {
@@ -30,6 +30,7 @@ type TodayRow = {
   groupName: string;
   startTime: string;
   endTime: string;
+  attendanceState?: "pending" | "partial" | "saved" | "empty" | "unavailable";
   checkin: Checkin | null;
   isMine: boolean;
 };
@@ -71,6 +72,25 @@ type DashboardData = {
     missing: number;
   };
 };
+
+const attendanceLabels = {
+  pending: "Yoklama bekleniyor",
+  partial: "Yoklama eksik",
+  saved: "Yoklama kaydedildi",
+  empty: "Yoklama bekleyen öğrenci yok",
+  unavailable: "Yoklama durumu alınamadı",
+};
+
+function shiftDay(value: string, days: number) {
+  const day = new Date(`${value}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + days);
+  return day.toISOString().slice(0, 10);
+}
+
+function paymentStatus(row: PayrollRow) {
+  if (row.paymentStatus === "paid" || (row.paymentStatus === "archived" && row.paidAmount > 0)) return `Ödendi · ${money(row.paidAmount)}`;
+  return row.paymentStatus === "awaiting_payment" ? "Ödeme bekliyor" : "Dönem açık";
+}
 
 const payTypeLabels: Record<string, string> = {
   per_lesson: "Ders başı",
@@ -125,9 +145,12 @@ function statusMeta(checkin: Checkin | null) {
   return { label: "Geldi", tone: "success" };
 }
 
-export default function PersonelPuantajClient({ currentRole, coachHome = false, previewStaffId }: { currentRole: UserRole; coachHome?: boolean; previewStaffId?: string }) {
+export default function PersonelPuantajClient({ currentRole, coachHome = false, previewStaffId, initialDate = "" }: { currentRole: UserRole; coachHome?: boolean; previewStaffId?: string; initialDate?: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(initialDate);
+  const [payrollMonth, setPayrollMonth] = useState("");
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -135,33 +158,49 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
   const [activeTab, setActiveTab] = useState<"today" | "payroll">("today");
   const [clockTick, setClockTick] = useState(0);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
+  const requestedDate = coachHome && activeTab === "payroll" && payrollMonth ? `${payrollMonth}-01` : date;
+  const load = useCallback(async (background = false) => {
+    if (background && requestRef.current) return;
+    requestRef.current?.abort();
+    const request = new AbortController();
+    requestRef.current = request;
+    const { signal } = request;
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params = new URLSearchParams();
-      if (date) params.set("date", date);
+      if (requestedDate) params.set("date", requestedDate);
       if (previewStaffId) params.set("personel", previewStaffId);
       const query = params.size ? `?${params}` : "";
       const response = await fetch(`/api/personel-puantaj${query}`, { cache: "no-store", signal });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "Veriler alınamadı.");
+      if (signal.aborted) return;
       setData(payload);
+      setLoadedDate(requestedDate);
     } catch (err) {
-      if (!signal?.aborted) setError(err instanceof Error ? err.message : "Veriler alınamadı.");
+      if (!signal.aborted) setError(err instanceof Error ? err.message : "Veriler alınamadı.");
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (requestRef.current === request) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
-  }, [date, previewStaffId]);
+  }, [requestedDate, previewStaffId]);
 
   useEffect(() => {
-    const request = new AbortController();
-    void load(request.signal);
+    void load();
     const timer = window.setInterval(() => {
       setClockTick((value) => value + 1);
-      void load(request.signal);
+      void load(true);
     }, 60_000);
-    return () => { request.abort(); window.clearInterval(timer); };
+    return () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+      window.clearInterval(timer);
+    };
   }, [load]);
 
   const currentMinute = useMemo(() => {
@@ -283,15 +322,21 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
   }
 
   if (!data) {
-    return <div className="ppErrorBox">{error || "Personel puantaj verileri görüntülenemedi."}</div>;
+    return <div className="ppErrorBox" role="alert">
+      {error || "Personel puantaj verileri görüntülenemedi."} <button type="button" onClick={() => void load()}>Tekrar dene</button>
+    </div>;
   }
+
+  const dateReady = loadedDate === requestedDate;
+  const selectedDay = date || data.currentDate;
+  const personalPayroll = coachHome ? data.payroll[0] : undefined;
 
   return (
     <div className="ppContent">
       {message ? <div className="ppNotice success" role="status">{message}</div> : null}
       {error ? <div className="ppNotice danger" role="alert">{error}</div> : null}
 
-      {data.isManager && managerMissing.length ? (
+      {!coachHome && data.isManager && managerMissing.length ? (
         <section className="ppManagerAlertPanel">
           <div className="ppManagerAlertHead">
             <div><p>YÖNETİCİ UYARISI</p><strong>Giriş yapılmayan seanslar</strong></div>
@@ -311,28 +356,45 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
 
       <div className="ppViewControls">
         <div className="ppTabs" role="group" aria-label="Personel puantaj bölümleri">
-          <button type="button" aria-pressed={activeTab === "today"} className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>{coachHome ? "Ders programım" : "Ders planı"}</button>
-          <button type="button" aria-pressed={activeTab === "payroll"} className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>{coachHome ? "Puantaj ve ödemelerim" : "Puantaj ve hakediş"}</button>
+          <button type="button" disabled={busyKey !== null} aria-pressed={activeTab === "today"} className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>{previewStaffId ? "Ders programı" : coachHome ? "Derslerim" : "Ders planı"}</button>
+          <button type="button" disabled={busyKey !== null} aria-pressed={activeTab === "payroll"} className={activeTab === "payroll" ? "active" : ""} onClick={() => { if (coachHome && !payrollMonth) setPayrollMonth(data.currentDate.slice(0, 7)); setActiveTab("payroll"); }}>{coachHome ? "Puantaj ve ödemeler" : "Puantaj ve hakediş"}</button>
         </div>
         <div className="ppDateTools">
-          <label>{activeTab === "today" ? "Ders tarihi" : "Puantaj tarihi"} <input type="date" value={date || data.date} disabled={busyKey !== null} onChange={(event) => setDate(event.target.value)} /></label>
-          {data.date !== data.currentDate ? <button type="button" onClick={() => setDate("")} disabled={busyKey !== null}>Bugüne dön</button> : null}
+          {coachHome && activeTab === "payroll" ? (
+            <label>Dönem <input type="month" value={payrollMonth || data.currentDate.slice(0, 7)}
+              disabled={busyKey !== null} onChange={(event) => setPayrollMonth(event.target.value || data.currentDate.slice(0, 7))} /></label>
+          ) : coachHome ? (
+            <div className="ppDayPicker">
+              <button type="button" aria-label="Önceki gün" disabled={busyKey !== null} onClick={() => setDate(shiftDay(selectedDay, -1))}>‹</button>
+              <input aria-label="Ders tarihi" type="date" value={selectedDay} disabled={busyKey !== null}
+                onChange={(event) => setDate(event.target.value)} />
+              <button type="button" aria-label="Sonraki gün" disabled={busyKey !== null} onClick={() => setDate(shiftDay(selectedDay, 1))}>›</button>
+              <button type="button" disabled={busyKey !== null || selectedDay === data.currentDate} onClick={() => setDate("")}>Bugün</button>
+            </div>
+          ) : (
+            <>
+              <label>{activeTab === "today" ? "Ders tarihi" : "Puantaj tarihi"} <input type="date" value={date || data.date} disabled={busyKey !== null} onChange={(event) => setDate(event.target.value)} /></label>
+              {data.date !== data.currentDate ? <button type="button" onClick={() => setDate("")} disabled={busyKey !== null}>Bugüne dön</button> : null}
+            </>
+          )}
           <button type="button" onClick={() => void load()} disabled={loading}>{loading ? "Yenileniyor…" : "Yenile"}</button>
         </div>
       </div>
 
-      {!coachHome && activeTab === "today" ? <section className="ppStats ppCompactStats" aria-label="Ders planı özeti">
+      {dateReady && !coachHome && activeTab === "today" ? <section className="ppStats ppCompactStats" aria-label="Ders planı özeti">
         <article><span>Planlanan görev</span><strong>{data.summary.planned}</strong></article>
         <article><span>Giriş kaydı</span><strong>{data.summary.checkedIn}</strong></article>
         <article><span>Konum onayı bekleyen</span><strong>{data.summary.pending}</strong></article>
         <article className={managerMissing.length || data.summary.missing ? "alert" : ""}><span>Giriş yapılmayan</span><strong>{managerMissing.length || data.summary.missing}</strong></article>
       </section> : null}
 
-      {activeTab === "today" ? (
+      {!dateReady ? (
+        !error ? <div className="ppLoading" role="status">Seçilen dönem yükleniyor…</div> : null
+      ) : activeTab === "today" ? (
         <section className="ppPanel">
           <div className="ppPanelHead">
             <h2>{previewStaffId ? "Atanan dersler" : coachHome ? "Derslerim" : "Antrenör, havuz ve ders planı"}</h2>
-            <span>{formatDisplayDate(data.date)}</span>
+            <span>{coachHome ? `${data.today.length} seans` : formatDisplayDate(data.date)}</span>
           </div>
 
           {data.unassigned?.length ? (
@@ -373,28 +435,32 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                 const reportsUrl = `${attendanceUrl}&gorunum=gelisim`;
                 const checkinOpensAt = Math.max(0, minutes(row.startTime) - 30);
                 const openingTime = `${String(Math.floor(checkinOpensAt / 60)).padStart(2, "0")}:${String(checkinOpensAt % 60).padStart(2, "0")}`;
-                const showCheckin = coachHome && !row.checkin;
-                const checkinHint = previewStaffId
-                  ? `Eğitmen kendi hesabından ${openingTime}–${row.endTime} arasında konumlu giriş yapar.`
-                  : data.date !== data.currentDate ? `Konumlu giriş ders günü ${openingTime}–${row.endTime} arasında yapılır.`
+                const showCheckin = coachHome && !previewStaffId && !row.checkin;
+                const checkinHint = data.date !== data.currentDate ? `Konumlu giriş ders günü ${openingTime}–${row.endTime} arasında yapılır.`
                   : currentMinute < checkinOpensAt ? `Saat ${openingTime}’da açılır.`
                   : currentMinute >= minutes(row.endTime) ? "Ders sona erdi. Konumlu giriş kapandı."
                   : !row.isMine ? "Konumlu giriş için personel hesabınızı kontrol edin."
                   : "Tesisteyken dokunun. Telefonunuz konum izni isteyebilir.";
                 const canApprove = data.isManager && row.checkin?.approval_status === "pending";
                 const lateBy = currentMinute - minutes(row.startTime);
-                const isMissingStarted = !row.checkin && lateBy >= 0;
+                const isMissingStarted = !row.checkin && currentMinute >= minutes(row.endTime);
+                const isLate = !row.checkin && lateBy >= 0 && !isMissingStarted;
+                const attendanceLabel = row.attendanceState ? attendanceLabels[row.attendanceState] : null;
                 return (
                   <article className={`ppLessonRow ${isMissingStarted ? "missing" : ""}`} key={`${row.staffId}-${row.scheduleId}`}>
                     <div className="ppTimeBox"><strong>{row.startTime}</strong><span>{row.endTime}</span></div>
                     <div className="ppLessonMain">
                       <div className="ppLessonTitle">
                         <strong>{coachHome ? row.groupName : row.staffName}</strong>
-                        <span className={`ppStatus ${isMissingStarted ? "danger" : meta.tone}`}>{isMissingStarted ? "Giriş yapılmadı" : meta.label}</span>
+                        <span className={`ppStatus ${isMissingStarted ? "danger" : isLate ? "late" : meta.tone}`}>{isMissingStarted ? "Giriş yapılmadı" : isLate ? "Giriş gecikti" : meta.label}</span>
                       </div>
                       {!coachHome ? <p>{row.branchName} · {row.groupName}</p> :
                         !row.groupName.toLocaleLowerCase("tr-TR").includes(row.branchName.toLocaleLowerCase("tr-TR")) ? <p>{row.branchName}</p> : null}
-                      <small>{row.assignmentRole === "backup" ? "Yedek Eğitmen" : "Ana Eğitmen"} · {row.title || "Eğitmen"}</small>
+                      <small>{row.assignmentRole === "backup" ? "Yedek eğitmen" : "Ana eğitmen"}{!coachHome && row.title && row.title !== "Eğitmen" ? ` · ${row.title}` : ""}</small>
+                      {previewStaffId && !row.checkin && !isMissingStarted ? (
+                        <p className="ppCheckinWindow">Konumlu giriş saati {openingTime}–{row.endTime}</p>
+                      ) : null}
+                      {previewStaffId && row.checkin?.manager_note ? <p>{row.checkin.manager_note}</p> : null}
                       {row.checkin ? (
                         <div className="ppCheckMeta">
                           <span>Giriş: {timeOf(row.checkin.checked_in_at)}</span>
@@ -428,19 +494,22 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                           void approve(row.checkin!.id, typeof note === "string" ? note : undefined);
                         }}>
                           {previewStaffId ? <input name="note" aria-label="Yönetici onay notu" placeholder="Onay notu (isteğe bağlı)" maxLength={500} /> : null}
-                          <button type="submit" className="ppApprove" disabled={busyKey === row.checkin.id}>
+                          <button type="submit" className="ppApprove" disabled={busyKey !== null}>
                             {busyKey === row.checkin.id ? "Onaylanıyor…" : "Konum Girişini Onayla"}
                           </button>
                         </form>
                       ) : null}
                       {(row.isMine || previewStaffId) ? (
                         <div className="ppClassLinks">
-                          <Link className="ppLessonLink" href={attendanceUrl}>Öğrenciler ve yoklama</Link>
+                          <Link className="ppLessonLink ppAttendanceLink" href={attendanceUrl}>
+                            Öğrenciler ve yoklama
+                            {attendanceLabel ? <small data-state={row.attendanceState}>{attendanceLabel}</small> : null}
+                          </Link>
                           {coachHome ? <Link className="ppLessonLink" href={reportsUrl}>Gelişim raporları</Link> : null}
                         </div>
                       ) : null}
                       {canComplete ? (
-                        <button className="ppPrimary" disabled={busyKey === row.scheduleId} onClick={() => void complete(row)}>
+                        <button className="ppPrimary" disabled={busyKey !== null} onClick={() => void complete(row)}>
                           {busyKey === row.scheduleId ? "Kaydediliyor…" : "Dersi Tamamla"}
                         </button>
                       ) : null}
@@ -449,10 +518,10 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                       ) : null}
                       {data.isManager ? (
                         <Link
-                          className="ppLessonLink"
+                          className="ppLessonLink ppAssignmentLink"
                           href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, seans: row.scheduleId, sube: row.branchId, saat: row.startTime })}`}
                         >
-                          Atamayı Düzenle
+                          Eğitmen atamasını düzenle
                         </Link>
                       ) : null}
                     </div>
@@ -477,9 +546,20 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
         <section className="ppPanel">
           <div className="ppPanelHead">
             <div><p>{new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(new Date(`${data.date}T12:00:00`))}</p><h2>Puantaj ve hakediş</h2></div>
-            {data.isManager ? <strong className="ppTotal">Toplam {money(totalPayroll)}</strong> : null}
+            {data.isManager && !coachHome ? <strong className="ppTotal">Toplam {money(totalPayroll)}</strong> : null}
           </div>
 
+          {personalPayroll ? (
+            <dl className="ppPayrollSummary">
+              <div><dt>Hakediş</dt><dd>{money(personalPayroll.estimatedAmount)}</dd></div>
+              <div><dt>Ödeme</dt><dd>{paymentStatus(personalPayroll)}</dd></div>
+              <div><dt>Onaylı ders</dt><dd>{personalPayroll.lessonCount}</dd></div>
+              <div><dt>Toplam süre</dt><dd>{Math.floor(personalPayroll.totalMinutes / 60)} sa {personalPayroll.totalMinutes % 60} dk</dd></div>
+              <div><dt>Ücret modeli</dt><dd>{payTypeLabels[personalPayroll.payType] || personalPayroll.payType}</dd></div>
+            </dl>
+          ) : coachHome ? (
+            <p className="ppEmpty">Bu dönem için puantaj bilgisi bulunamadı.</p>
+          ) : (
           <div className="ppPayrollTableWrap">
             <table className="ppPayrollTable">
               <thead><tr><th>Personel</th><th>Ücret modeli</th><th>Onaylı ders</th><th>Süre</th><th>Hakediş</th><th>Ödeme</th></tr></thead>
@@ -491,14 +571,14 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                     <td>{row.lessonCount}</td>
                     <td>{Math.floor(row.totalMinutes / 60)} sa {row.totalMinutes % 60} dk</td>
                     <td><strong>{money(row.estimatedAmount)}</strong></td>
-                    <td>{row.paymentStatus === "paid" || (row.paymentStatus === "archived" && row.paidAmount > 0)
-                      ? `Ödendi · ${money(row.paidAmount)}`
-                      : row.paymentStatus === "awaiting_payment" ? "Ödeme bekliyor" : "Dönem açık"}</td>
+                    <td>{paymentStatus(row)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          )}
 
           {coachHome && data.lessons.length > 0 ? (
             <section className="ppLessonHistory" aria-label="Tamamlanan dersler">
@@ -520,7 +600,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
 
           <div className="ppInfo">
             <strong>Hesaplama kuralı</strong>
-            <p>Hakedişe yalnızca konumu otomatik doğrulanan veya yönetici tarafından onaylanan ders girişleri dahil edilir. Personelin ücret modeli `staff` kaydındaki ders başı, saatlik veya aylık ücret ayarından hesaplanır.</p>
+            <p>Hakediş, ücret modeline göre hesaplanır. Ders ödemesine tamamlanan ve konum girişi onaylanan dersler dahil edilir.</p>
           </div>
         </section>
       )}

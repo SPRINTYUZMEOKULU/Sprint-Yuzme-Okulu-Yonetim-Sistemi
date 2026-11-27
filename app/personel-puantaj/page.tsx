@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
+import { isLessonDate } from "@/lib/personnel/sessions";
 import CoachHome from "./coach-home";
 import PersonelPuantajClient from "./personel-puantaj-client";
 import PersonelOdemeleri from "./personel-odemeleri";
@@ -9,7 +10,7 @@ import "./personel-puantaj.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function PersonelPuantajPage({ searchParams }: { searchParams: Promise<{ personel?: string }> }) {
+export default async function PersonelPuantajPage({ searchParams }: { searchParams: Promise<{ personel?: string; date?: string }> }) {
   const profile = await requireProfile([
     "owner",
     "admin",
@@ -19,9 +20,9 @@ export default async function PersonelPuantajPage({ searchParams }: { searchPara
     "coach",
   ]);
 
-  if (profile.base_role === "coach") return <CoachHome profile={profile} />;
-
-  const { personel } = await searchParams;
+  const { personel, date } = await searchParams;
+  const initialDate = date && isLessonDate(date) ? date : undefined;
+  if (profile.base_role === "coach") return <CoachHome key={initialDate} profile={profile} initialDate={initialDate} />;
   let directory: Array<{ id: string; auth_user_id: string | null; first_name: string; last_name: string; title: string | null }> = [];
   let directoryError = false;
   if (profile.is_active && profile.organization_id && ["owner", "admin"].includes(profile.base_role)) {
@@ -33,7 +34,7 @@ export default async function PersonelPuantajPage({ searchParams }: { searchPara
     directory = result.data || [];
     directoryError = Boolean(result.error);
     const selected = directory.find((person) => person.id === personel);
-    if (selected) return <CoachHome profile={profile} preview={{
+    if (selected) return <CoachHome key={`${selected.id}:${initialDate || ""}`} profile={profile} initialDate={initialDate} preview={{
       id: selected.id, name: `${selected.first_name} ${selected.last_name}`.trim(), profileId: selected.auth_user_id,
     }} />;
   }

@@ -5,8 +5,9 @@ import type { CurrentProfile } from "@/lib/auth/profile";
 import PersonelPuantajClient from "./personel-puantaj-client";
 import "./personel-puantaj.css";
 
-export default function CoachHome({ profile, preview }: {
+export default function CoachHome({ profile, preview, initialDate }: {
   profile: CurrentProfile;
+  initialDate?: string;
   preview?: { id: string; name: string; profileId: string | null };
 }) {
   const firstName = (preview?.name || profile.full_name)?.trim().split(/\s+/)[0];
@@ -17,10 +18,10 @@ export default function CoachHome({ profile, preview }: {
         <div className="ppShell">
           <header className="ppHeader">
             <div>
-              <p className="ppEyebrow">{preview ? "YÖNETİCİ · PERSONEL GÖRÜNÜMÜ" : "EĞİTMEN PANELİ"}</p>
-              <h1>{preview?.name || (firstName ? `${firstName} · Eğitmen paneli` : "Eğitmen paneli")}</h1>
+              <p className="ppEyebrow">{preview ? "Personel görünümü" : "Eğitmen paneli"}</p>
+              <h1>{preview?.name || (firstName || "Ders programı")}</h1>
             </div>
-            {preview ? <Link className="ppBack" href="/personel-puantaj">Personel Listesi</Link> : profile.is_super_user ? <Link href="/?yonetim=1" className="ppBack">Yönetim Ekranı</Link> : null}
+            {preview ? <Link className="ppBack" href="/personel-puantaj">← Personel listesi</Link> : profile.is_super_user ? <Link href="/?yonetim=1" className="ppBack">Yönetim Ekranı</Link> : null}
           </header>
           {preview ? (
             <details className="ppCoachNotifications ppPreviewSettings">
@@ -31,7 +32,7 @@ export default function CoachHome({ profile, preview }: {
               </nav>
             </details>
           ) : null}
-          <PersonelPuantajClient key={preview?.id} currentRole="coach" coachHome previewStaffId={preview?.id} />
+          <PersonelPuantajClient key={preview?.id} currentRole="coach" coachHome previewStaffId={preview?.id} initialDate={initialDate} />
           {!preview ? <details className="ppCoachNotifications">
             <summary>Telefon bildirimlerini aç veya test et</summary>
             <NotificationSettingsClient />
