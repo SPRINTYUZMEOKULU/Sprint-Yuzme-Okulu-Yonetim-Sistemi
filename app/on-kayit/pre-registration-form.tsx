@@ -66,7 +66,11 @@ const days = [
   "Cumartesi",
 ];
 
-export default function PreRegistrationForm() {
+export default function PreRegistrationForm({
+  preferredBranchName,
+}: {
+  preferredBranchName?: string;
+}) {
   const [status, setStatus] =
     useState<
       "idle" |
@@ -104,6 +108,11 @@ export default function PreRegistrationForm() {
   const [branchId, setBranchId] =
     useState("");
 
+  const preferredBranchId = options.branches.find(
+    (branch) => branch.name === preferredBranchName &&
+      options.groups.some((group) => group.branch_id === branch.id)
+  )?.id ?? "";
+
   const [groupId, setGroupId] =
     useState("");
 
@@ -127,6 +136,11 @@ export default function PreRegistrationForm() {
         }
 
         setOptions(data);
+        const preferredBranch = (data as Options).branches.find(
+          (branch) => branch.name === preferredBranchName &&
+            (data as Options).groups.some((group) => group.branch_id === branch.id)
+        );
+        if (preferredBranch) setBranchId(preferredBranch.id);
       })
       .catch(() => {
         setMessage(
@@ -136,7 +150,7 @@ export default function PreRegistrationForm() {
       .finally(() =>
         setLoading(false)
       );
-  }, []);
+  }, [preferredBranchName]);
 
   const courseTypes =
     useMemo(
@@ -280,6 +294,9 @@ export default function PreRegistrationForm() {
       );
 
     try {
+      if (typeof payload.phone === "string") {
+        payload.phone = payload.phone.replace(/[\s().-]/g, "");
+      }
       const response =
         await fetch(
           "/api/pre-registrations",
@@ -321,7 +338,7 @@ export default function PreRegistrationForm() {
       );
 
       setCourseType("");
-      setBranchId("");
+      setBranchId(preferredBranchId);
       setGroupId("");
     } catch (error) {
       setStatus("error");
@@ -881,9 +898,7 @@ export default function PreRegistrationForm() {
             </strong>
 
             <span>
-              Veli olarak çocuğunuz
-              için ön kayıt
-              oluşturun.
+              Çocuk grubu veya 14–17 yaş için yetişkin grubu seçebilirsiniz.
             </span>
           </label>
 
@@ -911,13 +926,11 @@ export default function PreRegistrationForm() {
             />
 
             <strong>
-              Kendim için /
-              Yetişkin
+              Kendim için
             </strong>
 
             <span>
-              18 yaş ve üzeri
-              katılımcılar için.
+              Yetişkin grubunda kendi adınıza başvuru.
             </span>
           </label>
         </div>
@@ -979,7 +992,7 @@ export default function PreRegistrationForm() {
               autoComplete="tel"
               placeholder="05xx xxx xx xx"
               maxLength={20}
-              pattern="(?:\+90|0)?5\d{9}"
+              pattern="(?:\+90|0)?[ ]*5(?:[ ]*\d){9}"
               title="Telefon numarasını 05XXXXXXXXX veya +905XXXXXXXXX formatında giriniz."
             />
           </label>
@@ -1005,9 +1018,12 @@ export default function PreRegistrationForm() {
 
         {loading ? (
           <div className="optionsLoading">
-            Aktif gruplar
-            yükleniyor…
+            Grup seçenekleri yükleniyor…
           </div>
+        ) : !options.groups.length ? (
+          <p className="formMessage error" role="alert">
+            {message || "Şu anda başvuruya açık grup bulunmuyor."}
+          </p>
         ) : (
           <div className="formGrid">
             <label>
@@ -1022,7 +1038,12 @@ export default function PreRegistrationForm() {
                     event.target.value
                   );
 
-                  setBranchId("");
+                  const nextCourseType = event.target.value;
+                  if (!options.groups.some(
+                    (group) => group.branch_id === branchId && group.course_type === nextCourseType
+                  )) {
+                    setBranchId("");
+                  }
                   setGroupId("");
                 }}
               >
@@ -1566,9 +1587,7 @@ export default function PreRegistrationForm() {
         }}
       >
         <strong>Başvurunuz gönderildikten sonra:</strong>{" "}
-        Seçtiğiniz şube, grup ve paket bilgileri SprintOS
-        kayıt ekranına otomatik düşer. Kayıt ekibimiz
-        başvuruyu kontrol ederek sizinle iletişime geçer.
+        Kayıt ekibimiz başvurunuzu inceleyip sizinle iletişime geçer.
       </div>
 
       <div className="submitRow">
@@ -1583,7 +1602,7 @@ export default function PreRegistrationForm() {
         >
           {status === "sending"
             ? "Başvurunuz gönderiliyor..."
-            : "Ön Kaydı Tamamla"}
+            : "Başvuruyu gönder"}
         </button>
       </div>
 
