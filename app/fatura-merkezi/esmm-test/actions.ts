@@ -14,13 +14,13 @@ async function actor(){
  if(!profile.organization_id||!profile.is_active||!["owner","admin"].includes(profile.base_role)) throw new Error(forbidden);
  return profile;
 }
-function sampleTestDraft(ettn:string,externalDocumentNumber:string,documentNumber:string):EsmmTestDraft{
+function sampleTestDraft(companyCode:string,ettn:string,externalDocumentNumber:string,documentNumber:string):EsmmTestDraft{
  // No real student, customer, payment, issuer tax data, or production credential.
  const now=new Date(Date.now()+3*60*60*1000).toISOString().slice(0,19)+"+03:00";
  return {
  ettn,externalDocumentNumber,documentNumber,documentDate:now,createdDate:now,
  note:"SADECE ISNET TEST ORTAMI / GERCEK MAKBUZ DEGIL",
- receiver:{taxCode:"0000000000",name:"SENTETIK TEST ALICISI",address:"Ornek Test Sokak No 1",city:"Ankara",town:"Cankaya",taxOffice:"",email:"test@example.invalid"},
+ receiver:{taxCode:companyCode==="4810173324"?"1234567805":"4810173324",name:"ISNET SENTETIK TEST ALICISI",address:"Ornek Test Sokak No 1",city:"Ankara",town:"Cankaya",taxOffice:"",email:"test@example.invalid"},
  lines:[{
  productName:"SENTETIK TEST HIZMETI",productDescription:"TEST ONLY, no customer/payment",
  grossAmount:"100.00",netAmount:"100.00",payableAmount:"120.00",
@@ -52,7 +52,7 @@ export async function submitEsmmSandbox(companyCode:string,documentNumber:string
    .eq("organization_id",p.organization_id).eq("id",runId).eq("state","reserved").select("id").maybeSingle();
  if(started.error||!started.data) return {ok:false,runId,message:"Test kimliği ayrıldı ancak gönderim kilidi açılamadı. Yeniden gönderim yapmayın; aynı test kaydını inceleyin."};
  try{
-  const result=await new IsnetEsmmTestClient(companyCode).send(sampleTestDraft(ettn,external,documentNumber));
+  const result=await new IsnetEsmmTestClient(companyCode).send(sampleTestDraft(companyCode,ettn,external,documentNumber));
   const update=await db.from("isnet_esmm_sandbox_runs").update({state:"send_confirmed",provider_document_number:result.documentNumber})
     .eq("organization_id",p.organization_id).eq("id",runId).eq("state","send_started").select("id").maybeSingle();
   refresh();
