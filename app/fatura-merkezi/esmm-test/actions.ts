@@ -11,7 +11,7 @@ const refresh=()=>revalidatePath("/fatura-merkezi/esmm-test");
 const forbidden="Yalnızca aktif SprintOS yöneticisi sentetik e-SMM testi başlatabilir.";
 async function actor(){
  const profile=await requireProfile(["owner","admin"]);
- if(!profile.organization_id||!profile.is_active) throw new Error(forbidden);
+ if(!profile.organization_id||!profile.is_active||!["owner","admin"].includes(profile.base_role)) throw new Error(forbidden);
  return profile;
 }
 function sampleTestDraft(ettn:string,externalDocumentNumber:string,documentNumber:string):EsmmTestDraft{
