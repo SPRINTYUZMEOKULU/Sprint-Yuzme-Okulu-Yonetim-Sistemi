@@ -1,3 +1,4 @@
+import { cleanStaffName } from "@/lib/personnel/display";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import UstGezinme from "@/app/components/UstGezinme";
@@ -35,7 +36,7 @@ export default async function PersonelPuantajPage({ searchParams }: { searchPara
     directoryError = Boolean(result.error);
     const selected = directory.find((person) => person.id === personel);
     if (selected) return <CoachHome key={`${selected.id}:${initialDate || ""}`} profile={profile} initialDate={initialDate} preview={{
-      id: selected.id, name: `${selected.first_name} ${selected.last_name}`.trim(), profileId: selected.auth_user_id,
+      id: selected.id, name: [selected.first_name, selected.last_name].map(cleanStaffName).filter(Boolean).join(" ") || "Personel ekranı", profileId: selected.auth_user_id,
     }} />;
   }
 
@@ -64,13 +65,13 @@ export default async function PersonelPuantajPage({ searchParams }: { searchPara
               <div className="ppPersonPickerControls">
                 <select id="pp-person" name="personel" required defaultValue="">
                   <option value="" disabled>Personel seçin</option>
-                  {directory.map((person) => <option key={person.id} value={person.id}>{person.first_name} {person.last_name}{person.title ? ` · ${person.title}` : ""}</option>)}
+                  {directory.map((person) => <option key={person.id} value={person.id}>{[person.first_name, person.last_name].map(cleanStaffName).filter(Boolean).join(" ") || "Personel"}{person.title ? ` · ${person.title}` : ""}</option>)}
                 </select>
                 <button type="submit" className="ppPrimary">Paneli aç</button>
               </div>
             </form>
           ) : null}
-          <PersonelPuantajClient currentRole={profile.role} />
+          <PersonelPuantajClient key={initialDate} currentRole={profile.role} initialDate={initialDate} />
           {canManagePay ? <div style={{ marginTop: 16 }}><PersonelOdemeleri /></div> : null}
         </section>
       </main>

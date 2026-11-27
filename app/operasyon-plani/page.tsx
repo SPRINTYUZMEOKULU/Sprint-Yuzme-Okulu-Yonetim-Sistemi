@@ -1,3 +1,5 @@
+import "./session-assignment.css";
+import { cleanStaffName } from "@/lib/personnel/display";
 import { formatDisplayDate } from "@/lib/dates/display";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
@@ -12,6 +14,8 @@ import OperationStudentManager, {
   type OperationStudentRow,
 } from "./operation-student-manager";
 import StudentAssignmentSelect from "./student-assignment-select";
+import SessionAssignmentForm from "./session-assignment-form";
+import { isLessonDate, loadPersonnelSessions } from "@/lib/personnel/sessions";
 import SessionRosterPrintButton from "./session-roster-print-button";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +36,8 @@ const GUNLER: Record<number, string> = {
 
 type SearchParams = {
   tarih?: string;
+  atama?: string;
+  personel?: string;
   seans?: string;
   sube?: string;
   saat?: string;
@@ -284,9 +290,111 @@ async function personelAta(formData: FormData) {
   }
 
   revalidatePath("/gruplar");
+  revalidatePath("/personel-puantaj");
   revalidatePath("/operasyon-plani");
   revalidatePath("/yoklama");
   revalidatePath("/");
+}
+
+async function saveFocusedAssignment(_: { error?: string; saved?: boolean }, formData: FormData) {
+  "use server";
+  try {
+    await personelAta(formData);
+    return { saved: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Atama kaydedilemedi. Tekrar deneyin." };
+  }
+}
+
+async function FocusedAssignment({ params, organizationId, date }: {
+  params: SearchParams;
+  organizationId: string;
+  date: string;
+}) {
+  await requireProfile(["owner", "admin", "branch_manager"]);
+  const db = await createClient();
+  const returnParams = new URLSearchParams({ date });
+  if (params.personel) returnParams.set("personel", params.personel);
+  const assignmentParams = new URLSearchParams({ atama: "1", tarih: date });
+  if (params.personel) assignmentParams.set("personel", params.personel);
+  const assignmentUrl = `/operasyon-plani?${assignmentParams}`;
+  const [dailyResult, coachResult, staffResult] = await Promise.allSettled([
+    loadPersonnelSessions(db, organizationId, date),
+    db.from("profiles").select("id,full_name,email").eq("organization_id", organizationId)
+      .eq("is_active", true).in("role", ["coach", "admin", "branch_manager"]).order("full_name"),
+    db.from("staff").select("id,auth_user_id,first_name,last_name").eq("organization_id", organizationId).eq("is_active", true),
+  ]);
+
+  const sessions = dailyResult.status === "fulfilled" ? dailyResult.value : [];
+  const coaches = coachResult.status === "fulfilled" ? coachResult.value.data || [] : [];
+  const staff = staffResult.status === "fulfilled" ? staffResult.value.data || [] : [];
+  const loadFailed = dailyResult.status === "rejected" ||
+    coachResult.status === "rejected" || Boolean(coachResult.value.error) ||
+    staffResult.status === "rejected" || Boolean(staffResult.value.error);
+  const person = staff.find((row) => row.id === params.personel);
+  const selected = sessions.find((session) => session.id === params.seans);
+  const personName = [person?.first_name, person?.last_name].map(cleanStaffName).filter(Boolean).join(" ");
+  const nameById = new Map<string, string>();
+  for (const coach of coaches) nameById.set(coach.id, coach.full_name || coach.email || "Eğitmen");
+  for (const row of staff) {
+    const name = [row.first_name, row.last_name].map(cleanStaffName).filter(Boolean).join(" ");
+    if (!name) continue;
+    nameById.set(row.id, name);
+    if (row.auth_user_id) nameById.set(row.auth_user_id, name);
+  }
+  const regularSessions = sessions.filter((session) => !session.makeup_date && session.is_active)
+    .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.group.name.localeCompare(b.group.name, "tr"));
+  const selectedAssignable = selected && regularSessions.some((session) => session.id === selected.id);
+  const sessionLabel = (session: (typeof sessions)[number]) =>
+    `${session.start_time.slice(0, 5)}–${session.end_time.slice(0, 5)} · ${session.branch.short_name || session.branch.name} · ${session.group.name}`;
+  const roleNames = (role: string) => selected
+    ? [...selected.coaches].filter(([, assignedRole]) => assignedRole === role)
+        .map(([id]) => nameById.get(id) || "Eğitmen kaydı eşleşmedi").join(", ") || "Atanmamış"
+    : "Atanmamış";
+
+  return (
+    <>
+      <UstGezinme />
+      <main className="opAssignmentPage">
+        <nav aria-label="Atama bağlantıları">
+          <Link href={`/personel-puantaj?${returnParams}`}>← Personel ekranına dön</Link>
+          <Link href={`/operasyon-plani?tarih=${date}&kapsam=gun`}>Günlük operasyon planı</Link>
+        </nav>
+        <section className="opAssignmentCard">
+          <h1>Eğitmen ataması</h1>
+          <p>{[formatDisplayDate(date), personName].filter(Boolean).join(" · ")}</p>
+          {loadFailed ? <p role="alert">Seans veya personel listesi yüklenemedi. <Link href={assignmentUrl}>Tekrar deneyin</Link>.</p> : (
+            <>
+              <form className="opAssignmentFields" action="/operasyon-plani">
+                <input type="hidden" name="atama" value="1" />
+                <input type="hidden" name="tarih" value={date} />
+                {params.personel ? <input type="hidden" name="personel" value={params.personel} /> : null}
+                <label>Seans
+                  <select name="seans" required defaultValue={selectedAssignable ? selected.id : ""} disabled={!regularSessions.length}>
+                    <option value="">Seçilen günün seansları</option>
+                    {regularSessions.map((session) => <option key={session.id} value={session.id}>{sessionLabel(session)}</option>)}
+                  </select>
+                </label>
+                <button type="submit" disabled={!regularSessions.length}>Seansı aç</button>
+              </form>
+              {!regularSessions.length ? <p>Bu tarihte eğitmen atanabilecek normal seans bulunmuyor.</p>
+                : params.seans && !selectedAssignable ? <p role="status">Bu seans, seçilen tarihte normal seans olarak atamaya açık değil.</p> : null}
+              {selected && selectedAssignable ? (
+                <section className="opAssignmentDetails">
+                  <h2>{sessionLabel(selected)}</h2>
+                  <dl><div><dt>Ana eğitmen</dt><dd>{roleNames("coach")}</dd></div><div><dt>Yedek eğitmen</dt><dd>{roleNames("backup")}</dd></div></dl>
+                  {person && !coaches.some((coach) => coach.id === person.auth_user_id) ? <p>Bu personel için atamaya uygun aktif bir kullanıcı hesabı bulunamadı.</p> : null}
+                  <SessionAssignmentForm key={selected.id} action={saveFocusedAssignment} scheduleId={selected.id}
+                    coaches={coaches.map((coach) => ({ id: coach.id, name: nameById.get(coach.id) || "Eğitmen" }))}
+                    selectedCoachId={person?.auth_user_id || ""} />
+                </section>
+              ) : null}
+            </>
+          )}
+        </section>
+      </main>
+    </>
+  );
 }
 
 /* =========================================================
@@ -662,7 +770,11 @@ export default async function OperasyonPlaniPage({
     (await searchParams) || {};
 
   const selectedDate =
-    params.tarih || bugunIstanbul();
+    params.tarih && isLessonDate(params.tarih) ? params.tarih : bugunIstanbul();
+
+  if (params.atama === "1") {
+    return <FocusedAssignment params={params} organizationId={organizationId} date={selectedDate} />;
+  }
 
   const selectedWeekday =
     gunNo(selectedDate);
