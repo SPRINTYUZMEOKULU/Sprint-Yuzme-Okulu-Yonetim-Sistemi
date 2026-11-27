@@ -101,15 +101,19 @@ export default function SetupForm() {
                 <label>Yeni şifre (tekrar)<input type="password" autoComplete="new-password" minLength={8} maxLength={100}
                     value={confirmation} onChange={event => setConfirmation(event.target.value)} required /></label>
                 <button disabled={pending}>{pending ? "Kaydediliyor…" : "Şifremi kaydet"}</button>
-                {error && <p role="alert">{error}</p>}
+                {error && <p role="alert" className="portalSetupNotice">{error}</p>}
             </form> : token === "" ? <>
-                <p>Şifre oluşturma bağlantısı eksik. WhatsApp’tan aldığınız bağlantıyı açın veya aşağıdan yeni bağlantı isteyin.</p>
+                <p>WhatsApp’taki şifre bağlantınızı açın veya yeni bağlantı isteyin.</p>
             </> : null}
             {!done && token !== null && <div className="portalSetupSupport">
-                <button type="button" disabled={supportPending} onClick={() => openSupport("password")}>Şifremi unuttum · Yeni bağlantı iste</button>
-                <button type="button" disabled={supportPending} onClick={() => openSupport("password_reset_error")}>Şifremi yenileyemiyorum</button>
-                {supportKind && !supportResult?.ok && <form onSubmit={submitSupport}>
-                    <label>Hesabınızda kayıtlı telefon numarası
+                <div className="portalSetupSupportOptions" role="group" aria-label="Şifre yardımı">
+                    <button type="button" aria-pressed={supportKind === "password"} disabled={supportPending}
+                        onClick={() => openSupport("password")}>Yeni bağlantı iste</button>
+                    <button type="button" aria-pressed={supportKind === "password_reset_error"} disabled={supportPending}
+                        onClick={() => openSupport("password_reset_error")}>Şifre sorununu bildir</button>
+                </div>
+                {supportKind && !supportResult?.ok && <form className="portalSetupSupportForm" onSubmit={submitSupport}>
+                    <label>Kayıtlı telefon numaranız
                         <input type="tel" autoComplete="tel" maxLength={30} value={phone}
                             onChange={event => setPhone(event.target.value)} required disabled={supportPending} />
                     </label>
@@ -117,8 +121,8 @@ export default function SetupForm() {
                         {supportPending ? "Gönderiliyor…" : supportKind === "password" ? "Yeni bağlantı talebi gönder" : "Sorunu yönetime bildir"}
                     </button>
                 </form>}
-                {supportResult && <p role={supportResult.ok ? "status" : "alert"}>{supportResult.message}</p>}
-                <a href="/login">Veli girişine dön</a>
+                {supportResult && <p className="portalSetupNotice" role={supportResult.ok ? "status" : "alert"}>{supportResult.message}</p>}
+                <a className="portalSetupBack" href="/login">Veli girişine dön</a>
             </div>}
         </section>
     </main>;
