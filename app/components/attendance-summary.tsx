@@ -1,5 +1,10 @@
-export default function AttendanceSummary({summary, layout = "inline"}: {summary?: {present: number; absent: number; excused: number} | null; layout?: "inline" | "cards"}) {
+export default function AttendanceSummary({summary, otherPackageMakeups = 0, layout = "inline"}: {summary?: {present: number; absent: number; excused: number} | null; otherPackageMakeups?: number; layout?: "inline" | "cards"}) {
   if (!summary) return <span>Yoklama bilgisi alınamadı</span>;
+  const makeupLabel = otherPackageMakeups > 0
+    ? <span style={{gridColumn:"1 / -1",flexBasis:"100%",color:"#087443",fontSize:12}}>
+        Başka paketten telafiye geldi: {otherPackageMakeups}
+      </span>
+    : null;
   if (layout === "cards") {
     const items = [
       { label: "Geldi", value: summary.present, color: "#087443", background: "#ecfdf3", border: "#ccebd9" },
@@ -11,11 +16,13 @@ export default function AttendanceSummary({summary, layout = "inline"}: {summary
         <span style={{fontSize:11,fontWeight:600,whiteSpace:"nowrap",color:item.color}}>{item.label}</span>
         <strong style={{fontSize:20,fontWeight:800,fontVariantNumeric:"tabular-nums",color:item.color}}>{item.value}</strong>
       </span>)}
+      {makeupLabel}
     </span>;
   }
   return <span aria-label="Bu kayıt döneminin yoklaması" style={{display:"flex",flexWrap:"wrap",justifyContent:"inherit",gap:"4px 10px",fontSize:12,lineHeight:1.6,fontWeight:600}}>
     <span style={{color:"#087443"}}>Geldi: {summary.present}</span>
     <span style={{color:"#b42318"}}>Gelmedi: {summary.absent}</span>
     <span style={{color:"#64748b"}}>İzinli: {summary.excused}</span>
+    {makeupLabel}
   </span>;
 }

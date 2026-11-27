@@ -4,7 +4,7 @@ import { summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
 import { renewalPresentation } from "@/lib/enrollment/renewal-presentation";
 import AttendanceSummary from "@/app/components/attendance-summary";
-import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
+import { attendanceSummary, loadStudentAttendance, otherPackageMakeupCount } from "@/lib/students/attendance-summary";
 import PassiveStudentGuard from "@/app/components/passive-student-guard";
 import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
 import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
@@ -367,6 +367,7 @@ export default async function StudentFile({
   const coachReports = coachReportsResult.data ?? [];
   const enrollmentHistory = enrollmentHistoryResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
+  const otherPackageMakeups = otherPackageMakeupCount(attendanceRecords, enrollment);
   const currentAttendanceSummary = attendanceResult.error ? null : attendanceSummary(attendanceRecords, enrollment);
   const consent = consentResult.data;
 
@@ -950,7 +951,7 @@ export default async function StudentFile({
 
         <article>
           <span>Yoklama</span>
-          <AttendanceSummary summary={currentAttendanceSummary} />
+          <AttendanceSummary summary={currentAttendanceSummary} otherPackageMakeups={otherPackageMakeups} />
         </article>
 
         <article>
@@ -1320,7 +1321,7 @@ export default async function StudentFile({
                   : record.status === "excused"
                     ? "○ İzinli"
                     : record.status === "compensation"
-                      ? "+ Telafi"
+                      ? "✓ Geldi · Telafi"
                       : record.status || "—";
 
             const group = record.group_id
@@ -1840,7 +1841,7 @@ export default async function StudentFile({
 
             <div>
               <span>Yoklama</span>
-              <AttendanceSummary summary={currentAttendanceSummary} />
+              <AttendanceSummary summary={currentAttendanceSummary} otherPackageMakeups={otherPackageMakeups} />
             </div>
 
             <div>

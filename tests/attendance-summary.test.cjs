@@ -8,3 +8,22 @@ test('unlinked historical attendance requires current dates and group',()=>{asse
 test('attendance loader reads all pages and never shows partial totals on failure',async()=>{const rows=Array.from({length:501},(_,i)=>({id:String(i)}));function client(fail){return {from(){const q={select(){return q},eq(){return q},in(){return q},order(){return q},async range(a,b){return a&&fail?{data:null,error:{message:'offline'}}:{data:rows.slice(a,b+1),error:null}}};return q;}}}assert.equal((await loadStudentAttendance(client(false),'org',['a'])).data.length,501);const result=await loadStudentAttendance(client(true),'org',['a']);assert.equal(result.data.length,0);assert.ok(result.error);});
 test('completed makeup attendance appears in present count without changing rights',()=>{assert.deepEqual(attendanceSummary([{student_id:'a',enrollment_id:'new',group_id:'g',schedule_id:'s',lesson_date:'2026-11-01',status:'compensation'}],e),{present:1,absent:0,excused:0});});
 test('card summary renders the same attendance labels for server and client screens',()=>{const react=require('react'),{renderToStaticMarkup}=require('react-dom/server');const mod={exports:{}};new Function('module','exports','require',ts.transpileModule(fs.readFileSync('app/components/attendance-summary.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText)(mod,mod.exports,require);const markup=renderToStaticMarkup(react.createElement(mod.exports.default,{summary:{present:5,absent:3,excused:0}}));assert.match(markup,/Geldi: 5/);assert.match(markup,/Gelmedi: 3/);assert.match(markup,/İzinli: 0/);assert.doesNotMatch(markup,/Tamamlanan|Kullanılan/);assert.match(renderToStaticMarkup(react.createElement(mod.exports.default,{summary:null})),/alınamadı/);});
+
+test('a completed makeup on the new package start date stays linked to the old package', () => {
+  const oldPackageMakeup = {
+    student_id: 'a', enrollment_id: 'old', group_id: 'g',
+    schedule_id: 's', lesson_date: '2026-10-01', status: 'compensation',
+  };
+  const activePackageMakeup = { ...oldPackageMakeup, enrollment_id: 'new', lesson_date: '2026-10-02' };
+  const rows = [
+    oldPackageMakeup,
+    { ...oldPackageMakeup, id: 'duplicate' },
+    activePackageMakeup,
+    { ...oldPackageMakeup, lesson_date: '2026-09-30' },
+    { ...oldPackageMakeup, lesson_date: '2026-11-01' },
+    { ...oldPackageMakeup, lesson_date: '2026-10-03', status: 'absent' },
+    { ...oldPackageMakeup, lesson_date: '2026-10-04', student_id: 'b' },
+  ];
+  assert.equal(m.exports.otherPackageMakeupCount(rows, e), 1);
+  assert.deepEqual(attendanceSummary(rows, e), { present: 1, absent: 0, excused: 0 });
+});
