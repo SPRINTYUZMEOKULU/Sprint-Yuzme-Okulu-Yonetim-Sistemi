@@ -66,6 +66,11 @@ const days = [
   "Cumartesi",
 ];
 
+const localSiteBranches = new Map([
+  ["meltemyuzmekursu.com", "meltem hasan subaşı"],
+  ["muratpasayuzmekursu.com", "süleyman erol olimpik"],
+]);
+
 export default function PreRegistrationForm() {
   const [status, setStatus] =
     useState<
@@ -103,6 +108,7 @@ export default function PreRegistrationForm() {
 
   const [branchId, setBranchId] =
     useState("");
+  const [referredBranchId, setReferredBranchId] = useState("");
 
   const [groupId, setGroupId] =
     useState("");
@@ -119,7 +125,7 @@ export default function PreRegistrationForm() {
       .then((response) =>
         response.json()
       )
-      .then((data) => {
+      .then((data: Options & { error?: string }) => {
         if (data.error) {
           throw new Error(
             data.error
@@ -127,6 +133,20 @@ export default function PreRegistrationForm() {
         }
 
         setOptions(data);
+
+        const source = new URLSearchParams(window.location.search).get("utm_source");
+        const branchName = source ? localSiteBranches.get(source) : undefined;
+        if (!branchName) return;
+
+        const matches = data.branches.filter(
+          (branch) =>
+            branch.name.trim().toLocaleLowerCase("tr-TR") === branchName &&
+            data.groups.some((group) => group.branch_id === branch.id),
+        );
+        if (matches.length === 1) {
+          setReferredBranchId(matches[0].id);
+          setBranchId(matches[0].id);
+        }
       })
       .catch(() => {
         setMessage(
@@ -881,9 +901,8 @@ export default function PreRegistrationForm() {
             </strong>
 
             <span>
-              Veli olarak çocuğunuz
-              için ön kayıt
-              oluşturun.
+              Veli olarak çocuğunuz için ön kayıt oluşturun.
+              14–17 yaş arası katılımcılar için Yetişkin yüzme programını seçebilirsiniz.
             </span>
           </label>
 
@@ -911,13 +930,12 @@ export default function PreRegistrationForm() {
             />
 
             <strong>
-              Kendim için /
-              Yetişkin
+              Kendim için
             </strong>
 
             <span>
-              18 yaş ve üzeri
-              katılımcılar için.
+              18 yaş ve üzeri katılımcıların kendi başvurusu için.
+              Yetişkin yüzme programı 14 yaş ve üzeri içindir.
             </span>
           </label>
         </div>
@@ -1022,7 +1040,14 @@ export default function PreRegistrationForm() {
                     event.target.value
                   );
 
-                  setBranchId("");
+                  const canKeepReferredBranch =
+                    branchId === referredBranchId &&
+                    options.groups.some(
+                      (group) =>
+                        group.branch_id === referredBranchId &&
+                        group.course_type === event.target.value,
+                    );
+                  if (!canKeepReferredBranch) setBranchId("");
                   setGroupId("");
                 }}
               >
