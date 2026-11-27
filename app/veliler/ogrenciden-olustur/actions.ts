@@ -3,15 +3,13 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { normalizePortalPhone, resolvePortalRecipient } from "@/lib/guardian/portal-recipient";
 import { requireProfile } from "@/lib/auth/profile";
 
 const roles = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 function adminClient(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");return createAdminClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
-function normalizePhone(value:unknown){let digits=String(value||"").replace(/\D/g,"");if(!digits)return"";if(digits.startsWith("0090"))digits=digits.slice(4);if(digits.startsWith("90")&&digits.length===12)digits=digits.slice(2);if(digits.startsWith("0")&&digits.length===11)digits=digits.slice(1);return digits.length===10&&digits.startsWith("5")?`+90${digits}`:""}
 function phoneCandidates(phone:string){const local=phone.replace(/^\+90/,"");return[phone,`90${local}`,`0${local}`,local]}
 function safeMessage(value:string){return encodeURIComponent(value.slice(0,260))}
-function norm(value:unknown){return String(value||"").trim().toLocaleLowerCase("tr-TR")}
-function isAdultCourse(...values:unknown[]){const text=norm(values.filter(Boolean).join(" "));return text.includes("yetişkin")||text.includes("yetiskin")||text.includes("adult")||text.includes("master")}
 
 export async function createOrLinkGuardianFromStudent(formData:FormData){
  const profile=await requireProfile([...roles]);const organizationId=profile.organization_id;const studentId=String(formData.get("student_id")||"").trim();
@@ -21,9 +19,9 @@ export async function createOrLinkGuardianFromStudent(formData:FormData){
  if(studentError||!student)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(studentError?.message||"Öğrenci bulunamadı.")}`);
  let group:any=null;
  if(student.preferred_group_id){const {data:groupData}=await admin.from("training_groups").select("id,name,course_type").eq("id",student.preferred_group_id).eq("organization_id",organizationId).maybeSingle();group=groupData}
- const studentName=`${student.first_name||""} ${student.last_name||""}`.trim(),guardianName=String(student.guardian_name||"").trim(),guardianPhone=normalizePhone(student.guardian_phone),studentPhone=normalizePhone(student.phone);
- const useSelf=isAdultCourse(group?.course_type,group?.name);const accountName=useSelf?studentName:guardianName,accountPhone=useSelf?studentPhone:guardianPhone,accountEmail=useSelf?"":String(student.guardian_email||"").trim().toLowerCase(),relationship=useSelf?"Kendisi":"Veli";
- if(!accountName)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(useSelf?`${studentName} için kursiyer adı eksik.`:`${studentName} için veli adı eksik.`)}&student=${studentId}`);if(!accountPhone)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(useSelf?`${studentName} için kursiyerin kendi telefon numarası eksik veya geçersiz.`:`${studentName} için geçerli veli telefonu eksik.`)}&student=${studentId}`);
+ const {fullName:accountName,phone:accountPhone,email:accountEmail,relationship,error:recipientError}=resolvePortalRecipient(student,group);
+ const useSelf=relationship==="Kendisi";
+ if(recipientError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(recipientError)}&student=${studentId}`);
  const {data:existingLinks,error:existingLinksError}=await admin.from("guardian_students").select("guardian_id,is_primary").eq("student_id",studentId).order("is_primary",{ascending:false});
  if(existingLinksError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut veli bağlantıları okunamadı.")}&student=${studentId}`);
  let pendingGuardian:any=null;
@@ -33,7 +31,7 @@ export async function createOrLinkGuardianFromStudent(formData:FormData){
   if(g.auth_user_id)redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage("Öğrenci zaten bir portal hesabına bağlı. Giriş durumu ve şifre işlemlerini veli merkezinden kontrol edin.")}&guardian=${g.auth_user_id}&student=${studentId}`);
   if(g.is_active===false||g.login_enabled===false)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Veli erişimi pasif. Önce veli merkezinden erişimi kontrol edin.")}&student=${studentId}`);
   if(pendingGuardian&&pendingGuardian.id!==g.id)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Birden fazla tamamlanmamış veli bağlantısı var. Veli merkezinden birincil bağlantıyı kontrol edin.")}&student=${studentId}`);
-  if(normalizePhone(g.phone)&&normalizePhone(g.phone)!==accountPhone)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Bağlı veli ile öğrenci dosyasındaki telefonlar farklı. Önce iletişim bilgilerini kontrol edin.")}&student=${studentId}`);
+  if(normalizePortalPhone(g.phone)&&normalizePortalPhone(g.phone)!==accountPhone)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Bağlı veli ile öğrenci dosyasındaki telefonlar farklı. Önce iletişim bilgilerini kontrol edin.")}&student=${studentId}`);
   pendingGuardian=g;
  }
  let profileGuardian:any=null;const candidates=phoneCandidates(accountPhone);const {data:byPhone,error:phoneLookupError}=await admin.from("profiles").select("id,full_name,email,phone,role,is_active").eq("organization_id",organizationId).eq("role","guardian").in("phone",candidates).limit(1).maybeSingle();if(phoneLookupError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(phoneLookupError.message)}&student=${studentId}`);profileGuardian=byPhone;

@@ -6,6 +6,7 @@ import PaymentInfoShortcut from "../../components/payment-info-shortcut";
 import EnrollmentFreezeForm from "./enrollment-freeze-form";
 import StudentRenewalButton from "./student-renewal-button";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { resolvePortalRecipient } from "@/lib/guardian/portal-recipient";
 import { portalCredentialContact } from "@/app/veliler/portal-credential-actions";
 import PortalCredentialManager from "@/app/veliler/portal-credential-manager";
 import { rememberPortalCredential } from "@/lib/guardian/credential-draft";
@@ -55,6 +56,7 @@ type Props = {
     branch_name?: string | null;
     group_id?: string | null;
     group_name?: string | null;
+    portalGroup?: { name: string | null; course_type: string | null } | null;
   };
   guardianCenterHref?: string;
   enrollmentId?: string | null;
@@ -191,6 +193,7 @@ export default function StudentFileOperations({
   >(null);
 
   const [portalOpen, setPortalOpen] = useState(false);
+  const [linkedRecipient, setLinkedRecipient] = useState<{ fullName: string; phone: string } | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalStatus, setPortalStatus] = useState("");
   const [portalAccess, setPortalAccess] = useState<GuardianBulkResult | null>(null);
@@ -210,6 +213,16 @@ export default function StudentFileOperations({
     window.addEventListener("guardian-portal-linked",changed);
     return ()=>{live=false;window.removeEventListener("guardian-portal-linked",changed);};
   }, [student.id,student.first_name,student.last_name]);
+
+  useEffect(() => {
+    if (!portalOpen) return;
+    let live = true;
+    setLinkedRecipient(null);
+    void portalCredentialContact({ studentId: student.id }).then(contact => {
+      if (live && contact.ok) setLinkedRecipient(contact);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [portalOpen, student.id]);
 
   async function preparePortalAccess() {
     if (portalLock.current || portalAccess) return;
@@ -347,6 +360,8 @@ export default function StudentFileOperations({
 
   const phone =
     normalizePhone(student.guardian_phone) || normalizePhone(student.phone);
+
+  const portalRecipient = resolvePortalRecipient(student, student.portalGroup);
 
   function selectTab(tab: FileTab, targetId?: string) {
     const page = document.querySelector<HTMLElement>(".studentFilePage");
@@ -683,9 +698,10 @@ export default function StudentFileOperations({
               </div>
               <div className="portalCard">
                 <span className="portalCardLabel">ALICI BİLGİLERİ</span>
-                <strong>{portalAccess?.fullName || student.guardian_name || fullName}</strong>
-                <span>{portalAccess?.phone || phone || "Telefon bilgisi kayıtlı değil"}</span>
-                <p>Çocuklarda kayıtlı veli, yetişkinlerde kursiyerin iletişim bilgileri kullanılır.</p>
+                <strong>{(portalAccess ?? linkedRecipient ?? portalRecipient).fullName || "Alıcı adı eksik"}</strong>
+                <span>{(portalAccess ?? linkedRecipient ?? portalRecipient).phone || "Geçerli cep telefonu eksik"}</span>
+                <p>Kayıtlı veli bilgileri önceliklidir. Bağlı portal hesabı varsa o hesabın bilgileri kullanılır.</p>
+                {guardianCenterHref && <a href={`${guardianCenterHref}?manage=1`}>Bağlı veli hesaplarını yönet</a>}
               </div>
               <div className="portalNotice">
                 <FileIcon name="key" />

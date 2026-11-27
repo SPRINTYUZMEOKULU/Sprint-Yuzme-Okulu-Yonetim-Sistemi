@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { requireProfile } from '@/lib/auth/profile';
 import { hashShortSetupCode, newShortSetupCode, sealSetupToken, setupLinkLifetimeMs } from '@/lib/guardian/setup-token';
+import { normalizePortalPhone } from '@/lib/guardian/portal-recipient';
 import { revalidateGuardianConnection } from '@/lib/guardian/revalidate';
 const roles = ['owner', 'admin', 'branch_manager', 'registration_staff'] as const;
 export async function portalCredentialContact(input: {
@@ -23,8 +24,14 @@ export async function portalCredentialContact(input: {
             return { ok: false as const, message: 'Portal bağlantısı okunamadı.' };
         if (links && links.length > 1 && links.filter(link => link.is_primary).length !== 1)
             return { ok: false as const, message: 'Birden fazla portal hesabı bağlı. Veli merkezinden birincil hesabı belirleyin.' };
-        const { data: records } = links?.length ? await admin.from('guardians').select('id,auth_user_id').eq('organization_id', org).in('id', links.map(l => l.guardian_id)) : { data: [] };
-        accountId = links?.map(l => records?.find(r => r.id === l.guardian_id)?.auth_user_id).find(Boolean);
+        const selectedLink = links?.find(link => link.is_primary) ?? links?.[0];
+        if (selectedLink) {
+            const { data: record, error: recordError } = await admin.from('guardians').select('auth_user_id')
+                .eq('organization_id', org).eq('id', selectedLink.guardian_id).maybeSingle();
+            if (recordError || !record?.auth_user_id)
+                return { ok: false as const, message: 'Seçili veli hesabının giriş bağlantısı eksik. Veli merkezinden kontrol edin.' };
+            accountId = record.auth_user_id;
+        }
     }
     if (!accountId)
         return { ok: false as const, message: 'Kursiyere bağlı portal hesabı bulunamadı.' };
@@ -74,10 +81,26 @@ export async function createPortalSetupLink(input: { accountId?: string; student
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
         auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: account } = await admin.auth.admin.getUserById(contact.accountId);
-    if (!account.user?.email) return { ok: false as const, message: 'Portal hesabının giriş kimliği bulunamadı.' };
+    const { data: account, error: accountError } = await admin.auth.admin.getUserById(contact.accountId);
+    if (accountError || !account.user) return { ok: false as const, message: 'Portal hesabının giriş kimliği bulunamadı.' };
 
-    const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email: account.user.email });
+    let loginEmail = account.user.email;
+    if (!loginEmail) {
+        const phone = normalizePortalPhone(contact.phone);
+        if (!phone || normalizePortalPhone(account.user.phone) !== phone)
+            return { ok: false as const, message: 'Kayıtlı telefon ile portal giriş telefonu eşleşmiyor. Veli merkezinden kontrol edin.' };
+
+        const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(contact.accountId, {
+            email: `phone.${phone.slice(3)}@login.sprintos.local`,
+            email_confirm: true,
+            user_metadata: { ...account.user.user_metadata, sprintos_phone_login: true },
+        });
+        if (updateError || updated.user?.id !== contact.accountId || !updated.user.email)
+            return { ok: false as const, message: 'Telefonla giriş kimliği hazırlanamadı. Veli merkezinden kontrol edin.' };
+        loginEmail = updated.user.email;
+    }
+
+    const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email: loginEmail });
     const token = data?.properties?.hashed_token;
     if (error || data.user?.id !== contact.accountId || !token) {
         return { ok: false as const, message: 'Şifre oluşturma bağlantısı hazırlanamadı.' };

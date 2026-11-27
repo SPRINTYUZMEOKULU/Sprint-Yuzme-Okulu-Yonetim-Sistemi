@@ -4,14 +4,17 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { addSecondaryGuardian } from "../../ogrenciden-olustur/bulk-account-actions";
 import GuardianIcon from "../../guardian-icon";
 import "../../guardian-management.css";
 
-export default async function StudentGuardianCenter({ params }: {
+export default async function StudentGuardianCenter({ params, searchParams }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; manage?: string }>;
 }) {
   const profile = await requireProfile(["owner", "admin", "branch_manager", "registration_staff"]);
   const { id } = await params;
+  const { error, manage } = await searchParams;
   const organizationId = profile.organization_id;
   if (!organizationId) notFound();
 
@@ -55,7 +58,7 @@ export default async function StudentGuardianCenter({ params }: {
 
   const studentPath = `/ogrenciler/${student.id}`;
   const filePath = (accountId: string) => `/veliler/${accountId}?student=${student.id}`;
-  if (choices.length === 1) redirect(filePath(choices[0].account.id));
+  if (choices.length === 1 && manage !== "1" && !error) redirect(filePath(choices[0].account.id));
   if (choices.length === 0 && !student.is_deleted) {
     redirect(`/veliler/ogrenciden-olustur?student=${student.id}`);
   }
@@ -88,6 +91,16 @@ export default async function StudentGuardianCenter({ params }: {
             </div>)}
           </div>
         </section> : <p className="guardianEmpty">Arşivdeki bu öğrenciye bağlı bir portal hesabı bulunamadı.</p>}
+        {!student.is_deleted && choices.some(({ link }) => link.is_primary) && <section className="guardianPanel">
+          <h2>İkinci veliye portal erişimi ver</h2>
+          {error && <p className="guardianNotice error" role="alert">{error}</p>}
+          <form action={addSecondaryGuardian} className="guardianForm">
+            <input type="hidden" name="student_id" value={student.id} />
+            <label>Veli adı soyadı <input name="full_name" required maxLength={120} /></label>
+            <label>Cep telefonu <input name="phone" type="tel" required maxLength={30} /></label>
+            <button className="guardianButton">İkinci veliyi bağla</button>
+          </form>
+        </section>}
       </div>
     </main>
   </>;

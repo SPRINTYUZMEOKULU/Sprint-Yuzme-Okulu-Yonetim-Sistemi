@@ -853,6 +853,7 @@ export default async function StudentFile({
           branch_name: branchInfo?.name ?? null,
           group_id: groupInfo?.id ?? null,
           group_name: activeGroupName || null,
+          portalGroup: operationGroups.find(group => group.id === student.preferred_group_id) || null,
         }}
         canRequestFreeze={["owner", "admin", "branch_manager", "registration_staff"].includes(profile.role)}
         enrollmentId={enrollment?.id ?? null}
