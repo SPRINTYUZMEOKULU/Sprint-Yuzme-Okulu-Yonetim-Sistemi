@@ -36,6 +36,7 @@ export default async function EsmmPreparationPage() {
         </div>}
       <p><strong>Canlı gönderim kapalı.</strong> İşNet 27 Kasım'da doğruladı: hatalı test için yeni ETTN gerekli; yeni testte GİB raporu “GibRaporuKabulEtti” durumuna ulaşmalı ve kabul edilen makbuzun XML'si sağlayıcıya gönderilmeli. Şahıs işletmesinde firma VKN alanı 11 haneli TCKN olarak kullanılır. Test ortamında sabit IP gerekmiyor; canlı SOAP erişiminde sabit IP zorunlu. Yeni test GİB kabulü, canlı firma/seri erişimi ve çıkış IP yetkisi hâlâ doğrulanmadı. Sağlayıcı işlem defteri yalnızca gelecekteki tekil ETTN, durum ve özel arşiv izini tutmak için hazırlandı; henüz herhangi bir makbuz oluşturmaz.</p>
       <Link href="/odeme-bilgileri/belgeler">Belge taleplerini ve ön onayları incele</Link>
+      <p><Link href="/fatura-merkezi/esmm-test">İşNet test ortamı · sentetik tek gönderim ve GİB rapor sorgusu (yalnız yönetici)</Link></p>
     </section>
     <EsmmAmountPreview/>
     <section className="invoice-card esmm-launch" aria-labelledby="esmm-launch-title">
