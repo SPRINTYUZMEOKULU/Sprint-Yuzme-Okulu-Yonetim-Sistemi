@@ -94,8 +94,12 @@ for (let offset = 0; visibleScheduleIds.length > 0; offset += 500) {
   }
   if ((result.data?.length || 0) < 500) break;
 }
+const panelDate = isLessonDate(attendanceDate) ? attendanceDate : todayDate;
+const personnelPanelUrl = `/personel-puantaj?${new URLSearchParams({
+  date: panelDate,
+  ...(selectedStaff ? { personel: selectedStaff.id } : {}),
+})}`;
 if (params.gorunum === "gelisim" && (selectedStaff || profile.base_role === "coach")) {
-  const backUrl = selectedStaff ? `/personel-puantaj?personel=${selectedStaff.id}` : "/personel-puantaj";
   const session = (selectedStaff || coachStaff) && isLessonDate(attendanceDate) && attendanceDate <= todayDate
     ? (await loadPersonnelSessions(cancellationDb, organizationId, attendanceDate)).find((row) =>
         row.id === params.scheduleId && [...coachIds].some((id) => row.coaches.has(id)))
@@ -114,7 +118,7 @@ if (params.gorunum === "gelisim" && (selectedStaff || profile.base_role === "coa
 
   return (
     <main className="saReports">
-      <Link className="saReportsBack" href={backUrl}>Eğitmen paneline dön</Link>
+      <Link className="saReportsBack" href={personnelPanelUrl}>{selectedStaff ? "Personel paneline dön" : "Eğitmen paneline dön"}</Link>
       <header>
         <h1>Gelişim raporları</h1>
         {session ? <p>{session.group.name} · {formatDisplayDate(attendanceDate)}</p> : null}
@@ -134,7 +138,7 @@ if (params.gorunum === "gelisim" && (selectedStaff || profile.base_role === "coa
     </main>
   );
 }
-return <>{selectedStaff ? <div className="saTopNav" aria-label="Eğitmen öğrenci görünümü">
-  <Link href={`/personel-puantaj?personel=${selectedStaff.id}`}>Personel Paneline Dön</Link>
-  <strong>{selectedStaff.first_name} {selectedStaff.last_name} · Eğitmenin öğrenci listesi</strong>
+return <>{selectedStaff || useOwnRoster ? <div className="saTopNav" aria-label="Eğitmen öğrenci görünümü">
+  <Link href={personnelPanelUrl}>Personel Paneline Dön</Link>
+  {selectedStaff ? <strong>{selectedStaff.first_name} {selectedStaff.last_name} · Öğrenci listesi</strong> : null}
 </div> : null}<nav className="saTopNav" aria-label="Yoklama hızlı erişim"><AttendanceBackButton><span className="saTopNavIcon"><Icon name="back"/></span><span><b>Geri</b><small>Önceki ekran</small></span></AttendanceBackButton><Link href={`/yoklama?date=${todayDate}`} className="saTopNavItem active"><span className="saTopNavIcon"><Icon name="today"/></span><span><b>Bugün</b><small>Günlük yoklama</small></span></Link><Link href="/yoklama/aylik" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="month"/></span><span><b>Tüm Ay</b><small>Aylık görünüm</small></span></Link><Link href="/yoklama/gecmis" className="saTopNavItem"><span className="saTopNavIcon"><Icon name="history"/></span><span><b>Geçmiş</b><small>Ders kayıtları</small></span></Link></nav><QuickAttendanceClient key={`${attendanceDate}:${params.branchId||""}:${params.time||""}:${params.scheduleId||""}:${selectedStaff?.id||""}`} viewerId={selectedStaff ? `${profile.id}:${selectedStaff.id}` : profile.id} cancellations={cancellations} branches={scopedAttendance?(branches.data||[]).filter(branch=>coachVisibleSchedules.some(schedule=>schedule.branch_id===branch.id)):branches.data||[]} groups={coachVisibleGroups} schedules={coachVisibleSchedules} allowedStudentIdsBySchedule={allowedStudentIdsBySchedule} reportScope={reportScope} memberships={coachVisibleMemberships} students={students.data||[]} enrollments={enrollments.data||[]} compensationLessons={compensation.data||[]} initialBranchId={params.branchId||""} initialDate={attendanceDate} initialTime={params.time} initialScheduleId={params.scheduleId}/></>}

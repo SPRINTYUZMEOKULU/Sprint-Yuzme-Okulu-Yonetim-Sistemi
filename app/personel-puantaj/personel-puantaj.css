@@ -195,3 +195,44 @@
   text-decoration: none;
 }
 .ppLessonLink:hover { background: #edf4fd; }
+
+.ppCoachHome .ppHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+.ppCoachHome .ppEyebrow { letter-spacing: .04em; font-size: 13px; }
+.ppCoachHome .ppContent { gap: 12px; }
+.ppCoachHome .ppViewControls { gap: 10px; }
+.ppCoachHome .ppTabs { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ppCoachHome .ppDateTools { width: 100%; justify-content: space-between; gap: 8px; }
+.ppDayPicker { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.ppDayPicker button { min-width: 44px; }
+.ppDayPicker button[aria-label] { font-size: 22px; line-height: 1; }
+.ppCoachHome .ppDateTools input { max-width: 100%; }
+.ppCoachHome .ppDateTools button:disabled { color: #536a86; background: #eef3f8; }
+.ppCoachHome .ppLessonRow { padding: 16px; }
+.ppCoachHome .ppLessonTitle { align-items: flex-start; flex-direction: column; gap: 5px; }
+.ppCoachHome .ppLessonMain small, .ppCoachHome .ppCheckinWindow { color: #526b88; font-size: 12px; }
+.ppCoachHome .ppStatus { font-size: 11px; }
+.ppCoachHome .ppActions { border-top: 1px solid #edf1f6; padding-top: 10px; }
+.ppCoachHome .ppAttendanceLink { flex-direction: column; gap: 2px; padding: 8px; background: #edf4fd; }
+.ppAttendanceLink small { font-size: 11px; font-weight: 650; color: #526b88; }
+.ppAttendanceLink small[data-state="saved"] { color: #14754c; }
+.ppAttendanceLink small[data-state="partial"] { color: #8a5400; }
+.ppCoachHome .ppAssignmentLink { justify-self: start; border-color: transparent; }
+.ppCoachHome :is(button, a, input, summary):focus-visible {
+  outline: 2px solid #1b5ba9;
+  outline-offset: 2px;
+}
+.ppPayrollSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+}
+.ppPayrollSummary > div { padding: 12px; background: #f4f7fb; border-radius: 10px; }
+.ppPayrollSummary dt { font-size: 12px; color: #526b88; }
+.ppPayrollSummary dd { margin: 5px 0 0; color: #173c6c; font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
