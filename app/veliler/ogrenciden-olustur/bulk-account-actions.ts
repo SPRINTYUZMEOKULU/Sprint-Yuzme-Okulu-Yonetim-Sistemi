@@ -95,7 +95,7 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
   if(recordsError)return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Veli kayıtları okunamadı. İşlem yapılmadı."}];
   if (secondary && !(students?.length === 1 && existingLinks?.some(link =>
     link.student_id === students[0].id && link.is_primary && link.portal_access &&
-    linkedRecords?.some(record => record.id === link.guardian_id && record.auth_user_id)
+    linkedRecords?.some(record => record.id === link.guardian_id && record.auth_user_id && record.is_active !== false && record.login_enabled !== false)
   ))) {
     return [{ ok: false, key: "secondary", fullName: secondary.fullName, phone: secondary.phone, email: "", studentNames: [], status: "error", message: "Önce kursiyerin birincil portal hesabını hazırlayın." }];
   }
@@ -148,6 +148,18 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
       if (secondary && linkedRecords?.some(record => normalizePortalPhone(record.phone) === group.phone || (existingProfile && record.auth_user_id === existingProfile.id))) {
         throw new Error("Bu telefon zaten kursiyere bağlı bir veli hesabında kullanılıyor.");
       }
+      const { data: byPhone, error: guardianPhoneError } = await admin.from("guardians")
+        .select("id,auth_user_id,is_active,login_enabled").eq("organization_id", organizationId)
+        .in("phone", candidates).limit(1).maybeSingle();
+      if (guardianPhoneError) throw guardianPhoneError;
+      if (secondary && byPhone) {
+        if (byPhone.is_active === false || byPhone.login_enabled === false) {
+          throw new Error("Bu velinin portal erişimi kapalı. Erişimi Veli Merkezi’nden kontrol edin.");
+        }
+        if (byPhone.auth_user_id && byPhone.auth_user_id !== existingProfile?.id) {
+          throw new Error("Telefonun portal hesabı eşleşmiyor. Veli Merkezi’nden kontrol edin.");
+        }
+      }
       let authUserId = existingProfile?.id || "";
       if (!authUserId) {
         const payload: any = { phone: group.phone, phone_confirm: true, password, user_metadata: { full_name: group.fullName, role: "guardian", organization_id: organizationId } };
@@ -167,17 +179,18 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
 
       if (!secondary || created) {
         const { error: profileError } = await admin.from("profiles").upsert({ id: authUserId, organization_id: organizationId, full_name: existingProfile?.full_name || group.fullName, phone: group.phone, email: existingProfile?.email || group.email || null, role: "guardian", is_active: true, updated_at: new Date().toISOString() }, { onConflict: "id" });
-        if (profileError) throw profileError;
+        if (profileError) {
+          if (created) await admin.auth.admin.deleteUser(authUserId);
+          throw profileError;
+        }
       }
 
       let guardianRecord: any = null;
-      const { data: byAuth } = await admin.from("guardians").select("id,auth_user_id,is_active,login_enabled").eq("organization_id", organizationId).eq("auth_user_id", authUserId).limit(1).maybeSingle();
+      const { data: byAuth, error: guardianAuthError } = await admin.from("guardians").select("id,auth_user_id,is_active,login_enabled").eq("organization_id", organizationId).eq("auth_user_id", authUserId).limit(1).maybeSingle();
+      if (guardianAuthError) throw guardianAuthError;
       if(byAuth&&pendingRecord&&byAuth.id!==pendingRecord.id)throw new Error("Mevcut giriş hesabı başka bir veli kaydına bağlı. Veli merkezinden kontrol edin.");
       guardianRecord = byAuth||pendingRecord;
-      if (!guardianRecord) {
-        const { data: byPhone } = await admin.from("guardians").select("id,auth_user_id,is_active,login_enabled").eq("organization_id", organizationId).in("phone", candidates).limit(1).maybeSingle();
-        guardianRecord = byPhone;
-      }
+      guardianRecord ??= byPhone;
       if (guardianRecord?.auth_user_id && guardianRecord.auth_user_id !== authUserId) throw new Error("Telefon başka bir portal hesabına bağlı. Veli merkezinde bağlantıyı kontrol edin.");
       if (secondary && guardianRecord && (guardianRecord.is_active === false || guardianRecord.login_enabled === false)) {
         throw new Error("Bu velinin portal erişimi kapalı. Erişimi Veli Merkezi’nden kontrol edin.");
