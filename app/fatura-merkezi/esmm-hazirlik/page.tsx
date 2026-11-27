@@ -34,7 +34,7 @@ export default async function EsmmPreparationPage() {
           <div><span>Sağlayıcı işlem kaydı</span><strong>{ledger.count??0}</strong></div>
           <div><span>GİB kabulü kayıtlı</span><strong>{gibAccepted.count??0}</strong></div>
         </div>}
-      <p><strong>Canlı gönderim kapalı.</strong> İşNet 19 Kasım'da mevcut test e-SMM'nin hata aldığını bildirdi; test raporu kabulü, firmanın canlı web servis erişimi ve sabit çıkış IP yetkisi doğrulanmadı. Sağlayıcı işlem defteri yalnızca gelecekteki tekil ETTN, durum ve özel arşiv izini tutmak için hazırlandı; henüz herhangi bir makbuz oluşturmaz.</p>
+      <p><strong>Canlı gönderim kapalı.</strong> İşNet 27 Kasım'da doğruladı: hatalı test için yeni ETTN gerekli; yeni testte GİB raporu “GibRaporuKabulEtti” durumuna ulaşmalı ve kabul edilen makbuzun XML'si sağlayıcıya gönderilmeli. Şahıs işletmesinde firma VKN alanı 11 haneli TCKN olarak kullanılır. Test ortamında sabit IP gerekmiyor; canlı SOAP erişiminde sabit IP zorunlu. Yeni test GİB kabulü, canlı firma/seri erişimi ve çıkış IP yetkisi hâlâ doğrulanmadı. Sağlayıcı işlem defteri yalnızca gelecekteki tekil ETTN, durum ve özel arşiv izini tutmak için hazırlandı; henüz herhangi bir makbuz oluşturmaz.</p>
       <Link href="/odeme-bilgileri/belgeler">Belge taleplerini ve ön onayları incele</Link>
     </section>
     <EsmmAmountPreview/>
