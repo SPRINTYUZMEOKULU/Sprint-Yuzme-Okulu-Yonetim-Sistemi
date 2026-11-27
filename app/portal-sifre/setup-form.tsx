@@ -55,8 +55,14 @@ export default function SetupForm() {
                 <label>Yeni şifre (tekrar)<input type="password" autoComplete="new-password" minLength={8} maxLength={100}
                     value={confirmation} onChange={event => setConfirmation(event.target.value)} required /></label>
                 <button disabled={pending}>{pending ? "Kaydediliyor…" : "Şifremi kaydet"}</button>
-                {error && <p role="alert">{error}</p>}
-            </form> : token === "" ? <p>WhatsApp’tan aldığınız şifre oluşturma bağlantısını açın. Yeni bağlantı için SPRINT ile iletişime geçin.</p> : null}
+                {error && <div>
+                    <p role="alert">{error}</p>
+                    <a href="/login">Giriş ekranına dön</a>
+                </div>}
+            </form> : token === "" ? <>
+                <p>WhatsApp’tan aldığınız şifre oluşturma bağlantısını açın veya giriş ekranından şifre yenileme talebi gönderin.</p>
+                <a href="/login">Giriş ekranına dön</a>
+            </> : null}
         </section>
     </main>;
 }

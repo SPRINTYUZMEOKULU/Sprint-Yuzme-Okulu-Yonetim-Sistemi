@@ -47,5 +47,14 @@ export async function setPortalPassword(token: string, password: string) {
     if (!guardian) return "Portal erişimi doğrulanamadı.";
 
     const result = await auth.auth.updateUser({ password });
-    return result.error ? "Şifre kaydedilemedi. Sprint’ten yeni bağlantı isteyin." : null;
+    if (!result.error || result.error.code === "same_password") return null;
+
+    console.warn("[portal-sifre] Password update rejected", {
+        code: result.error.code,
+        status: result.error.status,
+    });
+    if (result.error.code === "weak_password") {
+        return "Şifreniz güvenlik kurallarını karşılamıyor. Sprint’ten yeni bağlantı isteyin ve daha güçlü bir şifre seçin.";
+    }
+    return "Şifre kaydedilemedi. Yeni bağlantı almak için giriş ekranından şifre yenileme talebi gönderin.";
 }
