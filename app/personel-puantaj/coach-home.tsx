@@ -18,15 +18,18 @@ export default function CoachHome({ profile, preview }: {
           <header className="ppHeader">
             <div>
               <p className="ppEyebrow">{preview ? "YÖNETİCİ · PERSONEL GÖRÜNÜMÜ" : "EĞİTMEN PANELİ"}</p>
-              <h1>{firstName ? `Hoş geldiniz, ${firstName}` : "Derslerim"}</h1>
+              <h1>{preview?.name || (firstName ? `${firstName} · Eğitmen paneli` : "Eğitmen paneli")}</h1>
             </div>
             {preview ? <Link className="ppBack" href="/personel-puantaj">Personel Listesi</Link> : profile.is_super_user ? <Link href="/?yonetim=1" className="ppBack">Yönetim Ekranı</Link> : null}
           </header>
           {preview ? (
-            <nav className="ppPreviewTools" aria-label="Personel düzenleme">
-              {preview.profileId ? <Link className="ppBack" href={`/kullanicilar-ve-yetkiler?profile=${preview.profileId}`}>Personel Bilgilerini Düzenle</Link> : null}
-              <Link className="ppBack" href={`/personel-puantaj/ucret-ayarlari#personel-${preview.id}`}>Ücret Bilgilerini Düzenle</Link>
-            </nav>
+            <details className="ppCoachNotifications ppPreviewSettings">
+              <summary>Personel ayarları</summary>
+              <nav className="ppPreviewTools" aria-label="Personel düzenleme">
+                {preview.profileId ? <Link className="ppBack" href={`/kullanicilar-ve-yetkiler?profile=${preview.profileId}`}>Personel bilgileri</Link> : null}
+                <Link className="ppBack" href={`/personel-puantaj/ucret-ayarlari#personel-${preview.id}`}>Ücret bilgileri</Link>
+              </nav>
+            </details>
           ) : null}
           <PersonelPuantajClient key={preview?.id} currentRole="coach" coachHome previewStaffId={preview?.id} />
           {!preview ? <details className="ppCoachNotifications">
