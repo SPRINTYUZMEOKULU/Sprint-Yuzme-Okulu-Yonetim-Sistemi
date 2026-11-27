@@ -4,7 +4,7 @@ import { documentAdmin } from "@/lib/payments/document-admin";
 import { IsnetEsmmTestClient, IsnetEsmmError, type EsmmTestDraft } from "@/lib/invoicing/isnet-esmm-test";
 import { revalidatePath } from "next/cache";
 
-const TEST_COMPANIES = new Set(["4810173324","1234567805"]);
+const TEST_COMPANIES = new Set(["4810173324"]);
 const DOC_NUMBER=/^[A-Z]{3}20[0-9]{11}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const refresh=()=>revalidatePath("/fatura-merkezi/esmm-test");
@@ -20,7 +20,7 @@ function sampleTestDraft(companyCode:string,ettn:string,externalDocumentNumber:s
  return {
  ettn,externalDocumentNumber,documentNumber,documentDate:now,createdDate:now,
  note:"SADECE ISNET TEST ORTAMI / GERCEK MAKBUZ DEGIL",
- receiver:{taxCode:companyCode==="4810173324"?"1234567805":"4810173324",name:"ISNET SENTETIK TEST ALICISI",address:"Ornek Test Sokak No 1",city:"Ankara",town:"Cankaya",taxOffice:"",email:"test@example.invalid"},
+ receiver:{taxCode:companyCode,name:"ISNET SENTETIK TEST ALICISI",address:"Ornek Test Sokak No 1",city:"Ankara",town:"Cankaya",taxOffice:"",email:"test@example.invalid"},
  lines:[{
  productName:"SENTETIK TEST HIZMETI",productDescription:"TEST ONLY, no customer/payment",
  grossAmount:"100.00",netAmount:"100.00",payableAmount:"120.00",
