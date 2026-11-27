@@ -21,6 +21,24 @@ export function attendanceSummary(rows: AttendanceRow[], enrollment: any) {
   return result;
 }
 
+export function otherPackageMakeupCount(rows: AttendanceRow[], enrollment: {
+  id: string;
+  student_id: string;
+  start_date: string | null;
+  planned_end_date: string | null;
+} | null | undefined) {
+  if (!enrollment?.id || !enrollment.start_date || !enrollment.planned_end_date) return 0;
+
+  const sessions = new Set<string>();
+  for (const row of rows) {
+    if (row.student_id !== enrollment.student_id || row.status !== "compensation" ||
+      !row.enrollment_id || row.enrollment_id === enrollment.id ||
+      row.lesson_date < enrollment.start_date || row.lesson_date > enrollment.planned_end_date) continue;
+    sessions.add(`${row.lesson_date}:${row.schedule_id || row.group_id || row.id}`);
+  }
+  return sessions.size;
+}
+
 export async function loadStudentAttendance(client: any, organizationId: string | null, studentIds: string[], columns = "id,student_id,enrollment_id,group_id,schedule_id,lesson_date,status,updated_at") {
   if (!organizationId) return { data: [], error: { message: "Kurum bilgisi bulunamadı." } };
   const data: any[] = [];

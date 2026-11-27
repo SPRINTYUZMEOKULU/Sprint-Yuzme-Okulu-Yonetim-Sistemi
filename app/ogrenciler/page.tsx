@@ -1,4 +1,4 @@
-import { attendanceSummary, loadStudentAttendance } from "@/lib/students/attendance-summary";
+import { attendanceSummary, loadStudentAttendance, otherPackageMakeupCount } from "@/lib/students/attendance-summary";
 import { participationDays, participationWeekday } from "@/lib/lesson-operations/participation";
 import { loadLessonRightsContext, rightsForEnrollment } from "@/lib/students/lesson-rights-context";
 import { requireProfile } from "@/lib/auth/profile";
@@ -422,6 +422,7 @@ export default async function StudentsPage() {
     if (!nextCompensationMap.has(periodKey)) nextCompensationMap.set(periodKey, row);
   }
 
+  const attendanceByStudent = new Map<string, any[]>();
   const lastAttendanceMap = new Map<string, any>();
   const lastAbsentMap = new Map<string, any>();
   const completedNoteIds = new Set<string>();
@@ -450,6 +451,10 @@ export default async function StudentsPage() {
   for (const row of (lastAttendanceResult.data || []) as any[]) {
     if (!row.student_id) continue;
 
+    const studentRows = attendanceByStudent.get(row.student_id);
+    if (studentRows) studentRows.push(row);
+    else attendanceByStudent.set(row.student_id, [row]);
+
     if (!lastAttendanceMap.has(row.student_id)) {
       lastAttendanceMap.set(row.student_id, row);
     }
@@ -467,6 +472,7 @@ export default async function StudentsPage() {
       const attendancePlan = candidatePlan?.enrollment_id === enrollment?.id ? candidatePlan : null;
       const lessonBalance = lessonBalanceMap.get(student.id) as any;
       const paymentSummary = paymentSummaryMap.get(student.id) as any;
+      const attendanceRows = attendanceByStudent.get(student.id) ?? [];
       const lastAttendance = lastAttendanceMap.get(student.id) as any;
       const lastAbsent = lastAbsentMap.get(student.id) as any;
       const nextCompensation = nextCompensationMap.get(`${student.id}:${enrollment?.id || ""}`) as any;
@@ -636,7 +642,8 @@ export default async function StudentsPage() {
           plannedCompensationCount.get(`${student.id}:${enrollment?.id || ""}`) || 0,
 
         used_lessons: usedLessons,
-        attendance_summary: attendanceSummary(lastAttendanceResult.data || [], enrollment),
+        attendance_summary: lastAttendanceResult.error ? null : attendanceSummary(attendanceRows, enrollment),
+        other_package_makeups: otherPackageMakeupCount(attendanceRows, enrollment),
         normal_remaining_lessons: normalRemaining,
         total_remaining_lessons: totalRemaining,
         remaining_lessons: totalRemaining,

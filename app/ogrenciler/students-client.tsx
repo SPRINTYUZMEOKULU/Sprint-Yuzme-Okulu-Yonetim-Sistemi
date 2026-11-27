@@ -47,7 +47,8 @@ export type StudentListItem = {
 
   compensation_lessons?: number | null;
   used_lessons?: number | null;
-  attendance_summary?: { present: number; absent: number; excused: number };
+  attendance_summary?: { present: number; absent: number; excused: number } | null;
+  other_package_makeups?: number;
   normal_remaining_lessons?: number | null;
   total_remaining_lessons?: number | null;
   remaining_lessons?: number | null;
@@ -3332,7 +3333,7 @@ thead{display:table-header-group}tr{break-inside:avoid}
 
                 <div className="attendanceMetric">
                   <span>Bu Dönemin Yoklaması</span>
-                  <AttendanceSummary summary={student.attendance_summary} layout="cards" />
+                  <AttendanceSummary summary={student.attendance_summary} otherPackageMakeups={student.other_package_makeups} layout="cards" />
                 </div>
               </div>
 
