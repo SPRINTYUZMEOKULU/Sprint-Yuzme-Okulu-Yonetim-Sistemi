@@ -32,3 +32,18 @@
     font-weight: 700;
 }
 .portalSetup [role="alert"] { color: #a12626; }
+
+.portalSetupSupport {
+    display: grid;
+    gap: 8px;
+    margin-top: 20px;
+    border-top: 1px solid #d6e1ee;
+    padding-top: 12px;
+}
+.portalSetupSupport > button, .portalSetupSupport > a {
+    background: transparent;
+    color: #1459a3;
+    text-align: left;
+}
+.portalSetupSupport form { margin-top: 8px; }
+.portalSetup button:disabled { opacity: .65; }

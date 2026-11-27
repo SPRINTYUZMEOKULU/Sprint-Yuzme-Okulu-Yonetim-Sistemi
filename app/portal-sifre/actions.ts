@@ -19,10 +19,10 @@ export async function setPortalPassword(token: string, password: string) {
     if (shortSetupCodePattern.test(token)) {
         codeHash = hashShortSetupCode(token);
         const { data: link, error } = await admin.from("guardian_setup_links")
-            .select("sealed_token,account_id").eq("code_hash", codeHash)
-            .gt("expires_at", new Date().toISOString()).maybeSingle();
+            .select("sealed_token,account_id,expires_at").eq("code_hash", codeHash).maybeSingle();
         if (error) return "Bağlantı şu anda doğrulanamadı. Tekrar deneyin.";
-        if (!link) return invalidLink;
+        if (!link) return "Bu bağlantı tanınmadı veya daha önce kullanıldı. Yeni bağlantı isteyin.";
+        if (Date.parse(link.expires_at) <= Date.now()) return "Bu bağlantının süresi doldu. Yeni bağlantı isteyin.";
         sealedToken = link.sealed_token;
         accountId = link.account_id;
     }
@@ -38,13 +38,15 @@ export async function setPortalPassword(token: string, password: string) {
     if (accountId && data.user.id !== accountId) return invalidLink;
     if (codeHash) await admin.from("guardian_setup_links").delete().eq("code_hash", codeHash);
 
-    const { data: profile } = await admin.from("profiles").select("organization_id")
+    const { data: profile, error: profileError } = await admin.from("profiles").select("organization_id")
         .eq("id", data.user.id).eq("role", "guardian").eq("is_active", true).maybeSingle();
-    if (!profile?.organization_id) return "Portal erişimi doğrulanamadı.";
-    const { data: guardian } = await admin.from("guardians").select("id")
+    if (profileError) return "Veli hesabı şu anda kontrol edilemiyor. Sprint’e bildirin.";
+    if (!profile?.organization_id) return "Bağlantı etkin bir veli hesabına bağlı değil. Sprint’e bildirin.";
+    const { data: guardian, error: guardianError } = await admin.from("guardians").select("id")
         .eq("auth_user_id", data.user.id).eq("organization_id", profile.organization_id)
         .eq("is_active", true).eq("login_enabled", true).maybeSingle();
-    if (!guardian) return "Portal erişimi doğrulanamadı.";
+    if (guardianError) return "Veli giriş durumu şu anda kontrol edilemiyor. Sprint’e bildirin.";
+    if (!guardian) return "Bu veli hesabının portal girişi kapalı veya hesap bağlantısı eksik. Sprint’e bildirin.";
 
     const result = await auth.auth.updateUser({ password });
     if (!result.error || result.error.code === "same_password") return null;
@@ -56,5 +58,6 @@ export async function setPortalPassword(token: string, password: string) {
     if (result.error.code === "weak_password") {
         return "Şifreniz güvenlik kurallarını karşılamıyor. Sprint’ten yeni bağlantı isteyin ve daha güçlü bir şifre seçin.";
     }
-    return "Şifre kaydedilemedi. Yeni bağlantı almak için giriş ekranından şifre yenileme talebi gönderin.";
+    if (result.error.status === 429) return "Çok fazla şifre işlemi yapıldı. Biraz bekleyip yeni bağlantı isteyin.";
+    return "Şifre sunucuda kaydedilemedi. Sprint’e bildirin ve yeni bağlantı isteyin.";
 }
