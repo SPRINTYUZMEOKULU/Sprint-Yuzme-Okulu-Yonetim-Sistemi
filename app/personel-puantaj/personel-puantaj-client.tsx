@@ -355,22 +355,24 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
         </section>
       ) : null}
 
-      {!coachHome ? <section className="ppStats">
-        <article><span>Bugünkü Antrenör Planı</span><strong>{data.summary.planned}</strong><small>atanmış antrenör / seans</small></article>
-        <article><span>Derse Gelen Antrenör</span><strong>{data.summary.checkedIn}</strong><small>bugün giriş yapan</small></article>
-        <article><span>Konum Onayı Bekleyen</span><strong>{data.summary.pending}</strong><small>yönetici kontrolü</small></article>
-        <article className={managerMissing.length ? "alert" : ""}><span>Giriş Yapmayan Antrenör</span><strong>{managerMissing.length || data.summary.missing}</strong><small>başlayan seans / giriş yok</small></article>
-      </section> : null}
+      <div className="ppViewControls">
+        <div className="ppTabs" role="group" aria-label="Personel puantaj bölümleri">
+          <button type="button" aria-pressed={activeTab === "today"} className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>{coachHome ? "Ders programım" : "Ders planı"}</button>
+          <button type="button" aria-pressed={activeTab === "payroll"} className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>{coachHome ? "Puantaj ve ödemelerim" : "Puantaj ve hakediş"}</button>
+        </div>
+        <div className="ppDateTools">
+          <label>{activeTab === "today" ? "Ders tarihi" : "Puantaj tarihi"} <input type="date" value={date || data.date} disabled={busyKey !== null} onChange={(event) => setDate(event.target.value)} /></label>
+          {data.date !== data.currentDate ? <button type="button" onClick={() => setDate("")} disabled={busyKey !== null}>Bugüne dön</button> : null}
+          <button type="button" onClick={() => void load()} disabled={loading}>{loading ? "Yenileniyor…" : "Yenile"}</button>
+        </div>
+      </div>
 
-      <div className="ppDateTools">
-        <label>Ders tarihi <input type="date" value={date || data.date} disabled={busyKey !== null} onChange={(event) => setDate(event.target.value)} /></label>
-        {data.date !== data.currentDate ? <button type="button" onClick={() => setDate("")} disabled={busyKey !== null}>Bugüne Dön</button> : null}
-      </div>
-      <div className="ppTabs" role="tablist" aria-label="Personel puantaj bölümleri">
-        <button className={activeTab === "today" ? "active" : ""} onClick={() => setActiveTab("today")}>{coachHome ? "Ders Programım" : "Bugünkü Antrenör & Ders Planı"}</button>
-        <button className={activeTab === "payroll" ? "active" : ""} onClick={() => setActiveTab("payroll")}>{coachHome ? "Puantaj ve Ödemelerim" : "Aylık Puantaj & Hakediş"}</button>
-        <button className="ppRefresh" onClick={() => void load()} disabled={loading}>{loading ? "Yenileniyor…" : "Yenile"}</button>
-      </div>
+      {!coachHome && activeTab === "today" ? <section className="ppStats ppCompactStats" aria-label="Ders planı özeti">
+        <article><span>Planlanan görev</span><strong>{data.summary.planned}</strong></article>
+        <article><span>Giriş kaydı</span><strong>{data.summary.checkedIn}</strong></article>
+        <article><span>Konum onayı bekleyen</span><strong>{data.summary.pending}</strong></article>
+        <article className={managerMissing.length || data.summary.missing ? "alert" : ""}><span>Giriş yapılmayan</span><strong>{managerMissing.length || data.summary.missing}</strong></article>
+      </section> : null}
 
       {activeTab === "today" ? (
         <section className="ppPanel">
@@ -380,15 +382,26 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
           </div>
 
           {data.unassigned?.length ? (
-            <div className="ppInfo">
-              <strong>{data.unassigned.length} seans eğitmen ataması bekliyor</strong>
-              <p>Seansı, girişi açık bir eğitmen hesabına bağlayın.</p>
-              <ul>{data.unassigned.map((row) => <li key={row.id}>
-                <Link href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, sube: row.branchId, saat: row.startTime })}`}>
-                  {row.startTime} · {row.branchName} · {row.groupName}
-                </Link>
-              </li>)}</ul>
-            </div>
+            <section className="ppAssignmentNotice" aria-label="Eğitmen atamaları">
+              <h3>{data.unassigned.length} seans eğitmen ataması bekliyor</h3>
+              <ul>
+                {data.unassigned.map((row) => (
+                  <li key={row.id}>
+                    <time>{row.startTime}</time>
+                    <div>
+                      <strong>{row.groupName}</strong>
+                      {!row.groupName.toLocaleLowerCase("tr-TR").includes(row.branchName.toLocaleLowerCase("tr-TR")) ? <span>{row.branchName}</span> : null}
+                    </div>
+                    <Link
+                      href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, seans: row.id, sube: row.branchId, saat: row.startTime })}`}
+                      aria-label={`${row.startTime} ${row.groupName} seansını aç`}
+                    >
+                      Seansı aç
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
           {data.today.length ? (
             <div className="ppLessonList">

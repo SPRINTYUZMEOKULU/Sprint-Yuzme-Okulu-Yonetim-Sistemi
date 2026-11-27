@@ -31,3 +31,114 @@
 .ppPreviewTools select, .ppApprovalForm input { min-height: 42px; max-width: 100%; border: 1px solid #dce5ef; border-radius: 10px; background: #fff; color: #29496f; padding: 0 10px; font: inherit; }
 .ppPreviewTools label { flex-wrap: wrap; }
 .ppApprovalForm { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ppHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ppPersonPicker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fff;
+}
+.ppPersonPicker label {
+  color: #243c5b;
+  font-size: 13px;
+  font-weight: 800;
+}
+.ppPersonPickerControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(100%, 540px);
+}
+.ppPersonPickerControls select, .ppPersonPickerControls button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+}
+.ppPersonPickerControls select {
+  border: 1px solid #dce5ef;
+  background: #f8fafc;
+  color: #243c5b;
+}
+.ppPersonPickerControls button { font-weight: 800; cursor: pointer; }
+.ppViewControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.ppViewControls .ppTabs { overflow: visible; }
+.ppViewControls .ppTabs button {
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+  font-size: 13px;
+}
+.ppViewControls .ppDateTools input, .ppViewControls .ppDateTools button { min-height: 44px; }
+.ppCompactStats article { min-height: 0; padding: 12px 14px; }
+.ppCompactStats span { color: #536a86; font-size: 12px; }
+.ppCompactStats strong { margin: 4px 0 0; font-size: 24px; }
+.ppAssignmentNotice {
+  margin: 14px;
+  border: 1px solid #ead8ad;
+  border-radius: 14px;
+  background: #fffaf0;
+}
+.ppAssignmentNotice h3 {
+  margin: 0;
+  padding: 12px;
+  color: #714700;
+  font-size: 14px;
+}
+.ppAssignmentNotice ul { margin: 0; padding: 0; list-style: none; }
+.ppAssignmentNotice li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-top: 1px solid #ead8ad;
+  background: #fff;
+  color: #243c5b;
+  font-size: 13px;
+}
+.ppAssignmentNotice li:last-child { border-radius: 0 0 13px 13px; }
+.ppAssignmentNotice time { font-weight: 800; font-variant-numeric: tabular-nums; }
+.ppAssignmentNotice li div { overflow-wrap: anywhere; }
+.ppAssignmentNotice li span { display: block; margin-top: 3px; color: #536a86; }
+.ppAssignmentNotice a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: #edf4fd;
+  color: #173c6c;
+  font-weight: 800;
+  text-decoration: none;
+}
+.ppAssignmentNotice a:hover { text-decoration: underline; }
+@media (max-width: 560px) {
+  .ppPage .ppHeader { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .ppViewControls .ppTabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .ppViewControls .ppDateTools { width: 100%; }
+  .ppViewControls .ppDateTools label { flex-wrap: wrap; }
+  .ppAssignmentNotice li { grid-template-columns: auto minmax(0, 1fr); }
+  .ppAssignmentNotice a { grid-column: 2; justify-self: start; }
+}
