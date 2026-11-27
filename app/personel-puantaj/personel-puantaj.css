@@ -142,3 +142,56 @@
   .ppAssignmentNotice li { grid-template-columns: auto minmax(0, 1fr); }
   .ppAssignmentNotice a { grid-column: 2; justify-self: start; }
 }
+
+.ppPreviewSettings { margin: 0 0 14px; }
+.ppPreviewSettings nav { margin: 0; padding: 0 12px 12px; }
+.ppCoachHome .ppLessonRow {
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.ppCoachHome .ppLessonMain { overflow-wrap: anywhere; }
+.ppCoachHome .ppActions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+}
+.ppCoachHome .ppActions button { max-width: none; }
+.ppCheckinControl {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #dce8f6;
+  border-radius: 12px;
+  background: #f5f9ff;
+}
+.ppCheckinControl span { color: #415a78; font-size: 12px; line-height: 1.4; }
+.ppCheckinControl button:disabled {
+  background: #e1eaf6;
+  color: #354d6a;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.ppClassLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ppClassLinks > a { flex: 1 1 130px; }
+.ppLessonLink {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #cbdcf0;
+  border-radius: 10px;
+  background: #fff;
+  color: #173c6c;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+.ppLessonLink:hover { background: #edf4fd; }
