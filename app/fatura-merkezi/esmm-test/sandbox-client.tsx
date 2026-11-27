@@ -23,7 +23,7 @@ export default function SandboxClient({runs}:{runs:Run[]}){
    <p style={{margin:0}}>Bu işlem <strong>gerçek makbuz kesmez</strong>. Düğmeye basınca yalnız İşNet TEST InvoiceService'e bir kez gönderilir. İkinci gönderim otomatik yapılmaz. Günlük en fazla üç test kaydı.</p>
    <label style={{display:"grid",gap:6,fontWeight:600}}>İşNet test firması
     <select value={company} onChange={e=>setCompany(e.target.value)} disabled={busy} style={{padding:12,borderRadius:9,border:"1px solid #bdd4e4"}}>
-     <option value="4810173324">İşNet test firması</option><option value="1234567805">Test firma 05</option>
+     <option value="4810173324">İşNet test firması · 4810173324 (onaylandı)</option>
     </select></label>
    <label style={{display:"grid",gap:6,fontWeight:600}}>Yeni yetkili TEST makbuz numarası
     <input value={number} onChange={e=>setNumber(e.target.value.toUpperCase().replace(/\s/g,""))} autoComplete="off" maxLength={16}
