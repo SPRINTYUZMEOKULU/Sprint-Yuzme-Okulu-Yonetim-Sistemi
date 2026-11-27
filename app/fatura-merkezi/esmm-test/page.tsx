@@ -5,7 +5,7 @@ import SandboxClient from "./sandbox-client";
 export const dynamic="force-dynamic";
 export default async function EsmmSandboxPage(){
  const profile=await requireProfile(["owner","admin"]);
- if(!profile.organization_id||!profile.is_active)
+ if(!profile.organization_id||!profile.is_active||!["owner","admin"].includes(profile.base_role))
   return <main><h1>Test erişimi yetkisiz</h1><Link href="/fatura-merkezi">Fatura Merkezine dön</Link></main>;
  const {data,error}=await documentAdmin().from("isnet_esmm_sandbox_runs")
  .select("id,test_company_code,requested_document_number,ettn,state,provider_document_number,provider_report_status,created_at")
