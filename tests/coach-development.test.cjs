@@ -39,17 +39,22 @@ function fixture(otherCoach) {
   const notifications = new Set();
   const managementNotifications = [];
   let calls = 0;
+  let actor = "coach";
   const db = { from(table) {
     const criteria = [];
     let payload;
+    let changes;
     const builder = {
       select() { return builder; }, eq(key, value) { criteria.push([key, value]); return builder; }, or() { return builder; },
+      update(row) { changes = row; return builder; },
       upsert(row) { payload = row; return builder; },
       maybeSingle() {
         if (table === "staff") return Promise.resolve({ data: { id: "staff" } });
         if (payload && !saved.has(payload.id)) { saved.set(payload.id, payload); return Promise.resolve({ data: { id: payload.id } }); }
         if (payload) return Promise.resolve({ data: null });
-        return Promise.resolve({ data: [...saved.values()].find(row => criteria.every(([key, value]) => row[key] === value)) || null });
+        const match = [...saved.values()].find(row => criteria.every(([key, value]) => row[key] === value));
+        if (match && changes) Object.assign(match, changes);
+        return Promise.resolve({ data: match || null });
       },
       in() { return builder; },
       then(resolve) {
@@ -59,11 +64,11 @@ function fixture(otherCoach) {
     };
     return builder;
   } };
-  const { POST } = load("app/api/coach-development/route.ts", {
+  const { POST, PATCH } = load("app/api/coach-development/route.ts", {
     "@supabase/supabase-js": { createClient: () => db },
     "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status || 200 }) } },
     "next/cache": { revalidatePath() {} },
-    "@/lib/auth/profile": { requireProfile: async () => ({ id: "coach", organization_id: "org", base_role: "coach", is_active: true }) },
+    "@/lib/auth/profile": { requireProfile: async () => ({ id: actor, organization_id: "org", base_role: actor, is_active: true }) },
     "@/lib/attendance/roster": { attendanceRoster: () => ({ students: [{ id: studentId, status: "active" }] }) },
     "@/lib/attendance/coach-roster": scope,
     "@/lib/attendance/development-report": report,
@@ -85,7 +90,7 @@ function fixture(otherCoach) {
       return { count: 1 };
     } },
   });
-  return { submit: (payload = form) => POST({ json: async () => payload }), saved, notifications, managementNotifications };
+  return { submit: (payload = form) => POST({ json: async () => payload }), approve: async (role) => { actor = role; return PATCH({ json: async () => ({ id: noteId, studentId }) }); }, saved, notifications, managementNotifications };
 }
 
 test("the server refuses a student allocated to another coach before creating the report", async () => {
@@ -94,14 +99,21 @@ test("the server refuses a student allocated to another coach before creating th
   assert.equal(flow.saved.size, 0);
 });
 
-test("a notification retry reuses the guardian-visible report and preserves its author", async () => {
+test("reports stay private until a manager approves and notification retries preserve the author", async () => {
   const flow = fixture(false);
-  assert.deepEqual((await flow.submit()).body, { saved: true, notificationError: true });
   assert.deepEqual((await flow.submit()).body, { saved: true, recipientCount: 1 });
+  assert.equal(flow.saved.get(noteId).is_guardian_visible, false);
+  assert.equal(flow.saved.get(noteId).target, report.pendingDevelopmentReportTitle);
+  assert.equal(flow.notifications.size, 0);
+  assert.equal((await flow.approve("coach")).status, 403);
+  assert.deepEqual((await flow.approve("admin")).body, { saved: true, notificationError: true });
+  assert.deepEqual((await flow.approve("admin")).body, { saved: true, notificationError: false });
   assert.equal(flow.saved.size, 1);
   assert.equal(flow.saved.get(noteId).author_id, "coach");
+  assert.equal(flow.saved.get(noteId).target, report.developmentReportTitle);
   assert.equal(flow.saved.get(noteId).is_guardian_visible, true);
   assert.equal(flow.notifications.size, 1);
+  assert.deepEqual(flow.managementNotifications.at(-1).recipientProfileIds, ["coach"]);
 });
 
 
