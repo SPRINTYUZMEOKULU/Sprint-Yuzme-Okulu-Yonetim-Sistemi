@@ -4,7 +4,7 @@ import { documentAdmin } from "@/lib/payments/document-admin";
 import { IsnetEsmmTestClient, IsnetEsmmError, type EsmmTestDraft } from "@/lib/invoicing/isnet-esmm-test";
 import { revalidatePath } from "next/cache";
 
-const TEST_COMPANIES = new Set(["4810173324","1234567805"]);
+const TEST_COMPANIES = new Set(["4810173324"]);
 const DOC_NUMBER=/^[A-Z]{3}20[0-9]{11}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const refresh=()=>revalidatePath("/fatura-merkezi/esmm-test");
