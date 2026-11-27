@@ -1,6 +1,7 @@
 import { attendanceRoster } from "@/lib/attendance/roster";
 import { formatDisplayDate } from "@/lib/dates/display";
 import { isLessonDate, loadPersonnelSessions } from "@/lib/personnel/sessions";
+import ManagementNoteForm from "./management-note-form";
 import DevelopmentReportButton from "./development-report-button";
 import Link from "next/link";
 import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
@@ -128,6 +129,7 @@ if (params.gorunum === "gelisim" && (selectedStaff || profile.base_role === "coa
               <strong>{name}</strong>
               {!selectedStaff && coachStaff ? <DevelopmentReportButton studentId={student.id}
                 studentName={name} scheduleId={session.id} date={attendanceDate} disabled={false} /> : null}
+              {!selectedStaff && coachStaff ? <ManagementNoteForm studentId={student.id} scheduleId={session.id} date={attendanceDate} /> : null}
             </li>;
           })}
         </ul> : <p>Bu seans için rapor hazırlanabilecek öğrenci bulunamadı.</p>}
