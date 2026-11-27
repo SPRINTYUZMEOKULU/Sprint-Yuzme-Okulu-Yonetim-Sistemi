@@ -28,3 +28,27 @@
   font-weight: 750;
   cursor: pointer;
 }
+
+.saManagementNote { flex: 1 0 100%; min-width: 0; border-top: 1px solid #dce5ef; }
+.saManagementNote summary { padding: 12px 0; color: #174477; font-size: 14px; font-weight: 750; cursor: pointer; }
+.saManagementNote form, .saManagementNote label { display: grid; gap: 8px; }
+.saManagementNote form { padding-bottom: 6px; }
+.saManagementNote select, .saManagementNote textarea {
+  padding: 9px;
+  border: 1px solid #cbd9e8;
+  border-radius: 8px;
+  color: #132844;
+  font: inherit;
+}
+.saManagementNote textarea { min-height: 104px; resize: vertical; }
+.saManagementNote button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #173c6c;
+  color: #fff;
+  font-weight: 750;
+}
+.saManagementNote p { margin: 0; font-size: 14px; }
