@@ -37,6 +37,7 @@ test("direct assignments and individual student allocations control the developm
 function fixture(otherCoach) {
   const saved = new Map();
   const notifications = new Set();
+  const managementNotifications = [];
   let calls = 0;
   const db = { from(table) {
     const criteria = [];
@@ -50,7 +51,9 @@ function fixture(otherCoach) {
         if (payload) return Promise.resolve({ data: null });
         return Promise.resolve({ data: [...saved.values()].find(row => criteria.every(([key, value]) => row[key] === value)) || null });
       },
+      in() { return builder; },
       then(resolve) {
+        if (table === "profiles") return Promise.resolve({ data: [{ id: "manager" }] }).then(resolve);
         return Promise.resolve({ data: otherCoach ? [{ schedule_id: scheduleId, student_id: studentId, coach_id: "other" }] : [] }).then(resolve);
       },
     };
@@ -70,6 +73,10 @@ function fixture(otherCoach) {
       isLessonDate: () => true, sessionClock: () => ({ date: "2026-11-26" }),
       loadPersonnelSessions: async () => [{ id: scheduleId, group_id: "group", weekday: 4, coaches: new Map([["staff", "coach"]]) }],
     },
+    "@/lib/notifications/create-notification": { createNotification: async (input) => {
+      managementNotifications.push(input);
+      return { ok: true, recipientCount: 1 };
+    } },
     "@/lib/guardian/note-sharing": { notifySharedNote: async (org, student, note, body, actor, options) => {
       assert.equal(options.developmentReport, true);
       calls += 1;
@@ -78,7 +85,7 @@ function fixture(otherCoach) {
       return { count: 1 };
     } },
   });
-  return { submit: () => POST({ json: async () => form }), saved, notifications };
+  return { submit: (payload = form) => POST({ json: async () => payload }), saved, notifications, managementNotifications };
 }
 
 test("the server refuses a student allocated to another coach before creating the report", async () => {
@@ -95,4 +102,22 @@ test("a notification retry reuses the guardian-visible report and preserves its 
   assert.equal(flow.saved.get(noteId).author_id, "coach");
   assert.equal(flow.saved.get(noteId).is_guardian_visible, true);
   assert.equal(flow.notifications.size, 1);
+});
+
+
+test("a coach management note stays private and alerts only management without exposing its content", async () => {
+  const flow = fixture(false);
+  const payload = { ...form, kind: "management_note", subject: "guardian", body: "Özel görüşme notu" };
+  assert.deepEqual((await flow.submit(payload)).body, { saved: true, recipientCount: 1 });
+  await flow.submit(payload);
+  assert.equal(flow.saved.size, 1);
+  assert.equal(flow.saved.get(noteId).note_type, "management");
+  assert.equal(flow.saved.get(noteId).is_guardian_visible, false);
+  assert.equal(flow.notifications.size, 0);
+  assert.deepEqual(flow.managementNotifications[0].recipientProfileIds, ["manager"]);
+  assert.equal(flow.managementNotifications[0].dedupeKey, flow.managementNotifications[1].dedupeKey);
+  assert.doesNotMatch(flow.managementNotifications[0].body, /Özel görüşme/);
+  const otherCoach = fixture(true);
+  assert.equal((await otherCoach.submit(payload)).status, 403);
+  assert.equal(otherCoach.saved.size, 0);
 });
