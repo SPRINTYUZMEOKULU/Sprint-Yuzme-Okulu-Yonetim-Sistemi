@@ -70,7 +70,7 @@ export default function LoginForm() {
   function openSupport(kind: SupportKind) {
     setSupportKind(kind);
     setSupportStatus("");
-    setSupportMessage(kind === "password" ? "Şifremi yenilemek istiyorum." : kind === "login_error" ? "Bilgilerimi doğru girdiğim halde sisteme giriş yapamıyorum." : "Sprint hesabımla ilgili destek almak istiyorum.");
+    setSupportMessage(kind === "password" ? "Şifremi unuttum. Yeni bir şifre oluşturma bağlantısı istiyorum." : kind === "login_error" ? "Bilgilerimi doğru girdiğim halde sisteme giriş yapamıyorum." : "Sprint hesabımla ilgili destek almak istiyorum.");
     setSupportOpen(true);
   }
 

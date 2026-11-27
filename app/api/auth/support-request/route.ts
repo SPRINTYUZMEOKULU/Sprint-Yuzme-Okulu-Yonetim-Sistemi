@@ -6,7 +6,7 @@ import { deliverLoginSupportPush } from "@/lib/notifications/create-notification
 export const dynamic = "force-dynamic";
 
 const MANAGEMENT_ROLES = ["owner", "admin", "branch_manager"];
-const VALID_KINDS = ["password", "contact", "login_error"];
+const VALID_KINDS = ["password", "contact", "login_error", "password_reset_error"];
 const VALID_ROLES = ["guardian", "coach", "admin"];
 const VALID_METHODS = ["email", "phone"];
 
@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     const method = clean(payload.method, 20);
     const identifier = clean(payload.identifier, 160);
     const message = clean(payload.message, 1000);
+    if (kind === "password_reset_error" && (role !== "guardian" || method !== "phone" || !localPhone(identifier))) {
+      return NextResponse.json({ ok: false, message: "Lütfen geçerli bir telefon numarası girin." }, { status: 400 });
+    }
 
     if (!VALID_KINDS.includes(kind) || !VALID_ROLES.includes(role) || !VALID_METHODS.includes(method)) {
       return NextResponse.json({ ok: false, message: "Geçersiz destek talebi." }, { status: 400 });
@@ -73,12 +76,16 @@ export async function POST(request: Request) {
     } else {
       const wanted = localPhone(identifier);
       if (wanted) {
-        const { data } = await admin
-          .from("profiles")
-          .select("id,organization_id,full_name,email,phone,role")
-          .not("phone", "is", null)
-          .limit(1000);
-        account = (data || []).find((row) => phoneMatches(row.phone, wanted)) || null;
+        const profiles = () => admin.from("profiles").select("id,organization_id,full_name,email,phone,role");
+        const candidates = [wanted, `0${wanted}`, `90${wanted}`, `+90${wanted}`, `0090${wanted}`];
+        const { data: exact } = await (role === "guardian" ? profiles().eq("role", "guardian") : profiles())
+          .in("phone", candidates).limit(1).maybeSingle();
+        account = exact;
+        if (!account) {
+          const { data } = await (role === "guardian" ? profiles().eq("role", "guardian") : profiles())
+            .not("phone", "is", null).limit(1000);
+          account = (data || []).find((row) => phoneMatches(row.phone, wanted)) || null;
+        }
       }
     }
 
@@ -113,12 +120,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Destek talebini alacak yönetici bulunamadı." }, { status: 500 });
     }
 
+    const resetError = kind === "password_reset_error";
     const kindLabel =
       kind === "password"
         ? "Şifre yenileme talebi"
         : kind === "login_error"
           ? "Giriş sorunu"
-          : "İletişim talebi";
+          : resetError ? "Veli şifresi yenileme sorunu" : "İletişim talebi";
     const roleLabel = role === "guardian" ? "Veli" : role === "coach" ? "Eğitmen" : "Yönetici";
     const accountLabel = account?.full_name || identifier;
     const eventKey = `login_support_${kind}`;
@@ -163,8 +171,8 @@ export async function POST(request: Request) {
         title: `${kindLabel}: ${accountLabel}`,
         body: requestMessage,
         message: requestMessage,
-        priority: kind === "password" || kind === "login_error" ? "high" : "normal",
-        severity: kind === "login_error" ? "warning" : "info",
+        priority: kind === "password" || kind === "login_error" || resetError ? "high" : "normal",
+        severity: kind === "login_error" || resetError ? "warning" : "info",
         category: "accounts",
         student_id: null,
         source_type: "login_support",
@@ -223,7 +231,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       duplicate: Boolean(recentDuplicate),
-      account_found: Boolean(account),
       message: recentDuplicate
         ? "Talebiniz zaten yönetime iletilmiş durumda."
         : "Talebiniz yönetime iletildi.",
