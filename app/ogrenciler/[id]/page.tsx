@@ -1,3 +1,4 @@
+import InstructorLessonHistory from "./instructor-lesson-history";
 import { pendingDevelopmentReportTitle } from "@/lib/attendance/development-report";
 import ApproveDevelopmentReport from "./approve-development-report";
 import { loadStudentObligations, loadStudentPaymentCenter } from "@/lib/payments/student-finance";
@@ -1271,6 +1272,12 @@ export default async function StudentFile({
 
           <strong>Toplam Kayıt: {attendanceRecords.length}</strong>
         </div>
+
+        {profile.is_active && ["owner", "admin"].includes(profile.base_role) &&
+          profile.organization_id === student.organization_id && profile.organization_id ? (
+            <InstructorLessonHistory organizationId={profile.organization_id}
+              attendance={attendanceResult.error ? null : attendanceRecords} />
+          ) : null}
 
         <div className="list">
           {attendanceRecords.map((record: any) => {
