@@ -4,6 +4,11 @@ async function paymentCenter(requested=''){
   {id:'next',student_id:'child',organization_id:'org',status:'scheduled',package_id:'p',start_date:'2026-10-22',planned_end_date:'2026-11-17'},
   {id:'current',student_id:'child',organization_id:'org',status:'active',package_id:'p',start_date:'2026-09-22',planned_end_date:'2026-10-17'},
   {id:'foreign',student_id:'other',organization_id:'other',status:'scheduled',package_id:'p'}],
+  student_renewal_events:[
+   {id:'next-renewal',student_id:'child',organization_id:'org',renewal_status:'scheduled',note:' Sonraki dönem notu ',period:{start_date:'2026-10-22',planned_end_date:'2026-11-17'}},
+   {id:'past-renewal',student_id:'child',organization_id:'org',renewal_status:'completed',note:'Geçmiş dönem notu',period:{start_date:'2026-08-22',planned_end_date:'2026-09-17'}},
+   {id:'cancelled-renewal',student_id:'child',organization_id:'org',renewal_status:'cancelled',note:'İptal',period:{start_date:'2026-07-22',planned_end_date:'2026-08-17'}},
+   {id:'other-renewal',student_id:'other',organization_id:'other',renewal_status:'completed',note:'Başka öğrenci',period:{start_date:'2026-08-22',planned_end_date:'2026-09-17'}}],
   course_packages:[{id:'p',organization_id:'org',price:6000,name:'12 Ders'}],
   student_payment_plans:[{id:'next-plan',student_id:'child',organization_id:'org',enrollment_id:'next',status:'active',total_amount:6000}],
   student_payment_installments:[
@@ -38,4 +43,12 @@ test('prepayment selection scopes payments to the scheduled period, leaving the 
 });
 test('a requested period belonging to another student or organization is rejected',async()=>{
  const result=await paymentCenter('foreign');assert.equal(result.status,404);assert.equal(result.body.ok,false);
+});
+test('payment center includes saved renewal notes with period dates even without a payment for that period',async()=>{
+ const result=await paymentCenter();
+ assert.equal(result.status,200);
+ assert.deepEqual(result.body.renewalNotes,[
+  {id:'next-renewal',note:'Sonraki dönem notu',startDate:'2026-10-22',plannedEndDate:'2026-11-17'},
+  {id:'past-renewal',note:'Geçmiş dönem notu',startDate:'2026-08-22',plannedEndDate:'2026-09-17'},
+ ]);
 });

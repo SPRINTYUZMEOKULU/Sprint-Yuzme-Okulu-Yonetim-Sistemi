@@ -1,3 +1,4 @@
+import RegistrationPeriodNotes from "./registration-period-notes";
 import { loadStudentObligations, loadStudentPaymentCenter } from "@/lib/payments/student-finance";
 import { summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { registrationPaymentDue, registrationPaymentHoldMessage } from "@/lib/students/registration-payment-hold";
@@ -1271,6 +1272,7 @@ export default async function StudentFile({
             </div>
           </>
         )}
+        <RegistrationPeriodNotes notes={finance?.[0]?.renewalNotes} />
         {activeEnrollmentTotalReceived > packagePrice ? <p>Paket tutarını aşan tahsilat: <strong>{money(activeEnrollmentTotalReceived - packagePrice)}</strong>. Çok dönemli ödeme açıklaması ödeme geçmişinde saklanır.</p> : null}
         <div className="list">
           {payments.map((payment: any) => (

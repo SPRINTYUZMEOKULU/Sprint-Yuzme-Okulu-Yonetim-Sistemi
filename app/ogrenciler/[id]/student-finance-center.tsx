@@ -1,5 +1,6 @@
 "use client";
 
+import RegistrationPeriodNotes, { type RegistrationPeriodNote } from "./registration-period-notes";
 import PaymentInfoShortcut from "../../components/payment-info-shortcut";
 import { openStudentObligations, summarizeStudentDebt } from "@/lib/payments/student-open-debt";
 import { reviewCollection } from "@/lib/payments/collection-review";
@@ -51,6 +52,7 @@ type CenterData = {
     remainingPayment: number;
   };
   payments: PaymentRow[];
+  renewalNotes?: RegistrationPeriodNote[];
 };
 
 type Obligation = {
@@ -404,6 +406,12 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
                 <small>Paket dışı açık borç kaydı bulunuyor.</small>
               </div>
               <button type="button" onClick={() => setTab("debt")}>Ek Borçları Gör</button>
+            </div>
+          ) : null}
+
+          {data?.renewalNotes?.length ? (
+            <div className="sfcCard sfcHistory">
+              <RegistrationPeriodNotes notes={data.renewalNotes} />
             </div>
           ) : null}
 
