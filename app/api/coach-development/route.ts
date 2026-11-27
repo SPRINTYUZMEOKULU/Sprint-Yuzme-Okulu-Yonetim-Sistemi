@@ -21,11 +21,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Bu işlem için aktif bir eğitmen hesabı gerekiyor." }, { status: 403 });
   }
   const input = await request.json().catch(() => null);
-  const noteBody = input && typeof input === "object" ? developmentReportBody(input) : null;
+  const internal = input?.kind === "management_note";
+  const subject = input?.subject === "guardian" ? "Veli hakkında" : "Öğrenci hakkında";
+  const text = typeof input?.body === "string" ? input.body.trim() : "";
+  const noteBody = internal ? (text && text.length <= 1500 ? `${subject}\n${text}` : null)
+    : input && typeof input === "object" ? developmentReportBody(input) : null;
+  const target = internal ? "Kurum içi eğitmen notu" : developmentReportTitle;
+  const noteType = internal ? "management" : "coach";
   const { id, studentId, scheduleId, lessonDate } = input || {};
   if (!noteBody || !validId(id) || !validId(studentId) || !validId(scheduleId) ||
       typeof lessonDate !== "string" || !isLessonDate(lessonDate) || lessonDate > sessionClock().date) {
-    return NextResponse.json({ error: "Üç rapor alanını doldurun ve geçerli bir ders tarihi seçin." }, { status: 400 });
+    return NextResponse.json({ error: internal ? "Notu doldurun ve geçerli bir ders tarihi seçin." : "Üç rapor alanını doldurun ve geçerli bir ders tarihi seçin." }, { status: 400 });
   }
 
   try {
@@ -64,15 +70,38 @@ export async function POST(request: NextRequest) {
 
     const note = await db.from("student_notes").upsert({
       id, organization_id: org, student_id: studentId, author_id: profile.id,
-      note_type: "coach", target: developmentReportTitle, body: noteBody, is_guardian_visible: true,
+      note_type: noteType, target, body: noteBody, is_guardian_visible: !internal,
     }, { onConflict: "id", ignoreDuplicates: true }).select("id").maybeSingle();
     if (note.error) throw note.error;
     if (!note.data) {
       const existing = await db.from("student_notes").select("id").eq("organization_id", org).eq("student_id", studentId)
-        .eq("author_id", profile.id).eq("target", developmentReportTitle).eq("note_type", "coach").eq("is_guardian_visible", true)
+        .eq("author_id", profile.id).eq("target", target).eq("note_type", noteType).eq("is_guardian_visible", !internal)
         .eq("body", noteBody).eq("id", id).maybeSingle();
       if (existing.error) throw existing.error;
       if (!existing.data) return NextResponse.json({ error: "Bu rapor kimliği daha önce kullanılmış." }, { status: 409 });
+    }
+
+    if (internal) {
+      revalidatePath(`/ogrenciler/${studentId}`);
+      try {
+        const { data: managers, error: managerError } = await db.from("profiles").select("id")
+          .eq("organization_id", org).eq("is_active", true).in("role", ["owner", "admin"]);
+        if (managerError) throw managerError;
+        if (!managers?.length) return NextResponse.json({ saved: true, recipientCount: 0 });
+        const { createNotification } = await import("@/lib/notifications/create-notification");
+        const notification = await createNotification({
+          organizationId: org, category: "students", eventKey: "coach_management_note",
+          title: "Yeni kurum içi eğitmen notu",
+          body: "Eğitmen, öğrenci dosyasına yönetim için bir not ekledi.",
+          studentId, sourceType: "student_note", sourceId: id, dedupeKey: `coach-management-note:${id}`,
+          targetPath: `/ogrenciler/${studentId}#notlar`, recipientProfileIds: managers.map((manager) => manager.id),
+          createdBy: profile.id, push: true,
+        });
+        if (!notification.ok) throw new Error(notification.message);
+        return NextResponse.json({ saved: true, recipientCount: notification.recipientCount });
+      } catch {
+        return NextResponse.json({ saved: true, notificationError: true });
+      }
     }
 
     for (const path of ["/veli-gelisim", "/veli-mesajlar", "/veli-paneli", `/ogrenciler/${studentId}`]) revalidatePath(path);
