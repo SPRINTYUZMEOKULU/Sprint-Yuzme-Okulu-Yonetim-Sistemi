@@ -34,7 +34,7 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
   // yanlış ₺0 / Ödendi durumuna dönüşmez.
   const supabase = adminClient();
 
-  const [studentResult, enrollmentResult, paymentsResult, checklistResult] = await Promise.all([
+  const [studentResult, enrollmentResult, paymentsResult, checklistResult, renewalNotesResult] = await Promise.all([
     supabase
       .from("students")
       .select("id,first_name,last_name,phone,guardian_name,guardian_phone,preferred_package_id")
@@ -63,12 +63,22 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
       .eq("organization_id", organizationId)
       .eq("student_id", studentId)
       .maybeSingle(),
+    supabase
+      .from("student_renewal_events")
+      .select("id,note,new_enrollment_id,period:student_enrollments!new_enrollment_id!inner(start_date,planned_end_date)")
+      .eq("organization_id", organizationId)
+      .eq("student_id", studentId)
+      .in("renewal_status", ["completed", "scheduled"])
+      .neq("note", "")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
   ]);
 
   if (studentResult.error) throw studentResult.error;
   if (enrollmentResult.error) throw enrollmentResult.error;
   if (paymentsResult.error) throw paymentsResult.error;
   if (checklistResult.error) throw checklistResult.error;
+  if (renewalNotesResult.error) throw renewalNotesResult.error;
 
   if (!studentResult.data) {
     return null;
@@ -224,6 +234,17 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
           remainingPayment,
         }
       : null,
+    renewalNotes: (renewalNotesResult.data ?? []).flatMap((row) => {
+      const note = row.note?.trim();
+      const period = Array.isArray(row.period) ? row.period[0] : row.period;
+      if (!note || !period) return [];
+      return [{
+        id: row.id,
+        note,
+        startDate: period.start_date,
+        plannedEndDate: period.planned_end_date,
+      }];
+    }),
     payments: allPayments.map((row: any) => {
       const period = row.enrollment_id
         ? enrollmentPeriodMap.get(String(row.enrollment_id)) || null
