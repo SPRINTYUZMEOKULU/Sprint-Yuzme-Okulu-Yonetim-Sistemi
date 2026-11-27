@@ -1,1 +1,30 @@
 .saTopNav{max-width:1180px;width:calc(100% - 40px);margin:18px auto 4px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:7px;background:#fff;border:1px solid #dce7f3;border-radius:20px;box-shadow:0 8px 28px rgba(22,55,92,.06);box-sizing:border-box}.saTopNavItem{min-width:0;height:62px;display:flex;align-items:center;gap:11px;padding:8px 12px;border:0;border-radius:14px;background:transparent;color:#365978;text-decoration:none;box-sizing:border-box;transition:background .15s ease,color .15s ease,transform .15s ease}.saTopNavItem:hover{background:#f3f7fc}.saTopNavItem:active{transform:scale(.985)}.saTopNavItem.active{background:#0b6ff4;color:#fff;box-shadow:0 7px 18px rgba(11,111,244,.2)}.saTopNavIcon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#eef5fc;color:#176fcf;flex:0 0 38px}.saTopNavIcon svg{width:20px;height:20px}.saTopNavItem.active .saTopNavIcon{background:rgba(255,255,255,.17);color:#fff}.saTopNavItem>span:last-child{display:grid;gap:2px;min-width:0}.saTopNavItem b{font-size:13px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.saTopNavItem small{font-size:10px;color:#8498ad;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.saTopNavItem.active small{color:rgba(255,255,255,.78)}@media(max-width:760px){.saTopNav{width:calc(100% - 24px);margin:10px auto 3px;gap:3px;padding:5px;border-radius:17px;position:sticky;top:7px;z-index:30;box-shadow:0 7px 22px rgba(18,51,86,.08)}.saTopNavItem{height:58px;justify-content:center;gap:4px;padding:5px 2px;border-radius:12px;flex-direction:column}.saTopNavIcon{width:30px;height:30px;flex-basis:30px;border-radius:9px}.saTopNavIcon svg{width:18px;height:18px}.saTopNavItem b{font-size:10px;letter-spacing:-.01em}.saTopNavItem small{display:none}}
+
+.saReports { max-width: 760px; margin: 0 auto; padding: 16px; color: #132844; }
+.saReportsBack { display: inline-flex; align-items: center; min-height: 44px; color: #174477; font-weight: 700; }
+.saReports > header { margin: 12px 0; }
+.saReports h1 { margin: 0; font-size: clamp(23px, 5vw, 32px); }
+.saReports > header p { margin: 8px 0; color: #415a78; font-size: 14px; }
+.saReports ul { padding: 0; margin: 16px 0; list-style: none; }
+.saReports li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+  background: #fff;
+}
+.saReports li > button {
+  min-height: 44px;
+  padding: 0 12px;
+  background: #173c6c;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  font-weight: 750;
+  cursor: pointer;
+}

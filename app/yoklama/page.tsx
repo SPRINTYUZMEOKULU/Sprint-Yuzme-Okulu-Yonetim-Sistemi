@@ -1,3 +1,7 @@
+import { attendanceRoster } from "@/lib/attendance/roster";
+import { formatDisplayDate } from "@/lib/dates/display";
+import { isLessonDate, loadPersonnelSessions } from "@/lib/personnel/sessions";
+import DevelopmentReportButton from "./development-report-button";
 import Link from "next/link";
 import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
 import { reportStudentScope } from "@/lib/attendance/development-report";
@@ -89,6 +93,46 @@ for (let offset = 0; visibleScheduleIds.length > 0; offset += 500) {
     }
   }
   if ((result.data?.length || 0) < 500) break;
+}
+if (params.gorunum === "gelisim" && (selectedStaff || profile.base_role === "coach")) {
+  const backUrl = selectedStaff ? `/personel-puantaj?personel=${selectedStaff.id}` : "/personel-puantaj";
+  const session = (selectedStaff || coachStaff) && isLessonDate(attendanceDate) && attendanceDate <= todayDate
+    ? (await loadPersonnelSessions(cancellationDb, organizationId, attendanceDate)).find((row) =>
+        row.id === params.scheduleId && [...coachIds].some((id) => row.coaches.has(id)))
+    : undefined;
+  const roster = session ? attendanceRoster({
+    students: students.data || [],
+    enrollments: enrollments.data || [],
+    memberships: session.makeup_date ? [] : memberships.data || [],
+    compensationLessons: compensation.data || [],
+  }, session.group_id, session.id, attendanceDate, session.weekday || 7) : null;
+  const cancelled = session ? new Set(cancellations[`${attendanceDate}:${session.id}`]) : new Set<string>();
+  const eligible = session && roster ? coachStudentScope(studentAssignments.data || [], session.id,
+    session.group_id, coachIds, true, roster.students.map((student) => student.id)) : undefined;
+  const reportStudents = roster?.students.filter((student) => student.status === "active" &&
+    !cancelled.has(student.id) && (!eligible || eligible.includes(student.id))) || [];
+
+  return (
+    <main className="saReports">
+      <Link className="saReportsBack" href={backUrl}>Eğitmen paneline dön</Link>
+      <header>
+        <h1>Gelişim raporları</h1>
+        {session ? <p>{session.group.name} · {formatDisplayDate(attendanceDate)}</p> : null}
+        {selectedStaff ? <p>{selectedStaff.first_name} {selectedStaff.last_name} kendi hesabından rapor hazırlayıp veliyle paylaşabilir.</p> : null}
+      </header>
+      {!session ? <p>{attendanceDate > todayDate ? "Bu seansın raporları ders günü açılır." : "Bu tarih için atanmış aktif bir seans bulunamadı."}</p> :
+        reportStudents.length ? <ul>
+          {reportStudents.map((student) => {
+            const name = `${student.first_name || ""} ${student.last_name || ""}`.trim() || "Öğrenci";
+            return <li key={student.id}>
+              <strong>{name}</strong>
+              {!selectedStaff && coachStaff ? <DevelopmentReportButton studentId={student.id}
+                studentName={name} scheduleId={session.id} date={attendanceDate} disabled={false} /> : null}
+            </li>;
+          })}
+        </ul> : <p>Bu seans için rapor hazırlanabilecek öğrenci bulunamadı.</p>}
+    </main>
+  );
 }
 return <>{selectedStaff ? <div className="saTopNav" aria-label="Eğitmen öğrenci görünümü">
   <Link href={`/personel-puantaj?personel=${selectedStaff.id}`}>Personel Paneline Dön</Link>
