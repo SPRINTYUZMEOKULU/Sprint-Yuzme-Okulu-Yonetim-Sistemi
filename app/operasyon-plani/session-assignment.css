@@ -1,0 +1,17 @@
+.opAssignmentPage { max-width: 820px; margin: auto; padding: 24px 16px; color: #10213a; }
+.opAssignmentPage nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
+.opAssignmentPage a { color: #174c90; }
+.opAssignmentCard { background: #fff; padding: clamp(16px, 4vw, 28px); border: 1px solid #dbe4ef; border-radius: 16px; }
+.opAssignmentCard h1 { margin: 0; font-size: 26px; }
+.opAssignmentCard h2 { margin: 0; font-size: 17px; }
+.opAssignmentFields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.opAssignmentFields label { display: grid; gap: 6px; flex: 1 1 200px; min-width: 0; font-weight: 600; }
+.opAssignmentFields select, .opAssignmentFields button { min-height: 44px; max-width: 100%; border-radius: 8px; padding: 8px 12px; font: inherit; }
+.opAssignmentFields select { width: 100%; border: 1px solid #a6b6ca; background: #fff; color: inherit; }
+.opAssignmentFields button { border: 1px solid #174c90; background: #174c90; color: #fff; cursor: pointer; font-weight: 700; }
+.opAssignmentFields button:disabled { opacity: .55; cursor: default; }
+.opAssignmentDetails { border-top: 1px solid #dbe4ef; margin-top: 20px; padding-top: 20px; }
+.opAssignmentDetails dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; }
+.opAssignmentDetails dt { font-size: 13px; color: #41546f; }
+.opAssignmentDetails dd { margin: 4px 0 0; font-weight: 700; }
+.opAssignmentError { color: #a21c24; }

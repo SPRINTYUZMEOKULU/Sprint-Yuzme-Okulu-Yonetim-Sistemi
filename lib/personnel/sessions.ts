@@ -80,7 +80,9 @@ export async function loadPersonnelSessions(client: SupabaseClient, organization
         coaches.set(assignment.coach_id, assignment.assignment_role || "coach");
       }
     }
-    if (!coaches.size && group.primary_coach_id) coaches.set(group.primary_coach_id, "coach");
+    if (group.primary_coach_id && ![...coaches.values()].includes("coach")) {
+      coaches.set(group.primary_coach_id, "coach");
+    }
     return [{ ...schedule, branch, group, coaches }];
   });
 }

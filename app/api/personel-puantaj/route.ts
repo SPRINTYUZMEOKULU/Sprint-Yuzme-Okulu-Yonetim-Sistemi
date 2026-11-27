@@ -154,9 +154,9 @@ async function getDashboard(ctx: NonNullable<Awaited<ReturnType<typeof getContex
   rows.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) || String(a.staffName).localeCompare(String(b.staffName), "tr"));
 
   const unassigned = manager && !previewStaffId ? sessions.filter((session) =>
-    ![...session.coaches.keys()].some((id) => {
+    ![...session.coaches].some(([id, role]) => {
       const person = staffIdentityMap.get(id);
-      return person?.auth_user_id && person.login_enabled;
+      return role === "coach" && person?.auth_user_id && person.login_enabled;
     })
   ).map((session) => ({
     id: session.id, branchId: session.branch_id, groupName: session.group.name,

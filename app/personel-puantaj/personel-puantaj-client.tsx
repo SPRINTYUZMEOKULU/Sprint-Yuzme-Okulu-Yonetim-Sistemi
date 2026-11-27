@@ -329,6 +329,11 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
 
   const dateReady = loadedDate === requestedDate;
   const selectedDay = date || data.currentDate;
+  const assignmentHref = (scheduleId?: string) => `/operasyon-plani?${new URLSearchParams({
+    atama: "1", tarih: data.date,
+    ...(scheduleId ? { seans: scheduleId } : {}),
+    ...(previewStaffId ? { personel: previewStaffId } : {}),
+  })}`;
   const personalPayroll = coachHome ? data.payroll[0] : undefined;
 
   return (
@@ -394,7 +399,10 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
         <section className="ppPanel">
           <div className="ppPanelHead">
             <h2>{previewStaffId ? "Atanan dersler" : coachHome ? "Derslerim" : "Antrenör, havuz ve ders planı"}</h2>
-            <span>{coachHome ? `${data.today.length} seans` : formatDisplayDate(data.date)}</span>
+            <div className="ppScheduleActions">
+              <span>{coachHome ? `${data.today.length} seans` : formatDisplayDate(data.date)}</span>
+              {previewStaffId && data.isManager && data.today.length ? <Link className="ppAssignButton" href={assignmentHref()}>Eğitmen ata</Link> : null}
+            </div>
           </div>
 
           {data.unassigned?.length ? (
@@ -409,7 +417,7 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                       {!row.groupName.toLocaleLowerCase("tr-TR").includes(row.branchName.toLocaleLowerCase("tr-TR")) ? <span>{row.branchName}</span> : null}
                     </div>
                     <Link
-                      href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, seans: row.id, sube: row.branchId, saat: row.startTime })}`}
+                      href={assignmentHref(row.id)}
                       aria-label={`${row.startTime} ${row.groupName} seansını aç`}
                     >
                       Seansı aç
@@ -514,12 +522,12 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
                         </button>
                       ) : null}
                       {data.isManager && !previewStaffId && ["owner", "admin"].includes(currentRole) ? (
-                        <Link className="ppApprove" href={`/personel-puantaj?personel=${row.staffId}`}>Paneli Aç</Link>
+                        <Link className="ppApprove" href={`/personel-puantaj?personel=${row.staffId}&date=${data.date}`}>Paneli Aç</Link>
                       ) : null}
                       {data.isManager ? (
                         <Link
                           className="ppLessonLink ppAssignmentLink"
-                          href={`/operasyon-plani?${new URLSearchParams({ tarih: data.date, seans: row.scheduleId, sube: row.branchId, saat: row.startTime })}`}
+                          href={assignmentHref(row.scheduleId)}
                         >
                           Eğitmen atamasını düzenle
                         </Link>
@@ -533,10 +541,8 @@ export default function PersonelPuantajClient({ currentRole, coachHome = false, 
             <div className="ppEmpty">
               <strong>Bu tarih için atanmış ders bulunmuyor.</strong>
               {data.isManager ? (
-                <div style={{ marginTop: 12 }}>
-                  <Link className="ppApprove" href={`/operasyon-plani?tarih=${encodeURIComponent(data.date)}`}>
-                    Operasyon Planında Atama Yap / Düzelt
-                  </Link>
+                <div className="ppEmptyAssignment">
+                  <Link className="ppAssignButton" href={assignmentHref()}>Eğitmen ata</Link>
                 </div>
               ) : null}
             </div>
