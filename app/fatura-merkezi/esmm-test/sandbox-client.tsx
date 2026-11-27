@@ -35,9 +35,9 @@ export default function SandboxClient({runs}:{runs:Run[]}){
     <span>Gerçek kişi veya öğrenci bilgisi göndermeyeceğimi, işlemin yalnızca sentetik TEST ortamında bir kez gönderim başlatacağını ve yeni test numarasının yetkili olduğunu onaylıyorum.</span>
    </label>
    <button type="button" disabled={busy||!confirmed||!allowed} onClick={()=>startTransition(async()=>{
-    try{const r=await submitEsmmSandbox(company,number,confirmed);setFeedback(r.message);if(r.runId||r.ok){setConfirmed(false);setNumber("");router.refresh();}}
+    try{const r=await submitEsmmSandbox(company,number,confirmed);setFeedback(r.message);if(('runId' in r && r.runId)||r.ok){setConfirmed(false);setNumber("");router.refresh();}}
     catch{setFeedback("Test işlemi doğrulanamadı. Yeniden gönderim yapmadan kayıt durumunu kontrol edin.");}
-   })} style={{padding:13,background:"#095f9b",color:"#fff",border:0,borderRadius:9,opacity:busy||!confirmed||!allowed?.5:1}}>
+   })} style={{padding:13,background:"#095f9b",color:"#fff",border:0,borderRadius:9,opacity:(busy||!confirmed||!allowed)?0.5:1}}>
     {busy?"TEST işlemi sürüyor…":"Yalnız TEST ortamına bir kez gönder"}</button>
    {feedback?<p role="status" style={{margin:0}}>{feedback}</p>:null}
   </section>
