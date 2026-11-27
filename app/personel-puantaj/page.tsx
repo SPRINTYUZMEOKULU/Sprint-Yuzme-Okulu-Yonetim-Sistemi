@@ -47,29 +47,26 @@ export default async function PersonelPuantajPage({ searchParams }: { searchPara
         <section className="ppShell">
           <header className="ppHeader">
             <div>
-              <p className="ppEyebrow">SPRİNTOS · PERSONEL OPERASYONU</p>
-              <h1>Personel & Puantaj</h1>
-              <p className="ppIntro">
-                Yüzme dersleri, antrenör girişleri, seans görevlendirmeleri, aylık puantaj ve hakediş takibi tek ekranda.
-              </p>
+              <h1>Personel ve Puantaj</h1>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <nav className="ppHeaderActions" aria-label="Personel işlemleri">
               {["owner", "admin", "branch_manager"].includes(profile.role) ? <Link href="/operasyon-plani" className="ppBack">Antrenör / Seans Düzenle</Link> : null}
               {canManagePay ? <Link href="/personel-puantaj/ucret-ayarlari" className="ppBack">Ücret Ayarları</Link> : null}
               <Link href="/" className="ppBack">Ana Sayfa</Link>
-            </div>
+            </nav>
           </header>
 
           {directoryError ? <p role="alert">Personel listesi yüklenemedi.</p> : null}
           {directory.length ? (
-            <form className="ppDateTools ppPreviewTools" action="/personel-puantaj">
-              <label>Personel ekranı
-                <select name="personel" required defaultValue="">
+            <form className="ppPersonPicker" action="/personel-puantaj">
+              <label htmlFor="pp-person">Personel ekranı</label>
+              <div className="ppPersonPickerControls">
+                <select id="pp-person" name="personel" required defaultValue="">
                   <option value="" disabled>Personel seçin</option>
                   {directory.map((person) => <option key={person.id} value={person.id}>{person.first_name} {person.last_name}{person.title ? ` · ${person.title}` : ""}</option>)}
                 </select>
-              </label>
-              <button type="submit">Paneli Aç</button>
+                <button type="submit" className="ppPrimary">Paneli aç</button>
+              </div>
             </form>
           ) : null}
           <PersonelPuantajClient currentRole={profile.role} />
