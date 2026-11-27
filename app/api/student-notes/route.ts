@@ -243,6 +243,7 @@ export async function POST(request: NextRequest) {
     created_by: profile.id,
   });
 
+  revalidatePath(`/ogrenciler/${studentId}`);
   return NextResponse.json({ ok: true, note: { ...note, reminder_at: reminderAt } });
 }
 

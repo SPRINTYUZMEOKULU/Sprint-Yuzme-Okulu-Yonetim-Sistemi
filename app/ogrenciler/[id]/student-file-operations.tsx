@@ -39,6 +39,7 @@ type ScheduleOption = {
 };
 
 type Props = {
+  noteCount?: number;
   student: {
     id: string;
     first_name?: string | null;
@@ -172,6 +173,7 @@ function FileIcon({ name }: { name: FileIconName }) {
 export default function StudentFileOperations({
   student,
   guardianCenterHref,
+  noteCount,
   enrollmentId,
   canRequestFreeze,
   activeWeekdays = [],
@@ -732,7 +734,7 @@ export default function StudentFileOperations({
           Sağlık & Beyanlar
         </button>
         <button type="button" role="tab" aria-selected={activeTab === "notes"} className={activeTab === "notes" ? "active" : ""} onClick={() => selectTab("notes")}>
-          Notlar
+          Notlar{noteCount !== undefined ? ` (${noteCount})` : ""}
         </button>
         <button type="button" role="tab" aria-selected={activeTab === "messages"} className={activeTab === "messages" ? "active" : ""} onClick={() => selectTab("messages")}>
           Mesajlar
