@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { updateScheduledRenewalDate } from "./actions";
+import { latestPlannedMakeupDate } from "@/lib/students/compensation-message";
 import CorrectionForm from "./correction-form";
 import CorrectionWhatsapp from "./correction-whatsapp";
 import "./duzeltme.css";
@@ -65,6 +66,10 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
     </form>
   </div></main>;
   const savedEnrollment = enrollmentResult.data;
+  const makeups = savedEnrollment ? await supabase.from("student_compensation_lessons")
+    .select("lesson_date,status").eq("organization_id", organizationId).eq("student_id", id)
+    .eq("enrollment_id", savedEnrollment.id).eq("status", "planned") : null;
+  const lastMakeupDate = latestPlannedMakeupDate(makeups?.data ?? []);
   const correctionResult = savedEnrollment && query.correction &&
     /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(query.correction)
     ? await supabase.from("student_activity_logs").select("new_value,performed_at")
@@ -146,7 +151,7 @@ export default async function ManagerCorrectionPage({ params, searchParams }: { 
           </div>
         ) : null}
         {!enrollmentResult.data ? <div className="correctionNotice error"><strong>Aktif kayıt bulunamadı.</strong><span>Paket/program düzeltmesi için öğrencinin aktif kaydı olmalıdır.</span></div> : (
-          <CorrectionForm student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={activeEnrollmentPayment} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
+          <CorrectionForm lastMakeupDate={lastMakeupDate} makeupDateUnavailable={Boolean(makeups?.error)} student={student} enrollment={enrollmentResult.data} attendancePlan={planResult.data || null} payment={activeEnrollmentPayment} branches={branchesResult.data || []} groups={groupsResult.data || []} packages={packagesResult.data || []} schedules={schedulesResult.data || []} />
         )}
       </div>
     </main>

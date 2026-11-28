@@ -1,6 +1,6 @@
 import { currentMakeupNotice } from "@/lib/students/compensation-management";
 import { revalidateStudentSurfaces } from "@/lib/students/revalidate";
-import { compensationChangeMessage } from "@/lib/students/compensation-message";
+import { compensationChangeMessage, compensationEndDate, latestPlannedMakeupDate, makeupPlanLabel } from "@/lib/students/compensation-message";
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -39,7 +39,26 @@ async function prepareChangeMessage(ctx: NonNullable<Awaited<ReturnType<typeof c
     return {date,time:schedule?`${String(schedule.start_time).slice(0,5)}–${String(schedule.end_time).slice(0,5)}`:null,group:group?.name,branch:branch?.name};
   }
   const [previous,next]=await Promise.all([plan(current.lesson_date,current.target_schedule_id,current.target_group_id),changes.status==="cancelled"?Promise.resolve(null):plan(changes.lesson_date,changes.target_schedule_id,changes.target_group_id)]);
-  const message=compensationChangeMessage([student.first_name,student.last_name].filter(Boolean).join(" "),previous,next,Boolean(current.reserved));
+  let message = compensationChangeMessage([student.first_name,student.last_name].filter(Boolean).join(" "),previous,next,Boolean(current.reserved));
+  const enrollmentId = current.enrollment_id || changes.enrollment_id;
+  if (enrollmentId) {
+    const [period, lessons] = await Promise.all([
+      ctx.admin.from("student_enrollments").select("planned_end_date").eq("organization_id",ctx.organizationId)
+        .eq("student_id",current.student_id).eq("id",enrollmentId).single(),
+      ctx.admin.from("student_compensation_lessons").select("lesson_date,status").eq("organization_id",ctx.organizationId)
+        .eq("student_id",current.student_id).eq("enrollment_id",enrollmentId).eq("status","planned"),
+    ]);
+    if (period.error || lessons.error) throw new Error("Dönemin telafi bitiş tarihi doğrulanamadı.");
+    const normalEnd = period.data.planned_end_date;
+    const lastMakeup = latestPlannedMakeupDate(lessons.data);
+    const plannedEnd = compensationEndDate(normalEnd, lessons.data);
+    const dates = [
+      normalEnd && `*Normal paket bitişi:* ${makeupPlanLabel({date:normalEnd})}`,
+      lastMakeup && `*Son planlanan telafi:* ${makeupPlanLabel({date:lastMakeup})}`,
+      lastMakeup && plannedEnd && `*Telafi dahil planlanan bitiş:* ${makeupPlanLabel({date:plannedEnd})}`,
+    ].filter(Boolean);
+    if (dates.length) message = message.replace("\n\n*Sprint Yüzme Okulu*", `\n\n${dates.join("\n")}\n\n*Sprint Yüzme Okulu*`);
+  }
   let recipient=String(student.guardian_phone||student.phone||"").replace(/\D/g,"");
   if(recipient.length===11&&recipient.startsWith("0"))recipient=`90${recipient.slice(1)}`;
   else if(recipient.length===10)recipient=`90${recipient}`;
@@ -88,7 +107,7 @@ export async function PATCH(request:NextRequest){
     if(!ctx||!manageRoles.includes(ctx.role)) return NextResponse.json({ok:false,error:"Yetkisiz."},{status:403});
     const body=await request.json(); const id=String(body?.id||"");
     if(!id) return NextResponse.json({ok:false,error:"Telafi kaydı seçilmedi."},{status:400});
-    const {data:current}=await ctx.admin.from("student_compensation_lessons").select("id,student_id,status,lesson_date,target_group_id,target_schedule_id,updated_at").eq("id",id).eq("organization_id",ctx.organizationId).maybeSingle();
+    const {data:current}=await ctx.admin.from("student_compensation_lessons").select("id,student_id,enrollment_id,status,lesson_date,target_group_id,target_schedule_id,updated_at").eq("id",id).eq("organization_id",ctx.organizationId).maybeSingle();
     if(!current) return NextResponse.json({ok:false,error:"Telafi kaydı bulunamadı."},{status:404});
     if(current.status!=="planned") return NextResponse.json({ok:false,error:"Yalnızca bekleyen telafi iptal edilebilir."},{status:409});
     const moving=body.action === "reschedule";
@@ -185,7 +204,7 @@ export async function POST(request:NextRequest){
     const {data:event}=await ctx.admin.from("student_activity_logs").select("old_value,new_value").eq("organization_id",ctx.organizationId).eq("student_id",current.student_id).eq("source_id",current.id).in("activity_type",["compensation_rescheduled","compensation_cancelled","compensation_reserved_planned"]).order("performed_at",{ascending:false}).limit(1).maybeSingle();
     if(!event?.old_value||!event.new_value)return NextResponse.json({ok:false,error:"Son telafi değişikliği bulunamadı."},{status:404});
     if((event.new_value.status==="cancelled"&&current.status!=="cancelled")||(event.new_value.lesson_date&&current.lesson_date!==event.new_value.lesson_date)||(event.new_value.target_schedule_id&&current.target_schedule_id!==event.new_value.target_schedule_id))return NextResponse.json({ok:false,error:"Telafi planı yeniden değişmiş. Sayfayı yenileyin."},{status:409});
-    const notification=await prepareChangeMessage(ctx,event.old_value,event.new_value);
+    const notification=await prepareChangeMessage(ctx,{...event.old_value,enrollment_id:current.enrollment_id},event.new_value);
     revalidatePath(`/ogrenciler/${current.student_id}`);
     return NextResponse.json({ok:true,notification});
   }

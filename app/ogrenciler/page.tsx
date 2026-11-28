@@ -662,6 +662,7 @@ export default async function StudentsPage() {
         start_date: startDate,
         normal_end_date: normalEndDate,
         compensation_end_date: compensationEndDate,
+        last_makeup_date: rights.lastMakeupDate,
         end_date: compensationEndDate,
 
         phone: student.phone || null,

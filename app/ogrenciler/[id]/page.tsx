@@ -7,7 +7,7 @@ import AttendanceSummary from "@/app/components/attendance-summary";
 import { attendanceSummary, loadStudentAttendance, otherPackageMakeupCount } from "@/lib/students/attendance-summary";
 import PassiveStudentGuard from "@/app/components/passive-student-guard";
 import {StudentNoteFollowUps,StudentNoteFollowUp} from "@/app/components/student-note-follow-up";
-import { compensationEndDate as plannedCompensationEndDate } from "@/lib/students/compensation-message";
+import { compensationEndDate as plannedCompensationEndDate, latestPlannedMakeupDate } from "@/lib/students/compensation-message";
 import CompensationPlanEditor from "./compensation-plan-editor";
 import CommunicationSummary from "./communication-summary";
 import { formatDisplayDateTime, formatDisplayDate } from "@/lib/dates/display";
@@ -665,7 +665,15 @@ export default async function StudentFile({
     enrollment?.planned_end_date ??
     null;
 
-  const compensationEndDate = rightsAvailable ? plannedCompensationEndDate(normalEndDate, plannedCompensations.filter((row:any)=>enrollment?.status!=="completed"||row.enrollment_id===enrollment?.id)) : attendancePlan?.compensation_planned_end_date ?? normalEndDate;
+  const periodCompensations = plannedCompensations.filter(row => enrollment?.id && row.enrollment_id === enrollment.id);
+  const lastMakeupDate = rightsAvailable ? latestPlannedMakeupDate(periodCompensations) : null;
+  const unscheduledMakeups = compensationBalance - periodCompensations.filter(row => row.status === "planned").length;
+  const compensationEndDate = rightsAvailable
+    ? plannedCompensationEndDate(normalEndDate, periodCompensations)
+    : null;
+  const makeupDateLabel = !rightsAvailable ? "Doğrulanamadı" : lastMakeupDate
+    ? fmtDate(lastMakeupDate)
+    : compensationBalance > 0 ? "Planlanacak" : "—";
 
   /*
    * =========================================================
@@ -960,8 +968,10 @@ export default async function StudentFile({
         </article>
 
         <article>
-          <span>Telafi Kalan</span>
-          <strong>+{compensationBalance}</strong>
+          <span>Bu Dönemin Telafisi</span>
+          <strong>{rightsAvailable ? `+${compensationBalance}` : "—"}</strong>
+          {rightsAvailable && compensationBalance > 0 && <small>Son planlanan telafi: {makeupDateLabel}</small>}
+          {rightsAvailable && unscheduledMakeups > 0 && <small>{unscheduledMakeups} ders planlanacak</small>}
         </article>
 
         <article>
@@ -1396,6 +1406,7 @@ export default async function StudentFile({
             const notice=messages.find((row:any)=>row.template_key==="compensation_plan_change"&&row.metadata?.compensation_id===item.id&&row.status!=="cancelled"&&row.metadata?.current_plan?.date===item.lesson_date&&row.metadata?.current_plan?.schedule_id===item.target_schedule_id&&Boolean(row.metadata?.current_plan?.cancelled)===(item.status==="cancelled"));
             return <article key={`planned-${item.id}`} className="compensationCard">
               <div className="compensationCardHead"><div><small>TELAFİ DERSİ</small><h3>{fmtDate(item.lesson_date)}{schedule?.start_time?` · ${String(schedule.start_time).slice(0,5)}–${String(schedule.end_time).slice(0,5)}`:""}</h3></div><span className={`compensationStatus ${item.status}`}>{item.status==="planned"?"Planlandı":item.status==="completed"?"Tamamlandı":"İptal edildi"}</span></div>
+              <div className="compensationLocation">{item.enrollment_id === enrollment?.id ? "Bu dönemin telafisi" : item.enrollment_id ? "Başka dönemin telafisi" : "Kayıt dönemi belirsiz"}</div>
               <div className="compensationLocation">{[targetBranch?.name,targetGroup?.name].filter(Boolean).join(" · ")||"Seans bilgisi"}</div>
               {item.note&&<details className="compensationSource"><summary>Kaynak ders ve açıklama</summary><p>{item.note}</p></details>}
               {canManageCompensation&&<CompensationPlanEditor studentId={student.id} id={item.id} date={item.lesson_date} status={item.status} canPrepare={activityLogs.some((row:any)=>row.source_id===item.id&&["compensation_cancelled","compensation_rescheduled"].includes(row.activity_type))} notification={notice?{id:notice.id,body:notice.message_body,recipient:notice.recipient||"",status:notice.status}:null} schedules={operationSchedules} groups={operationGroups} branches={operationBranches}/>}
@@ -1850,7 +1861,7 @@ export default async function StudentFile({
             </div>
 
             <div>
-              <span>Telafi Kalan</span>
+              <span>Bu Dönemin Telafisi</span>
               <strong>{compensationBalance} ders</strong>
             </div>
 

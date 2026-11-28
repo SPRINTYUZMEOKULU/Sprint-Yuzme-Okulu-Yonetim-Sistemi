@@ -56,6 +56,7 @@ export type StudentListItem = {
   start_date?: string | null;
   normal_end_date?: string | null;
   compensation_end_date?: string | null;
+  last_makeup_date?: string | null;
   end_date?: string | null;
 
   phone?: string | null;
@@ -611,6 +612,15 @@ function buildMessage(
 
   const endText = formatDate(endDate);
   const startText = formatDate(student.start_date);
+  const unplannedMakeups = Math.max(0, compensationRemaining - numberValue(student.planned_compensation_lessons));
+  const makeupStatus = compensationRemaining > 0
+    ? `📅 *Son Planlanan Telafi:* ${student.last_makeup_date ? formatDate(student.last_makeup_date) : "Tarih planlanacak"}\n` +
+      (unplannedMakeups > 0 ? `${unplannedMakeups} telafi dersi için tarih henüz planlanmadı.\n` : "")
+    : "";
+  const endingDates =
+    `📅 *Normal Paket Bitişi:* ${formatDate(student.normal_end_date || endDate)}\n` +
+    (student.last_makeup_date ? `📅 *Telafi Dahil Planlanan Bitiş:* ${endText}\n` : "") +
+    makeupStatus;
   const packageOutstanding = numberValue(student.payment_package_outstanding);
   const extraOutstanding = numberValue(student.payment_extra_outstanding);
   const outstanding = numberValue(student.payment_outstanding);
@@ -738,7 +748,7 @@ function buildMessage(
           ? "kayıt yenileme döneminiz yaklaşmaktadır."
           : "için kayıt yenileme dönemi yaklaşmaktadır."
       }\n\n` +
-      `📅 *Planlanan Bitiş:* ${endText}\n` +
+      endingDates +
       `🏊 *Kalan Ders:* ${normalRemaining}\n` +
       `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
       `✅ *Toplam Kalan:* ${totalRemaining}\n\n` +
@@ -770,7 +780,7 @@ function buildMessage(
         `${header}\n\n` +
         `_*TELAFİ BİLGİLENDİRMESİ*_\n\n` +
         `${greeting}\n\n` +
-        `Planlanmış aktif bir telafi dersi bulunmamaktadır.` +
+        (compensationRemaining > 0 ? `Bu dönemden ${compensationRemaining} telafi dersiniz var. Tarihler planlandığında ayrıca bilgilendirileceksiniz.\n\n${endingDates}` : "Planlanmış aktif bir telafi dersi bulunmamaktadır.") +
         footer
       );
     }
@@ -787,7 +797,7 @@ function buildMessage(
       `📅 *Tarih:* ${compensationDate}\n` +
       `⏰ *Saat:* ${compensationTime || "—"}\n` +
       `👥 *Grup:* ${compensationGroup}\n` +
-      `➕ *Mevcut Telafi Hakkı:* ${compensationRemaining}\n\n` +
+      `➕ *Bu Dönemin Telafi Hakkı:* ${compensationRemaining}\n` + endingDates + "\n" +
       `Belirtilen tarih ve saatte derse katılım sağlamanızı rica ederiz.` +
       footer
     );
@@ -852,18 +862,19 @@ function buildMessage(
   if (type === "lesson_ending") {
     return (
       `${header}\n\n` +
-      `_*DERS HAKKI BİTİYOR*_\n\n` +
+      (normalRemaining === 0 && compensationRemaining > 0 ? "_*NORMAL PAKET TAMAMLANDI · TELAFİ DEVAM EDİYOR*_\n\n" : "_*DERS HAKKI BİTİYOR*_\n\n") +
       `${greeting}\n\n` +
       `🏊 *Kalan Ders:* ${normalRemaining}\n` +
       `➕ *Telafi Kalan:* ${compensationRemaining}\n` +
       `✅ *Toplam Kalan:* ${totalRemaining}\n` +
-      `📅 *Planlanan Bitiş:* ${endText}\n\n` +
+      endingDates + "\n" +
       `Ders planlamasının kesintiye uğramaması için kayıt yenileme işleminizi planlamanızı rica ederiz.` +
       footer
     );
   }
 
   if (type === "lesson_finished") {
+    if (totalRemaining > 0) return buildMessage(student, "lesson_ending");
     return (
       `${header}\n\n` +
       `_*DERS HAKKI TAMAMLANDI*_\n\n` +
