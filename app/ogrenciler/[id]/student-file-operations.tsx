@@ -650,9 +650,9 @@ export default function StudentFileOperations({
             </button>
           )}
 
-          <button type="button" className="portalLaunch" onClick={() => setPortalOpen(true)}>
+          {student.status === "active" && <button type="button" className="portalLaunch" onClick={() => setPortalOpen(true)}>
             <FileIcon name="key" /> Giriş Bilgilerini Gönder
-          </button>
+          </button>}
 
           <button
             type="button"
@@ -708,7 +708,7 @@ export default function StudentFileOperations({
                 <div><strong>Geçici şifre hakkında</strong><p>Hesap yoksa oluşturulur ve kursiyere bağlanır. Mevcut hesap bağlanır ve şifresi korunur. Şifre değiştirme yalnızca Yeni Şifreyi Kaydet işlemiyle yapılır.</p></div>
               </div>
               {portalAccess && (
-                <PortalCredentialManager accountId={portalAccess.accountId}/>
+                <PortalCredentialManager accountId={portalAccess.accountId} studentId={student.id}/>
               )}
               {portalStatus && <div className="portalStatus" role="status" aria-live="polite">{portalStatus}</div>}
             </div>

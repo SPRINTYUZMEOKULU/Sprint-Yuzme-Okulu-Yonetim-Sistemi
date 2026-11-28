@@ -3,7 +3,7 @@ import { generatePortalPassword } from "@/lib/guardian/password";
 import { useEffect, useRef, useState } from 'react';
 import { createPortalSetupLink, portalCredentialContact, savePortalCredential } from './portal-credential-actions';
 import { portalCredentialDraft, rememberPortalCredential } from '@/lib/guardian/credential-draft';
-import { portalGuideMessage, portalMessage, type PortalCredential } from '@/lib/guardian/portal-message';
+import { portalGuideMessage, portalSetupWhatsAppUrl, type PortalCredential } from '@/lib/guardian/portal-message';
 import './portal-credential-manager.css';
 export default function PortalCredentialManager({ accountId, studentId, initialCredential }: {
     accountId?: string;
@@ -117,7 +117,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
                 setStatus(value.message);
                 return;
             }
-            const href = `https://wa.me/${value.phone.replace(/\D/g, '')}?text=${encodeURIComponent(portalMessage(value, window.location.origin))}`;
+            const href = portalSetupWhatsAppUrl(value, window.location.origin);
             if (target) target.location.replace(href);
             else window.location.assign(href);
             setStatus('WhatsApp mesajı açıldı. Gönderimi WhatsApp üzerinden onaylayın.');

@@ -26,3 +26,7 @@ export function portalMessage(input: Pick<PortalCredential, 'fullName' | 'phone'
 export function portalGuideMessage(origin:string){
     return `*SPRINT Yüzme Okulu | PORTAL KULLANIM REHBERİ*\n\nDers, telafi, yoklama ve ödeme bilgilerinize nasıl ulaşacağınızı; telefona ekleme, giriş ve şifre değiştirme adımlarını görsel rehberimizden inceleyebilirsiniz.\n\n${origin.replace(/\/$/,'')}/portal-rehberi\n\nGirişte WhatsApp mesajındaki telefon numarasını ve oluşturduğunuz şifreyi kullanın. Yetişkin kursiyerlerimiz de *Veli Girişi* bölümünden giriş yapar.\n\n*Destek:* 0551 896 83 19`;
 }
+
+export function portalSetupWhatsAppUrl(input: Parameters<typeof portalMessage>[0], origin: string) {
+    return `https://wa.me/${input.phone.replace(/\D/g, '')}?text=${encodeURIComponent(portalMessage(input, origin))}`;
+}

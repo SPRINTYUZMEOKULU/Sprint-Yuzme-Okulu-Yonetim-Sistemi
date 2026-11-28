@@ -1,5 +1,6 @@
 "use server";
 
+import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { portalCredentialContact, savePortalCredential } from "../portal-credential-actions";
 import { redirect } from "next/navigation";
@@ -67,12 +68,19 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
   if (!organizationId || !studentIds.length) return [];
 
   const admin = adminClient();
+  const activeIds = await activePortalStudentIds(admin, organizationId, studentIds).catch(() => new Set<string>());
+  const skipped: GuardianBulkResult[] = studentIds.filter((id) => !activeIds.has(id)).map((id) => ({
+    ok: false, key: id, fullName: "Atlanan kursiyer", phone: "", email: "", studentNames: [],
+    status: "error", message: "Kursiyerin aktifliği doğrulanamadığı için işlem yapılmadı.",
+  }));
+  if (!activeIds.size) return skipped;
   const { data: students, error: studentError } = await admin
     .from("students")
     .select("id,first_name,last_name,phone,guardian_name,guardian_phone,guardian_email,preferred_group_id")
     .eq("organization_id", organizationId)
     .eq("is_deleted", false)
-    .in("id", studentIds);
+    .eq("status", "active")
+    .in("id", [...activeIds]);
 
   if (studentError) {
     return [{ ok: false, key: "batch", fullName: "", phone: "", email: "", studentNames: [], status: "error", message: studentError.message }];
@@ -86,7 +94,7 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
 
   const linkedResults = new Map<string, GuardianBulkResult>();
   const unlinkedStudents: any[] = [];
-  const {data:existingLinks,error:linksError}=await admin.from("guardian_students").select("student_id,guardian_id,is_primary,portal_access").in("student_id",studentIds);
+  const {data:existingLinks,error:linksError}=await admin.from("guardian_students").select("student_id,guardian_id,is_primary,portal_access").in("student_id",[...activeIds]);
   if(linksError) return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Mevcut hesap bağlantıları okunamadı. Şifreler değiştirilmedi."}];
   const guardianIds=[...new Set((existingLinks||[]).map(link=>link.guardian_id))];
   const {data:linkedRecords,error:recordsError}=guardianIds.length
@@ -132,7 +140,7 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
     else groups.set(phone, { fullName, phone, email, relationship, students: [student] });
   }
 
-  const results: GuardianBulkResult[] = [...linkedResults.values()];
+  const results: GuardianBulkResult[] = [...skipped, ...linkedResults.values()];
   for (const [key, group] of groups) {
     const candidates = phoneCandidates(group.phone);
     const studentNames = group.students.map((student) => `${student.first_name || ""} ${student.last_name || ""}`.trim());

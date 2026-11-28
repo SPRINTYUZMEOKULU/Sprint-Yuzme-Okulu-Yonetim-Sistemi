@@ -1,4 +1,5 @@
 "use server";
+import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient } from '@supabase/supabase-js';
 import { requireProfile } from '@/lib/auth/profile';
 import { hashShortSetupCode, newShortSetupCode, sealSetupToken, setupLinkLifetimeMs } from '@/lib/guardian/setup-token';
@@ -44,6 +45,15 @@ export async function portalCredentialContact(input: {
         return { ok: false as const, message: 'Portal hesabının bağlantıları eksik. Veli merkezinden kontrol edin.' };
     if (!profile.is_active || guardian.is_active === false || guardian.login_enabled === false)
         return { ok: false as const, message: 'Portal erişimi pasif. Önce erişimi aktif edin.' };
+    const { data: eligibleLinks, error: eligibilityError } = await admin.from('guardian_students')
+        .select('student_id').eq('guardian_id', guardian.id).eq('portal_access', true);
+    if (eligibilityError)
+        return { ok: false as const, message: 'Portal bağlantısı doğrulanamadı.' };
+    const linkedStudentIds = (eligibleLinks || []).map(link => link.student_id)
+        .filter(id => !input.studentId || id === input.studentId);
+    const activeIds = await activePortalStudentIds(admin, org, linkedStudentIds).catch(() => new Set<string>());
+    if (!activeIds.size)
+        return { ok: false as const, message: 'Bu işlem için aktif bir kursiyer bağlantısı doğrulanmalıdır.' };
     return { ok: true as const, accountId, fullName: profile.full_name || 'Değerli Velimiz', phone: profile.phone || '', email: profile.email || '', revision: auth.user.updated_at || auth.user.created_at };
 }
 export async function savePortalCredential(input: {
@@ -76,7 +86,8 @@ export async function savePortalCredential(input: {
 export async function createPortalSetupLink(input: { accountId?: string; studentId?: string }) {
     const contact = await portalCredentialContact(input);
     if (!contact.ok) return contact;
-    if (!contact.phone) return { ok: false as const, message: 'Kayıtlı WhatsApp telefonu bulunamadı.' };
+    const phone = normalizePortalPhone(contact.phone);
+    if (!phone) return { ok: false as const, message: 'Geçerli WhatsApp telefonu bulunamadı.' };
 
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -86,8 +97,7 @@ export async function createPortalSetupLink(input: { accountId?: string; student
 
     let loginEmail = account.user.email;
     if (!loginEmail) {
-        const phone = normalizePortalPhone(contact.phone);
-        if (!phone || normalizePortalPhone(account.user.phone) !== phone)
+        if (normalizePortalPhone(account.user.phone) !== phone)
             return { ok: false as const, message: 'Kayıtlı telefon ile portal giriş telefonu eşleşmiyor. Veli merkezinden kontrol edin.' };
 
         const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(contact.accountId, {
@@ -116,5 +126,5 @@ export async function createPortalSetupLink(input: { accountId?: string; student
 
     await admin.from('guardian_setup_links').delete()
         .eq('account_id', contact.accountId).lte('expires_at', new Date().toISOString());
-    return { ...contact, setupPath: '/s#' + code };
+    return { ...contact, phone, setupPath: '/s#' + code };
 }
