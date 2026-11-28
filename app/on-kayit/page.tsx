@@ -10,10 +10,13 @@ export const dynamic = "force-dynamic";
 export default async function PreRegistrationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sube?: string | string[] }>;
+  searchParams: Promise<{ sube?: string | string[]; kurs?: string | string[] }>;
 }) {
-  const { sube } = await searchParams;
+  const { sube, kurs } = await searchParams;
   const isMuratpasa = sube === "muratpasa";
+  const preferredCourseType = kurs === "cocuk"
+    ? "Çocuk Yüzme Kursu"
+    : kurs === "yetiskin" ? "Yetişkin Yüzme Kursu" : undefined;
   const { brand, registration } = await publicRegistrationSettings();
 
   return (
@@ -39,7 +42,7 @@ export default async function PreRegistrationPage({
             </div>
           </header>
 
-          {registration.public_enabled ? <PreRegistrationForm preferredBranchName={isMuratpasa ? "Süleyman Erol Olimpik" : undefined} /> : <div role="status" style={{padding:24,borderRadius:16,background:"#eef5ff",lineHeight:1.7}}>{String(registration.closed_text)}</div>}
+          {registration.public_enabled ? <PreRegistrationForm preferredBranchName={isMuratpasa ? "Süleyman Erol Olimpik" : undefined} preferredCourseType={preferredCourseType} /> : <div role="status" style={{padding:24,borderRadius:16,background:"#eef5ff",lineHeight:1.7}}>{String(registration.closed_text)}</div>}
           <footer style={{marginTop:24,fontSize:12,lineHeight:1.8,color:"#5e7189"}}>
             <strong>{String(brand.legal_name || brand.display_name)}</strong>
             {brand.phone ? <div>{String(brand.phone)}</div> : null}
