@@ -1,7 +1,7 @@
 "use client";
 import { generatePortalPassword } from "@/lib/guardian/password";
 import { useEffect, useRef, useState } from 'react';
-import { createPortalSetupLink, portalCredentialContact, savePortalCredential } from './portal-credential-actions';
+import { confirmPortalSetupSent, createPortalSetupLink, portalCredentialContact, savePortalCredential } from './portal-credential-actions';
 import { portalCredentialDraft, rememberPortalCredential } from '@/lib/guardian/credential-draft';
 import { portalGuideMessage, portalSetupWhatsAppUrl, type PortalCredential } from '@/lib/guardian/portal-message';
 import './portal-credential-manager.css';
@@ -16,6 +16,7 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
     const [busy, setBusy] = useState(false);
     const [status, setStatus] = useState('');
     const [fallbackText, setFallbackText] = useState('');
+    const [pendingDispatch, setPendingDispatch] = useState('');
     const lock = useRef(false);
     useEffect(() => {
         let live = true;
@@ -120,10 +121,26 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
             const href = portalSetupWhatsAppUrl(value, window.location.origin);
             if (target) target.location.replace(href);
             else window.location.assign(href);
+            setPendingDispatch(value.dispatchId);
             setStatus('WhatsApp mesajı açıldı. Gönderimi WhatsApp üzerinden onaylayın.');
         } catch {
             target?.close();
             setStatus('Giriş bilgileri doğrulanamadı. Tekrar deneyin.');
+        } finally {
+            lock.current = false;
+            setBusy(false);
+        }
+    }
+    async function confirmSent() {
+        if (!pendingDispatch || lock.current) return;
+        lock.current = true;
+        setBusy(true);
+        try {
+            const result = await confirmPortalSetupSent(pendingDispatch);
+            setStatus(result.message);
+            if (result.ok) setPendingDispatch('');
+        } catch {
+            setStatus('Gönderim kaydedilemedi. Tekrar deneyin.');
         } finally {
             lock.current = false;
             setBusy(false);
@@ -143,7 +160,11 @@ export default function PortalCredentialManager({ accountId, studentId, initialC
     return <section className="portalCredentialManager" aria-label="Portal giriş bilgileri">
     <h3>Portal şifresi ve giriş bilgileri</h3>
     <p>WhatsApp bağlantısıyla veli kendi şifresini oluşturur. Aynı hesaba bağlı tüm kursiyerler bu şifreyi kullanır.</p>
-    <div className="credentialButtons"><button type="button" className="credentialWhatsapp" onClick={share} disabled={busy}>Şifre Oluşturma Mesajını WhatsApp’ta Aç</button><a href="/portal-rehberi" target="_blank" rel="noreferrer">Görsel Rehberi Aç</a><button type="button" onClick={()=>void shareGuide()} disabled={busy}>Rehberi WhatsApp’ta Aç</button></div>
+    <div className="credentialButtons"><button type="button" className="credentialWhatsapp" onClick={share} disabled={busy || !!pendingDispatch}>Şifre Oluşturma Mesajını WhatsApp’ta Aç</button><a href="/portal-rehberi" target="_blank" rel="noreferrer">Görsel Rehberi Aç</a><button type="button" onClick={()=>void shareGuide()} disabled={busy}>Rehberi WhatsApp’ta Aç</button></div>
+    {pendingDispatch && <div className="credentialButtons">
+      <button type="button" onClick={confirmSent} disabled={busy}>Gönderildi Olarak Kaydet</button>
+      <button type="button" disabled={busy} onClick={() => { setPendingDispatch(''); setStatus('Mesaj taslak olarak kaldı.'); }}>Göndermedim</button>
+    </div>}
     {!credential ? <p className="credentialHint">Mevcut şifre güvenlik nedeniyle okunamaz. Bu oturumda hazırlanan şifre varsa burada kullanılır; yoksa yeni şifre belirleyip kaydedin.</p> : null}
     <label>Yeni şifre<input type={show ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => { setPassword(e.target.value); if (status.startsWith('Şifre en az')) setStatus(''); }} minLength={8} maxLength={100} disabled={busy} aria-describedby="portalPasswordRules"/></label>
     <p id="portalPasswordRules" className="credentialHint">En az 8 karakter kullanın. Mevcut veli şifresini değiştirmek istemiyorsanız yeniden kaydetmeyin.</p>

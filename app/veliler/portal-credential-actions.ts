@@ -126,5 +126,60 @@ export async function createPortalSetupLink(input: { accountId?: string; student
 
     await admin.from('guardian_setup_links').delete()
         .eq('account_id', contact.accountId).lte('expires_at', new Date().toISOString());
-    return { ...contact, phone, setupPath: '/s#' + code };
+    const actor = await requireProfile([...roles]);
+    const org = actor.organization_id;
+    if (!org) return { ok: false as const, message: 'Kurum bulunamadı.' };
+    const { data: guardian } = await admin.from('guardians').select('id')
+        .eq('organization_id', org).eq('auth_user_id', contact.accountId).maybeSingle();
+    if (!guardian) return { ok: false as const, message: 'Veli kaydı bulunamadı.' };
+    const { data: links, error: linksError } = await admin.from('guardian_students')
+        .select('student_id').eq('guardian_id', guardian.id).eq('portal_access', true);
+    if (linksError) return { ok: false as const, message: 'Kursiyer bağlantıları okunamadı.' };
+    const studentIds = (links || []).map(link => link.student_id).filter(id => !input.studentId || id === input.studentId);
+    const activeIds = await activePortalStudentIds(admin, org, studentIds).catch(() => new Set<string>());
+    if (!activeIds.size) return { ok: false as const, message: 'Aktif kursiyer bağlantısı doğrulanamadı.' };
+    const dispatchId = crypto.randomUUID();
+    const { error: logError } = await admin.from('message_logs').insert([...activeIds].map(studentId => ({
+        organization_id: org, student_id: studentId, guardian_id: contact.accountId,
+        template_key: 'guardian_portal_setup', channel: 'whatsapp', recipient: phone,
+        subject: 'Portal giriş bilgileri',
+        message_body: 'Portal giriş adresi ve tek kullanımlık şifre oluşturma bağlantısı.',
+        status: 'prepared', prepared_by: actor.id, metadata: { dispatch_id: dispatchId },
+    })));
+    if (logError) return { ok: false as const, message: 'Mesaj kaydı hazırlanamadı. Tekrar deneyin.' };
+    return { ...contact, phone, dispatchId, setupPath: '/s#' + code };
+}
+
+export async function confirmPortalSetupSent(dispatchId: string) {
+    const actor = await requireProfile([...roles]);
+    const org = actor.organization_id;
+    if (!org || !/^[a-f0-9-]{36}$/i.test(dispatchId))
+        return { ok: false as const, message: 'Mesaj kaydı bulunamadı.' };
+
+    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: rows, error } = await admin.from('message_logs')
+        .select('id,student_id,sent_at').eq('organization_id', org).eq('prepared_by', actor.id)
+        .eq('template_key', 'guardian_portal_setup').eq('channel', 'whatsapp')
+        .contains('metadata', { dispatch_id: dispatchId }).in('status', ['prepared', 'sent']);
+    if (error || !rows?.length) return { ok: false as const, message: 'Mesaj kaydı doğrulanamadı.' };
+
+    const sentAt = rows.find(row => row.sent_at)?.sent_at || new Date().toISOString();
+    const pending = rows.filter(row => !row.sent_at).map(row => row.id);
+    if (pending.length) {
+        const { error: updateError } = await admin.from('message_logs')
+            .update({ status: 'sent', sent_at: sentAt, sent_by: actor.id,
+                metadata: { dispatch_id: dispatchId, delivery_confirmation: 'user_confirmed' } })
+            .eq('organization_id', org).eq('prepared_by', actor.id).in('id', pending).eq('status', 'prepared');
+        if (updateError) return { ok: false as const, message: 'Gönderim kaydedilemedi. Tekrar deneyin.' };
+    }
+    const { error: activityError } = await admin.from('student_activity_logs').upsert(rows.map(row => ({
+        id: row.id, organization_id: org, student_id: row.student_id,
+        activity_type: 'guardian_portal_setup_sent', title: 'Portal giriş bilgileri WhatsApp ile gönderildi',
+        description: 'Gönderim yönetim panelinden onaylandı.',
+        source_type: 'message_logs', source_id: row.id, performed_at: sentAt,
+    })), { onConflict: 'id', ignoreDuplicates: true });
+    if (activityError) return { ok: false as const, message: 'Mesaj kaydedildi. Yapılan işlemler kaydını tamamlamak için tekrar deneyin.' };
+    return { ok: true as const, message: 'Gönderim kursiyer dosyasına kaydedildi.' };
 }

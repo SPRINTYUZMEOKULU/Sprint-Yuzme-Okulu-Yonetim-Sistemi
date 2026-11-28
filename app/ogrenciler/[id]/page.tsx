@@ -1807,7 +1807,7 @@ export default async function StudentFile({
             {messages.map((message: any) => (
                 <article key={message.id}>
                   <div>
-                    <strong>{message.template_key==="compensation_plan_change"?"Telafi Planı Değişikliği":message.template_key || "Mesaj"}</strong>
+                    <strong>{message.template_key==="guardian_portal_setup"?"Portal Giriş Bilgileri":message.template_key==="compensation_plan_change"?"Telafi Planı Değişikliği":message.template_key || "Mesaj"}</strong>
 
                     <MessageBody body={message.message_body} />
                   </div>
