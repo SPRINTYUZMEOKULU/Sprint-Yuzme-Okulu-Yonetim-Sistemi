@@ -1,4 +1,4 @@
-import { compensationEndDate } from "@/lib/students/compensation-message";
+import { compensationEndDate, latestPlannedMakeupDate } from "@/lib/students/compensation-message";
 import { studentLessonRights } from "@/lib/students/lesson-rights";
 
 export async function loadLessonRightsContext(client:any,organizationId:string,studentIds?:string[]){
@@ -30,7 +30,10 @@ export function rightsForEnrollment(context:Awaited<ReturnType<typeof loadLesson
   legacyCompensation:legacyCompensation??context.balances.get(enrollment?.student_id)??0,enrollment,
   compensations:context.compensations.filter(c=>c.student_id===enrollment?.student_id),
   cancellations:context.cancellations.filter(c=>c.student_id===enrollment?.student_id),schedules:context.schedules,today:context.today,time:context.time});
- const endDate=compensationEndDate(enrollment?.planned_end_date,context.compensations.filter(c=>c.student_id===enrollment?.student_id && Boolean(enrollment?.id) && c.enrollment_id===enrollment.id));
- const plannedCompensation = context.compensations.filter(c => c.student_id === enrollment?.student_id && Boolean(enrollment?.id) && c.enrollment_id === enrollment.id && c.status === "planned").length;
- return {...rights,plannedCompensation,endDate:endDate||null};
+ const periodLessons = context.compensations.filter(c =>
+  c.student_id === enrollment?.student_id && Boolean(enrollment?.id) && c.enrollment_id === enrollment.id);
+ const lastMakeupDate = latestPlannedMakeupDate(periodLessons);
+ const plannedCompensation = periodLessons.filter(c => c.status === "planned").length;
+ const endDate = compensationEndDate(enrollment?.planned_end_date, periodLessons);
+ return {...rights,plannedCompensation,endDate,lastMakeupDate};
 }

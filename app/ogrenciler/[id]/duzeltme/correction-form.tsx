@@ -25,6 +25,8 @@ type Props = {
   student: any;
   enrollment: any;
   attendancePlan: any;
+  lastMakeupDate: string | null;
+  makeupDateUnavailable: boolean;
   payment: any;
   branches: Branch[];
   groups: Group[];
@@ -110,6 +112,8 @@ export default function CorrectionForm({
   student,
   enrollment,
   attendancePlan,
+  lastMakeupDate,
+  makeupDateUnavailable,
   payment,
   branches,
   groups,
@@ -398,7 +402,7 @@ export default function CorrectionForm({
             />
           </label>
           <label>
-            <span>Planlanan Bitiş Tarihi</span>
+            <span>Normal Paket Bitiş Tarihi</span>
             <input
               type="date"
               value={plannedEndDate}
@@ -411,6 +415,11 @@ export default function CorrectionForm({
               hesaplanır.
             </small>
           </label>
+          <div>
+            <strong>Bu Dönemin Son Planlanan Telafisi</strong>
+            <p>{makeupDateUnavailable ? "Doğrulanamadı" : lastMakeupDate ? lastMakeupDate.split("-").reverse().join(".") : "Bu dönem için planlanmış telafi yok"}</p>
+            {lastMakeupDate && <small>Telafi dahil planlanan bitiş: {(plannedEndDate > lastMakeupDate ? plannedEndDate : lastMakeupDate).split("-").reverse().join(".")}</small>}
+          </div>
           <label>
             <span>Ödeme Vade Tarihi</span>
             <input
