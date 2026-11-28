@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const ts=require('typescript');
-function load(file,imports={}){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;const m={exports:{}};new Function('require','exports','module',js)(name=>{if(name in imports)return imports[name];if(name==='@/lib/guardian/portal-student-eligibility')return load('lib/guardian/portal-student-eligibility.ts');if(name==='@/lib/guardian/portal-recipient')return load('lib/guardian/portal-recipient.ts');if(name==='next/navigation')return {};if(name==='@/lib/supabase/server')return {};if(name==='@/lib/guardian/setup-token')return load('lib/guardian/setup-token.ts',{'node:crypto':require('node:crypto')});throw Error('Unexpected import '+name);},m.exports,m);return m.exports;}
+function load(file,imports={}){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;const m={exports:{}};new Function('require','exports','module',js)(name=>{if(name in imports)return imports[name];if(name==='@/lib/guardian/reuse-sibling-account')return load('lib/guardian/reuse-sibling-account.ts',{'./portal-recipient':load('lib/guardian/portal-recipient.ts')});if(name==='@/lib/guardian/portal-student-eligibility')return load('lib/guardian/portal-student-eligibility.ts');if(name==='@/lib/guardian/portal-recipient')return load('lib/guardian/portal-recipient.ts');if(name==='next/navigation')return {};if(name==='@/lib/supabase/server')return {};if(name==='@/lib/guardian/setup-token')return load('lib/guardian/setup-token.ts',{'node:crypto':require('node:crypto')});throw Error('Unexpected import '+name);},m.exports,m);return m.exports;}
 function harness({active=true,org='org',portal=true,updateError=false,studentStatus='active',frozen=false,activeSibling=false}={}) {
  const writes=[];
  const tables={profiles:[{id:'account',organization_id:org,role:'guardian',full_name:'Test Veli',phone:'+905550000000',email:'',is_active:active}],guardians:[{id:'person',organization_id:org,auth_user_id:'account',is_active:true,login_enabled:portal}],students:[{id:'child',organization_id:org,status:studentStatus,is_deleted:false},...(activeSibling?[{id:'sibling',organization_id:org,status:'active',is_deleted:false}]:[])],student_enrollments:frozen?[{student_id:'child',organization_id:org,status:'active',freeze_restart_pending:true,freeze_start_date:'2020-01-01'}]:[],guardian_students:[{guardian_id:'person',student_id:'child',portal_access:true,is_primary:true},...(activeSibling?[{guardian_id:'person',student_id:'sibling',portal_access:true}]:[])]};
@@ -115,4 +115,43 @@ test('WhatsApp confirmation writes one message and one activity per linked stude
   assert.equal(message.metadata.delivery_confirmation, 'user_confirmed');
   assert.equal(activities.get(message.id).performed_at, message.sent_at);
  }
+});
+
+test('Sibling linking moves only the existing relationship and stops on identity conflicts', async () => {
+ const phone = '+905550000001';
+ const pending = {id:'pending',full_name:'Şükriye Oktur',email:null,phone};
+ const guardian = {id:'existing',full_name:'Şükriye OKTUR',is_active:true,login_enabled:true,email:null,phone};
+ const profile = {id:'account',full_name:'Şükriye oktur',is_active:true,email:null,phone};
+ const link = {guardian_id:pending.id,student_id:'sibling',is_primary:true,portal_access:true,is_payment_contact:false};
+ const audit = [];
+ const records = {profiles:[profile],guardians:[guardian],guardian_students:[link]};
+ const admin = {
+  auth:{admin:{getUserById:async () => ({data:{user:{phone:'905550000001'}},error:null})}},
+  from(table) {
+   const filters = [];
+   let update;
+   const run = () => (records[table] || []).filter(row => filters.every(filter => filter(row))).map(row => update ? Object.assign(row,update) : row);
+   const q = {
+    select() { return q; },
+    eq(key,value) { if (key !== 'organization_id' && key !== 'role' && key !== 'auth_user_id') filters.push(row => row[key] === value); return q; },
+    in(key,values) { filters.push(row => values.includes(row[key])); return q; },
+    async limit() { return {data:run(),error:null}; },
+    async maybeSingle() { return {data:run()[0],error:null}; },
+    update(value) { update=value; return q; },
+    async insert(value) { assert.equal(table,'student_activity_logs'); audit.push(value); return {error:null}; },
+   };
+   return q;
+  },
+ };
+ const {reuseSiblingAccount} = load('lib/guardian/reuse-sibling-account.ts',{'./portal-recipient':load('lib/guardian/portal-recipient.ts')});
+ const recipient = {fullName:'  ŞÜKRİYE  OKTUR ',phone,email:'',relationship:'Veli'};
+ await assert.rejects(() => reuseSiblingAccount(admin,'org','sibling',pending,{...recipient,fullName:'Başka Veli'}),/eşleşmiyor/);
+ assert.equal(link.guardian_id,pending.id);
+ const result = await reuseSiblingAccount(admin,'org','sibling',pending,recipient);
+ assert.equal(result.accountId,profile.id);
+ assert.equal(link.guardian_id,guardian.id);
+ assert.equal(link.is_payment_contact,false);
+ assert.equal(audit.length,1);
+ await reuseSiblingAccount(admin,'org','sibling',pending,recipient);
+ assert.equal(audit.length,1);
 });
