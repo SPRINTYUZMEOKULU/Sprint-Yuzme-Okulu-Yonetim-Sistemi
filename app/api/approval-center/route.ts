@@ -1,3 +1,5 @@
+import { correctPackagePayment } from "@/lib/payments/correct-package-payment";
+import { revalidatePath } from "next/cache";
 import { publishEnrollmentFreeze } from "@/lib/messaging/publish-enrollment-freeze";
 import { enrollmentFreezeMessage } from "@/lib/messaging/enrollment-freeze-message";
 import { attendanceOperationsDb } from "@/lib/attendance/operations-db";
@@ -512,6 +514,7 @@ export async function POST(request: NextRequest) {
 
       const organizationId = approvalRequest.organization_id;
       const requestType = clean(approvalRequest.request_type, 100);
+      const isPaymentCorrection = requestType === "payment_edit" || requestType === "payment_cancel";
       const isRenewalLessonApproval = requestType === "registration_custom_lesson_count" && asObject(approvalRequest.metadata).source === "student_renewal_center";
       const studentId =
         typeof approvalRequest.student_id === "string"
@@ -550,7 +553,7 @@ export async function POST(request: NextRequest) {
       /* ---------------- REDDET ---------------- */
 
       if (action === "reject") {
-        const { error: rejectError } = await supabase
+        const { data: rejectedRequest, error: rejectError } = await supabase
           .from("approval_requests")
           .update({
             status: "rejected",
@@ -561,7 +564,7 @@ export async function POST(request: NextRequest) {
           })
           .eq("id", id)
           .eq("organization_id", organizationId)
-          .eq("status", "pending");
+          .eq("status", "pending").select("id").maybeSingle();
 
         if (rejectError) {
           return NextResponse.json(
@@ -572,6 +575,10 @@ export async function POST(request: NextRequest) {
             },
             { status: 500 }
           );
+        }
+
+        if (!rejectedRequest) {
+          return NextResponse.json({ ok: false, error: "Bu talep daha önce işlenmiş." }, { status: 409 });
         }
 
         if (requestType === "pre_registration_close") await supabase.from("system_notifications")
@@ -751,110 +758,28 @@ export async function POST(request: NextRequest) {
             { status: 500 }
           );
         }
-      } else if (requestType === "payment_edit") {
+      } else if (isPaymentCorrection) {
         if (!appliedEntityId) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "Düzeltilecek ödeme kaydı bulunamadı.",
-            },
-            { status: 400 }
-          );
+          return NextResponse.json({ ok: false, error: "Tahsilat kaydı bulunamadı." }, { status: 400 });
         }
-
-        const amount =
-          typeof newValues.amount === "number"
-            ? newValues.amount
-            : Number(newValues.amount);
-
-        const paymentMethod =
-          typeof newValues.payment_method === "string"
-            ? newValues.payment_method
-            : "";
-
-        if (
-          !Number.isFinite(amount) ||
-          amount <= 0 ||
-          !["cash", "card", "bank_transfer", "eft", "other"].includes(
-            paymentMethod
-          )
-        ) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "Ödeme düzeltme verisi geçersiz.",
-            },
-            { status: 400 }
-          );
-        }
-
-        const isCash = paymentMethod === "cash";
-
-        const { error: applyError } = await supabase
-          .from("student_payments")
-          .update({
-            amount,
-            payment_method: paymentMethod,
-            description:
-              typeof newValues.description === "string"
-                ? newValues.description
-                : null,
-            cash_handover_status: isCash
-              ? "with_staff"
-              : "main_cash_confirmed",
-            cash_handover_requested_at: null,
-            cash_handover_approved_by: isCash ? null : actorId,
-            cash_handover_approved_at: isCash ? null : decidedAt,
-          })
-          .eq("id", appliedEntityId)
-          .eq("organization_id", organizationId);
-
-        if (applyError) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "Ödeme düzeltmesi uygulanamadı.",
-              details: applyError.message,
-            },
-            { status: 500 }
-          );
-        }
-      } else if (requestType === "payment_cancel") {
-        if (!appliedEntityId) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "İptal edilecek ödeme kaydı bulunamadı.",
-            },
-            { status: 400 }
-          );
-        }
-
-        const cancellationReason =
-          typeof newValues.cancellation_reason === "string"
-            ? newValues.cancellation_reason
-            : approvalRequest.reason ?? "Yönetici onayı ile iptal edildi.";
-
-        const { error: applyError } = await supabase
-          .from("student_payments")
-          .update({
-            payment_status: "cancelled",
-            cancellation_reason: cancellationReason,
-            cancelled_by: actorId,
-            cancelled_at: decidedAt,
-          })
-          .eq("id", appliedEntityId)
-          .eq("organization_id", organizationId);
-
-        if (applyError) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "Ödeme iptali uygulanamadı.",
-              details: applyError.message,
-            },
-            { status: 500 }
-          );
+        try {
+          await correctPackagePayment({
+            organizationId, actorId, paymentId: appliedEntityId,
+            expected: oldValues,
+            reason: approvalRequest.reason || "Yönetici onayı",
+            cancellation: requestType === "payment_cancel",
+            amount: Number(newValues.amount) || undefined,
+            method: typeof newValues.payment_method === "string" ? newValues.payment_method : undefined,
+            description: typeof newValues.description === "string" ? newValues.description : null,
+            apply: true, approvalId: id, review: { name: actorName, note: reviewNote },
+          });
+          if (studentId) revalidateStudentSurfaces(studentId);
+          revalidatePath("/kasa");
+          revalidatePath("/odemeler");
+        } catch (error) {
+          return NextResponse.json({
+            ok: false, error: error instanceof Error ? error.message : "Tahsilat işlemi tamamlanamadı.",
+          }, { status: 409 });
         }
       } else if (requestType === "cash_handover_approve") {
         if (!appliedEntityId) {
@@ -987,7 +912,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { error: finishError } = await supabase
+      const { error: finishError } = isPaymentCorrection ? { error: null } : await supabase
         .from("approval_requests")
         .update({
           status: "approved",

@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createStudentPayment,
+  requestPaymentCancellation,
+  requestPaymentEdit,
   updatePaymentDueDate,
 } from "../../odemeler/actions";
 
@@ -24,7 +26,9 @@ type PaymentRow = {
   description: string | null;
   receivedAt: string | null;
   status: string | null;
-  isObligationPayment?:boolean;
+  isObligationPayment?: boolean;
+  isInstallmentPayment?: boolean;
+  cancellationReason?: string | null;
   periodStartDate?: string | null;
   periodEndDate?: string | null;
   packageName?: string | null;
@@ -52,6 +56,7 @@ type CenterData = {
     remainingPayment: number;
   };
   payments: PaymentRow[];
+  correctionPermissions?: { edit: boolean; cancel: boolean };
   renewalNotes?: RegistrationPeriodNote[];
 };
 
@@ -113,6 +118,13 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
   const [data, setData] = useState<CenterData | null>(null);
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [collection,setCollection]=useState<{id:string;amount:string;method:PaymentMethod;requestId:string}|null>(null);
+  const [correction, setCorrection] = useState<{
+    paymentId: string;
+    mode: "edit" | "cancel";
+    amount: string;
+    method: PaymentMethod;
+    reason: string;
+  } | null>(null);
   const [lastPayment, setLastPayment] = useState<PaymentRow | null>(null);
 
   const [amountValue, setAmountValue] = useState("");
@@ -132,7 +144,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     setLoading(true);
     try {
       const [financeResponse, obligationsResponse] = await Promise.all([
-        fetch(`/api/student-payment-center?studentId=${encodeURIComponent(studentId)}`, {
+        fetch(`/api/student-payment-center?studentId=${encodeURIComponent(studentId)}&includeCorrections=1`, {
           cache: "no-store",
         }),
         fetch(`/api/student-obligations?studentId=${encodeURIComponent(studentId)}`, {
@@ -152,7 +164,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
       const remaining = Number(finance.enrollment?.remainingPayment || 0);
       setAmountValue(remaining > 0 ? String(remaining) : "");
       setDueDate(finance.enrollment?.paymentDueDate || today());
-      setLastPayment(finance.payments?.[0] || null);
+      setLastPayment(finance.payments?.find((row: PaymentRow) => row.status !== "cancelled") || null);
     } catch (e) {
       setError(true);
       setMessage(e instanceof Error ? e.message : "Finans bilgileri yüklenemedi.");
@@ -162,6 +174,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
   }
 
   async function show(nextTab: Tab = "payment") {
+    setCorrection(null);
     setTab(nextTab);
     setOpen(true);
     setMessage("");
@@ -321,6 +334,47 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
     }
   }
 
+  function startCorrection(row: PaymentRow, mode: "edit" | "cancel") {
+    setCorrection({
+      paymentId: row.id,
+      mode,
+      amount: String(row.amount).replace(".", ","),
+      method: (row.method in methodLabels ? row.method : "other") as PaymentMethod,
+      reason: "",
+    });
+    setMessage("");
+  }
+
+  async function submitCorrection() {
+    if (!correction || busy || !correction.reason.trim()) return;
+    const amount = Number(correction.amount.trim().replace(",", "."));
+    if (correction.mode === "edit" && (!Number.isFinite(amount) || amount <= 0)) {
+      setError(true);
+      setMessage("Geçerli bir tahsilat tutarı girin.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = correction.mode === "cancel"
+        ? await requestPaymentCancellation(correction.paymentId, correction.reason)
+        : await requestPaymentEdit(correction.paymentId, { amount, paymentMethod: correction.method }, correction.reason);
+      setError(!result.ok);
+      setMessage(result.message);
+      if (result.ok) {
+        setCorrection(null);
+        await load();
+        window.dispatchEvent(new Event("sprint:payment-updated"));
+        router.refresh();
+      }
+    } catch {
+      setError(true);
+      setMessage("İşlem sonucu doğrulanamadı. Yeniden denemeden önce ödeme geçmişini kontrol edin.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function openPaymentReceivedMessage(payment?: PaymentRow | null) {
     if (!data) return;
     const row = payment || lastPayment;
@@ -423,7 +477,7 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
             <PaymentInfoShortcut studentId={studentId} inFinancePanel />
           </nav>
 
-          {message ? <div className={`sfcMessage ${error ? "error" : "success"}`}>{message}</div> : null}
+          {message ? <div role="status" className={`sfcMessage ${error ? "error" : "success"}`}>{message}</div> : null}
 
           {tab === "payment" ? (
             <section className="sfcCard">
@@ -540,17 +594,42 @@ export default function StudentFinanceCenter({ studentId }: { studentId: string 
                       <button className="sfcMini" type="button" onClick={() => setTab("payment")}>Ödeme Al</button>
                     </article>
                   ) : null}
-                  {data.payments.map((row) => (
-                    <article key={row.id}>
-                      <div>
-                        <b>{money(row.amount)} · {methodLabels[row.method] || row.method}</b>
-                        <span>{row.isObligationPayment?"Ek borç tahsilatı":row.packageName || "Kurs paketi"}</span>
-                        <span>{dateText(row.periodStartDate)} - {dateText(row.periodEndDate)} tarihleri arasındaki paketin ücreti ödendi.</span>
-                        <small>{row.receivedAt ? formatDisplayDateTime(new Date(row.receivedAt)) : "—"}</small>
-                      </div>
-                      <button className="sfcMini" type="button" onClick={() => openPaymentReceivedMessage(row)}>WhatsApp · Ödeme Alındı</button>
-                    </article>
-                  ))}
+                  {data.payments.map((row) => {
+                    const cancelled = row.status === "cancelled";
+                    const received = ["received", "recorded", "paid", "completed"].includes(row.status || "");
+                    const canCorrect = received && row.enrollmentId && !row.isObligationPayment && !row.isInstallmentPayment;
+                    const form = correction?.paymentId === row.id ? correction : null;
+                    return (
+                      <article key={row.id}>
+                        <div>
+                          <b>{money(row.amount)} · {methodLabels[row.method] || row.method}</b>
+                          <span>{row.isObligationPayment ? "Ek borç tahsilatı" : row.packageName || "Kurs paketi"}</span>
+                          {row.periodStartDate ? <span>{dateText(row.periodStartDate)} – {dateText(row.periodEndDate)}</span> : null}
+                          <small>{row.receivedAt ? formatDisplayDateTime(new Date(row.receivedAt)) : "—"}</small>
+                          {cancelled ? <strong>İptal edildi{row.cancellationReason ? ` · ${row.cancellationReason}` : ""}</strong> : null}
+                        </div>
+                        {form ? (
+                          <form className="sfcFormGrid" onSubmit={(event) => { event.preventDefault(); void submitCorrection(); }}>
+                            {form.mode === "edit" ? <>
+                              <label>Tutar<input required inputMode="decimal" disabled={busy} value={form.amount} onChange={(event) => setCorrection({ ...form, amount: event.target.value })} /></label>
+                              <label>Ödeme yöntemi<select disabled={busy} value={form.method} onChange={(event) => setCorrection({ ...form, method: event.target.value as PaymentMethod })}>
+                                {Object.entries(methodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                              </select></label>
+                            </> : <strong className="full">{money(row.amount)} tahsilatı iptal edilsin mi?</strong>}
+                            <label className="full">İşlem gerekçesi<textarea required maxLength={1000} disabled={busy} rows={2} value={form.reason} onChange={(event) => setCorrection({ ...form, reason: event.target.value })} /></label>
+                            <button className="sfcMini" type="button" disabled={busy} onClick={() => setCorrection(null)}>Vazgeç</button>
+                            <button className="sfcMini" type="submit" disabled={busy || !form.reason.trim()}>{busy ? "İşleniyor…" : form.mode === "cancel" ? "İptali Onayla" : "Düzeltmeyi Kaydet"}</button>
+                          </form>
+                        ) : received ? (
+                          <div>
+                            <button className="sfcMini" type="button" disabled={busy} onClick={() => openPaymentReceivedMessage(row)}>WhatsApp · Ödeme Alındı</button>
+                            {canCorrect && data.correctionPermissions?.edit ? <button className="sfcMini" type="button" disabled={busy} onClick={() => startCorrection(row, "edit")}>Ödemeyi Düzenle</button> : null}
+                            {canCorrect && data.correctionPermissions?.cancel ? <button className="sfcCancelDebt" type="button" disabled={busy} onClick={() => startCorrection(row, "cancel")}>Ödemeyi İptal Et</button> : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : <div className="sfcEmpty">Henüz ödeme hareketi yok.</div>}
             </section>
