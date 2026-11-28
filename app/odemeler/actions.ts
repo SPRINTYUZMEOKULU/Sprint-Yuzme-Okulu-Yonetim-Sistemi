@@ -4,6 +4,8 @@ import { publishEventNotification } from "@/lib/notifications/publish-event";
 import { revalidatePath } from "next/cache";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
+import { correctPackagePayment } from "@/lib/payments/correct-package-payment";
+import { can, getPermissionSnapshot } from "@/lib/auth/permissions";
 import { requireProfile } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -114,6 +116,7 @@ function revalidateFinancePaths(studentId?: string | null) {
   }
 
   revalidatePath("/kasa");
+  revalidatePath("/raporlar");
   revalidatePath("/veli-odemeler");
   revalidatePath("/veli-paneli");
   revalidatePath("/onay-merkezi");
@@ -1062,6 +1065,15 @@ export async function requestPaymentEdit(
       };
     }
 
+    const permissions = await getPermissionSnapshot({
+      userId: profile.id,
+      organizationId,
+      baseRole: profile.role,
+    });
+    if (!["owner", "admin", "accounting"].includes(profile.role) && !can(permissions, "finance.payment_edit")) {
+      return { ok: false, message: "Bu tahsilat işlemi için yetkiniz yok." };
+    }
+
     const requestReason = cleanReason(reason);
 
     if (!requestReason) {
@@ -1135,7 +1147,18 @@ export async function requestPaymentEdit(
      * Kritik finans hareketlerinde güvenli varsayılan onaydır.
      * Kural açıkken sadece talep oluşturulur.
      */
+    const expected = {
+      amount: payment.amount,
+      payment_method: payment.payment_method,
+      cash_handover_status: payment.cash_handover_status,
+      description: payment.description,
+    };
+    const correction = {
+      organizationId, actorId: profile.id, paymentId, expected, reason: requestReason,
+      amount: newAmount, method: newMethod, description: newDescription,
+    };
     if (rule.is_active && rule.requires_approval) {
+      await correctPackagePayment({ ...correction, apply: false });
       const request = await createApprovalRequest(supabase, {
         organizationId,
         requestType: "payment_edit",
@@ -1145,11 +1168,7 @@ export async function requestPaymentEdit(
         studentId: payment.student_id,
         requestedBy: profile.id,
         reason: requestReason,
-        oldValues: {
-          amount: payment.amount,
-          payment_method: payment.payment_method,
-          description: payment.description,
-        },
+        oldValues: expected,
         newValues: {
           amount: newAmount,
           payment_method: newMethod,
@@ -1190,36 +1209,7 @@ export async function requestPaymentEdit(
       };
     }
 
-    /*
-     * Ayardan yönetici onayı kapatılmışsa doğrudan uygula.
-     * Ödeme yönteminin nakit/nakit dışı değişmesi kasa statüsünü
-     * güvenli başlangıç durumuna taşır.
-     */
-    const nextCashStatus =
-      newMethod === "cash" ? "with_staff" : "main_cash_confirmed";
-
-    const now = new Date().toISOString();
-
-    const { error: updateError } = await supabase
-      .from("student_payments")
-      .update({
-        amount: newAmount,
-        payment_method: newMethod,
-        description: newDescription,
-        cash_handover_status: nextCashStatus,
-        cash_handover_requested_at: null,
-        cash_handover_approved_by: newMethod === "cash" ? null : profile.id,
-        cash_handover_approved_at: newMethod === "cash" ? null : now,
-      })
-      .eq("id", paymentId)
-      .eq("organization_id", organizationId);
-
-    if (updateError) {
-      return {
-        ok: false,
-        message: `Ödeme düzeltilemedi: ${updateError.message}`,
-      };
-    }
+    await correctPackagePayment({ ...correction, apply: true });
 
     if (rule.dashboard_notification || rule.push_notification) {
       await addSystemNotification(supabase, {
@@ -1286,6 +1276,15 @@ export async function requestPaymentCancellation(
       };
     }
 
+    const permissions = await getPermissionSnapshot({
+      userId: profile.id,
+      organizationId,
+      baseRole: profile.role,
+    });
+    if (!["owner", "admin", "accounting"].includes(profile.role) && !can(permissions, "finance.payment_cancel")) {
+      return { ok: false, message: "Bu tahsilat işlemi için yetkiniz yok." };
+    }
+
     const requestReason = cleanReason(reason);
 
     if (!paymentId) {
@@ -1333,7 +1332,18 @@ export async function requestPaymentCancellation(
       "payment_cancel",
     );
 
+    const expected = {
+      amount: payment.amount,
+      payment_method: payment.payment_method,
+      cash_handover_status: payment.cash_handover_status,
+      payment_status: payment.payment_status,
+    };
+    const correction = {
+      organizationId, actorId: profile.id, paymentId, expected, reason: requestReason,
+      cancellation: true,
+    };
     if (rule.is_active && rule.requires_approval) {
+      await correctPackagePayment({ ...correction, apply: false });
       const request = await createApprovalRequest(supabase, {
         organizationId,
         requestType: "payment_cancel",
@@ -1343,12 +1353,7 @@ export async function requestPaymentCancellation(
         studentId: payment.student_id,
         requestedBy: profile.id,
         reason: requestReason,
-        oldValues: {
-          amount: payment.amount,
-          payment_method: payment.payment_method,
-          payment_status: payment.payment_status,
-          cash_handover_status: payment.cash_handover_status,
-        },
+        oldValues: expected,
         newValues: {
           payment_status: "cancelled",
           cancellation_reason: requestReason,
@@ -1389,25 +1394,7 @@ export async function requestPaymentCancellation(
       };
     }
 
-    const now = new Date().toISOString();
-
-    const { error: cancelError } = await supabase
-      .from("student_payments")
-      .update({
-        payment_status: "cancelled",
-        cancellation_reason: requestReason,
-        cancelled_by: profile.id,
-        cancelled_at: now,
-      })
-      .eq("id", paymentId)
-      .eq("organization_id", organizationId);
-
-    if (cancelError) {
-      return {
-        ok: false,
-        message: `Ödeme iptal edilemedi: ${cancelError.message}`,
-      };
-    }
+    await correctPackagePayment({ ...correction, apply: true });
 
     if (rule.dashboard_notification || rule.push_notification) {
       await addSystemNotification(supabase, {

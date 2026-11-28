@@ -27,7 +27,7 @@ export async function loadStudentObligations(organizationId: string, studentId: 
   return data ?? [];
 }
 
-export async function loadStudentPaymentCenter(organizationId: string, studentId: string, requestedEnrollmentId = "", includeHistory = true) {
+export async function loadStudentPaymentCenter(organizationId: string, studentId: string, requestedEnrollmentId = "", includeHistory = true, includeCorrections = false) {
   // Yetki requireProfile ile doğrulandıktan sonra finans okumalarını service-role
   // üzerinden yapıyoruz. Tüm sorgular organization_id + student_id ile sınırlandırılır.
   // Böylece student_enrollments üzerindeki RLS farklılıkları finans merkezinde
@@ -51,7 +51,7 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
     includeHistory ? supabase
       .from("student_payments")
       .select(
-        "id,organization_id,student_id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,created_at,cash_handover_status,cancelled_at",
+        `id,organization_id,student_id,enrollment_id,amount,currency,payment_method,payment_status,description,received_at,created_at,cash_handover_status,cancelled_at${includeCorrections ? ",cancellation_reason,payment_installment_id" : ""}`,
       )
       .eq("organization_id", organizationId)
       .eq("student_id", studentId)
@@ -115,7 +115,7 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
   }
 
   const allPayments = (paymentsResult.data || []).filter(
-    (row: any) => !row.cancelled_at && row.payment_status !== "cancelled",
+    (row: any) => includeCorrections || (!row.cancelled_at && row.payment_status !== "cancelled"),
   );
 
   const historicalEnrollmentIds = [
@@ -257,7 +257,11 @@ export async function loadStudentPaymentCenter(organizationId: string, studentId
         method: row.payment_method || "other",
         description: row.description || null,
         receivedAt: row.received_at || row.created_at || null,
-        status: row.payment_status || "received",
+        status: row.cancelled_at ? "cancelled" : row.payment_status || "received",
+        ...(includeCorrections ? {
+          cancellationReason: row.cancellation_reason || null,
+          isInstallmentPayment: Boolean(row.payment_installment_id),
+        } : {}),
         cashHandoverStatus: row.cash_handover_status || null,
         periodStartDate: period?.start_date || null,
         periodEndDate: period?.planned_end_date || null,

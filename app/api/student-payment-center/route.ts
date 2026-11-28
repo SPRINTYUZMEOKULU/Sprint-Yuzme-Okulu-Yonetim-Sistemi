@@ -25,11 +25,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = await loadStudentPaymentCenter(organizationId, studentId, requestedEnrollmentId);
+    const includeCorrections = request.nextUrl.searchParams.get("includeCorrections") === "1";
+    const result = await loadStudentPaymentCenter(organizationId, studentId, requestedEnrollmentId, true, includeCorrections);
     if (!result) {
       return NextResponse.json({ ok: false, error: requestedEnrollmentId ? "Seçilen ödeme dönemi bulunamadı." : "Öğrenci bulunamadı." }, { status: 404 });
     }
-    return NextResponse.json(result);
+    if (!includeCorrections) return NextResponse.json(result);
+    const { can, getPermissionSnapshot } = await import("@/lib/auth/permissions");
+    const permissions = await getPermissionSnapshot({ userId: profile.id, organizationId, baseRole: profile.role });
+    const financeRole = ["owner", "admin", "accounting"].includes(profile.role);
+    return NextResponse.json({
+      ...result,
+      correctionPermissions: {
+        edit: financeRole || can(permissions, "finance.payment_edit"),
+        cancel: financeRole || can(permissions, "finance.payment_cancel"),
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Ödeme bilgileri alınamadı." },
