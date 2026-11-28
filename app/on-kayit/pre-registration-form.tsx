@@ -68,8 +68,10 @@ const days = [
 
 export default function PreRegistrationForm({
   preferredBranchName,
+  preferredCourseType,
 }: {
   preferredBranchName?: string;
+  preferredCourseType?: string;
 }) {
   const [status, setStatus] =
     useState<
@@ -135,12 +137,20 @@ export default function PreRegistrationForm({
           );
         }
 
-        setOptions(data);
-        const preferredBranch = (data as Options).branches.find(
+        const loadedOptions: Options = data;
+        setOptions(loadedOptions);
+        const preferredBranch = loadedOptions.branches.find(
           (branch) => branch.name === preferredBranchName &&
-            (data as Options).groups.some((group) => group.branch_id === branch.id)
+            loadedOptions.groups.some((group) => group.branch_id === branch.id)
         );
         if (preferredBranch) setBranchId(preferredBranch.id);
+        const courseIsAvailable = loadedOptions.groups.some((group) =>
+          group.course_type === preferredCourseType &&
+          (!preferredBranch || group.branch_id === preferredBranch.id)
+        );
+        if (preferredCourseType && courseIsAvailable) {
+          setCourseType(preferredCourseType);
+        }
       })
       .catch(() => {
         setMessage(
@@ -150,7 +160,7 @@ export default function PreRegistrationForm({
       .finally(() =>
         setLoading(false)
       );
-  }, [preferredBranchName]);
+  }, [preferredBranchName, preferredCourseType]);
 
   const courseTypes =
     useMemo(
@@ -858,153 +868,6 @@ export default function PreRegistrationForm({
 
           <div>
             <strong>
-              Öğrenci / Katılımcı
-              bilgileri
-            </strong>
-
-            <span>
-              Kimin için kayıt
-              oluşturduğunuzu seçin
-            </span>
-          </div>
-        </div>
-
-        <div className="registrationType">
-          <label
-            className={
-              registrationFor ===
-              "child"
-                ? "selected"
-                : ""
-            }
-          >
-            <input
-              type="radio"
-              name="registrationFor"
-              value="child"
-              checked={
-                registrationFor ===
-                "child"
-              }
-              onChange={() =>
-                setRegistrationFor(
-                  "child"
-                )
-              }
-            />
-
-            <strong>
-              Çocuğum için
-            </strong>
-
-            <span>
-              Çocuk grubu veya 14–17 yaş için yetişkin grubu seçebilirsiniz.
-            </span>
-          </label>
-
-          <label
-            className={
-              registrationFor ===
-              "adult"
-                ? "selected"
-                : ""
-            }
-          >
-            <input
-              type="radio"
-              name="registrationFor"
-              value="adult"
-              checked={
-                registrationFor ===
-                "adult"
-              }
-              onChange={() =>
-                setRegistrationFor(
-                  "adult"
-                )
-              }
-            />
-
-            <strong>
-              Kendim için
-            </strong>
-
-            <span>
-              Yetişkin grubunda kendi adınıza başvuru.
-            </span>
-          </label>
-        </div>
-
-        <div className="formGrid">
-          <label>
-            Öğrenci / Katılımcı adı
-
-            <input
-              name="firstName"
-              required
-              maxLength={60}
-              placeholder="Adı"
-            />
-          </label>
-
-          <label>
-            Soyadı
-
-            <input
-              name="lastName"
-              required
-              maxLength={60}
-              placeholder="Soyadı"
-            />
-          </label>
-
-          <label>
-            Doğum tarihi
-
-            <input
-              name="birthDate"
-              type="date"
-            />
-          </label>
-
-          {registrationFor ===
-            "child" && (
-            <label>
-              Veli adı soyadı
-
-              <input
-                name="guardianName"
-                required
-                maxLength={120}
-                placeholder="Veli adı soyadı"
-              />
-            </label>
-          )}
-
-          <label>
-            Telefon
-
-            <input
-              name="phone"
-              type="tel"
-              required
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="05xx xxx xx xx"
-              maxLength={20}
-              pattern="(?:\+90|0)?[ ]*5(?:[ ]*\d){9}"
-              title="Telefon numarasını 05XXXXXXXXX veya +905XXXXXXXXX formatında giriniz."
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="formSection">
-        <div className="formSectionTitle">
-          <b>2</b>
-
-          <div>
-            <strong>
               Kurs, grup ve paket
               tercihi
             </strong>
@@ -1326,6 +1189,153 @@ export default function PreRegistrationForm({
             iletişime geçebilirsiniz.
           </div>
         ) : null}
+      </section>
+
+      <section className="formSection">
+        <div className="formSectionTitle">
+          <b>2</b>
+
+          <div>
+            <strong>
+              Öğrenci / Katılımcı
+              bilgileri
+            </strong>
+
+            <span>
+              Kimin için kayıt
+              oluşturduğunuzu seçin
+            </span>
+          </div>
+        </div>
+
+        <div className="registrationType">
+          <label
+            className={
+              registrationFor ===
+              "child"
+                ? "selected"
+                : ""
+            }
+          >
+            <input
+              type="radio"
+              name="registrationFor"
+              value="child"
+              checked={
+                registrationFor ===
+                "child"
+              }
+              onChange={() =>
+                setRegistrationFor(
+                  "child"
+                )
+              }
+            />
+
+            <strong>
+              Çocuğum için
+            </strong>
+
+            <span>
+              Çocuk grubu veya 14–17 yaş için yetişkin grubu seçebilirsiniz.
+            </span>
+          </label>
+
+          <label
+            className={
+              registrationFor ===
+              "adult"
+                ? "selected"
+                : ""
+            }
+          >
+            <input
+              type="radio"
+              name="registrationFor"
+              value="adult"
+              checked={
+                registrationFor ===
+                "adult"
+              }
+              onChange={() =>
+                setRegistrationFor(
+                  "adult"
+                )
+              }
+            />
+
+            <strong>
+              Kendim için
+            </strong>
+
+            <span>
+              Yetişkin grubunda kendi adınıza başvuru.
+            </span>
+          </label>
+        </div>
+
+        <div className="formGrid">
+          <label>
+            Öğrenci / Katılımcı adı
+
+            <input
+              name="firstName"
+              required
+              maxLength={60}
+              placeholder="Adı"
+            />
+          </label>
+
+          <label>
+            Soyadı
+
+            <input
+              name="lastName"
+              required
+              maxLength={60}
+              placeholder="Soyadı"
+            />
+          </label>
+
+          <label>
+            Doğum tarihi
+
+            <input
+              name="birthDate"
+              type="date"
+            />
+          </label>
+
+          {registrationFor ===
+            "child" && (
+            <label>
+              Veli adı soyadı
+
+              <input
+                name="guardianName"
+                required
+                maxLength={120}
+                placeholder="Veli adı soyadı"
+              />
+            </label>
+          )}
+
+          <label>
+            Telefon
+
+            <input
+              name="phone"
+              type="tel"
+              required
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="05xx xxx xx xx"
+              maxLength={20}
+              pattern="(?:\+90|0)?[ ]*5(?:[ ]*\d){9}"
+              title="Telefon numarasını 05XXXXXXXXX veya +905XXXXXXXXX formatında giriniz."
+            />
+          </label>
+        </div>
       </section>
 
       <section className="formSection">
