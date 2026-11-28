@@ -1,4 +1,5 @@
 "use server";
+import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient } from '@supabase/supabase-js';
 import { requireProfile } from '@/lib/auth/profile';
 import { hashShortSetupCode, newShortSetupCode, sealSetupToken, setupLinkLifetimeMs } from '@/lib/guardian/setup-token';
@@ -44,6 +45,15 @@ export async function portalCredentialContact(input: {
         return { ok: false as const, message: 'Portal hesabının bağlantıları eksik. Veli merkezinden kontrol edin.' };
     if (!profile.is_active || guardian.is_active === false || guardian.login_enabled === false)
         return { ok: false as const, message: 'Portal erişimi pasif. Önce erişimi aktif edin.' };
+    const { data: eligibleLinks, error: eligibilityError } = await admin.from('guardian_students')
+        .select('student_id').eq('guardian_id', guardian.id).eq('portal_access', true);
+    if (eligibilityError)
+        return { ok: false as const, message: 'Portal bağlantısı doğrulanamadı.' };
+    const linkedStudentIds = (eligibleLinks || []).map(link => link.student_id)
+        .filter(id => !input.studentId || id === input.studentId);
+    const activeIds = await activePortalStudentIds(admin, org, linkedStudentIds).catch(() => new Set<string>());
+    if (!activeIds.size)
+        return { ok: false as const, message: 'Bu işlem için aktif bir kursiyer bağlantısı doğrulanmalıdır.' };
     return { ok: true as const, accountId, fullName: profile.full_name || 'Değerli Velimiz', phone: profile.phone || '', email: profile.email || '', revision: auth.user.updated_at || auth.user.created_at };
 }
 export async function savePortalCredential(input: {

@@ -1,3 +1,4 @@
+import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import Link from "next/link";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import UstGezinme from "@/app/components/UstGezinme";
@@ -29,7 +30,7 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const studentId = typeof query.student === "string" ? query.student : "";
   const studentsQuery = admin.from("students")
     .select("id,student_number,first_name,last_name,status,phone,guardian_name,guardian_phone,guardian_email,branch_id,preferred_group_id")
-    .eq("organization_id", organizationId).eq("is_deleted", false);
+    .eq("organization_id", organizationId).eq("is_deleted", false).eq("status", "active");
   const linksQuery = admin.from("guardian_students").select("guardian_id,student_id,relationship,is_primary");
 
   const [studentsRes, linksRes, guardiansRes, guardianRecordsRes, branchesRes, groupsRes] = await Promise.all([
@@ -41,7 +42,9 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     admin.from("training_groups").select("id,name,course_type").eq("organization_id", organizationId).limit(5000),
   ]);
 
-  const students = studentsRes.data || [];
+  if (studentsRes.error) throw new Error("Kursiyer listesi okunamadı.");
+  const activeIds = await activePortalStudentIds(admin, organizationId, (studentsRes.data || []).map((student) => student.id));
+  const students = (studentsRes.data || []).filter((student) => activeIds.has(student.id));
   const guardians = guardiansRes.data || [];
   const guardianRecords = guardianRecordsRes.data || [];
   const guardianRecordById = new Map(guardianRecords.map((g: any) => [g.id, g]));
@@ -129,7 +132,7 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
 
     <BulkAccountManager candidates={bulkCandidates}/>
 
-    <form className="wizardSearch"><input name="q" defaultValue={query.q || ""} placeholder="Kursiyer, veli veya telefon ara"/><select name="filter" defaultValue={filter}><option value="unlinked">Bağlantı bekleyenler</option><option value="ready">Oluşturmaya hazır</option><option value="missing">Bilgisi eksik</option><option value="linked">Zaten bağlı</option><option value="all">Tüm kursiyerler</option></select><button>Filtrele</button></form>
+    <form className="wizardSearch"><input name="q" defaultValue={query.q || ""} placeholder="Kursiyer, veli veya telefon ara"/><select name="filter" defaultValue={filter}><option value="unlinked">Bağlantı bekleyenler</option><option value="ready">Oluşturmaya hazır</option><option value="missing">Bilgisi eksik</option><option value="linked">Zaten bağlı</option><option value="all">Tüm aktif kursiyerler</option></select><button>Filtrele</button></form>
 
     </>}
 

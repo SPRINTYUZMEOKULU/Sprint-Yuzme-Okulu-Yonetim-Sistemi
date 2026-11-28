@@ -1,5 +1,6 @@
 "use server";
 
+import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -17,6 +18,8 @@ export async function createOrLinkGuardianFromStudent(formData:FormData){
  const admin=adminClient();
  const {data:student,error:studentError}=await admin.from("students").select("id,first_name,last_name,phone,guardian_name,guardian_phone,guardian_email,preferred_group_id").eq("id",studentId).eq("organization_id",organizationId).eq("is_deleted",false).maybeSingle();
  if(studentError||!student)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(studentError?.message||"Öğrenci bulunamadı.")}`);
+ const activeIds = await activePortalStudentIds(admin, organizationId, [studentId]).catch(() => new Set<string>());
+ if (!activeIds.has(studentId)) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Portal hesabı için kursiyerin aktiflik durumu doğrulanmalıdır.")}`);
  let group:any=null;
  if(student.preferred_group_id){const {data:groupData}=await admin.from("training_groups").select("id,name,course_type").eq("id",student.preferred_group_id).eq("organization_id",organizationId).maybeSingle();group=groupData}
  const {fullName:accountName,phone:accountPhone,email:accountEmail,relationship,error:recipientError}=resolvePortalRecipient(student,group);

@@ -2,11 +2,11 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const ts=require('typescript');
-function load(file,imports={}){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;const m={exports:{}};new Function('require','exports','module',js)(name=>{if(name in imports)return imports[name];if(name==='@/lib/guardian/setup-token')return load('lib/guardian/setup-token.ts',{'node:crypto':require('node:crypto')});throw Error('Unexpected import '+name);},m.exports,m);return m.exports;}
-function harness({active=true,org='org',portal=true,updateError=false}={}) {
+function load(file,imports={}){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;const m={exports:{}};new Function('require','exports','module',js)(name=>{if(name in imports)return imports[name];if(name==='@/lib/guardian/portal-student-eligibility')return load('lib/guardian/portal-student-eligibility.ts');if(name==='@/lib/guardian/portal-recipient')return load('lib/guardian/portal-recipient.ts');if(name==='next/navigation')return {};if(name==='@/lib/supabase/server')return {};if(name==='@/lib/guardian/setup-token')return load('lib/guardian/setup-token.ts',{'node:crypto':require('node:crypto')});throw Error('Unexpected import '+name);},m.exports,m);return m.exports;}
+function harness({active=true,org='org',portal=true,updateError=false,studentStatus='active',frozen=false,activeSibling=false}={}) {
  const writes=[];
- const tables={profiles:[{id:'account',organization_id:org,role:'guardian',full_name:'Test Veli',phone:'+905550000000',email:'',is_active:active}],guardians:[{id:'person',organization_id:org,auth_user_id:'account',is_active:true,login_enabled:portal}],students:[{id:'child',organization_id:org}],guardian_students:[{guardian_id:'person',student_id:'child',portal_access:true,is_primary:true}]};
- const client={from(table){let rows=[...(tables[table]||[])];const q={select(){return q;},eq(k,v){rows=rows.filter(r=>r[k]===v);return q;},in(k,vs){rows=rows.filter(r=>vs.includes(r[k]));return q;},order(){return q;},maybeSingle(){return Promise.resolve({data:rows[0]||null,error:null});},then(ok,no){return Promise.resolve({data:rows,error:null}).then(ok,no);}};return q;},auth:{admin:{getUserById:async id=>({data:{user:id==='account'?{id,created_at:'created',updated_at:'old'}:null},error:null}),updateUserById:async(id,input)=>{writes.push({id,input});return {data:{user:{id,created_at:'created',updated_at:'new'}},error:updateError?{message:'test'}:null};}}}};
+ const tables={profiles:[{id:'account',organization_id:org,role:'guardian',full_name:'Test Veli',phone:'+905550000000',email:'',is_active:active}],guardians:[{id:'person',organization_id:org,auth_user_id:'account',is_active:true,login_enabled:portal}],students:[{id:'child',organization_id:org,status:studentStatus,is_deleted:false},...(activeSibling?[{id:'sibling',organization_id:org,status:'active',is_deleted:false}]:[])],student_enrollments:frozen?[{student_id:'child',organization_id:org,status:'active',freeze_restart_pending:true,freeze_start_date:'2020-01-01'}]:[],guardian_students:[{guardian_id:'person',student_id:'child',portal_access:true,is_primary:true},...(activeSibling?[{guardian_id:'person',student_id:'sibling',portal_access:true}]:[])]};
+ const client={from(table){let rows=[...(tables[table]||[])];const q={select(){return q;},eq(k,v){rows=rows.filter(r=>r[k]===v);return q;},lte(k,v){rows=rows.filter(r=>r[k]<=v);return q;},in(k,vs){rows=rows.filter(r=>vs.includes(r[k]));return q;},order(){return q;},maybeSingle(){return Promise.resolve({data:rows[0]||null,error:null});},then(ok,no){return Promise.resolve({data:rows,error:null}).then(ok,no);}};return q;},auth:{admin:{getUserById:async id=>({data:{user:id==='account'?{id,created_at:'created',updated_at:'old'}:null},error:null}),updateUserById:async(id,input)=>{writes.push({id,input});return {data:{user:{id,created_at:'created',updated_at:'new'}},error:updateError?{message:'test'}:null};}}}};
  const actions=load('app/veliler/portal-credential-actions.ts',{'@supabase/supabase-js':{createClient:()=>client},'@/lib/auth/profile':{requireProfile:async()=>({id:'admin',organization_id:'org'})},'@/lib/guardian/revalidate':{revalidateGuardianConnection(){}}});
  return {actions,writes};
 }
@@ -23,11 +23,11 @@ test('Saved credentials are reused across screens by account, and invalidated af
 test('Preparing existing linked accounts preserves passwords and resolves the linked identity',async()=>{
  let changes=0;
  process.env.NEXT_PUBLIC_SUPABASE_URL='https://example.test';process.env.SUPABASE_SERVICE_ROLE_KEY='test-key';
- const rows={students:[{id:'child',first_name:'Child',last_name:'Test',guardian_name:'Outdated Name',guardian_phone:'05551111111'}],guardian_students:[{student_id:'child',guardian_id:'person',portal_access:true}],guardians:[{id:'person',auth_user_id:'actual-linked-parent'}]};
- const client={from(table){let values=[...(rows[table]||[])];const q={select(){return q;},eq(k,v){if(k==='organization_id'||k==='is_deleted')return q;values=values.filter(r=>r[k]===v);return q;},in(k,vs){values=values.filter(r=>vs.includes(r[k]));return q;},then(ok,no){return Promise.resolve({data:values,error:null}).then(ok,no);}};return q;}};
+ const rows={students:[{id:'child',status:'active',first_name:'Child',last_name:'Test',guardian_name:'Outdated Name',guardian_phone:'05551111111'}],guardian_students:[{student_id:'child',guardian_id:'person',portal_access:true}],guardians:[{id:'person',auth_user_id:'actual-linked-parent'}]};
+ const client={from(table){let values=[...(rows[table]||[])];const q={select(){return q;},eq(k,v){if(k==='organization_id'||k==='is_deleted')return q;values=values.filter(r=>r[k]===v);return q;},lte(k,v){values=values.filter(r=>r[k]<=v);return q;},in(k,vs){values=values.filter(r=>vs.includes(r[k]));return q;},then(ok,no){return Promise.resolve({data:values,error:null}).then(ok,no);}};return q;}};
  const contact={ok:true,accountId:'actual-linked-parent',revision:'unchanged',fullName:'Actual Parent',phone:'+905552222222',email:''};
  const bulk=load('app/veliler/ogrenciden-olustur/bulk-account-actions.ts',{'@supabase/supabase-js':{createClient:()=>client},'next/cache':{revalidatePath(){}},'@/lib/auth/profile':{requireProfile:async()=>({organization_id:'org'})},'../portal-credential-actions':{portalCredentialContact:async()=>contact,savePortalCredential:async()=>{changes++;return {...contact,password:'Reset-Test-94!',message:'Saved'};}}});
- const batch=await bulk.prepareGuardianAccountBatch(['child']);const [result]=batch;assert.equal(changes,0);assert.equal(result.accountId,'actual-linked-parent');assert.equal(result.phone,contact.phone);assert.equal(result.password,undefined);assert.equal(result.status,'linked');
+ const batch=await bulk.prepareGuardianAccountBatch(['child','inactive']);assert.equal(batch.find(item=>item.key==='inactive').ok,false);const result=batch.find(item=>item.ok);assert.equal(changes,0);assert.equal(result.accountId,'actual-linked-parent');assert.equal(result.phone,contact.phone);assert.equal(result.password,undefined);assert.equal(result.status,'linked');
  const [reset]=await bulk.prepareGuardianAccountBatch(['child'],true);assert.equal(changes,1);assert.equal(reset.password,'Reset-Test-94!');
 });
 
@@ -51,4 +51,16 @@ test('Short links use a URL-safe 128-bit code and a distinct database lookup has
  assert.equal(Buffer.from(code,'base64url').length,16);
  assert.match(hashShortSetupCode(code),/^[a-f0-9]{64}$/);
  assert.notEqual(hashShortSetupCode(code),hashShortSetupCode(code+'a'));
+});
+
+test('Inactive or frozen students cannot receive setup links, including through an old selection', async () => {
+ for (const options of [{studentStatus:'passive'},{frozen:true}]) {
+  const {actions,writes}=harness(options);
+  assert.equal((await actions.createPortalSetupLink({accountId:'account'})).ok,false);
+  assert.equal((await actions.createPortalSetupLink({studentId:'child'})).ok,false);
+  assert.equal(writes.length,0);
+ }
+ const {actions}=harness({studentStatus:'passive',activeSibling:true});
+ assert.equal((await actions.portalCredentialContact({accountId:'account'})).ok,true);
+ assert.equal((await actions.portalCredentialContact({accountId:'account',studentId:'child'})).ok,false);
 });
