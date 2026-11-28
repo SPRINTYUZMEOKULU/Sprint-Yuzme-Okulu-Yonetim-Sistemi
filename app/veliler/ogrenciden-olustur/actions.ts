@@ -1,5 +1,6 @@
 "use server";
 
+import { portalPhoneCandidates, reuseSiblingAccount } from "@/lib/guardian/reuse-sibling-account";
 import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,6 @@ import { requireProfile } from "@/lib/auth/profile";
 
 const roles = ["owner", "admin", "branch_manager", "registration_staff"] as const;
 function adminClient(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");return createAdminClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
-function phoneCandidates(phone:string){const local=phone.replace(/^\+90/,"");return[phone,`90${local}`,`0${local}`,local]}
 function safeMessage(value:string){return encodeURIComponent(value.slice(0,260))}
 
 export async function createOrLinkGuardianFromStudent(formData:FormData){
@@ -29,7 +29,7 @@ export async function createOrLinkGuardianFromStudent(formData:FormData){
  if(existingLinksError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut veli bağlantıları okunamadı.")}&student=${studentId}`);
  let pendingGuardian:any=null;
  for(const link of existingLinks||[]){
-  const {data:g,error}=await admin.from("guardians").select("id,auth_user_id,phone,is_active,login_enabled").eq("id",link.guardian_id).eq("organization_id",organizationId).maybeSingle();
+  const {data:g,error}=await admin.from("guardians").select("id,auth_user_id,phone,full_name,email,is_active,login_enabled").eq("id",link.guardian_id).eq("organization_id",organizationId).maybeSingle();
   if(error||!g)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Öğrencide geçersiz/eski bir portal bağlantısı bulundu.")}&student=${studentId}`);
   if(g.auth_user_id)redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage("Öğrenci zaten bir portal hesabına bağlı. Giriş durumu ve şifre işlemlerini veli merkezinden kontrol edin.")}&guardian=${g.auth_user_id}&student=${studentId}`);
   if(g.is_active===false||g.login_enabled===false)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Veli erişimi pasif. Önce veli merkezinden erişimi kontrol edin.")}&student=${studentId}`);
@@ -37,9 +37,27 @@ export async function createOrLinkGuardianFromStudent(formData:FormData){
   if(normalizePortalPhone(g.phone)&&normalizePortalPhone(g.phone)!==accountPhone)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Bağlı veli ile öğrenci dosyasındaki telefonlar farklı. Önce iletişim bilgilerini kontrol edin.")}&student=${studentId}`);
   pendingGuardian=g;
  }
- let profileGuardian:any=null;const candidates=phoneCandidates(accountPhone);const {data:byPhone,error:phoneLookupError}=await admin.from("profiles").select("id,full_name,email,phone,role,is_active").eq("organization_id",organizationId).eq("role","guardian").in("phone",candidates).limit(1).maybeSingle();if(phoneLookupError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(phoneLookupError.message)}&student=${studentId}`);profileGuardian=byPhone;
+ if (pendingGuardian) {
+  const repair = await reuseSiblingAccount(admin, organizationId, studentId, pendingGuardian, {
+    fullName: accountName, phone: accountPhone, email: accountEmail, relationship,
+  }).catch(error => ({ error: error instanceof Error ? error.message : "Veli eşleştirmesi tamamlanamadı." }));
+  if (repair) {
+    if ("error" in repair) redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(repair.error)}&student=${studentId}`);
+    revalidatePath("/veliler");
+    revalidatePath(`/veliler/${repair.accountId}`);
+    revalidatePath(`/ogrenciler/${studentId}`);
+    redirect(`/veliler/ogrenciden-olustur?saved=${safeMessage(repair.message)}&guardian=${repair.accountId}&student=${studentId}`);
+  }
+ }
+ let profileGuardian:any=null;const candidates=portalPhoneCandidates(accountPhone);const {data:byPhone,error:phoneLookupError}=await admin.from("profiles").select("id,full_name,email,phone,role,is_active").eq("organization_id",organizationId).eq("role","guardian").in("phone",candidates).limit(1).maybeSingle();if(phoneLookupError)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(phoneLookupError.message)}&student=${studentId}`);profileGuardian=byPhone;
  if(!profileGuardian&&accountEmail){const {data:byEmail}=await admin.from("profiles").select("id,full_name,email,phone,role,is_active").eq("organization_id",organizationId).eq("role","guardian").eq("email",accountEmail).limit(1).maybeSingle();profileGuardian=byEmail}
  let authUserId=profileGuardian?.id||"",created=false;
+ if (authUserId && pendingGuardian) {
+  const { data: canonical, error } = await admin.from("guardians").select("id").eq("organization_id", organizationId).eq("auth_user_id", authUserId).maybeSingle();
+  if (error || (canonical && canonical.id !== pendingGuardian.id)) {
+    redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut veli hesabı güvenle eşleştirilemedi. Veli bilgilerini kontrol edin.")}&student=${studentId}`);
+  }
+ }
  if(authUserId){const {data:authData,error:authLookupError}=await admin.auth.admin.getUserById(authUserId);if(authLookupError||!authData.user)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage("Mevcut portal hesabının kimlik kaydı bulunamadı.")}&student=${studentId}`);if(authData.user.phone!==accountPhone){const {error}=await admin.auth.admin.updateUserById(authUserId,{phone:accountPhone,user_metadata:{...(authData.user.user_metadata||{}),full_name:accountName,role:"guardian",organization_id:organizationId}});if(error)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Telefon Auth hesabına bağlanamadı: ${error.message}`)}&student=${studentId}`)}await admin.from("profiles").update({phone:accountPhone,full_name:profileGuardian.full_name||accountName,email:profileGuardian.email||accountEmail||null,is_active:true,updated_at:new Date().toISOString()}).eq("id",authUserId).eq("organization_id",organizationId)}
  else{const {data:createdUser,error:createError}=await admin.auth.admin.createUser({phone:accountPhone,password:`Sprint-${crypto.randomUUID()}-A9!`,user_metadata:{full_name:accountName,role:"guardian",organization_id:organizationId}});if(createError||!createdUser.user)redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(createError?.message||"Portal hesabı oluşturulamadı.")}&student=${studentId}`);authUserId=createdUser.user.id;created=true;const {error}=await admin.from("profiles").upsert({id:authUserId,organization_id:organizationId,full_name:accountName,phone:accountPhone,email:accountEmail||null,role:"guardian",is_active:true,last_sign_in_at:null,updated_at:new Date().toISOString()},{onConflict:"id"});if(error){await admin.auth.admin.deleteUser(authUserId);redirect(`/veliler/ogrenciden-olustur?error=${safeMessage(`Portal profili oluşturulamadı: ${error.message}`)}&student=${studentId}`)}}
  // guardian_students.guardian_id -> public.guardians.id (NOT profiles/auth.users.id).

@@ -1,5 +1,6 @@
 "use server";
 
+import { portalPhoneCandidates, reuseSiblingAccount } from "@/lib/guardian/reuse-sibling-account";
 import { activePortalStudentIds } from "@/lib/guardian/portal-student-eligibility";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { portalCredentialContact, savePortalCredential } from "../portal-credential-actions";
@@ -30,11 +31,6 @@ function adminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Supabase yönetici bağlantısı yapılandırılmamış.");
   return createAdminClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-function phoneCandidates(phone: string) {
-  const local = phone.replace(/^\+90/, "");
-  return [phone, `90${local}`, `0${local}`, local];
 }
 
 function temporaryPassword() {
@@ -98,7 +94,7 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
   if(linksError) return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Mevcut hesap bağlantıları okunamadı. Şifreler değiştirilmedi."}];
   const guardianIds=[...new Set((existingLinks||[]).map(link=>link.guardian_id))];
   const {data:linkedRecords,error:recordsError}=guardianIds.length
-    ?await admin.from("guardians").select("id,auth_user_id,phone,is_active,login_enabled").eq("organization_id",organizationId).in("id",guardianIds)
+    ?await admin.from("guardians").select("id,auth_user_id,phone,full_name,email,is_active,login_enabled").eq("organization_id",organizationId).in("id",guardianIds)
     :{data:[],error:null};
   if(recordsError)return [{ok:false,key:"links",fullName:"",phone:"",email:"",studentNames:[],status:"error",message:"Veli kayıtları okunamadı. İşlem yapılmadı."}];
   if (secondary && !(students?.length === 1 && existingLinks?.some(link =>
@@ -108,24 +104,41 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
     return [{ ok: false, key: "secondary", fullName: secondary.fullName, phone: secondary.phone, email: "", studentNames: [], status: "error", message: "Önce kursiyerin birincil portal hesabını hazırlayın." }];
   }
   const pendingRecords=new Map<string,any>();
+  const reusedAccounts = new Map<string, string>();
   for(const student of students || []) {
     if (secondary) { unlinkedStudents.push(student); continue; }
     if(!existingLinks?.some(link=>link.student_id===student.id)){unlinkedStudents.push(student);continue;}
     const links=existingLinks!.filter(link=>link.student_id===student.id);
     const records=links.map(link=>linkedRecords?.find(record=>record.id===link.guardian_id));
-    if(records.every(record=>record&&!record.auth_user_id)&&records.length===1&&records[0]?.is_active!==false&&records[0]?.login_enabled!==false){
-      const group:any=groupMap.get(student.preferred_group_id);
-      const phone=resolvePortalRecipient(student, group).phone;
-      const storedPhone=normalizePortalPhone(records[0]?.phone);
-      if(!storedPhone||storedPhone===phone){pendingRecords.set(student.id,records[0]);unlinkedStudents.push(student);continue;}
+    const studentName = `${student.first_name || ""} ${student.last_name || ""}`.trim();
+    let repaired = null;
+    if (links.length === 1 && links[0].is_primary && links[0].portal_access && records[0] &&
+        !records[0].auth_user_id && records[0].is_active !== false && records[0].login_enabled !== false) {
+      const pending = records[0];
+      const recipient = resolvePortalRecipient(student, groupMap.get(student.preferred_group_id));
+      const storedPhone = normalizePortalPhone(pending.phone);
+      if (!storedPhone || storedPhone === recipient.phone) {
+        try {
+          if (!recipient.error) repaired = await reuseSiblingAccount(admin, organizationId, student.id, pending, recipient);
+        } catch (error) {
+          linkedResults.set(student.id, { ok: false, key: student.id, fullName: studentName, phone: "", email: "",
+            studentNames: [studentName], status: "error", message: error instanceof Error ? error.message : "Veli eşleştirilemedi." });
+          continue;
+        }
+        if (!repaired) {
+          pendingRecords.set(student.id, pending);
+          unlinkedStudents.push(student);
+          continue;
+        }
+        reusedAccounts.set(repaired.accountId, repaired.message);
+      }
     }
     const contact=await portalCredentialContact({studentId:student.id});
-    const studentName=`${student.first_name || ""} ${student.last_name || ""}`.trim();
     if(!contact.ok){linkedResults.set(student.id,{ok:false,key:student.id,fullName:studentName,phone:"",email:"",studentNames:[studentName],status:"error",message:contact.message});continue;}
     const previous=linkedResults.get(contact.accountId);
     if(previous){previous.studentNames.push(studentName);continue;}
     const saved=resetExisting?await savePortalCredential({accountId:contact.accountId},temporaryPassword()):null;
-    linkedResults.set(contact.accountId,{ok:!saved || saved.ok,key:contact.accountId,accountId:contact.accountId,revision:saved?.ok?saved.revision:contact.revision,fullName:contact.fullName,phone:contact.phone,email:contact.email,password:saved?.ok?saved.password:undefined,studentNames:[studentName],status:saved?.ok?"password_reset":"linked",message:saved?saved.message:"Mevcut hesap bağlı; şifre değiştirilmedi."});
+    linkedResults.set(contact.accountId,{ok:!saved || saved.ok,key:contact.accountId,accountId:contact.accountId,revision:saved?.ok?saved.revision:contact.revision,fullName:contact.fullName,phone:contact.phone,email:contact.email,password:saved?.ok?saved.password:undefined,studentNames:[studentName],status:saved?.ok?"password_reset":"linked",message:saved?saved.message:reusedAccounts.get(contact.accountId)||"Mevcut hesap bağlı; şifre değiştirilmedi."});
   }
   const groups = new Map<string, { fullName: string; phone: string; email: string; relationship: string; students: any[] }>();
   for (const student of unlinkedStudents) {
@@ -142,7 +155,7 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
 
   const results: GuardianBulkResult[] = [...skipped, ...linkedResults.values()];
   for (const [key, group] of groups) {
-    const candidates = phoneCandidates(group.phone);
+    const candidates = portalPhoneCandidates(group.phone);
     const studentNames = group.students.map((student) => `${student.first_name || ""} ${student.last_name || ""}`.trim());
     const password = temporaryPassword();
     let created = false;
