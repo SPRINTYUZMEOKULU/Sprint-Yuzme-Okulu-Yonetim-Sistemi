@@ -86,7 +86,8 @@ export async function savePortalCredential(input: {
 export async function createPortalSetupLink(input: { accountId?: string; studentId?: string }) {
     const contact = await portalCredentialContact(input);
     if (!contact.ok) return contact;
-    if (!contact.phone) return { ok: false as const, message: 'Kayıtlı WhatsApp telefonu bulunamadı.' };
+    const phone = normalizePortalPhone(contact.phone);
+    if (!phone) return { ok: false as const, message: 'Geçerli WhatsApp telefonu bulunamadı.' };
 
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -96,8 +97,7 @@ export async function createPortalSetupLink(input: { accountId?: string; student
 
     let loginEmail = account.user.email;
     if (!loginEmail) {
-        const phone = normalizePortalPhone(contact.phone);
-        if (!phone || normalizePortalPhone(account.user.phone) !== phone)
+        if (normalizePortalPhone(account.user.phone) !== phone)
             return { ok: false as const, message: 'Kayıtlı telefon ile portal giriş telefonu eşleşmiyor. Veli merkezinden kontrol edin.' };
 
         const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(contact.accountId, {
@@ -126,5 +126,5 @@ export async function createPortalSetupLink(input: { accountId?: string; student
 
     await admin.from('guardian_setup_links').delete()
         .eq('account_id', contact.accountId).lte('expires_at', new Date().toISOString());
-    return { ...contact, setupPath: '/s#' + code };
+    return { ...contact, phone, setupPath: '/s#' + code };
 }
