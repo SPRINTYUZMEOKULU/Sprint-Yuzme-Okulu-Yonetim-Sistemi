@@ -64,3 +64,55 @@ test('Inactive or frozen students cannot receive setup links, including through 
  assert.equal((await actions.portalCredentialContact({accountId:'account'})).ok,true);
  assert.equal((await actions.portalCredentialContact({accountId:'account',studentId:'child'})).ok,false);
 });
+
+test('WhatsApp confirmation writes one message and one activity per linked student, across retries', async () => {
+ const dispatchId = '1bf14189-8aaf-41b1-ade4-ec86689dae41';
+ const messages = ['one', 'two'].map(id => ({
+  id, student_id: id, sent_at: null, status: 'prepared', organization_id: 'org',
+  prepared_by: 'admin', template_key: 'guardian_portal_setup', channel: 'whatsapp', metadata: { dispatch_id: dispatchId },
+ }));
+ const activities = new Map();
+ let failActivity = true;
+ const client = {from(table) {
+  let rows = [...messages];
+  let update;
+  const q = {
+   select() { return q; },
+   eq(key, value) { rows = rows.filter(row => row[key] === value); return q; },
+   in(key, values) { rows = rows.filter(row => values.includes(row[key])); return q; },
+   contains(key, value) { rows = rows.filter(row => row[key].dispatch_id === value.dispatch_id); return q; },
+   update(value) { update = value; return q; },
+   then(resolve, reject) {
+    if (update) rows.forEach(row => Object.assign(row, update));
+    return Promise.resolve({data: rows, error: null}).then(resolve, reject);
+   },
+   async upsert(values) {
+    assert.equal(table, 'student_activity_logs');
+    if (failActivity) return {error: 'retry'};
+    for (const value of values) if (!activities.has(value.id)) activities.set(value.id, value);
+    return {error: null};
+   },
+  };
+  return q;
+ }};
+ let actor = 'other';
+ const actions = load('app/veliler/portal-credential-actions.ts', {
+  '@supabase/supabase-js': {createClient: () => client},
+  '@/lib/auth/profile': {requireProfile: async () => ({ id: actor, organization_id: 'org' })},
+  '@/lib/guardian/revalidate': {revalidateGuardianConnection() {}},
+ });
+ assert.equal((await actions.confirmPortalSetupSent(dispatchId)).ok, false);
+ assert.ok(messages.every(row => row.status === 'prepared'));
+ actor = 'admin';
+ assert.equal((await actions.confirmPortalSetupSent(dispatchId)).ok, false);
+ assert.ok(messages.every(row => row.status === 'sent'));
+ failActivity = false;
+ for (let attempt = 0; attempt < 2; attempt++) {
+  assert.equal((await actions.confirmPortalSetupSent(dispatchId)).ok, true);
+ }
+ assert.equal(activities.size, 2);
+ for (const message of messages) {
+  assert.equal(message.metadata.delivery_confirmation, 'user_confirmed');
+  assert.equal(activities.get(message.id).performed_at, message.sent_at);
+ }
+});

@@ -239,7 +239,6 @@ async function prepareGuardianAccounts(studentIdsValue: string[], resetExisting:
       results.push({ ok: false, key, fullName: group.fullName, phone: group.phone, email: group.email, studentNames, status: "error", message: error instanceof Error ? error.message : "Portal hesabı hazırlanamadı." });
     }
   }
-  revalidatePath("/veliler");
-  revalidatePath("/veliler/ogrenciden-olustur");
+  if (secondary) revalidatePath("/veliler");
   return results;
 }
