@@ -98,6 +98,28 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
   const readyCount = derived.filter((s: any) => !hasPortalAccount(s.id) && s.ready).length;
   const missingCount = derived.filter((s: any) => !hasPortalAccount(s.id) && !s.ready).length;
 
+  const deliveries = new Map<string, NonNullable<GuardianBulkCandidate["delivery"]>>();
+  if (!studentId) {
+    const { data: logs, error } = await admin.from("message_logs")
+      .select("guardian_id,status,metadata,prepared_by")
+      .eq("organization_id", organizationId).eq("template_key", "guardian_portal_setup")
+      .eq("channel", "whatsapp").in("status", ["sent", "prepared"])
+      .order("prepared_at", { ascending: false });
+    if (error) throw new Error("Portal gönderim geçmişi okunamadı.");
+    for (const log of logs || []) {
+      if (!log.guardian_id || deliveries.get(log.guardian_id)?.status === "sent") continue;
+      if (log.status === "sent") {
+        deliveries.set(log.guardian_id, { status: "sent" });
+      } else if (!deliveries.has(log.guardian_id)) {
+        deliveries.set(log.guardian_id, {
+          status: "prepared",
+          dispatchId: log.prepared_by === profile.id && typeof log.metadata?.dispatch_id === "string"
+            ? log.metadata.dispatch_id : undefined,
+        });
+      }
+    }
+  }
+
   const candidateMap = new Map<string, GuardianBulkCandidate>();
   for (const student of students as any[]) {
     const link: any = linkByStudent.get(student.id);
@@ -110,13 +132,16 @@ export default async function GuardianFromStudentPage({ searchParams }: { search
     const fullName = String(linkedProfile?.full_name || guardianRecord?.full_name || recipient.fullName).trim();
     if (!phone || !fullName) continue;
     const state: GuardianBulkCandidate["state"] = linkedProfile ? (linkedProfile.last_sign_in_at ? "active" : "pending") : "new";
+    const accountId = linkedProfile?.id || guardianByPhone.get(phone)?.id;
+    const delivery = accountId ? deliveries.get(accountId) : undefined;
     const existing = candidateMap.get(phone);
     if (existing) {
       existing.studentIds.push(student.id);
       existing.studentNames.push(studentName);
       if (state === "active") existing.state = "active";
+      if (delivery?.status === "sent" || !existing.delivery) existing.delivery = delivery;
     } else {
-      candidateMap.set(phone, { key: phone, fullName, phone, studentIds: [student.id], studentNames: [studentName], state });
+      candidateMap.set(phone, { key: phone, fullName, phone, studentIds: [student.id], studentNames: [studentName], state, delivery });
     }
   }
   const bulkCandidates = [...candidateMap.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, "tr"));

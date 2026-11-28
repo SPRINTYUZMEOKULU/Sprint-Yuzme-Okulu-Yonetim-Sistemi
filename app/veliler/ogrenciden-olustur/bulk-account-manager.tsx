@@ -7,7 +7,7 @@ import { confirmPortalSetupSent, createPortalSetupLink } from "../portal-credent
 import { useMemo, useRef, useState } from "react";
 import type { GuardianBulkResult } from "./bulk-account-actions";
 
-export type GuardianBulkCandidate = { key: string; fullName: string; phone: string; studentIds: string[]; studentNames: string[]; state: "new" | "pending" | "active" };
+export type GuardianBulkCandidate = { key: string; fullName: string; phone: string; studentIds: string[]; studentNames: string[]; state: "new" | "pending" | "active"; delivery?: { status: "sent" | "prepared"; dispatchId?: string } };
 
 async function prepareChunk(studentIds: string[], resetExisting: boolean) {
   const response = await fetch("/api/guardian-portal/bulk-prepare", {
@@ -33,7 +33,7 @@ function CredentialDetails({ accountId }: { accountId: string }) {
 }
 
 export default function BulkAccountManager({ candidates }: { candidates: GuardianBulkCandidate[] }) {
-  const recommended = useMemo(() => candidates.filter((item) => item.state !== "active").map((item) => item.key), [candidates]);
+  const recommended = useMemo(() => candidates.filter(item => item.state !== "active" && !item.delivery).map(item => item.key), [candidates]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(recommended));
   const [resetExisting,setResetExisting]=useState(false);
   const [busy, setBusy] = useState(false); const [progress, setProgress] = useState(0); const [results, setResults] = useState<GuardianBulkResult[]>([]); const [sendIndex, setSendIndex] = useState(0);
@@ -42,8 +42,17 @@ export default function BulkAccountManager({ candidates }: { candidates: Guardia
   const [prepareError, setPrepareError] = useState("");
   const [pendingDispatch, setPendingDispatch] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
+  const [confirmedPhones, setConfirmedPhones] = useState<Set<string>>(() => new Set());
+  const [retryPhones, setRetryPhones] = useState<Set<string>>(() => new Set());
   const failedPreparation = useRef<{ candidates: GuardianBulkCandidate[]; offset: number; reset: boolean } | null>(null);
-  const selectedCandidates = candidates.filter((item) => selected.has(item.key)); const successful = results.filter((item, index) => item.ok && item.accountId && results.findIndex((entry) => entry.ok && entry.accountId === item.accountId) === index); const current = successful[sendIndex];
+  const sent = candidates.filter(item => item.delivery?.status === "sent" || confirmedPhones.has(item.key));
+  const needsConfirmation = candidates.filter(item => item.delivery?.status === "prepared" &&
+    !confirmedPhones.has(item.key) && !retryPhones.has(item.key));
+  const eligible = candidates.filter(item => !sent.includes(item) && !needsConfirmation.includes(item));
+  const selectedCandidates = eligible.filter(item => selected.has(item.key));
+  const successful = results.filter((item, index) => item.ok && item.accountId &&
+    results.findIndex(entry => entry.ok && entry.accountId === item.accountId) === index);
+  const current = successful[sendIndex];
   const toggle = (key: string) => setSelected((currentSet) => { const next = new Set(currentSet); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   async function prepare(resume = false) {
     if (busy || sharing.current || pendingDispatch) return;
@@ -90,13 +99,19 @@ export default function BulkAccountManager({ candidates }: { candidates: Guardia
     setSendIndex(index => index + 1);
   }
 
-  async function confirmSent() {
-    if (!pendingDispatch || sharing.current) return;
+  async function confirmSent(recovery?: GuardianBulkCandidate) {
+    const dispatchId = recovery ? recovery.delivery?.dispatchId : pendingDispatch;
+    if (!dispatchId || sharing.current) return;
     sharing.current = true;
     setShareBusy(true);
     try {
-      const result = await confirmPortalSetupSent(pendingDispatch);
-      if (result.ok) advance();
+      const result = await confirmPortalSetupSent(dispatchId);
+      if (result.ok) {
+        const key = recovery?.key ?? current?.phone;
+        if (key) setConfirmedPhones(previous => new Set([...previous, key]));
+        if (!recovery) advance();
+        else setShareError("");
+      }
       else setShareError(result.message);
     } catch {
       setShareError("Gönderim kaydedilemedi. Tekrar deneyin.");
@@ -137,8 +152,23 @@ export default function BulkAccountManager({ candidates }: { candidates: Guardia
       setShareBusy(false);
     }
   }
-  return <section className="bulkGuardianPanel"><div className="bulkGuardianHead"><div><small>TOPLU VELİ HESABI VE ŞİFRE GÖNDERİMİ</small><h2>Velileri öğrencilerden otomatik hazırla</h2><p>Hesabı olmayanlar ve ilk girişi bekleyenler seçili gelir. Mevcut hesapların şifresi korunur. Şifre yenileme için aşağıdaki ayrı seçeneği işaretleyin.</p></div><span>{selected.size} veli seçili</span></div><label><input type="checkbox" checked={resetExisting} disabled={busy} onChange={e=>setResetExisting(e.target.checked)}/> Seçilen mevcut hesapların şifresini de yenile (aynı hesaba bağlı tüm kursiyerleri etkiler)</label><div className="bulkGuardianTools"><button type="button" disabled={busy} onClick={() => setSelected(new Set(recommended))}>Önerilenleri Seç</button><button type="button" disabled={busy} onClick={() => setSelected(new Set(candidates.map((item) => item.key)))}>Tüm Uygun Velileri Seç</button><button type="button" disabled={busy} onClick={() => setSelected(new Set())}>Seçimi Temizle</button><button className="primary" type="button" disabled={busy || shareBusy || !!pendingDispatch || !selected.size} onClick={() => void prepare()}>{busy ? `Hazırlanıyor… ${progress}/${selectedCandidates.length}` : "Seçilenlere Hesap + Şifre Hazırla"}</button></div>{prepareError && <p role="alert">{prepareError} <button type="button" disabled={busy || shareBusy || !!pendingDispatch} onClick={() => void prepare(true)}>Kaldığı Yerden Devam Et</button></p>}<details className="bulkGuardianList" open={candidates.length <= 12}><summary>Seçilecek velileri göster ({candidates.length})</summary><div>{candidates.map((item) => <label key={item.key} className={item.state === "active" ? "active" : ""}><input type="checkbox" checked={selected.has(item.key)} disabled={busy} onChange={() => toggle(item.key)}/><span><strong>{item.fullName}</strong><small>{item.phone} · {item.studentNames.join(", ")}</small></span><em>{item.state === "new" ? "Hesap oluşturulacak" : item.state === "pending" ? "İlk giriş bekleniyor" : "Aktif hesap · şifre korunur"}</em></label>)}</div></details>{results.length ? <div className="bulkGuardianResults"><div className="bulkResultSummary"><strong>{successful.length} veli için giriş bilgileri hazır</strong><span>{busy ? "Hazırlık devam ediyor" : prepareError ? "Hazırlık durakladı" : results.filter((item) => !item.ok).length ? `${results.filter((item) => !item.ok).length} işlem tamamlanamadı` : "Tüm işlemler tamamlandı"}</span></div>{current ? pendingDispatch ? <div className="bulkGuardianTools">
-      <button className="whatsapp" type="button" disabled={shareBusy} onClick={confirmSent}>Gönderildi Olarak Kaydet · {current.fullName}</button>
+  return <section className="bulkGuardianPanel"><div className="bulkGuardianHead"><div><small>TOPLU VELİ HESABI VE ŞİFRE GÖNDERİMİ</small><h2>Velileri öğrencilerden otomatik hazırla</h2><p>Gönderim kaydı bulunmayan yeni hesaplar ve ilk girişi bekleyenler seçili gelir. Mevcut hesapların şifresi korunur. Şifre yenileme için aşağıdaki ayrı seçeneği işaretleyin.</p></div><span>{selectedCandidates.length} veli seçili</span></div><label><input type="checkbox" checked={resetExisting} disabled={busy} onChange={e=>setResetExisting(e.target.checked)}/> Seçilen mevcut hesapların şifresini de yenile (aynı hesaba bağlı tüm kursiyerleri etkiler)</label><div className="bulkGuardianTools"><button type="button" disabled={busy} onClick={() => setSelected(new Set(eligible.filter(item => item.state !== "active").map(item => item.key)))}>Kalanları Seç</button><button type="button" disabled={busy} onClick={() => setSelected(new Set(eligible.map((item) => item.key)))}>Tüm Uygun Velileri Seç</button><button type="button" disabled={busy} onClick={() => setSelected(new Set())}>Seçimi Temizle</button><button className="primary" type="button" disabled={busy || shareBusy || !!pendingDispatch || !selectedCandidates.length} onClick={() => void prepare()}>{busy ? `Hazırlanıyor… ${progress}/${selectedCandidates.length}` : "Seçilenlere Hesap + Şifre Hazırla"}</button></div>{prepareError && <p role="alert">{prepareError} <button type="button" disabled={busy || shareBusy || !!pendingDispatch} onClick={() => void prepare(true)}>Kaldığı Yerden Devam Et</button></p>}<p>{sent.length} gönderim onaylı · {needsConfirmation.length} gönderim onayı bekliyor</p>
+    {needsConfirmation.length > 0 && <section className="bulkGuardianResults">
+      <strong>WhatsApp’ta gönderim durumunu kontrol edin</strong>
+      {needsConfirmation.map(item => <div key={item.key}>
+        <p>{item.fullName} · {item.studentNames.join(", ")}</p>
+        <div className="bulkGuardianTools">
+          {item.delivery?.dispatchId && <button type="button" disabled={shareBusy || !!pendingDispatch} onClick={() => void confirmSent(item)}>WhatsApp’ta Gönderdim</button>}
+          <button type="button" disabled={busy || shareBusy || !!pendingDispatch} onClick={() => {
+            setRetryPhones(previous => new Set([...previous, item.key]));
+            setSelected(previous => new Set([...previous, item.key]));
+          }}>Göndermedim, Sıraya Ekle</button>
+        </div>
+      </div>)}
+    </section>}
+    {shareError && !results.length && <p role="alert">{shareError}</p>}
+    <details className="bulkGuardianList" open={eligible.length <= 12}><summary>Seçilecek velileri göster ({eligible.length})</summary><div>{eligible.map((item) => <label key={item.key} className={item.state === "active" ? "active" : ""}><input type="checkbox" checked={selected.has(item.key)} disabled={busy} onChange={() => toggle(item.key)}/><span><strong>{item.fullName}</strong><small>{item.phone} · {item.studentNames.join(", ")}</small></span><em>{item.state === "new" ? "Hesap oluşturulacak" : item.state === "pending" ? "İlk giriş bekleniyor" : "Aktif hesap · şifre korunur"}</em></label>)}</div></details>{results.length ? <div className="bulkGuardianResults"><div className="bulkResultSummary"><strong>{successful.length} veli için giriş bilgileri hazır</strong><span>{busy ? "Hazırlık devam ediyor" : prepareError ? "Hazırlık durakladı" : results.filter((item) => !item.ok).length ? `${results.filter((item) => !item.ok).length} işlem tamamlanamadı` : "Tüm işlemler tamamlandı"}</span></div>{current ? pendingDispatch ? <div className="bulkGuardianTools">
+      <button className="whatsapp" type="button" disabled={shareBusy} onClick={() => void confirmSent()}>Gönderildi Olarak Kaydet · {current.fullName}</button>
       <button type="button" disabled={shareBusy} onClick={advance}>Göndermeden Geç</button>
     </div> : <>
       <button type="button" className="whatsapp" disabled={shareBusy} onClick={openNext}>WhatsApp Mesajını Aç ({sendIndex + 1}/{successful.length}) · {current.fullName}</button>
